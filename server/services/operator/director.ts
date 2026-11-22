@@ -1282,7 +1282,11 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
   ]);
   // 7. §111: a registered capability benchmark whose production baseline misses its target — at
   // most one per suite, ahead of the open-ended detectors so the bound never cuts it.
-  const capability = await capabilityDeficiencies().catch(() => [] as DeficiencyReading[]);
+  // §115: the engineering cycle's limiting stage rides in the same protected slot.
+  const capability = [
+    ...(await capabilityDeficiencies().catch(() => [] as DeficiencyReading[])),
+    ...(await throughputDeficiencies().catch(() => [] as DeficiencyReading[])),
+  ];
   if (capability.length) return [...out.slice(0, 6), ...capability, ...more.flat()].slice(0, 14 + capability.length);
   return [...out.slice(0, 6), ...more.flat()].slice(0, 14);
 }
@@ -1707,6 +1711,60 @@ export async function capabilityDeficiencies(): Promise<DeficiencyReading[]> {
     });
   }
   return out;
+}
+
+/**
+ * §115: Brain's own engineering cycle, read from the newest ENGINEERING_CYCLE reading. The
+ * limiting stage is a deficiency when it moved since the reading before, or holds at least
+ * LIMITING_SHARE_THRESHOLD of critical-path time. The title names only the stage, so the id is
+ * stable while that stage limits and a shift is a new deficiency. The competing corrections ride
+ * along with their estimates; §87 judges the one built on ENGINEERING_CYCLE_HOURS_MEDIAN against
+ * the 72 h baseline and keeps or reverts it.
+ */
+export async function throughputDeficiencies(): Promise<DeficiencyReading[]> {
+  const { storedCycles } = await import('../engineering/cycle.ts');
+  const { STAGE_OWNERS } = await import('../../domain/engineeringCycle.ts');
+  const stored = await storedCycles({ limit: 10 });
+  const latest = stored[0];
+  const stage = latest?.reading.limitingStage;
+  if (!latest || !stage || !latest.change.record) return [];
+  const r = latest.reading;
+  const s = r.stages[stage];
+  const recurrence = stored.filter((one) => one.reading.limitingStage === stage).length;
+  const options = r.corrections.filter((c) => c.stage === stage);
+  const best = options[0];
+  return [
+    reading({
+      goalId: null,
+      deficiency: 'RESOURCE_ALLOCATION',
+      title: `Engineering throughput is limited by the ${stage} stage`,
+      observed:
+        `Over ${r.windowHours} h to ${r.to}, ${r.verified} of ${r.merged} merged change(s) were verified; ${stage} held ` +
+        `${Math.round(s.share * 100)}% of critical-path time (median ${Math.round((s.medianHours ?? 0) * 60)} min, p90 ` +
+        `${Math.round((s.p90Hours ?? 0) * 60)} min). ${latest.change.reason}. Cycle median ${r.cycleMedianHours} h; ` +
+        `${r.releases.failed} failed and ${r.releases.rerun} re-run release(s) of ${r.releases.dispatched}; ` +
+        `${r.improvements.count} verified improvement(s).`,
+      evidence: `engineering_evidence ${latest.id} (ENGINEERING_CYCLE, ${r.repository}); stages ${JSON.stringify(
+        Object.fromEntries(Object.entries(r.stages).map(([k, v]) => [k, v.share])),
+      )}`,
+      cause:
+        `${stage} is the largest share of the measured critical path (${Math.round(s.share * 100)}%), read from the forge's own ` +
+        'workflow runs, jobs and steps; competing corrections, estimated: ' +
+        options.map((c) => `${c.correction} (~${Math.round(c.estimatedHoursSaved * 60)} min/cycle; ${c.assumption})`).join('; '),
+      ownerPaths: STAGE_OWNERS[stage],
+      recurrence,
+      expectedBenefit: best
+        ? `About ${Math.round(best.estimatedHoursSaved * 60)} min off each engineering cycle (${best.correction}), measured, not assumed.`
+        : `A shorter ${stage} stage and engineering cycle.`,
+      acceptance:
+        `The next ENGINEERING_CYCLE reading after release shows ${stage}'s median lower and ENGINEERING_CYCLE_HOURS_MEDIAN ` +
+        'not higher than the baseline, with failed releases not increased.',
+      metric: 'ENGINEERING_CYCLE_HOURS_MEDIAN',
+      blocksGoal: false,
+      share: 0.1,
+      proposed: null,
+    }),
+  ];
 }
 
 function reading(diagnosis: Omit<DiagnosisRequest, 'runId'>): DeficiencyReading {

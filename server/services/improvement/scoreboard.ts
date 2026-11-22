@@ -116,6 +116,14 @@ export async function readMetric(key: MetricKey, from: string, to: string): Prom
       const ok = n(rows.find((r) => r.state === 'SUCCEEDED')?.n);
       return reading(key, from, to, ok, rows.reduce((a, r) => a + n(r.n), 0));
     }
+    case 'ENGINEERING_CYCLE_HOURS_MEDIAN': {
+      // §115: the cycles stored as ENGINEERING_CYCLE evidence, newest reading winning per pull request.
+      const { storedCycles } = await import('../engineering/cycle.ts');
+      const { cycleHoursIn } = await import('../../domain/engineeringCycle.ts');
+      const stored = await storedCycles({ limit: 50 }).catch(() => []);
+      const { median, samples } = cycleHoursIn(stored.map((s) => s.reading).reverse(), from, to);
+      return reading(key, from, to, samples, samples, median);
+    }
   }
 }
 

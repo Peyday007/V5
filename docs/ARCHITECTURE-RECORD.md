@@ -16945,3 +16945,57 @@ other suite's.
 The ACCEPTED verdict stays what it is — a financial-outcome reading a person may
 want — and is never the completion standard. A failing case is a measurement
 (`bench/planningReliability/BASELINE.md`), never a case to edit.
+
+## 115. Engineering throughput is measured from the forge, and its limiting stage is a deficiency, never a second optimizer.
+
+**Owner's order, 2026-11-22.** Brain measures its own engineering throughput,
+names the limiting stage, weighs competing corrections, implements an authorized
+one, tests it against its baseline, keeps what is proven, rejects or rolls back
+regressions, detects when the bottleneck moves, and repeats — by extending what
+exists, never as a second optimization organization.
+
+**What was missing.** Steps 3–7 and 9 already existed: §109 commissions and
+routes, §111 compares alternatives, §87 baselines a change for 72 h, measures it
+after release, and decides KEPT / KEPT_NO_EFFECT / REVERTED with at most three
+attempts. Factory's `throughput.ts` measures its own sessions. Nothing measured
+the whole cycle a change takes from first commit to verified release, so no
+detector could name a stage, and no metric could judge a correction to one.
+
+**The shape** (`domain/engineeringCycle.ts` pure, `services/engineering/cycle.ts`):
+
+- **A cycle is a merged pull request followed to the Deploy that shipped it**,
+  read from the forge's own records: DEVELOPMENT (first commit's author date →
+  opened), INTEGRATION_WAIT (opened → merged), RELEASE_QUEUE (merged → the
+  shipping Deploy dispatched, which carries every failed Deploy between),
+  TEST (dispatched → "Deploy to Fly" started), RELEASE (→ its "Deploy" step
+  done), VERIFICATION (→ the job done). The stages are sequential, so their
+  sums are the critical path and the limiting stage is the largest share — and
+  none with fewer than five verified cycles.
+- **Beside it:** failed, cancelled and re-run releases; effective concurrency
+  (cycles open at once by Little's law, and Deploy jobs per busy second); and
+  verified improvements per hour, which counts only an evolution ADOPT or an
+  improvement KEPT — a pull request is never an improvement.
+- **Competing corrections are estimated, and say what they assumed.** Each
+  stage carries its catalogue (`STAGE_CORRECTIONS`); an estimate is the stage's
+  mean per cycle, or the measured part a correction removes (the Postgres wait,
+  the setup steps), times a stated reduction. The estimate ranks; the measured
+  cycle after release decides.
+- **Stored as evidence, not a new table.** Each reading is one append-only
+  `engineering_evidence` row, property `ENGINEERING_CYCLE`, source CI, with the
+  reading and its `bottleneckChange` against the reading before.
+- **The limiting stage is a deficiency** (`throughputDeficiencies`, read by
+  `brain_operator_deficiencies` in the protected slot beside §111's capability
+  detector) when it moved or holds ≥ 40% of the critical path. Its title names
+  only the stage, so a shift is a new deficiency; its owner paths are the
+  stage's workflows; seen once it is WATCH, recurring it is ENGINEERING.
+- **Judged on one more §87 metric.** `ENGINEERING_CYCLE_HOURS_MEDIAN` (HOURS,
+  lower is better, minimum 8 cycles a side) is read from the stored cycles,
+  newest reading winning for a pull request, so the loop's baseline, after
+  window, ±25% band, KEPT and REVERTED apply unchanged.
+
+**Where the reading comes from.** Production reads the forge without a token,
+sixty reads an hour shared with Factory, and one 72-hour reading costs more
+than a hundred. So it is taken from a terminal: `npm run engineering -- cycle
+[--hours 72] [--input DIR] [--record --admin <email>]`, through the forge with
+`BRAIN_FORGE_TOKEN` or from `gh api` JSON in DIR. `npm run engineering --
+report` prints the newest stored reading. Tests: `tests/engineeringCycle.test.ts`.

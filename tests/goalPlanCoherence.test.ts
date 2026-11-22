@@ -309,6 +309,24 @@ describe('C-9: research follows the adopted plan', () => {
     expect(price).toMatch(/Revenue per deal binds/);
     expect(reply).not.toBe(price);
   });
+
+  it('always asks the factor that binds the plan, ranked by what moving it alone lifts, and only the top one', () => {
+    const bound = reconstruction({
+      diagnosis: [
+        { factor: 'CASH_TIMING', moved: 'days to cash ×0.5', reach: 0.967, settledP50: 10_000, liftReach: 0.905, liftP50: 9000 },
+        { factor: 'PRICE', moved: 'price ×2', reach: 0.3, settledP50: 1, liftReach: 0.24, liftP50: 1 },
+      ],
+    });
+    const asked = planResearchPriority({ reconstruction: bound, adoption, adoptedIds: ['o1', 'o2'], daysLeft: 30, remaining: 10_000, legacy: [] });
+    const vars = asked.map((one) => one.variable);
+    expect(vars).toContain('plan:days to cash');
+    expect(vars).not.toContain('plan:ticket');
+    expect(asked[0]!.variable).toBe('plan:days to cash');
+    expect(asked[0]!.reason).toMatch(/binds the plan: days to cash ×0\.5 lifts reach by/);
+    // Volume and capital are measured by sending or decided by a person, never researched.
+    const volume = planResearchPriority({ reconstruction: reconstruction({ diagnosis: [{ factor: 'VOLUME', moved: 'volume ×3', reach: 0.9, settledP50: 1, liftReach: 0.8, liftP50: 1 }] }), adoption, adoptedIds: ['o1', 'o2'], daysLeft: 30, remaining: 10_000, legacy: [] });
+    expect(volume.some((one) => /volume ×|plan:volume$/.test(one.variable))).toBe(false);
+  });
 });
 
 describe('C-11: search churn does not rewrite history', () => {

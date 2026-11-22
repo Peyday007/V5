@@ -204,6 +204,16 @@ export interface PortfolioProblem {
    * nothing but the ranking; a plan read never passes it.
    */
   challenge?: PlanChallengeOptions | false;
+  /**
+   * The activities a held combination may be built from (a goal plan: those
+   * whose price is established). When given, the result also carries
+   * `bestEligible`, the strongest feasible combination of only these,
+   * searched the way `best` is (exhaustively, or greedily over just these) on
+   * the same worlds. A reader that cannot hold `best` reads this instead of
+   * the first eligible entry of the truncated `ranked`, which depended on how
+   * many ineligible combinations happened to rank above it (planMetamorphic P6).
+   */
+  eligible?: (key: string) => boolean;
 }
 
 /** One input whose uncertainty limits the fifth-percentile reach, and what would settle it (Q2-6). */
@@ -285,6 +295,8 @@ export interface PortfolioResult {
    * replaced it. Absent when nothing was adopted.
    */
   adoption?: ChallengeAdoption;
+  /** The strongest feasible combination of only `problem.eligible` activities; present only when `eligible` was given. */
+  bestEligible?: PortfolioReading | null;
 }
 
 export interface ChallengeAdoption {
@@ -1134,23 +1146,18 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   };
   const record = (members: number[]) => keep(evaluate(problem, members, picks, worlds));
   const singles = problem.activities.map((_, i) => record([i]));
-  if (n <= EXHAUSTIVE_LIMIT) {
-    for (let mask = 1; mask < 1 << n; mask++) {
-      const members: number[] = [];
-      for (let i = 0; i < n; i++) if (mask & (1 << i)) members.push(i);
-      if (members.length > 1) record(members);
-    }
-  } else {
-    // Greedy: keep adding the activity that most improves the reading.
+  const all = problem.activities.map((_, i) => i);
+  // Greedy: keep adding, from `pool`, the activity that most improves the reading.
+  const greedy = (pool: number[], keepOne: (reading: PortfolioReading) => PortfolioReading): void => {
     let current: number[] = [];
     let currentReading: PortfolioReading | null = null;
     // Every world's state after `current`, so a candidate costs one member per world (see `Prefix`); null when it cannot.
     let prefix: Prefix | null = emptyPrefix(problem, worlds);
     for (;;) {
       let bestNext: { members: number[]; reading: PortfolioReading } | null = null;
-      for (let i = 0; i < n; i++) {
+      for (const i of pool) {
         if (current.includes(i)) continue;
-        const reading = keep(evaluateExtending(problem, prefix, current, i, picks, worlds));
+        const reading = keepOne(evaluateExtending(problem, prefix, current, i, picks, worlds));
         if (!bestNext || better(reading, bestNext.reading) < 0) bestNext = { members: [...current, i], reading };
       }
       if (!bestNext || (currentReading && better(bestNext.reading, currentReading) >= 0)) break;
@@ -1161,10 +1168,30 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
       if (appends) turn(problem, prefix!, planOf(problem, picks, current[current.length - 1]!), current[current.length - 1]!, worlds);
       else prefix = prefixOf(problem, current, picks, worlds);
     }
-  }
+  };
+  if (n <= EXHAUSTIVE_LIMIT) {
+    for (let mask = 1; mask < 1 << n; mask++) {
+      const members: number[] = [];
+      for (let i = 0; i < n; i++) if (mask & (1 << i)) members.push(i);
+      if (members.length > 1) record(members);
+    }
+  } else greedy(all, keep);
   const ranked = [...readings].sort(better);
   const best = ranked.find((one) => one.feasible) ?? null;
   const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance: assess(problem, best, best && problem.parameterReach ? problem.parameterReach(best.keys) : null) };
+  if (problem.eligible) {
+    const eligible = problem.eligible;
+    const allEligible = (one: PortfolioReading) => one.feasible && one.keys.every((k) => eligible(k));
+    if (best && allEligible(best)) result.bestEligible = best;
+    else if (n <= EXHAUSTIVE_LIMIT) result.bestEligible = ranked.find(allEligible) ?? null;
+    else {
+      // The greedy path above was steered by ineligible members: search the eligible ones on their own, on the same worlds.
+      const pool = all.filter((i) => eligible(problem.activities[i]!.key));
+      const own: PortfolioReading[] = [];
+      if (pool.length > 0) greedy(pool, (reading) => (own.push(reading), reading));
+      result.bestEligible = [...readings.filter(allEligible), ...own.filter(allEligible)].sort(better)[0] ?? null;
+    }
+  }
   const effectsOf = (one: PortfolioReading): SafeguardEffect[] | undefined => {
     if (!problem.safeguards?.length) return undefined;
     const members = one.keys.map((k) => problem.activities.findIndex((a) => a.key === k));

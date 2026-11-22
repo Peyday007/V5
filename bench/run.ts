@@ -29,7 +29,7 @@ export async function runBench(name: string, options: SuiteOptions & { ref?: str
   const sha = git(['rev-parse', 'HEAD']) ?? 'unknown';
   const ref = options.ref ?? git(['rev-parse', '--abbrev-ref', 'HEAD']) ?? sha;
   return {
-    result: { suite: suite.name, sha, ref, cases: outcome.cases, metrics: outcome.metrics, ranAt: new Date().toISOString() },
+    result: { suite: suite.name, sha, ref, cases: outcome.cases, metrics: outcome.metrics, ranAt: new Date().toISOString(), ...(outcome.timing ? { timing: outcome.timing } : {}) },
     summary: outcome.summary,
   };
 }

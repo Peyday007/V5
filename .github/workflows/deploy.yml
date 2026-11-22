@@ -150,9 +150,10 @@ jobs:
     needs: canonical
     if: needs.canonical.outputs.superseded != 'true'
     name: Typecheck and tests
-    # The whole suite split across four runners by vitest's own `--shard`, so
-    # the SQLite half of the gate takes a quarter of the time. Every shard must
-    # pass for `deploy` to run; nothing is skipped.
+    # The whole suite split across four runners by `--shard`, so the SQLite
+    # half of the gate takes a quarter of the time. The split is by recorded
+    # duration (vitest.config.ts → tests/helpers/shardSequencer.ts), not by
+    # file count. Every shard must pass for `deploy` to run; nothing is skipped.
     strategy:
       fail-fast: false
       matrix:
@@ -210,6 +211,10 @@ jobs:
           done
           [ "$ok" = 1 ] || { echo '::error::Could not install the OCR tooling in three bounded attempts.'; exit 1; }
           tesseract --version | head -1
+          # Which hardware this shard drew. Standard runners are not one speed:
+          # on run 44968385809 half the shards ran ~1.25x and half ~0.8x their
+          # predicted load. The shard balance cannot fix that, but it should be legible.
+          echo "runner cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs) x$(nproc)"
           pdftoppm -v 2>&1 | head -1
 
       # `ci` rather than `install`: the lockfile is the input, and a deploy that
@@ -239,11 +244,21 @@ jobs:
           # the suite's exit status, returned by the final `wait`.
           set +e
           interval="${SUPERSEDED_POLL_SECONDS:-60}"
-          setsid npm test ${SHARD:+-- --shard=$SHARD} &
+          # The exit is noticed within seconds; only the guard waits the interval.
+          # A whole-interval sleep held every shard up to a minute past its
+          # suite (measured: shards ending on x.1-minute marks, 2026-11-21).
+          tick=$(( interval < 5 ? interval : 5 ))
+          # The JSON report is for refreshing the shard balance
+          # (scripts/test-durations.mjs); the verdict is the exit status.
+          setsid npm test ${SHARD:+-- --shard=$SHARD --reporter=default --reporter=json --outputFile.json=sqlite-shard-report.json} &
           pid=$!
+          since=0
           while kill -0 "$pid" 2>/dev/null; do
-            sleep "$interval"
+            sleep "$tick"
             kill -0 "$pid" 2>/dev/null || break
+            since=$((since + tick))
+            [ "$since" -lt "$interval" ] && continue
+            since=0
             # The same one file answers; only its "superseded" (3) stops the suite.
             .github/workflows/canonical-guard.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" "while the suite runs" > "${RUNNER_TEMP:-/tmp}/guard.txt" 2>&1
             if [ $? = 3 ]; then
@@ -266,6 +281,14 @@ jobs:
       # costs a minute and finding out there costs a rollback.
       - run: npm run build
         if: steps.fresh.outputs.superseded != 'true' && steps.tests.outputs.superseded != 'true'
+
+      # Durations for the next shard balance; never part of the verdict.
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.fresh.outputs.superseded != 'true'
+        with:
+          name: sqlite-shard-${{ matrix.shard }}
+          path: sqlite-shard-report.json
+          if-no-files-found: ignore
 
   # The Postgres half of the gate, read rather than run again (FAC-7).
   #
@@ -1173,3 +1196,13 @@ jobs:
         run: |
           gh workflow run goals.yml -R "$GITHUB_REPOSITORY" --ref production -f command=check \
             || echo "::warning::The plan integrity check could not be dispatched; run goals.yml with command=check."
+      # The evaluator scores a fresh revision's baseline and any experiment
+      # waiting on production; its half-hour schedule fired about every five
+      # hours (evolution-eval.yml), so a released commit asks for it directly.
+      - name: Ask the evaluator to score the released commit
+        if: ${{ needs.deploy.result == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run evolution-eval.yml -R "$GITHUB_REPOSITORY" --ref production \
+            || echo "::warning::The evaluator could not be dispatched; its schedule is the backstop."

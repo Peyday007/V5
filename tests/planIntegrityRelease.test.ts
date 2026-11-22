@@ -48,7 +48,9 @@ describe('the release checks the plans it released', () => {
     expect(ok).toBeGreaterThan(0);
     expect(body.slice(ok)).toMatch(/process\.exit\(0\)/);
     // The parent that spawned the reads prints the verdict and ends too.
-    expect(read('scripts/goals.ts')).toMatch(/command === 'check'\) process\.exit\(/);
+    const entry = read('scripts/goals.ts');
+    expect(entry).toMatch(/command === 'check'\) return exitAfterFlush\(/);
+    expect(entry.slice(entry.indexOf('function exitAfterFlush('))).toMatch(/process\.exit\(code\)/);
   });
 
   it('reads each goal in its own child process, killed at its bound, so one blocked read cannot time the whole check out', () => {
@@ -74,6 +76,26 @@ describe('the release checks the plans it released', () => {
     const ok = body.lastIndexOf("console.log('GOALS: OK')");
     expect(ok).toBeGreaterThan(0);
     expect(body.slice(ok)).toMatch(/process\.exit\(0\)/);
+    // 2026-11-21 (run 44960240885): the plan was printed, then the search listing after it never
+    // finished, so no verdict. The listing, and closing the pool, are waited on only for a bound.
+    const listing = body.indexOf('finishesWithin(PLAN_LISTING_MS');
+    expect(listing).toBeGreaterThan(0);
+    expect(body.slice(listing, ok)).toContain('printSearching(reading)');
+    expect(body.slice(0, listing)).not.toContain('await printSearching');
+    expect(body.slice(ok)).toMatch(/finishesWithin\(2_000, \(\) => closeDatabase\(\)/);
+  });
+
+  it('bounds `goals plan` well inside its step: 20 minutes in the machine, and the SSH session on the runner', () => {
+    // 2026-11-21 (run 44960240885): nothing reached the runner after 23:10, not even the parent's
+    // 26-minute bound, and the step ran to its 30-minute timeout.
+    expect(read('scripts/goals.ts')).toMatch(/export const PLAN_TOTAL_MS = 20 \* 60_000;/);
+    const goals = read('.github/workflows/goals.yml');
+    const run = goals.slice(goals.indexOf('- name: Run'), goals.indexOf('- name: Publish the output as annotations'));
+    expect(run).toContain('timeout-minutes: 30');
+    expect(run).toContain('session=27m');
+    expect(run.match(/timeout -k 20s "\$session" flyctl ssh console/g)).toHaveLength(2);
+    expect(run).toContain('ended=${PIPESTATUS[0]}');
+    expect(run).toMatch(/grep -q '\^GOALS: ' goals\.txt \|\| echo "GOALS: FAILED/);
   });
 
   it('waits for the app to mark its boot derived-state rebuild finished before reading plans beside it', () => {

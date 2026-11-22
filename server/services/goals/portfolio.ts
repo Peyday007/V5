@@ -243,6 +243,12 @@ export interface GoalPortfolio {
   /** Worlds each combination was evaluated over: the sample a reach's interval is read from. */
   worlds: number;
   best: PortfolioCombination | null;
+  /**
+   * The strongest feasible combination whose members all have an established
+   * price, searched on the same worlds as `best` (`best` itself when it is
+   * one; null when none runs). Absent on a portfolio read before it existed.
+   */
+  pricedBest?: PortfolioCombination | null;
   alternatives: PortfolioCombination[];
   demand: DemandEstimate[];
   limits: {
@@ -1385,6 +1391,8 @@ export function evaluateGoalPortfolio(input: {
   const recipes = new Map<string, Recipe>();
   const memberOf = new Map<string, PortfolioMember>();
   const demand: DemandEstimate[] = [];
+  // Openings whose price nobody established: a plan cannot hold a combination that counts one (`pricedBest`).
+  const unpriced = new Set<string>();
   for (const card of input.openings) {
     const replied = measuredRates && applied !== 'AS_IS_FLOOR_ONLY' ? withMeasuredReply(card, measuredRates, applied) : card;
     // The market's own historical record, acquired from the research and outcomes the project holds.
@@ -1413,6 +1421,7 @@ export function evaluateGoalPortfolio(input: {
     const stakeFunded = !!stake;
     if (stake) capital.amount = stake.tiedUp;
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
+    if (unestablished.includes('price')) unpriced.add(id);
     if (!capital.established) unestablished.push('money tied up');
     if (one.channel) {
       if (!established(one.channel.perDay)) unestablished.push(`${one.channel.label} a day`);
@@ -1661,7 +1670,8 @@ export function evaluateGoalPortfolio(input: {
           const members = keys.map((key) => recipes.get(key)!).filter(Boolean);
           return members.length > 0 && members.every((r) => r.justified) ? parameterReachOf(problem, members, input.daysLeft, seed) : null;
         };
-  const result = optimizePortfolio({ ...problem, ...(parameterReach ? { parameterReach } : {}) });
+  const priced = (key: string) => !unpriced.has(recipes.get(key)?.one.opportunity.id ?? '');
+  const result = optimizePortfolio({ ...problem, ...(parameterReach ? { parameterReach } : {}), eligible: priced });
   const combination = (reading: PortfolioReading): PortfolioCombination => ({
     members: reading.keys.map((key) => memberOf.get(key)!).filter(Boolean),
     reach: reading.reach,
@@ -1674,6 +1684,8 @@ export function evaluateGoalPortfolio(input: {
     ...(reading.dealsP50 !== undefined ? { dealsP50: reading.dealsP50 } : {}),
   });
   const best = result.best ? combination(result.best) : null;
+  // The strongest combination of priced members only, searched as `best` is: the one a plan holds when `best` counts an unpriced member.
+  const pricedBest = !result.best || result.best.keys.every(priced) ? best : result.bestEligible ? combination(result.bestEligible) : null;
   const seen = new Set<string>();
   const alternatives = result.ranked
     .filter((one) => one.feasible && one !== result.best)
@@ -1718,6 +1730,7 @@ export function evaluateGoalPortfolio(input: {
     basis,
     worlds,
     best,
+    pricedBest,
     alternatives,
     demand,
     limits: {

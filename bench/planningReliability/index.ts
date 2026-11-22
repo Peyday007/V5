@@ -7,6 +7,10 @@
  * goal from the owner's words, reads `readGoalPlan`, and the grader (`grade.ts`)
  * judges the reading against the case's rubric in code.
  *
+ * Cases run serially in this process, or — with `workers` above 1 — on a bounded pool
+ * of child processes (`pool.ts`), each case still on its own copy of the one migrated
+ * template, so the verdicts cannot depend on which (`tests/benchLoop.test.ts`).
+ *
  * Metrics (over every case run, public and hidden):
  *   accuracy          — passed ÷ cases run (primary, higher is better; target 0.90)
  *   wilsonLow/High    — the Wilson 95% interval of that proportion over its denominator
@@ -14,6 +18,9 @@
  *   passed, cases, errors
  *   accuracy.familiar / accuracy.heldOut — the split
  *   failures.<CLASS>  — cases failed with each class
+ * Each case also carries its verdict, failure classes, whether one is critical and —
+ * for a public case only — the grader's reason; the result's `timing` carries the
+ * template, case and total wall-clock milliseconds and the worker count.
  */
 // First: the bench's process environment (a data root of its own, the loop's boot grace held).
 import '../env.ts';
@@ -44,14 +51,77 @@ export interface PlanningOutcome extends SuiteOutcome {
   rows: PlanningRow[];
 }
 
-export async function runPlanningReliability(options: SuiteOptions & { only?: string[] } = {}): Promise<PlanningOutcome> {
-  const publicCases = options.only ? PUBLIC_CASES.filter((c) => options.only!.includes(c.id)) : PUBLIC_CASES;
-  const all: Array<{ value: unknown; hidden: boolean }> = [
-    ...publicCases.map((value) => ({ value, hidden: false })),
+/** One case's place in the run: its position (which names its database) and whether it is hidden. */
+export interface CaseJob {
+  index: number;
+  value: unknown;
+  hidden: boolean;
+}
+
+/** The id a case is reported under: hidden cases carry the prefix. */
+export function caseId(job: CaseJob): string {
+  const v = job.value;
+  const rawId = v && typeof v === 'object' && typeof (v as { id?: unknown }).id === 'string' ? (v as { id: string }).id : `case-${job.index + 1}`;
+  return job.hidden ? `${HIDDEN_PREFIX}${rawId}` : rawId;
+}
+
+/**
+ * Puts one case through the planner on its own copy of the template and grades it. The
+ * serial runner and every pool worker (`pool.ts`) call exactly this, so a parallel run
+ * cannot judge a case differently from a serial one.
+ */
+export async function runCase(job: CaseJob, template: Template | null, templateError: string | null, dir: string): Promise<PlanningRow> {
+  const { value, hidden, index } = job;
+  const id = caseId(job);
+  const problem = caseProblem(value);
+  if (problem) return { id, hidden, heldOut: hidden, expect: null, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: `malformed: ${problem}` };
+  const c = value as PlanningCase;
+  const started = performance.now();
+  let row: PlanningRow;
+  if (!template) {
+    row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: templateError ?? 'no template database' };
+  } else {
+    try {
+      const world = await runWorld(c, template, dir, index);
+      const observed = observe(world.reading, world.keyOf);
+      const g = grade(c, observed);
+      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: observed.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail };
+    } catch (error) {
+      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: `error: ${String((error as Error)?.message ?? error).slice(0, 300)}` };
+    }
+  }
+  row.ms = Math.round(performance.now() - started);
+  return row;
+}
+
+/** The selection a run makes: public cases, then the extra (hidden) ones; `only` narrows it by reported id, then `shard` takes its share. */
+export function selectJobs(options: SuiteOptions): CaseJob[] {
+  const all: CaseJob[] = [
+    ...PUBLIC_CASES.map((value) => ({ value: value as unknown, hidden: false })),
     ...(options.extraCases ?? []).map((value) => ({ value, hidden: true })),
-  ];
+  ].map((j, index) => ({ ...j, index }));
+  const selected = options.only ? all.filter((j) => options.only!.includes(caseId(j))) : all;
+  const shard = options.shard;
+  if (!shard) return selected;
+  if (selected.some((j) => j.hidden)) throw new Error('a sharded run takes public cases only');
+  return selected.filter((_, k) => k % shard.of === shard.index - 1);
+}
+
+/** `i/N` → a shard, refusing anything that is not 1 ≤ i ≤ N. */
+export function parseShard(raw: string): { index: number; of: number } {
+  const m = /^(\d+)\/(\d+)$/.exec(raw.trim());
+  const index = Number(m?.[1]);
+  const of = Number(m?.[2]);
+  if (!m || !Number.isInteger(index) || !Number.isInteger(of) || of < 1 || index < 1 || index > of) {
+    throw new Error(`--shard must be i/N with 1 ≤ i ≤ N, not "${raw}"`);
+  }
+  return { index, of };
+}
+
+export async function runPlanningReliability(options: SuiteOptions = {}): Promise<PlanningOutcome> {
+  const jobs = selectJobs(options);
   const dir = fs.mkdtempSync(path.join(process.env['BRAIN_DATA_DIR'] ?? os.tmpdir(), 'planning-'));
-  const rows: PlanningRow[] = [];
+  const t0 = performance.now();
   let template: Template | null = null;
   let templateError: string | null = null;
   try {
@@ -60,38 +130,50 @@ export async function runPlanningReliability(options: SuiteOptions & { only?: st
   } catch (error) {
     templateError = `template: ${String((error as Error)?.message ?? error).slice(0, 200)}`;
   }
-  try {
-    for (const [i, { value, hidden }] of all.entries()) {
-      const rawId = value && typeof value === 'object' && typeof (value as { id?: unknown }).id === 'string' ? (value as { id: string }).id : `case-${i + 1}`;
-      const id = hidden ? `${HIDDEN_PREFIX}${rawId}` : rawId;
-      const problem = caseProblem(value);
-      if (problem) {
-        rows.push({ id, hidden, heldOut: hidden, expect: null, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: `malformed: ${problem}` });
-        continue;
-      }
-      const c = value as PlanningCase;
-      const started = performance.now();
-      let row: PlanningRow;
-      if (!template) {
-        row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: templateError ?? 'no template database' };
-      } else {
-        try {
-          const world = await runWorld(c, template, dir, i);
-          const observed = observe(world.reading, world.keyOf);
-          const g = grade(c, observed);
-          row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: observed.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail };
-        } catch (error) {
-          row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: `error: ${String((error as Error)?.message ?? error).slice(0, 300)}` };
-        }
-      }
-      row.ms = Math.round(performance.now() - started);
-      rows.push(row);
-      options.log?.(`${row.pass ? 'pass' : 'FAIL'} ${id}${hidden ? '' : ` — expected ${row.expect}, observed ${row.observed ?? 'ERROR'}${row.failures.length ? ` [${row.failures.join(', ')}]` : ''}: ${row.detail}`}`);
-    }
-  } finally {
+  const templateMs = Math.round(performance.now() - t0);
+  const logRow = (row: PlanningRow) =>
+    options.log?.(
+      `${row.pass ? 'pass' : 'FAIL'} ${row.id}${row.hidden ? '' : ` — expected ${row.expect}, observed ${row.observed ?? 'ERROR'}${row.failures.length ? ` [${row.failures.join(', ')}]` : ''}: ${row.detail}`} (${row.ms} ms)`,
+    );
+  const workers = Math.max(1, Math.min(options.workers ?? 1, jobs.length));
+  const t1 = performance.now();
+  let rows: PlanningRow[];
+  if (workers > 1 && template) {
+    // Each worker is its own process: its own database handle and its own module memos.
     await closeWorldDatabase();
+    const { runPool } = await import('./pool.ts');
+    rows = await runPool(jobs, { template, dir, workers, onRow: logRow });
+  } else {
+    rows = [];
+    try {
+      for (const job of jobs) {
+        const row = await runCase(job, template, templateError, dir);
+        rows.push(row);
+        logRow(row);
+      }
+    } finally {
+      await closeWorldDatabase();
+    }
   }
-  const cases: CaseResult[] = rows.map((r) => ({ id: r.id, pass: r.pass, score: r.pass ? 1 : 0, ms: r.ms }));
+  const casesMs = Math.round(performance.now() - t1);
+  // The template and every case's database are spent once graded (≈200 MB a full run).
+  fs.rmSync(dir, { recursive: true, force: true });
+  return summarise(rows, { templateMs, casesMs, totalMs: Math.round(performance.now() - t0), workers });
+}
+
+/** Rows to the shared result: metrics, per-case verdicts and the summary lines. Pure over the rows. */
+export function summarise(rows: PlanningRow[], timing?: Record<string, number>): PlanningOutcome {
+  const cases: CaseResult[] = rows.map((r) => ({
+    id: r.id,
+    pass: r.pass,
+    score: r.pass ? 1 : 0,
+    ms: r.ms,
+    verdict: r.pass ? (r.outcome ?? 'PASS') : r.observed === null ? 'ERROR' : r.failures.join('+') || 'FAIL',
+    failures: r.failures,
+    critical: r.failures.some((f) => CRITICAL.has(f)),
+    // A hidden case's grader detail describes its rubric: only its verdict leaves the run.
+    ...(r.hidden ? {} : { reason: r.detail }),
+  }));
   const passed = rows.filter((r) => r.pass).length;
   const interval = wilson(passed, rows.length);
   const share = (xs: PlanningRow[]) => (xs.length ? xs.filter((r) => r.pass).length / xs.length : 0);
@@ -112,11 +194,12 @@ export async function runPlanningReliability(options: SuiteOptions & { only?: st
   const failed = rows.filter((r) => !r.pass);
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
   const summary = [
-    `planningReliability: ${passed}/${rows.length} correct · accuracy ${pct(metrics['accuracy']!)} (Wilson 95% ${pct(metrics['wilsonLow']!)}–${pct(metrics['wilsonHigh']!)}) · critical ${metrics['criticalFailures']} · errors ${metrics['errors']}`,
+    `planningReliability: ${passed}/${rows.length} correct · accuracy ${pct(metrics['accuracy']!)} (Wilson 95% ${pct(metrics['wilsonLow']!)}–${pct(metrics['wilsonHigh']!)}) · critical ${metrics['criticalFailures']} · errors ${metrics['errors']}` +
+      (timing?.['totalMs'] !== undefined ? ` · ${(timing['totalMs'] / 1000).toFixed(1)} s on ${timing['workers'] ?? 1} worker(s)` : ''),
     // Hidden cases are named by id only: their content never reaches a log.
     ...failed.map((r) => `  FAIL ${r.id}${r.hidden ? '' : ` [${r.failures.join(', ') || 'ERROR'}] expected ${r.expect}, observed ${r.observed ?? 'ERROR'} — ${r.detail}`}`),
   ];
-  return { cases, metrics, summary, rows };
+  return { cases, metrics, summary, rows, ...(timing ? { timing } : {}) };
 }
 
 export const planningReliability: Suite = {

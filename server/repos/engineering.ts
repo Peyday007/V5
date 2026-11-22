@@ -108,6 +108,33 @@ export async function observationsFor(
 }
 
 /**
+ * The metadata of the newest rows of one property, across repositories unless one is
+ * named — how a measurement stored as evidence (ENGINEERING_CYCLE, §115) is read back.
+ */
+export async function evidenceMetadata(
+  propertyKey: string,
+  options: { repository?: string; limit?: number } = {},
+): Promise<{ id: string; repository: string; createdAt: string; metadata: Record<string, unknown> }[]> {
+  const params: (string | number)[] = [propertyKey];
+  let where = 'property_key = ?';
+  if (options.repository) {
+    where += ' AND repository = ?';
+    params.push(canonicalRepository(options.repository));
+  }
+  params.push(options.limit ?? 20);
+  const rows = await getDb().all<EngineeringEvidenceRow>(
+    `SELECT * FROM engineering_evidence WHERE ${where} ORDER BY created_at DESC, id LIMIT ?`,
+    params,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    repository: row.repository,
+    createdAt: row.created_at,
+    metadata: parseJson<Record<string, unknown>>(row.metadata, {}),
+  }));
+}
+
+/**
  * Invalidation is explicit: something relevant changed, and every property that
  * declared that change in its scope gets a STALE row at the strength it was
  * proven at, so the next lookup reads STALE rather than the old proof. Unrelated
