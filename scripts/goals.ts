@@ -18,7 +18,7 @@
  */
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AFTER_VERDICT_GRACE_MS, failureReason, goalsChildHeapMb, runBoundedChild, VERDICT_LINE } from './boundedChild.ts';
+import { AFTER_VERDICT_GRACE_MS, failureReason, goalsChildHeapMb, MACHINE_MEMORY_GUARD, runBoundedChild, VERDICT_LINE, type MemoryGuard } from './boundedChild.ts';
 
 /**
  * `goals plan` inside goals.yml's 30-minute step: the read, and the listing
@@ -40,6 +40,8 @@ export interface ReadChildren {
   env: NodeJS.ProcessEnv;
   heapMb: number;
   write: (text: string) => void;
+  /** Production's guard (`MACHINE_MEMORY_GUARD`); tests leave it out and spawn unguarded. */
+  memoryGuard?: MemoryGuard;
 }
 
 function spawnedHere(): ReadChildren {
@@ -49,6 +51,7 @@ function spawnedHere(): ReadChildren {
     env: process.env,
     heapMb: goalsChildHeapMb(),
     write: (text) => void process.stdout.write(text),
+    memoryGuard: MACHINE_MEMORY_GUARD,
   };
 }
 
@@ -82,6 +85,7 @@ export async function planGoal(goalId: string, io: ReadChildren = spawnedHere(),
     env: { ...io.env, BRAIN_PLAN_CHILD: '1' },
     ms,
     heapMb: io.heapMb,
+    memoryGuard: io.memoryGuard,
     onStdout: passThrough(io),
   });
   if (run.killed === 'AFTER_VERDICT') io.write(`  exit        the read printed its verdict and did not exit; stopped ${Math.round(AFTER_VERDICT_GRACE_MS / 1000)}s after it\n`);
@@ -107,6 +111,7 @@ export async function checkGoals(ids: string[], io: ReadChildren = spawnedHere()
       env: { ...io.env, BRAIN_CHECK_CHILD: 'list' },
       ms: LIST_MS,
       heapMb: io.heapMb,
+      memoryGuard: io.memoryGuard,
     });
     if (listed.verdict === null || !/^GOALS: OK/.test(listed.verdict)) {
       io.write(`INTEGRITY - ERROR the active goals could not be listed: ${failureReason(listed, LIST_MS, io.heapMb) ?? listed.verdict}\n`);
@@ -142,6 +147,7 @@ async function checkInChild(goalId: string, ms: number, io: ReadChildren): Promi
     env: { ...io.env, BRAIN_CHECK_CHILD: '1' },
     ms,
     heapMb: io.heapMb,
+    memoryGuard: io.memoryGuard,
     onStdout: passThrough(io),
   });
   const reason = failureReason(run, ms, io.heapMb);

@@ -25,6 +25,7 @@
  * the app keeps serving.
  */
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 
 export interface BoundedChildResult {
   /** The child's own verdict line (`GOALS: OK`, `GOALS: INTEGRITY FAILED`, …), or null when it printed none. */
@@ -38,6 +39,8 @@ export interface BoundedChildResult {
   outOfMemory: boolean;
   exitCode: number | null;
   signal: NodeJS.Signals | null;
+  /** Not started: the machine did not have the memory the read needs beside the app (`memoryGuard`). */
+  deferred?: string | null;
 }
 
 export interface BoundedChildOptions {
@@ -52,6 +55,64 @@ export interface BoundedChildOptions {
   onStdout?: (text: string) => void;
   /** The child's V8 heap cap, `--max-old-space-size`, in MB. Replaces any cap in `args`. */
   heapMb?: number;
+  /**
+   * Refuse to start the child until the machine has its heap cap plus headroom
+   * available, and make the child the kernel's first choice if memory runs out.
+   * Production, 2026-11-22: a 700 MB read child beside a 3.3 GB app on the
+   * 4 GB machine stalled the app itself for 428 s, 112 s and 36 min, each stall
+   * starting and ending with a release-check read (runs 45057935518,
+   * 45060366506); `nice` lowers CPU priority, never memory.
+   */
+  memoryGuard?: MemoryGuard;
+}
+
+export interface MemoryGuard {
+  /** Megabytes available now, or null where the platform cannot say (no /proc). */
+  availableMb: () => number | null;
+  /** Kept free beyond the child's heap cap. */
+  headroomMb: number;
+  /** How long to wait for memory before deferring the read. */
+  waitMs: number;
+  /** Marks the child as the process to sacrifice; a no-op where unsupported. */
+  sacrifice: (pid: number) => void;
+}
+
+/** MemAvailable from /proc/meminfo in MB, or null where there is none. */
+export function procAvailableMb(read: () => string = () => fs.readFileSync('/proc/meminfo', 'utf8')): number | null {
+  try {
+    const kb = /^MemAvailable:\s+(\d+)\s+kB/m.exec(read());
+    return kb ? Math.floor(Number(kb[1]) / 1024) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The production guard: /proc/meminfo, 300 MB headroom, a minute's wait, oom_score_adj 1000 on the child. */
+export const MACHINE_MEMORY_GUARD: MemoryGuard = {
+  availableMb: () => procAvailableMb(),
+  headroomMb: 300,
+  waitMs: 60_000,
+  sacrifice: (pid) => {
+    try {
+      fs.writeFileSync(`/proc/${pid}/oom_score_adj`, '1000');
+    } catch {
+      /* no /proc or not permitted: the heap cap still bounds the child */
+    }
+  },
+};
+
+/** Waits (up to `guard.waitMs`) for the child's heap plus headroom to be available; the deferral sentence, or null to start. */
+export async function memoryDeferral(guard: MemoryGuard, heapMb: number, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<string | null> {
+  const needed = heapMb + guard.headroomMb;
+  const deadline = Date.now() + guard.waitMs;
+  for (;;) {
+    const available = guard.availableMb();
+    if (available === null || available >= needed) return null;
+    if (Date.now() >= deadline) {
+      return `deferred: the machine had ${available} MB available and the read needs ${needed} MB (its ${heapMb} MB heap cap plus ${guard.headroomMb} MB), so it was not started beside the app`;
+    }
+    await sleep(5_000);
+  }
 }
 
 export const VERDICT_LINE = /^GOALS: .*$/m;
@@ -86,6 +147,7 @@ export function childArgs(args: string[], heapMb?: number): string[] {
 /** Why a child ended without a verdict, in a sentence that ends `(out of memory)` when it outgrew its heap cap; null when it printed one. */
 export function failureReason(run: BoundedChildResult, ms: number, heapMb?: number): string | null {
   if (run.verdict !== null) return null;
+  if (run.deferred) return run.deferred;
   if (run.killed === 'TIMEOUT') return `the plan read did not finish within ${Math.round(ms / 1000)}s and was stopped`;
   if (run.outOfMemory) return `the plan read outgrew its ${heapMb ?? '?'} MB heap cap and died (out of memory)`;
   return `the plan read exited without a verdict (${run.signal ? `signal ${run.signal}` : `exit code ${run.exitCode ?? 'unknown'}`})`;
@@ -113,14 +175,25 @@ export async function finishesWithin(ms: number, work: () => Promise<unknown>): 
   }
 }
 
-export function runBoundedChild(options: BoundedChildOptions): Promise<BoundedChildResult> {
+export async function runBoundedChild(options: BoundedChildOptions): Promise<BoundedChildResult> {
   const started = Date.now();
+  if (options.memoryGuard && options.heapMb !== undefined) {
+    const deferred = await memoryDeferral(options.memoryGuard, options.heapMb);
+    if (deferred) {
+      return { verdict: null, killed: null, out: '', elapsedMs: Date.now() - started, outOfMemory: false, exitCode: null, signal: null, deferred };
+    }
+  }
+  return runSpawned(options, started);
+}
+
+function runSpawned(options: BoundedChildOptions, started: number): Promise<BoundedChildResult> {
   const graceMs = options.graceMs ?? AFTER_VERDICT_GRACE_MS;
   return new Promise<BoundedChildResult>((resolve) => {
     const child = spawn(process.execPath, childArgs(options.args, options.heapMb), {
       env: options.env ?? process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    if (options.memoryGuard && child.pid !== undefined) options.memoryGuard.sacrifice(child.pid);
     let out = '';
     // Passed through as it arrives (heartbeats, traces); the tail is kept to recognise a heap death.
     let errTail = '';
