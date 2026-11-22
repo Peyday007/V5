@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     await q('PLAN_Q_SINCE_LIVE', "SELECT COUNT(*) AS n FROM cash_needs n WHERE n.blocked_action LIKE '%goal:wst_%:plan%' AND n.created_at > '2026-11-22T04:10:00'");
     await q('MISSIONS_SINCE_LIVE', "SELECT m.state, COUNT(*) AS n FROM russell_missions m WHERE m.created_at > '2026-11-22T04:10:00' GROUP BY m.state");
     await q('GOAL_PRICE_IDEAS', "SELECT c.state, COUNT(*) AS n, SUM(CASE WHEN EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id) THEN 1 ELSE 0 END) AS with_mission FROM russell_candidates c WHERE c.id IN (SELECT candidate_id FROM cash_needs WHERE state = 'OPEN' AND request_key LIKE 'goal-price-%' AND candidate_id IS NOT NULL) GROUP BY c.state");
-    await q('PLAN_Q_JUDGED', "SELECT c.id, c.state, c.project_id, c.id AS cid, substr(c.judgment, instr(c.judgment,'compilerVersion'), 700) AS judgment, c.updated_at FROM russell_candidates c WHERE c.id IN (SELECT candidate_id FROM cash_needs WHERE blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' AND candidate_id IS NOT NULL)");
+    await q('PLAN_Q_JUDGED', "SELECT c.id, c.state, c.project_id, c.id AS cid, substr(c.judgment, strpos(c.judgment,'compilerVersion'), 700) AS judgment, c.updated_at FROM russell_candidates c WHERE c.id IN (SELECT candidate_id FROM cash_needs WHERE blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' AND candidate_id IS NOT NULL)");
     await q('PRICE_Q_JUDGED', "SELECT c.id, c.state, c.project_id, substr(c.judgment,1,300) AS judgment FROM russell_candidates c WHERE c.state = 'QUEUED' AND c.id IN (SELECT candidate_id FROM cash_needs WHERE state = 'OPEN' AND request_key LIKE 'goal-price-%') LIMIT 2");
   } finally {
     await closeDatabase();
