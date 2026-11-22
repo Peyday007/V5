@@ -237,3 +237,58 @@ The rubric is written from the arithmetic and the evidence the case files, never
 what the planner answers today. A case the planner fails is a measurement, recorded
 in `bench/planningReliability/BASELINE.md`; it is never edited to pass, and neither is
 the grader.
+
+## 7. The fast development loop: `npm run loop`
+
+An agent changing reasoning code gets a verdict in minutes, without a deploy:
+
+```
+npm run loop                                   # this tree vs origin/production
+npm run loop -- --cases held-out.json          # plus held-out cases (repeatable; never committed)
+npm run loop -- --base <ref>                   # vs another base
+npm run loop -- --merge branchA,branchB        # several origin branches merged together
+```
+
+It runs `tsc --noEmit`, `test:impacted --base <base>` and the suite on this tree
+concurrently when the machine's available memory holds all three (else the bench
+follows the other two), diffs the suite's result against the base's case by case
+(`bench/diff.ts`), and prints one block: **PASS**, or **REJECT** with every reason —
+a failed stage, a REGRESSED case, a NEW CRITICAL failure (a critical class a case did
+not carry before, even one that was already failing), or a baseline case that did
+not run — then each stage's elapsed time. Exit 0 PASS, 1 REJECT, 2 the loop could not
+run. Changed cases are listed with their verdict before → after and the grader's
+reason; a hidden case shows its id and verdict only.
+
+- **The runner is parallel.** `npm run bench` runs planningReliability's cases on a
+  pool of case processes (`bench/planningReliability/pool.ts`; default cores − 1,
+  bounded by half the available memory at 2 GB a worker; `--workers 1` is serial,
+  `BRAIN_BENCH_WORKERS` overrides). The template is migrated once; every case, in any
+  worker, opens its own copy, so a parallel run gives the serial verdicts
+  (`tests/benchLoop.test.ts`). Nearly all of a run is the planner itself
+  (`readGoalPlan`, mostly `quant/reconstruct.ts`), not setup: template and boot are
+  ≈5 s of a 430 s serial run. `--baseline prior.json` prints the same diff for any
+  bench run; `--only id,id` narrows one; the result carries per-case `ms`, `verdict`,
+  `failures`, `critical` and (public only) `reason`, and a top-level `timing`.
+- **The base result is cached** per base SHA, runner files and held-out case set in
+  `<git-common-dir>/brain-loop/baselines/` (shared by all worktrees, never committed;
+  `BRAIN_LOOP_CACHE` overrides). A miss computes it once on a clean detached worktree
+  of the base. A base that predates the parallel runner is given this checkout's
+  runner files only (`RUNNER_FILES` in `scripts/loop.ts`) — never its cases, grader or
+  world — so both sides are measured by one runner.
+- **Integration mode** makes a temporary worktree at the base and merges the branches
+  in order. The first conflict stops it, naming each file and the branch pair (an
+  earlier branch that touched the file, or the base). Otherwise it runs the same loop
+  on the combination and attributes each regressed case to the first branch whose
+  prefix of the merge order produces it (re-running only those cases). Its worktrees
+  are removed afterwards.
+- **It is level A (developmental) feedback, and it prints so.** It is the same runner
+  and public cases the evaluator uses, on this machine. It is not the evaluator's
+  verdict on hidden cases (§111) and never production verification.
+
+On a shared 4-core machine, under `flock` and beside another worker's runs, the
+public suite took 433 s serially and 196 s on 3 workers. With the base result cached,
+a no-op change's loop took 195 s and a two-branch `--merge` 206 s; with it uncomputed,
+343 s. On PR #1214's diff against its parent (with 21 held-out cases) the bench
+verdict — 25 IMPROVED, 0 REGRESSED, critical 6 → 0 — took 409 s after a 613 s base;
+its impacted selection was 107 planner test files, which is the slow stage of a wide
+change and is why a selection over 12 files runs after the bench, not beside it.

@@ -23,4 +23,7 @@ changed to pass. Each failure is a finding:
 | ho-14 | OBJECTIVE_CHANGE_IGNORED (+UNJUSTIFIED_REFUSAL) | `changeObjective` rewrites the words; scope is re-read from them, but the stored target stays $3,000 one-time instead of the new $1,500 a month | `server/services/goals/decide.ts:343` |
 
 Reproduce: `npm run bench -- --suite planningReliability --out result.json`
-(~20 minutes: each case reads `readGoalPlan` on its own database).
+(~20 minutes when this baseline was recorded; each case reads `readGoalPlan` on its
+own database). Cases now run on a pool of case processes — 433 s serial, 196 s on 3
+workers on a shared 4-core machine — and `npm run loop` diffs a change against this
+suite's result on production (docs/COMPLETION-SPEC.md §7).

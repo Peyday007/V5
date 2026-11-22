@@ -569,3 +569,45 @@ export async function listRecentPullRequests(
       }),
   };
 }
+
+/* ------------------------------------------------------------------------- */
+/* What the engineering cycle is measured from (§115)                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * One page of the repository's workflow runs created at or after `since`, in
+ * the forge's own shape. Read-only, and paged by the caller, so a measurement
+ * spends exactly the reads it needs.
+ */
+export async function listWorkflowRunsPage(
+  repository: ForgeRepository,
+  since: string,
+  page: number,
+): Promise<ForgeReply<{ total: number; runs: unknown[] }>> {
+  const reply = await get<{ total_count?: number; workflow_runs?: unknown[] }>(
+    `/repos/${repository.slug}/actions/runs?per_page=100&page=${page}&created=${encodeURIComponent(`>=${since}`)}`,
+  );
+  if (!reply.ok) return { ...reply, body: null };
+  return { ...reply, body: { total: Number(reply.body?.total_count ?? 0), runs: reply.body?.workflow_runs ?? [] } };
+}
+
+/** One workflow run's jobs, with their steps. */
+export async function listRunJobs(repository: ForgeRepository, runId: number): Promise<ForgeReply<unknown[]>> {
+  const reply = await get<{ jobs?: unknown[] }>(`/repos/${repository.slug}/actions/runs/${runId}/jobs?per_page=100`);
+  if (!reply.ok) return { ...reply, body: null };
+  return { ...reply, body: reply.body?.jobs ?? [] };
+}
+
+/** One page of closed pull requests, most recently updated first. */
+export async function listClosedPullRequestsPage(repository: ForgeRepository, page: number): Promise<ForgeReply<unknown[]>> {
+  const reply = await get<unknown[]>(`/repos/${repository.slug}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=${page}`);
+  if (!reply.ok) return { ...reply, body: null };
+  return { ...reply, body: Array.isArray(reply.body) ? reply.body : [] };
+}
+
+/** A pull request's commits (the first commit's author date opens its cycle). */
+export async function listPullRequestCommits(repository: ForgeRepository, number: number): Promise<ForgeReply<unknown[]>> {
+  const reply = await get<unknown[]>(`/repos/${repository.slug}/pulls/${number}/commits?per_page=100`);
+  if (!reply.ok) return { ...reply, body: null };
+  return { ...reply, body: Array.isArray(reply.body) ? reply.body : [] };
+}
