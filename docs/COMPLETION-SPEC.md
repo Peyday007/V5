@@ -78,6 +78,77 @@ A critical failure would send Brain executing a wrong plan; an unjustified refus
 loses value but commits nothing. The suite reports both, and the critical count is a
 guard that may not regress.
 
+## 3a. The end-to-end level: a complete, AI-executable plan
+
+The verdict level above judges what the planner concluded. The end-to-end level
+judges whether what it produced can be carried out. It is graded by the same
+grader (`gradeE2E` in `bench/planningReliability/grade.ts`) from the same reading
+(`observeExecution`: the plan's `steps` with their `executor` records, its
+strategies, considered and excluded openings, next tests, sales, research
+priorities, infeasibility and the portfolio's per-member economics) — never from
+prose. It is reported **beside** the verdict level, never folded into it: a case's
+`pass`, `outcome` and `failures` are the verdict level exactly as in §3, so the
+history stays comparable.
+
+A case passes end to end when its verdict is correct **and**:
+
+- **an executable plan is complete** — its steps include reaching buyers (a REACH or
+  OFFER step whose operation sends: unless written agreements already cover the
+  target), fulfilment (a DELIVER step), collecting payment (a COLLECT step) and,
+  when a subcontracted member has a direct cost, paying the supplier (an ORDER step,
+  or a delivery step that makes the payment);
+- **every step is executable** — it names who performs it (Brain, a provider, or the
+  owner; never CAPABILITY_MISSING or NOT_ESTABLISHED), through capabilities Brain's
+  registry declares; the fulfilment step's performer is the fulfiller the evidence
+  names (Brain only where the evidence says Brain delivers it, §39/§42); it states
+  its cost, its day, the step it follows (for an order, delivery, collection or
+  repeat) and the evidence it rests on;
+- **the money steps are inside the deadline** — collecting payment and paying the
+  supplier are scheduled, on or before the goal's last day;
+- **the owner does no routine work the objective gives no hours for**;
+- **the steps use the economics the strategy was judged on** — a delivery step's
+  modelled cost and any price a step states lie within the member's judged range
+  (`portfolio.demand`: price, `costHeld`);
+- **a no-plan conclusion says what would resolve it** — a next test, sale or research
+  priority (RESEARCH_FIRST or LEARN_WHILE_EXECUTING) measuring the decisive blocker's
+  link, or, for an infeasible goal, a relaxation of the constraint with a suggestion —
+  and **shows it compared the alternatives**: where openings existed, at least one
+  strategy and at least one opening considered or excluded;
+- **every opening research filed is accounted for** — considered or excluded.
+
+| end-to-end class | meaning |
+|---|---|
+| `VERDICT_INCORRECT` | the verdict level failed |
+| `NOT_OBSERVED` | no execution reading was observed (an erroring case) |
+| `CHAIN_STEP_MISSING` | no step for buyer reach, fulfilment, payment collection or supplier payment |
+| `STEP_FIELD_ABSENT` | the planner's output does not carry a field the rubric needs (listed as `gaps`) |
+| `STEP_PERFORMER_UNESTABLISHED` | a step nobody performs |
+| `BRAIN_CAPABILITY_NOT_HELD` | Brain performs a step through an undeclared capability, or fulfils work the evidence gives to someone else |
+| `PERFORMER_MISMATCH` | the fulfilment step's performer is not the fulfiller the evidence names |
+| `STEP_COST_UNESTABLISHED` | a step whose cost is null |
+| `STEP_UNSCHEDULED` | an execution step with no day |
+| `STEP_DEPENDENCY_ABSENT` | an order, delivery, collection or repeat step names nothing it follows |
+| `MONEY_STEP_OUTSIDE_DEADLINE` | collection or supplier payment unscheduled or after the deadline |
+| `OWNER_ROUTINE_WORK` | routine owner work where the objective allows no owner hours |
+| `ECONOMICS_DRIFT` | a step's cost or price outside what the strategy was judged on |
+| `RESOLUTION_ABSENT` | a no-plan conclusion names nothing that would resolve its blocker |
+| `ALTERNATIVES_NOT_COMPARED` | a no-plan conclusion compared no strategy and considered no opening |
+| `OPENING_UNACCOUNTED` | an opening neither considered nor excluded |
+
+**A field the planner does not carry is a measured gap, never a guess.** `PlanStep`
+carries a `basis` label but no reference to the rows or claims a step rests on
+(`step.evidence`), no price on the step that sells (`step.price`) and no hours on a
+step the owner performs (`step.hours`). Each is recorded as `STEP_FIELD_ABSENT` with
+the field in `gaps`; when the planner adds the field (`evidence: string[]`,
+`price: number`, `hours: number` on `PlanStep`) the grader reads it and the gap
+closes by itself. `e2e.passedBarFieldGaps` counts the cases that would pass end to
+end but for those fields.
+
+Metrics: `e2e.passed`, `e2e.accuracy`, `e2e.wilsonLow`, `e2e.wilsonHigh` over the
+same denominator as `accuracy`, `e2e.passedBarFieldGaps`, and
+`e2e.failures.<CLASS>`. Each case result carries `e2e: { pass, failures, gaps }`
+(and its reason, for a public case only).
+
 ## 4. The metric
 
 ```
@@ -148,7 +219,8 @@ then judges the reading against the case's rubric in code:
 
 Metrics: `accuracy`, `wilsonLow`, `wilsonHigh`, `passed`, `cases`,
 `criticalFailures`, `errors`, `accuracy.familiar`, `accuracy.heldOut`, and
-`failures.<CLASS>` for each failure class.
+`failures.<CLASS>` for each failure class; beside them, the end-to-end level's
+`e2e.*` metrics (§3a).
 
 ## 6. Case format
 

@@ -227,3 +227,13 @@ describe('the report', () => {
     expect(s.cases[2]).toMatchObject({ pass: true, e2e: { pass: false, failures: ['CHAIN_STEP_MISSING'] } });
   });
 });
+
+describe('the specification', () => {
+  it('defines every end-to-end class it grades', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { E2E_FAILURE_CLASSES } = await import('../bench/planningReliability/grade.ts');
+    const spec = readFileSync(new URL('../docs/COMPLETION-SPEC.md', import.meta.url), 'utf8');
+    expect(spec).toMatch(/^## 3a\. The end-to-end level/m);
+    for (const k of E2E_FAILURE_CLASSES) expect(spec).toContain(`| \`${k}\` |`);
+  });
+});
