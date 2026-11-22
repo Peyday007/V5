@@ -162,6 +162,60 @@ export interface Rubric {
   targetAfterChange?: number;
 }
 
+/**
+ * One change to the case's world after a plan was read (adaptation). Each is applied to
+ * the same goal and the same openings through the write path production uses for it
+ * (`applyChange`, world.ts), and the plan is read again after it.
+ *
+ *   OBJECTIVE              — the owner restates the objective in words (`changeObjective`): its
+ *                            amount, deadline and limits move with the words. `changedObjective`
+ *                            is exactly one of these.
+ *   TARGET                 — the target becomes `amount` USD (`setTarget`; limits kept).
+ *   DEADLINE               — the goal is now due `days` days after the change (`setTerms`).
+ *   CAPITAL                — the owner's starting capital is now `capital` USD: the most the
+ *                            goal may tie up (`setTargetLimits`, capital ceiling).
+ *   CONSTRAINT             — a limit is added (`limit` a number: USD for CAPITAL, total hours for
+ *                            OWNER_HOURS) or removed (`limit` null) (`setTargetLimits`).
+ *   BUYER_UNAVAILABLE      — the opening's buyer is gone: the opening is archived with the reason
+ *                            (`archiveOpportunity`). A correct plan no longer uses it.
+ *   SUPPLIER_COST          — the opening's direct cost per deal is now `cost` USD (a new quote,
+ *                            recorded as the card's directCosts evidence).
+ *   DAYS_TO_CASH           — the opening now takes `days` days to usable cash (timeToFirstCash
+ *                            evidence).
+ *   CONTRADICTING_EVIDENCE — a new source states `value` for the opening's `field`, contradicting
+ *                            the figure the card carries (today: `price`, as `priceContradiction`
+ *                            files it).
+ */
+export const CHANGE_KINDS = ['OBJECTIVE', 'TARGET', 'DEADLINE', 'CAPITAL', 'CONSTRAINT', 'BUYER_UNAVAILABLE', 'SUPPLIER_COST', 'DAYS_TO_CASH', 'CONTRADICTING_EVIDENCE'] as const;
+export type ChangeKind = (typeof CHANGE_KINDS)[number];
+
+/** The limits a CONSTRAINT change adds or removes. */
+export const CHANGEABLE_CONSTRAINTS = ['CAPITAL', 'OWNER_HOURS'] as const;
+/** The figures a CONTRADICTING_EVIDENCE change can contradict. */
+export const CONTRADICTABLE_FIELDS = ['price'] as const;
+
+export type WorldChange =
+  | { kind: 'OBJECTIVE'; objective: string }
+  | { kind: 'TARGET'; amount: number }
+  | { kind: 'DEADLINE'; days: number }
+  | { kind: 'CAPITAL'; capital: number }
+  | { kind: 'CONSTRAINT'; constraint: (typeof CHANGEABLE_CONSTRAINTS)[number]; limit: number | null }
+  | { kind: 'BUYER_UNAVAILABLE'; opening: string; reason?: string }
+  | { kind: 'SUPPLIER_COST'; opening: string; cost: number }
+  | { kind: 'DAYS_TO_CASH'; opening: string; days: number }
+  | { kind: 'CONTRADICTING_EVIDENCE'; opening: string; field: (typeof CONTRADICTABLE_FIELDS)[number]; value: number };
+
+/**
+ * One step of an adaptation case: a change, then a re-read. `expect` is the rubric for the
+ * reading after this change; the last step takes none — the case's own `expect` is the
+ * final reading's rubric, exactly as it is for a `changedObjective` case. A middle step
+ * without `expect` is applied and read, and not graded.
+ */
+export interface ChangeStep {
+  change: WorldChange;
+  expect?: Rubric;
+}
+
 export interface PlanningCase {
   id: string;
   /** Unfamiliar industry or mechanism, not used by the existing transfer fixtures. */
@@ -175,9 +229,18 @@ export interface PlanningCase {
    * The objective changed mid-plan: the plan is read once on `objective`, the goal's
    * objective is changed to these words through `changeObjective`, and the second
    * reading is graded against the rubric (which is written for the changed objective).
+   * Exactly `changes: [{ change: { kind: 'OBJECTIVE', objective: <these words> } }]`.
    */
   changedObjective?: string;
+  /**
+   * Adaptation: changes applied in order to the same world after the first plan is read,
+   * each followed by a re-read (`changeSteps`, `caseAtStep`). Not together with `changedObjective`.
+   */
+  changes?: ChangeStep[];
+  /** With `changes`: the rubric for the first reading, before any change. Ungraded when absent. */
+  expectInitial?: Rubric;
   openings: OpeningFixture[];
+  /** The rubric of the final reading: after the last change, or the only reading when nothing changes. */
   expect: Rubric;
 }
 
@@ -218,6 +281,32 @@ export function caseProblem(value: unknown): string | null {
     if (conversion) return conversion;
   }
   const e = c.expect;
+  const rubric = rubricProblem(e, keys);
+  if (rubric) return rubric;
+  if (c.changes !== undefined) {
+    if (c.changedObjective !== undefined) return 'changedObjective and changes are both given; state the objective change as a change';
+    if (!Array.isArray(c.changes) || !c.changes.length) return 'changes is not a non-empty list';
+    for (const [i, step] of c.changes.entries()) {
+      if (!step || typeof step !== 'object') return `change ${i + 1} is not an object`;
+      const change = changeProblem(step.change, keys);
+      if (change) return `change ${i + 1}: ${change}`;
+      if (step.expect !== undefined) {
+        if (i === c.changes.length - 1) return `change ${i + 1} is the last; its rubric is the case's own expect`;
+        const r = rubricProblem(step.expect, keys);
+        if (r) return `change ${i + 1}: ${r}`;
+      }
+    }
+  }
+  if (c.expectInitial !== undefined) {
+    if (c.changes === undefined) return 'expectInitial is given without changes';
+    const r = rubricProblem(c.expectInitial, keys);
+    if (r) return `expectInitial: ${r}`;
+  }
+  if (!c.dimensions || typeof c.dimensions !== 'object') return 'no dimensions';
+  return null;
+}
+
+function rubricProblem(e: Rubric | undefined, keys: Set<string>): string | null {
   if (!e || !VERDICTS.has(e.verdict)) return 'expect.verdict is neither EXECUTABLE_PLAN nor NO_PLAN';
   if (e.verdict === 'NO_PLAN') {
     const b = e.blocker;
@@ -229,6 +318,107 @@ export function caseProblem(value: unknown): string | null {
     if (b.kind === 'MISSING_EVIDENCE' && b.opening !== undefined && !keys.has(b.opening)) return 'the blocker names an opening the case does not hold';
   }
   for (const k of e.mustNotUse ?? []) if (!keys.has(k)) return `mustNotUse names ${k}, which the case does not hold`;
-  if (!c.dimensions || typeof c.dimensions !== 'object') return 'no dimensions';
   return null;
+}
+
+const CHANGE_KIND_SET = new Set<string>(CHANGE_KINDS);
+const isAmount = (x: unknown, min = 0): x is number => typeof x === 'number' && Number.isFinite(x) && x > min;
+
+/** Why a value is not a change this format states, or null when it is one. */
+export function changeProblem(value: unknown, keys: ReadonlySet<string>): string | null {
+  if (!value || typeof value !== 'object') return 'no change';
+  const ch = value as Record<string, unknown>;
+  if (typeof ch['kind'] !== 'string' || !CHANGE_KIND_SET.has(ch['kind'])) return `unknown change kind ${String(ch['kind'])}`;
+  const opening = () => (typeof ch['opening'] === 'string' && keys.has(ch['opening']) ? null : `names opening ${String(ch['opening'])}, which the case does not hold`);
+  switch (ch['kind'] as ChangeKind) {
+    case 'OBJECTIVE':
+      return typeof ch['objective'] === 'string' && ch['objective'].trim() ? null : 'the objective is not words';
+    case 'TARGET':
+      return isAmount(ch['amount']) ? null : 'the target is not a positive amount';
+    case 'DEADLINE':
+      return isAmount(ch['days']) && Number.isInteger(ch['days']) ? null : 'days is not a positive whole number';
+    case 'CAPITAL':
+      return typeof ch['capital'] === 'number' && Number.isFinite(ch['capital']) && ch['capital'] >= 0 ? null : 'capital is not an amount';
+    case 'CONSTRAINT':
+      if (!(CHANGEABLE_CONSTRAINTS as readonly unknown[]).includes(ch['constraint'])) return `a constraint change names ${String(ch['constraint'])}, not ${CHANGEABLE_CONSTRAINTS.join(' or ')}`;
+      return ch['limit'] === null || (typeof ch['limit'] === 'number' && Number.isFinite(ch['limit']) && ch['limit'] >= 0) ? null : 'limit is neither a figure nor null (removed)';
+    case 'BUYER_UNAVAILABLE':
+      return opening() ?? (ch['reason'] === undefined || (typeof ch['reason'] === 'string' && ch['reason'].trim()) ? null : 'the reason is not words');
+    case 'SUPPLIER_COST':
+      return opening() ?? (typeof ch['cost'] === 'number' && Number.isFinite(ch['cost']) && ch['cost'] >= 0 ? null : 'cost is not an amount');
+    case 'DAYS_TO_CASH':
+      return opening() ?? (isAmount(ch['days']) ? null : 'days is not positive');
+    case 'CONTRADICTING_EVIDENCE':
+      if (!(CONTRADICTABLE_FIELDS as readonly unknown[]).includes(ch['field'])) return `contradicting evidence on ${String(ch['field'])}, not ${CONTRADICTABLE_FIELDS.join(' or ')}`;
+      return opening() ?? (isAmount(ch['value']) ? null : 'the contradicting value is not a positive amount');
+  }
+}
+
+/** The case's changes, in order: `changes`, or the one objective change `changedObjective` states, or none. */
+export function changeSteps(c: Pick<PlanningCase, 'changedObjective' | 'changes'>): ChangeStep[] {
+  if (c.changes?.length) return c.changes;
+  if (c.changedObjective) return [{ change: { kind: 'OBJECTIVE', objective: c.changedObjective } }];
+  return [];
+}
+
+/** Changes that move the goal's own terms (what it counts, by when, with what), as opposed to the world's openings. */
+const GOAL_CHANGES: ReadonlySet<ChangeKind> = new Set(['OBJECTIVE', 'TARGET', 'DEADLINE', 'CAPITAL', 'CONSTRAINT']);
+
+/**
+ * The case as it stands after its first `step` changes (0: before any), in the shape the
+ * grader already judges: the objective's current words, the openings' current evidence,
+ * and that step's rubric. `grade(caseAtStep(c, k), observe(readings[k]))` judges reading k.
+ *
+ *  - A goal change sets `changedObjective` (to the words now in force), so a failure to
+ *    follow it is the grader's OBJECTIVE_CHANGE_IGNORED; a TARGET change also states the
+ *    target the reading must carry (`targetAfterChange`, unless the rubric gives one).
+ *  - An opening change rewrites that opening's fixture (cost, days to cash, contradicting
+ *    price), and a buyer that became unavailable joins the rubric's `mustNotUse`.
+ *  - `changes`/`expectInitial` are removed, so the result reads as a single-reading case.
+ *
+ * Returns null for a step with no rubric (a middle step left ungraded, or the first
+ * reading without `expectInitial`), or a step past the end.
+ */
+export function caseAtStep(c: PlanningCase, step: number): PlanningCase | null {
+  const steps = changeSteps(c);
+  if (step < 0 || step > steps.length) return null;
+  const rubric = step === 0 ? (steps.length ? (c.expectInitial ?? null) : c.expect) : step === steps.length ? c.expect : (steps[step - 1]!.expect ?? null);
+  if (!rubric) return null;
+  let words = c.objective;
+  let goalChanged = false;
+  let target: number | undefined;
+  const unavailable: string[] = [];
+  const openings = c.openings.map((o) => ({ ...o }));
+  const fixture = (key: string) => openings.find((o) => o.key === key)!;
+  for (const { change } of steps.slice(0, step)) {
+    if (GOAL_CHANGES.has(change.kind)) goalChanged = true;
+    switch (change.kind) {
+      case 'OBJECTIVE':
+        words = change.objective;
+        target = undefined;
+        break;
+      case 'TARGET':
+        target = change.amount;
+        break;
+      case 'BUYER_UNAVAILABLE':
+        unavailable.push(change.opening);
+        break;
+      case 'SUPPLIER_COST':
+        fixture(change.opening).cost = change.cost;
+        break;
+      case 'DAYS_TO_CASH':
+        fixture(change.opening).daysToCash = change.days;
+        break;
+      case 'CONTRADICTING_EVIDENCE':
+        fixture(change.opening).priceContradiction = change.value;
+        break;
+      default:
+        break;
+    }
+  }
+  const expect: Rubric = { ...rubric };
+  if (unavailable.length) expect.mustNotUse = [...new Set([...(rubric.mustNotUse ?? []), ...unavailable])];
+  if (target !== undefined && expect.targetAfterChange === undefined) expect.targetAfterChange = target;
+  const { changes: _changes, expectInitial: _initial, changedObjective: _changed, ...rest } = c;
+  return { ...rest, openings, expect, ...(goalChanged ? { changedObjective: words } : {}) };
 }
