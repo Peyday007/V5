@@ -1086,6 +1086,52 @@ export function withoutSpareOwnerWork<M extends { one: ModelledOpportunity; deal
   if (committed <= target.hoursCeiling + 1e-9 && (all.labour === null || all.labour <= target.hoursCeiling + 1e-9)) return members;
   const spare = (m: M) => m.deals === 0 && m.one.agreedDeals > 0 && m.one.hours.value !== null && m.one.hours.provenance !== 'UNKNOWN' && m.one.hours.value > 0;
   const rest = members.filter((m) => !spare(m));
+  if (rest.length === members.length) return members;
+  const reaches = (set: M[]) => {
+    const cons = conservative(set, target);
+    return cons.settled !== null && cons.settled >= target.remainingCents / 100;
+  };
+  if (rest.length > 0) return reaches(rest) ? rest : members;
+  /*
+   * Every member is agreed work that costs hours (planningReliability round 5):
+   * nine signed Brain-produced reports at half an hour each beside three signed
+   * owner-hosted events at eight hours each. Leaving every spare member out
+   * left nothing, so all of them stayed and the limit broke, although the
+   * reports alone collect the target in 4.5 hours. The agreements that cost
+   * the most hours for each unit of money go first, one at a time, while what
+   * stays still reaches the target, until the hours fit.
+   */
+  const hoursOf = (m: M) => m.one.agreedDeals * (m.one.hours.value ?? 0);
+  const order = [...members].sort((a, b) => hoursOf(b) / Math.max(1e-9, b.one.agreedValue) - hoursOf(a) / Math.max(1e-9, a.one.agreedValue));
+  let kept = members;
+  for (const m of order) {
+    if (kept.reduce((sum, k) => sum + hoursOf(k), 0) <= target.hoursCeiling + 1e-9) break;
+    const next = kept.filter((k) => k !== m);
+    if (next.length > 0 && reaches(next)) kept = next;
+  }
+  return kept;
+}
+
+/**
+ * A strategy's members, without agreed lots on which every deal loses money
+ * that the plan does not need (planningReliability round 5) — the economics
+ * counterpart of `withoutSpareOwnerWork`.
+ *
+ * Every agreement is counted in every strategy, so six signed rentals that each
+ * cost more than they pay put "costs at least what it pays" on every strategy,
+ * including one whose other opening reaches the target at a margin; and a
+ * strategy without them could not be stated. Agreed-only members whose
+ * established direct cost is at least their price are left out if the rest
+ * still reach the target at their cautious numbers; otherwise every member
+ * stays, and the economics break. Pure.
+ */
+export function withoutLossMakingLots<M extends { one: ModelledOpportunity; deals: number }>(
+  members: M[],
+  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'> & Partial<Pick<TargetReading, 'metric'>>,
+): M[] {
+  const losing = (m: M) =>
+    m.deals === 0 && m.one.agreedDeals > 0 && m.one.price.value !== null && m.one.directCost.value !== null && m.one.directCost.provenance !== 'UNKNOWN' && m.one.directCost.value >= m.one.price.value;
+  const rest = members.filter((m) => !losing(m));
   if (rest.length === 0 || rest.length === members.length) return members;
   const cons = conservative(rest, target);
   return cons.settled !== null && cons.settled >= target.remainingCents / 100 ? rest : members;
@@ -1281,13 +1327,25 @@ export async function measuredPlanChance(): Promise<PlanReading['measuredChance'
  * leaves the plan a candidate. The strongest candidate is still named, so it
  * is pursued and improved while nothing is accepted.
  */
+/**
+ * A pathway combination's label, its members by title. The combination holds
+ * ids; joined as they were they read "arr_6f3b7a404ca5 + arr_7c86…" in the
+ * candidate and its sentence (NO_INTERNAL_KEYS, production goal
+ * wst_7b4fcbb5f2384f31b6c3, release check 44986740566). A member no pathway or
+ * portfolio entry titles is named generically, never by its id.
+ */
+export function pathwayLabel(members: readonly string[], pathways: ReadonlyArray<{ opportunityId: string; title: string }>, portfolio: Pick<GoalPortfolio, 'demand'> | null): string {
+  const titles = new Map<string, string>([...(portfolio?.demand ?? []).map((d) => [d.opportunityId, d.title] as const), ...pathways.map((p) => [p.opportunityId, p.title] as const)]);
+  return members.map((id) => (titles.get(id) ?? (isArrangementId(id) ? 'a constructed arrangement' : 'a held opening')).slice(0, 60)).join(' + ');
+}
+
 export function judgeAcceptance(input: {
   achieved: boolean;
   chosen: StrategyReading | null;
   portfolio: GoalPortfolio | null;
   measuredChance: PlanReading['measuredChance'];
   considered: Pick<ConsideredOpening, 'opportunityId' | 'missing'>[];
-  pathways?: Pick<PathwayReading, 'portfolio'> | null;
+  pathways?: (Pick<PathwayReading, 'portfolio'> & Partial<Pick<PathwayReading, 'pathways'>>) | null;
   required?: number;
   /** The goal's configured objective (GOAL-18-4): its required confidence governs, stated or recorded default. */
   objective?: Pick<GoalObjective, 'requiredConfidence'> | null;
@@ -1338,7 +1396,7 @@ export function judgeAcceptance(input: {
       : input.chosen && input.chosen.verdict !== 'NOT_VIABLE'
         ? { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds, source: 'STRATEGY', settledP50: input.chosen.conservativeSettled ?? input.chosen.sweep.settledP50, reach: input.chosen.sweep.goalMetShare, reachBasis: input.chosen.sweep.goalMetShare === null ? null : input.chosen.sweep.probabilistic ? 'PROBABILITY' : 'COVERAGE' }
         : input.pathways?.portfolio.leading
-          ? { label: input.pathways.portfolio.leading.members.join(' + '), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
+          ? { label: pathwayLabel(input.pathways.portfolio.leading.members, input.pathways.pathways ?? [], input.portfolio ?? null), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
           : null;
   // An alternative's construction is not the best combination's: the engine's assurance and interval are the best one's.
   const constructionPortfolio = pricedAlternative ? null : (input.portfolio ?? null);
@@ -2113,7 +2171,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   for (const spec of model.definition.strategies) {
     const members = withoutSpareCapitalLots(
       withoutSpareOwnerWork(
-        model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+        withoutLossMakingLots(
+          model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+          target,
+        ),
         target,
       ),
       target,

@@ -148,7 +148,8 @@ export function payerNounWords(payer: string | null | undefined): string[] {
   if (!payer) return [];
   const head = payer.split(/\s+(?:and|or|who|that|which|with|without|in|of|for|on|at|across|from|by|to|renting|running|using|buying|selling|needing|seeking|looking|operating|owning|managing)\b/i)[0]!.trim();
   const word = head.split(/\s+/).pop()?.toLowerCase().replace(/[^a-z-]/g, '') ?? '';
-  if (word.length < 4 || !/^[a-z][a-z-]*s$/.test(word)) return [];
+  // The same refusal as `industryBuyerWords`: a word for what is sold or done never counts buyers.
+  if (word.length < 4 || !/^[a-z][a-z-]*s$/.test(word) || word.endsWith('ss') || NOT_A_BUYER_NOUN.test(word)) return [];
   const one = word.replace(/(?:ies)$/, 'y').replace(/(?<=(?:s|x|ch|sh))es$/, '').replace(/s$/, '');
   return [...new Set([word, one])];
 }
@@ -166,6 +167,29 @@ const BUYING_SHARE = /(?<![\d.])(\d{1,2}(?:\.\d+)?)\s*%\s+(?:of\s+(?:them|these|
 function buyingShare(text: string): number | null {
   const shares = [...text.matchAll(BUYING_SHARE)].map((m) => Number(m[1]) / 100).filter((s) => s > 0 && s < 1);
   return shares.length ? Math.min(...shares) : null;
+}
+
+/** Plural nouns an industry can end on that name what is sold or done, never who buys it. */
+const NOT_A_BUYER_NOUN = /^(?:services|products|goods|supplies|parts|materials|sales|rentals|repairs|events|items|units|orders|jobs|projects|equipment|industries|sectors|markets|trades|works|systems|solutions|tools|devices|vehicles|cars|trucks|machines|programs|programmes)$/;
+
+/**
+ * The buyer an opening's industry names, as count words (planningReliability
+ * round 5): an opening filed under "golf courses" sells to golf courses, so "210
+ * member courses are listed in the directory" counts its buyers exactly as "210
+ * golf course owners" would, and "900 member washes" counts car washes. Before,
+ * only a fixed list of buyer nouns and the payer's holder noun counted, so a
+ * market research had sized in the industry's own noun read as unsized and its
+ * volume link stayed open on a question already answered. Only the industry's
+ * last word is taken, only when it is a plural noun, and never a word for what
+ * is sold or done ("auto parts", "event rentals"). Singular and plural. Pure.
+ */
+export function industryBuyerWords(industry: string | null | undefined): string[] {
+  if (!industry) return [];
+  const words = industry.replace(/\([^)]*\)/g, ' ').toLowerCase().match(/[a-z]+/g) ?? [];
+  const last = words[words.length - 1];
+  if (!last || last.length < 4 || !last.endsWith('s') || last.endsWith('ss') || NOT_A_BUYER_NOUN.test(last)) return [];
+  const one = /(?:sh|ch|x|ss)es$/.test(last) ? last.slice(0, -2) : last.slice(0, -1);
+  return [one, last];
 }
 
 interface StatedRate {
@@ -231,9 +255,9 @@ function readRates(text: string): StatedRate[] {
 }
 
 /** Read the deals a market can take inside `windowDays`, or null when no number is stated. */
-export function readVolume(text: string, windowDays: number, payer: string | null = null): VolumeReading | null {
+export function readVolume(text: string, windowDays: number, payer: string | null = null, industry: string | null = null): VolumeReading | null {
   if (!text || !(windowDays > 0)) return null;
-  const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
+  const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer), ...industryBuyerWords(industry)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
   const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS}|${held.join('|')})\\b`, 'gi');
   const window = Math.max(1, Math.floor(windowDays));
 
