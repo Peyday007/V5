@@ -2783,7 +2783,10 @@ export async function reconstructionFor(
       // When it is asked, it may also invent designs for new buyers, composed by construction (S-11).
       explore: { library, stancePrior, ...(due ? { invent: (brief) => inventDirections(brief), ...(design ? { design } : {}) } : {}) },
     });
-    if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
+    if (context.goalId) {
+      for (const [id, one] of explored) if (Date.now() - one.at >= EXPLORATION_HELD_MS) explored.delete(id);
+      explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
+    }
     if (context.persist && context.goalId && r.exploration) {
       // Credited once per (goal, inputs): a re-read of unchanged inputs is the same trial (lens S, S-9).
       await recordExploration(context.goalId, r.exploration, inputsKey).catch((error: unknown) => {
@@ -5100,6 +5103,8 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
   trace(`composed ${constructed.length}`);
   const arrangements = constructed.filter((one) => namesABuyerPopulation(one.demand.name));
   trace(`over a population ${arrangements.length}`);
+  // One composed ten minutes ago by the wall clock is never fresh again (`arrangementsFresh`): let it go.
+  for (const [id, one] of lastArrangements) if (Date.now() - one.composedAt >= ARRANGEMENTS_FRESH_MS) lastArrangements.delete(id);
   lastArrangements.set(goal.id, { at: now.getTime(), composedAt: Date.now(), arrangements });
   // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
   await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>
