@@ -3,6 +3,7 @@
  * ideas never launch. SELECT and pure reads only; never merged.
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
+import { launchableByProject } from '../server/services/russell/loop.ts';
 
 const trim = (r: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === 'string' && v.length > 160 ? `${v.slice(0, 160)}…` : v]));
@@ -36,6 +37,9 @@ async function main(): Promise<void> {
     await q('PLAN_Q_SPEC', "SELECT c.id, c.priority, c.ordinal, CASE WHEN c.judgment LIKE '%\"missionSpec\"%' THEN 1 ELSE 0 END AS has_spec, CASE WHEN c.judgment LIKE '%\"proposedMission\"%' THEN 1 ELSE 0 END AS has_proposed, substr(c.reason,1,150) AS reason FROM russell_candidates c WHERE c.id IN (SELECT candidate_id FROM cash_needs WHERE blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' AND candidate_id IS NOT NULL)");
     await q('PRICE_Q_SPEC', "SELECT CASE WHEN c.judgment LIKE '%\"missionSpec\"%' THEN 1 ELSE 0 END AS has_spec, c.priority, COUNT(*) AS n FROM russell_candidates c WHERE c.state = 'QUEUED' AND c.id IN (SELECT candidate_id FROM cash_needs WHERE state = 'OPEN' AND request_key LIKE 'goal-price-%') GROUP BY 1, 2");
     await q('RUNNING_BY_PROJECT', "SELECT c.project_id, COUNT(*) AS n FROM russell_missions m JOIN russell_candidates c ON c.id = m.candidate_id WHERE m.state IN ('RUNNING','LAUNCHING','PLANNED','QUEUED') GROUP BY c.project_id");
+    await step('SLOTS', async () => (await launchableByProject()).map((p) => ({ p: p.projectId.slice(0, 12), waiting: p.waiting, cap: p.slots?.cap ?? null, live: p.slots?.live ?? null, free: p.free })));
+    await q('MAIN_RUNNING_AGE', "SELECT m.state, COUNT(*) AS n, MIN(m.created_at) AS oldest, MAX(m.created_at) AS newest FROM russell_missions m JOIN russell_candidates c ON c.id = m.candidate_id WHERE c.project_id = 'prj_22fb4fec295f403a8a22' AND m.state IN ('RUNNING','LAUNCHING','PLANNED','QUEUED') GROUP BY m.state");
+    await q('MAIN_LAUNCHED_TODAY', "SELECT substr(m.created_at,1,13) AS hour, COUNT(*) AS n FROM russell_missions m JOIN russell_candidates c ON c.id = m.candidate_id WHERE c.project_id = 'prj_22fb4fec295f403a8a22' AND m.created_at > '2026-11-21T18:00:00' GROUP BY 1 ORDER BY 1");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
