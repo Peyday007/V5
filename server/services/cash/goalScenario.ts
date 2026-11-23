@@ -2249,10 +2249,35 @@ export function estimateInput(est: Estimate, scale = 1, what = ''): ModelInput {
  */
 export const PRICE_CONTRADICTION_RATIO = 1.2;
 
+/** Words that make a stated price approximate ("about $1,000"): only then may it sit the full ratio from the card. */
+const PRICE_HEDGE = /\b(?:about|around|roughly|approximately|approx|circa|nearly|almost|some|or so)\b|~/i;
+
+/**
+ * Whether an exact stated figure is the card's price restated (planningReliability
+ * round 13). "$1,000" restates $950 — a figure rounded to its own last nonzero
+ * place is that far from what it rounds — but "$1,570" does not restate
+ * $1,350: a figure stated to the ten is not a rounding of one 16% away. A
+ * figure agrees within half its rounding unit, or 5% for a figure stated to
+ * the unit. Pure.
+ */
+function restates(stated: number, card: number): boolean {
+  let unit = 1;
+  const whole = Math.round(stated);
+  if (Math.abs(stated - whole) < 1e-9 && whole > 0) {
+    let n = whole;
+    while (n % 10 === 0) {
+      n /= 10;
+      unit *= 10;
+    }
+  }
+  return Math.abs(card - stated) <= Math.max(0.05 * stated, unit / 2) + 1e-9;
+}
+
 /**
  * Whether the price fact contradicts the card's price: it states one or more
  * whole-deal figures, the card's figure lies outside the range the fact spans,
- * and it is more than PRICE_CONTRADICTION_RATIO away from every one of them
+ * and it is more than PRICE_CONTRADICTION_RATIO away from every one of them —
+ * or, for a figure stated exactly, further than its own rounding (`restates`)
  * (planningReliability fam-07, ho-13: a card at $600 read as evidence while its
  * source said $60). The test is symmetric, so a source stating a higher figure
  * contests the card exactly as a lower one does — a 50% disagreement is a
@@ -2274,7 +2299,8 @@ export function priceContradiction(cardMajor: number, factText: string, currency
   // A range is read across every figure that spans it ("$500 to $700 per engagement").
   const span = stated.map((one) => one.cents / 100).filter((one) => one > 0);
   const within = span.length > 1 && cardMajor >= Math.min(...span) && cardMajor <= Math.max(...span);
-  const agrees = within || figures.some((one) => cardMajor <= one * PRICE_CONTRADICTION_RATIO && cardMajor * PRICE_CONTRADICTION_RATIO >= one);
+  const hedged = PRICE_HEDGE.test(factText);
+  const agrees = within || figures.some((one) => cardMajor <= one * PRICE_CONTRADICTION_RATIO && cardMajor * PRICE_CONTRADICTION_RATIO >= one && (hedged || restates(one, cardMajor)));
   if (agrees) return null;
   const nearest = figures.reduce((best, one) => (Math.abs(Math.log(one / cardMajor)) < Math.abs(Math.log(best / cardMajor)) ? one : best));
   return { stated: nearest, text: `"${factText.slice(0, 120)}"` };
@@ -2556,6 +2582,21 @@ export function volumeEstablished(one: Pick<ModelledOpportunity, 'volume' | 'rep
 }
 
 /**
+ * The new deals a repeatable play's established market still holds
+ * (planningReliability round 13). A counted market (`prospects`: research
+ * counted the buyers themselves) already holds every buyer who agreed, so
+ * two signed of exactly two leaves none to ask — the agreements are never
+ * counted once as agreed money and again as fresh buyers. An order rate
+ * counts deals made, not buyers, and is read whole. Null when no volume is
+ * established. Pure.
+ */
+export function buyersLeft(one: Pick<ModelledOpportunity, 'volume' | 'repeatable' | 'prospects' | 'agreedDeals'>): number | null {
+  if (!volumeEstablished(one) || one.volume.value === null) return null;
+  const counted = one.prospects !== null && one.prospects !== undefined;
+  return counted ? Math.max(0, one.volume.value - Math.min(one.agreedDeals, one.volume.value)) : one.volume.value;
+}
+
+/**
  * `established` counts a repeatable play's deals only up to the volume research
  * established — one deal when nobody has — so a supported reach never rests on
  * buyers nobody has shown exist. Without it the reach is the most the opening
@@ -2572,7 +2613,7 @@ export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysL
   const each = perDealToward(one, price, net, 'LOW');
   const held = agreedToward(one, net, 'LOW');
   let deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(Math.max(0, remaining - held) / Math.max(1, each))) : one.agreedValue > 0 ? 0 : 1;
-  if (established && one.repeatable) deals = Math.min(deals, volumeEstablished(one) ? one.volume.value ?? 1 : 1);
+  if (established && one.repeatable) deals = Math.min(deals, volumeEstablished(one) ? (buyersLeft(one) ?? 1) : 1);
   return Math.max(0, Math.min(remaining, held + deals * each));
 }
 

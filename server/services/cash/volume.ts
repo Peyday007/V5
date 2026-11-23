@@ -39,12 +39,14 @@ const BUYER_WORDS =
   'buyers|businesses|companies|firms|customers|clients|households|homeowners|stores|shops|retailers|restaurants|practices|offices|owners|landlords|managers|agencies|contractors|organizations|organisations|members|accounts|venues|schools|clinics|dealers|dealerships|properties|operators|brokers|sellers|merchants|hotels|salons|studios|nonprofits|charities|teams|users|subscribers|employers|carriers|farms|wineries|breweries|builders|fleets|hospitals|pharmacies|gyms|churches|associations|shippers|distributors|manufacturers|wholesalers|vendors|families|parents|drivers|freelancers|creators|authors|publishers|photographers|realtors|agents|lawyers|attorneys|dentists|physicians|therapists|coaches|boards|homeowners|tenants';
 
 const COUNT = '(\\d{1,3}(?:,\\d{3})+|\\d+)';
-const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`, 'gi');
+// The words between a count and what it counts may carry an ampersand or an apostrophe:
+// "12 B&B owners" and "40 children's clinics" count buyers as "12 inn owners" does (round 13).
+const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`, 'gi');
 const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts|renewals';
 const PER = '(?:a|per|each|every)';
 const PERIODS = '(day|week|month|year)';
 /** "<count> [≤2 words] <orders> a/per <period>": a stated rate; group 1 the count, 2 the period. */
-const RATE_PHRASE = `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b`;
+const RATE_PHRASE = `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b`;
 const ORDER_RATE = new RegExp(RATE_PHRASE, 'gi');
 
 /*
@@ -62,9 +64,9 @@ const APPROX = '(?:about|around|roughly|approximately|nearly|some|an average of|
  * trailing qualifier.
  */
 const SUBJECT_RATE = new RegExp(
-  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS})` +
-    `(?:\\s+(?:in|within|on|of|around|near|throughout|listed|registered|licensed)\\s+(?:[A-Za-z-]+\\s+){0,1}?[A-Za-z-]+)?` +
-    `\\s+(?:(${ADVERBS})\\s+)?([A-Za-z-]+)\\s+(?:${APPROX}\\s+)?${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b` +
+  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS})` +
+    `(?:\\s+(?:in|within|on|of|around|near|throughout|listed|registered|licensed)\\s+(?:[A-Za-z&'’-]+\\s+){0,1}?[A-Za-z-]+)?` +
+    `\\s+(?:(${ADVERBS})\\s+)?([A-Za-z-]+)\\s+(?:${APPROX}\\s+)?${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b` +
     `(\\s+(?:each|apiece|between them|in total|combined|together|altogether|in all|overall))?`,
   'gi',
 );
@@ -73,13 +75,13 @@ const NOT_A_VERB = /^(?:and|or|but|plus|with|without|of|to|for|from|in|at|on|by|
 const COLLECTIVE = /^(?:collectively|together|jointly|combined|between them|in total|altogether|in all|overall)$/i;
 /** A rate distributed over named units: "20 deliveries a week from each of (the) 35 pharmacies". */
 const EACH_OF_RATE = new RegExp(
-  `${RATE_PHRASE}\\s+(?:(?:at|from|for|in|by|to|with)\\s+)?each\\s+of\\s+(?:the\\s+|their\\s+|its\\s+|our\\s+|these\\s+|those\\s+)?${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`,
+  `${RATE_PHRASE}\\s+(?:(?:at|from|for|in|by|to|with)\\s+)?each\\s+of\\s+(?:the\\s+|their\\s+|its\\s+|our\\s+|these\\s+|those\\s+)?${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`,
   'gi',
 );
 /** A rate per unit, with the period after or before the unit: "20 deliveries a week per pharmacy", "20 deliveries per pharmacy a week". */
 const PER_UNIT_AFTER = new RegExp(`${RATE_PHRASE}\\s+(?:per|from each|at each|for each|in each)\\s+([A-Za-z-]+)`, 'gi');
 const PER_UNIT_BEFORE = new RegExp(
-  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+(?:per|from each|at each|for each|in each)\\s+([A-Za-z-]+)\\s+${PER}\\s+${PERIODS}\\b`,
+  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+(?:per|from each|at each|for each|in each)\\s+([A-Za-z-]+)\\s+${PER}\\s+${PERIODS}\\b`,
   'gi',
 );
 const TIMES = /(?:(\d+)\s*(?:times|x)|\b(once|twice))\s+(?:a|per|each|every)\s+(week|month|quarter|year)\b/i;
@@ -280,7 +282,7 @@ function readRates(text: string): StatedRate[] {
 export function readVolume(text: string, windowDays: number, payer: string | null = null, industry: string | null = null): VolumeReading | null {
   if (!text || !(windowDays > 0)) return null;
   const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer), ...industryBuyerWords(industry)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
-  const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS}|${held.join('|')})\\b`, 'gi');
+  const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS}|${held.join('|')})\\b`, 'gi');
   const window = Math.max(1, Math.floor(windowDays));
 
   // An order rate states the volume directly; the slowest one stated is taken.
@@ -396,7 +398,7 @@ export function readTrialVolume(text: string, windowDays: number, unit: string):
   const words = TRIAL_WORDS.find(([pattern]) => pattern.test(unit.toLowerCase()))?.[1];
   if (!words) return null;
   const window = Math.max(1, Math.floor(windowDays));
-  const pattern = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,5}?(?:${words})\\b(?!\\s*%)(?:\\s+${PER}\\s+(day|week|month|quarter|year)\\b)?`, 'gi');
+  const pattern = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,5}?(?:${words})\\b(?!\\s*%)(?:\\s+${PER}\\s+(day|week|month|quarter|year)\\b)?`, 'gi');
   let best: VolumeReading | null = null;
   for (const m of text.matchAll(pattern)) {
     const count = toInt(m[1]!);
@@ -445,7 +447,7 @@ const CLOSED_WORK = /\b(?:won|lost|awarded\s+(?:to|us)|completed|delivered|signe
  * count is (`readTrialVolume`). Null otherwise. Pure.
  */
 function readPostedWorkVolume(text: string, window: number, unit: string): VolumeReading | null {
-  const pattern = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,5}?(?:${POSTED_WORK})\\b(?!\\s*%)(?:\\s+${PER}\\s+(day|week|month|quarter|year)\\b)?`, 'gi');
+  const pattern = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,5}?(?:${POSTED_WORK})\\b(?!\\s*%)(?:\\s+${PER}\\s+(day|week|month|quarter|year)\\b)?`, 'gi');
   let best: VolumeReading | null = null;
   for (const m of text.matchAll(pattern)) {
     const count = toInt(m[1]!);
@@ -477,7 +479,7 @@ function readPostedWorkVolume(text: string, window: number, unit: string): Volum
 
 /** A verb by which a buyer puts its own work out to bid: it tenders it, bids it out, issues an RFQ for it. */
 const SOLICITS = '(?:re-?)?tenders?|(?:re-?)?bids?\\s+(?:[a-z-]+\\s+){0,4}?out|puts?\\s+(?:[a-z-]+\\s+){0,4}?(?:out\\s+)?(?:to|for)\\s+(?:bid|bids|tender)|issues?\\s+(?:an?\\s+)?(?:RFQ|RFP|RFT|tender|invitation\\s+to\\s+bid)s?|solicits?\\s+bids';
-const SOLICITOR_RATE = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+((?:[A-Za-z-]+\\s+){1,6}?)(?:${SOLICITS})\\b[^.;\\d]*?\\b${PER}\\s+(week|month|quarter|year)\\b`, 'gi');
+const SOLICITOR_RATE = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+((?:[A-Za-z&'’-]+\\s+){1,6}?)(?:${SOLICITS})\\b[^.;\\d]*?\\b${PER}\\s+(week|month|quarter|year)\\b`, 'gi');
 
 /**
  * Tenders counted by who issues them (planningReliability round 8): "140

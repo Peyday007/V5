@@ -104,7 +104,9 @@ const PHYSICAL_SERVICE = new RegExp(
     'moving (?:labor|help|service)',
     'junk removal',
     'yard work',
-    'landscap(?:e|ing)',
+    // Landscaping is the work; "landscape designers" and "landscape architects" are buyers who draw it (round 13).
+    'landscaping',
+    'landscape (?:maintenance|install(?:ation|ations|ing|s)?|work|crews?|care|services?|contract(?:s|ing|or|ors)?)',
     'handyman',
     'pest control',
     'pet (?:sitting|grooming)|dog walking',
