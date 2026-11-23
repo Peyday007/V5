@@ -93,7 +93,9 @@ async function fileOpening(f: OpeningFixture, t: Template, cashModeId: string, n
   } as never);
   // The evidenced price: the card's own figure, or — contradicting it — the figure another source states.
   const evidencedPrice = f.priceContradiction ?? f.price;
-  await fact('price', `$${evidencedPrice}${f.monthly ? ' a month' : ''}`, f.priceBasis === 'PERSON' ? 'PERSON' : 'EVIDENCE');
+  // A case may state what the source says the money is; a contradicting figure still wins, as research would file it.
+  const priceText = f.priceContradiction === undefined && f.priceEvidence ? f.priceEvidence : `$${evidencedPrice}${f.monthly ? ' a month' : ''}`;
+  await fact('price', priceText, f.priceBasis === 'PERSON' ? 'PERSON' : 'EVIDENCE');
   if (f.daysToCash !== undefined && f.daysToCash !== null) await fact('timeToFirstCash', `${f.daysToCash} days`);
   if (f.cost !== undefined && f.cost !== null) await fact('directCosts', `$${f.cost}`);
   await fact('exposure', `$${f.capital ?? 0}`);
