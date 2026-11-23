@@ -17019,3 +17019,36 @@ than a hundred. So it is taken from a terminal: `npm run engineering -- cycle
 [--hours 72] [--input DIR] [--record --admin <email>]`, through the forge with
 `BRAIN_FORGE_TOKEN` or from `gh api` JSON in DIR. `npm run engineering --
 report` prints the newest stored reading. Tests: `tests/engineeringCycle.test.ts`.
+
+## 116. A price is what a buyer pays a supplier, a buyer population is more than one company, and coverage over unsupported legs is not reliability.
+
+**Owner's order, 2026-11-23**, after the independent audit of the $10K plan
+(`docs/audits/2026-11-23-10k-plan-audit.md`, kept verbatim with the reading it
+examined). The candidate reported "reach 0.98". Almost all of it came from one
+constructed arrangement that sold a spreadsheet to "GitHub Inc is the payer —
+its bug bounty page publishes rewards of $10,000 or more…" at $10,000 a deal,
+1–200 times, to a median of 4,314 contacts. Without that leg the five others
+had a median of $432, and the reconstruction reached $10K in 0% of worlds.
+
+**The general causes, and where each is closed:**
+
+- **A payment is read for what it is paid for** (`server/domain/paymentNature.ts`).
+  A bounty, prize or contest reward, a grant, a rebate, refund, reimbursement or
+  settlement, and a wage are money, but none is a price a buyer pays a supplier
+  for a deliverable. `claimPaysPopulation` checked direction only; GitHub *is*
+  the payer of its bounty, so the $10,000 passed. Every price back-fill source
+  now refuses such a claim at the one place it files (`fileOne`, industry/expand.ts),
+  construction drops already-filed facts and opening prices that are one, and a
+  bounty, prize or contest opening is a competitive award (paid after it is
+  judged), like a tender.
+- **One organisation is not a population** (`namesABuyerPopulation`). A buyer
+  name written as a sentence is read by its subject (`subjectOf`): the sentence
+  about GitHub passed because the whole sentence is not a proper name.
+- **A payer an opening named is evidence about that opening's need only.** The
+  GitHub payer was paired with an HVAC-software sentence from another opening
+  in its sector, which became the offer text.
+
+Each refusal is read from the claim's own words by a closed set of cues (§8),
+and each is pinned by `tests/paymentNature.test.ts` with the audit's own claims
+and their counter-cases (a grant *writer's* fee, a contract won by bid, a
+per-puzzle purchase stay prices).
