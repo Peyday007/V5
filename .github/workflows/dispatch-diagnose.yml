@@ -87,6 +87,9 @@ jobs:
           echo "=============== step10 fire-check ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fire-check" 2>&1 | tail -80
 
+          echo "=============== step10 fragment-failures ==============="
+          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fragment-failures" 2>&1 | tail -90
+
           if [ -n "$DIAG_BIN" ]; then
             echo "=============== step10 trace $DIAG_BIN ==============="
             flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh trace $DIAG_BIN" 2>&1 | tail -200
