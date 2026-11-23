@@ -46,6 +46,9 @@ async function main(): Promise<void> {
     await q('FRAG_QUEUE', "SELECT f.status, COUNT(*) AS n, MIN(f.created_at) AS oldest FROM research_fragments f WHERE f.created_at > '2026-11-15' GROUP BY f.status");
     await q('FRAG_DONE_BY_HOUR', "SELECT substr(f.updated_at,1,13) AS hour, f.status, COUNT(*) AS n FROM research_fragments f WHERE f.updated_at > '2026-11-22T00:00:00' AND f.status NOT IN ('QUEUED','PENDING') GROUP BY 1, 2 ORDER BY 1");
     await q('FRAG_QUEUE_PROJ', "SELECT f.project_id, COUNT(*) AS n FROM research_fragments f WHERE f.status = 'QUEUED' GROUP BY 1");
+    await q('FL_CAP_EVENTS', "SELECT e.at, e.workload_class AS model, e.outcome, substr(e.reason,1,160) AS reason, substr(e.measures,1,160) AS measures FROM bin_events e WHERE e.event_type = 'FREE_LANE_CAPACITY' AND e.at > '2026-11-22T20:00:00' ORDER BY e.at DESC LIMIT 15");
+    await q('FL_CLAIMS_BY_HOUR', "SELECT substr(e.at,1,13) AS hour, e.event_type, COUNT(*) AS n FROM bin_events e WHERE e.at > '2026-11-23T00:00:00' AND e.event_type IN ('CLAIMED','COMPLETED','FAILED','RELEASED','LEASE_EXPIRED','CHECKPOINT') GROUP BY 1, 2 ORDER BY 1, 2");
+    await q('BIN_EVENT_TYPES', "SELECT e.event_type, COUNT(*) AS n FROM bin_events e WHERE e.at > '2026-11-23T03:00:00' GROUP BY 1 ORDER BY 2 DESC LIMIT 25");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
