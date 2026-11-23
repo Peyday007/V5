@@ -57,6 +57,7 @@
  *     method problem. Each is a `ResearchDiagnosis`, so the next round is
  *     asked differently through the door that already exists.
  */
+import { fulfillerParty } from '../../domain/operatingModel.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { payerNounWords } from '../cash/volume.ts';
 import type { VariableProvenance } from '../../domain/scenario.ts';
@@ -643,12 +644,24 @@ export function byCollectibility(a: TransactionPathway, b: TransactionPathway, d
  * publication, a firm) keeps the first-word reading. Pure.
  */
 export function namesThePayer(fulfiller: string, payer: string | null | undefined): boolean {
-  const text = fulfiller.toLowerCase();
+  /*
+   * A party that quoted for the work is a supplier, whatever its name shares
+   * with the buyers ("Sandpiper Outfitters (seller quote)" for hunting
+   * outfitters), and the party is read without what describes it
+   * (`fulfillerParty`): "Summit Logistics (quoted; the owner's former
+   * employer)" names Summit Logistics, never the shop owners who pay
+   * (planningReliability round 13).
+   */
+  if (QUOTED_PARTY.test(fulfiller)) return false;
+  const text = fulfillerParty(fulfiller).toLowerCase();
   const kind = payerNounWords(payer);
   if (kind.length > 0) return kind.some((w) => new RegExp(`(?:^|[^a-z])${w}(?:[^a-z]|$)`).test(text));
   const payerWord = (payer ?? '').toLowerCase().split(/[^a-z0-9]+/).find((w) => w.length > 3 && !['market', 'payer', 'english', 'language'].includes(w)) ?? null;
   return payerWord !== null && text.includes(payerWord);
 }
+
+/** Words that say a named party priced the work for us: a quote comes from a supplier, never from the buyer. */
+const QUOTED_PARTY = /\b(?:quoted|quotes?|quotation)\b/i;
 
 /**
  * A pathway's transaction model from what the plan composed for it. Pure.

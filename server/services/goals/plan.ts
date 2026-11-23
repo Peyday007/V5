@@ -72,8 +72,8 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
-import { agreedToward, costedDeals, costPerDeal, countsNet } from '../cash/towardTarget.ts';
-import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, dealsFromOffers, measuredClose, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
+import { agreedToward, costedDeals, costPerDeal, countsNet, perDealToward } from '../cash/towardTarget.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, buyersLeft, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, dealsFromOffers, measuredClose, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
 import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching, staleUnlaunchedRounds } from '../cash/discovery.ts';
@@ -661,6 +661,13 @@ export interface InfeasibleConclusion {
    * the search narrows to that instead of stopping (§65; review F2).
    */
   instantOnly: boolean;
+  /**
+   * The conclusion is about the openings held, each bounded by a measured
+   * market or by the goal's own limits (`judgeHeldMarkets`). Markets nobody
+   * has counted are not ruled out, so the search for other openings continues
+   * (§65), while the plan on what is held names the change of terms.
+   */
+  heldMarkets?: boolean;
 }
 
 export interface InferredInput {
@@ -2157,7 +2164,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       refusedAcceptance = { ...refusedAcceptance, status: 'CANDIDATE_ONLY', candidate: refusedPlan.candidate, sentence: candidateSentence(refusedPlan.candidate, refusedAcceptance.required) };
     }
     const refusedInfeasible =
-      refusedAcceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(refusedReconstruction, null, model.portfolio, target, refusedAcceptance.required));
+      refusedAcceptance.status === 'ACCEPTED' || agreedInReach(model.considered, target.daysLeft, countsNet(target.metric)) >= target.remainingCents / 100 - 0.5
+        ? null
+        : judgeFeasibility(feasibilityInput(refusedReconstruction, null, model.portfolio, target, refusedAcceptance.required));
     if (refusedInfeasible) refusedAcceptance = notSupported(refusedAcceptance, refusedInfeasible);
     /*
      * One lead (transfer test, 2026-11-19, goal wst_4f0c312400e1425dab2e): the
@@ -2366,7 +2375,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       // Agreed money is reach. New deals are reach only at a price buyers are
       // shown to pay — never at a guessed or listed one.
       // A repeatable play takes no more deals than research shows the market holds.
-      const taken = volumeEstablished(one) && one.repeatable ? Math.min(deals, one.volume.value ?? deals) : deals;
+      // A counted market already holds the buyers who agreed: they are agreed money, never fresh deals too (`buyersLeft`).
+      const taken = volumeEstablished(one) && one.repeatable ? Math.min(deals, buyersLeft(one) ?? deals) : deals;
       const fresh = unproven || !priceSupported(one) ? 0 : taken;
       // On a net target the best case is net too: the top price less the lowest cost of each deal, agreed ones included.
       const kept = net ? agreedToward(one, true, 'LOW') - fresh * costPerDeal(one, 'LOW') : one.agreedValue;
@@ -2579,10 +2589,22 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     acceptance = { ...acceptance, status: 'CANDIDATE_ONLY', candidate: plan.candidate, sentence: candidateSentence(plan.candidate, acceptance.required) };
   }
   // The goal as stated, judged on arithmetic rather than on the openings found (C-10, §65).
-  const infeasible = acceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(reconstruction, pathways.structures, model.portfolio, target, acceptance.required));
+  // Or on measurements alone: every opening held bounded by a counted market or by the goal's own limits (round 13).
+  const infeasible =
+    acceptance.status === 'ACCEPTED' || target.achieved
+      ? null
+      : ((agreedInReach(model.considered, target.daysLeft, net) >= target.remainingCents / 100 - 0.5 ? null : judgeFeasibility(feasibilityInput(reconstruction, pathways.structures, model.portfolio, target, acceptance.required))) ??
+        judgeHeldMarkets({
+          openings: model.considered.filter((one) => !isArrangementId(one.opportunity.id)),
+          remaining: target.remainingCents / 100,
+          net,
+          limits: { daysLeft: target.daysLeft, capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100 },
+          required: acceptance.required,
+        }));
   // What would resolve the no-plan conclusion's blocker (§3a): advice beside the verdict, never a change of it.
   const resolutions = acceptance.status === 'ACCEPTED' ? [] : resolutionsOf(strategies, model.included, target, acceptance);
-  if (infeasible) relaxAlso(infeasible, resolutions);
+  // A held-market conclusion computed its own relaxations; a limit it found would not rescue the goal is not offered.
+  if (infeasible && !infeasible.heldMarkets) relaxAlso(infeasible, resolutions);
   if (infeasible) acceptance = notSupported(acceptance, infeasible);
   // The verdict follows the plan adopted: a reconstructed candidate is constructed from its own reading, not the baseline's.
   acceptance = {
@@ -2662,7 +2684,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     outcomeRecorded,
     policy,
     acceptance: acceptance.status,
-    instantOnly: infeasible?.instantOnly,
+    instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets,
     surplus: readings.objective.outcome?.surplusForSuccessors ?? Math.max(0, (target.achievedCents - target.targetCents) / 100),
   });
   const built: PlanReading = {
@@ -2701,7 +2723,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       legacy: researchPriority(result, model.included, target, chosen?.key ?? null),
     })],
     // The pool, the ladder and the diagnosis are about openings found; an estimate is none of them.
-    pool: infeasible ? { ...pool, sentence: `${pool.sentence} The goal as stated is not supported by arithmetic, so the search stops until its terms or inputs change.` } : pool,
+    pool: infeasible
+      ? { ...pool, sentence: infeasible.heldMarkets ? `${pool.sentence} The openings held cannot reach the goal on their measured markets and limits; the search continues for openings outside them.` : `${pool.sentence} The goal as stated is not supported by arithmetic, so the search stops until its terms or inputs change.` }
+      : pool,
     ladder: ladderOf(considered.filter((one) => !isArrangementId(one.opportunityId))),
     marketTests,
     executionPolicy: policy,
@@ -2731,7 +2755,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   // The plan's integrity (`planIntegrity`), checked on the steps, the lead and every text a person reads: a reading that breaks a rule is never ACCEPTED.
   const reading = gateIntegrity(built, (refused) => {
     const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models });
-    return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, surplus: continuation.surplusForSuccessors }) };
+    return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets, surplus: continuation.surplusForSuccessors }) };
   });
   if (input.persist) {
     await recordDegraded(goal.id, target.projectId, degraded);
@@ -3284,6 +3308,145 @@ export function judgeFeasibility(input: {
   return { reason, relax, headroomReach: r.headroom.reach, required: input.required, instantOnly };
 }
 
+/**
+ * What the agreements already held bring toward the target when each settles
+ * at its favourable end: every one whose settlement is unknown or inside the
+ * window (planningReliability round 13). Agreed money needs no sale, so no
+ * structure outreach could sell bears on it; when it alone covers what is
+ * still needed, the goal is not out of reach by arithmetic, and what blocks it
+ * is the missing link (when the buyers pay), never the target. Pure.
+ */
+export function agreedInReach(openings: ModelledOpportunity[], daysLeft: number | null, net: boolean): number {
+  let sum = 0;
+  for (const one of openings) {
+    if (!(one.agreedValue > 0)) continue;
+    const days = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' ? one.daysToCash.value : null;
+    if (days !== null && daysLeft !== null && days > daysLeft) continue;
+    sum += agreedToward(one, net, 'LOW');
+  }
+  return sum;
+}
+
+/** The goal's own limits a held-market ceiling is read under (`heldCeiling`); null fields bind nothing. */
+export interface HeldLimits {
+  daysLeft: number | null;
+  capitalCeiling: number | null;
+}
+
+/**
+ * The most one held opening could bring toward the target, every unknown at its
+ * favourable end and every buyer agreeing, or null when nothing measured bounds
+ * it (planningReliability round 13). Pure.
+ *
+ * Two measurements bound an opening, and nothing else does (§65: a short pool
+ * is a search gap, never a ceiling):
+ *
+ * - its market, when research counted the buyers themselves (`prospects`): the
+ *   agreements plus the buyers left (`buyersLeft`), at the top price;
+ * - under `limits`, the goal's own terms: a lot that settles after the
+ *   deadline brings nothing, a lot that ties up more than the ceiling cannot
+ *   start, and a ceiling of ⌊ceiling ÷ capital⌋ lots at once turned
+ *   ⌊days left ÷ days to cash⌋ times holds that many lots, agreed ones first.
+ *
+ * A one-off nobody sized, an order rate, an estimate, or a deal priced by a
+ * figure nobody has shown buyers pay (unknown, assumed or contested) is
+ * unmeasured: it returns null, and the conclusion is not drawn.
+ */
+export function heldCeiling(one: ModelledOpportunity, net: boolean, limits: HeldLimits | null): number | null {
+  if (one.competitiveAward) return null;
+  const known = (x: ModelInput): number | null => (x.value !== null && x.provenance !== 'UNKNOWN' ? x.value : null);
+  // Only a price buyers are shown to pay measures what a deal brings: a contested or assumed one bounds nothing.
+  const price = priceSupported(one) ? (one.price.high ?? one.price.value) : null;
+  const each = price === null ? null : perDealToward(one, price, net, 'LOW');
+  const agreed = agreedToward(one, net, 'LOW');
+  const lots = agreedLots(one);
+  const left = one.repeatable && one.prospects !== null && one.prospects !== undefined ? buyersLeft(one) : null;
+  let bound = left === null ? Infinity : left > 0 && each === null ? Infinity : agreed + left * (each ?? 0);
+  if (limits) {
+    const days = known(one.daysToCash);
+    if (days !== null && limits.daysLeft !== null && days > limits.daysLeft) return 0;
+    const capital = known(one.capital);
+    if (capital !== null && capital > 0 && limits.capitalCeiling !== null) {
+      if (capital > limits.capitalCeiling + 1e-9) return 0;
+      if (days !== null && days > 0 && limits.daysLeft !== null) {
+        const inWindow = Math.floor(limits.capitalCeiling / capital + 1e-9) * Math.max(1, Math.floor(limits.daysLeft / days + 1e-9));
+        const agreedIn = lots > 0 ? (agreed * Math.min(lots, inWindow)) / lots : agreed;
+        const freshLots = Math.max(0, inWindow - lots);
+        const byLots = freshLots > 0 && each === null ? Infinity : agreedIn + freshLots * (each ?? 0);
+        bound = Math.min(bound, byLots);
+      }
+    }
+  }
+  return Number.isFinite(bound) ? Math.max(0, bound) : null;
+}
+
+/**
+ * Whether the openings held are out of reach of the goal on measurements alone
+ * (planningReliability round 13; §65, §95). Pure.
+ *
+ * `judgeFeasibility` reads the goal against every structure outreach could
+ * sell, so a short pool never concludes it. A measured ceiling is different:
+ * when research counted the whole market an opening sells into, or the goal's
+ * own capital and deadline hold only so many lots, every buyer agreeing at the
+ * top price is the most that opening can bring — a measurement, not a search
+ * gap. When every held opening is bounded that way and together they fall
+ * short, the goal is infeasible on what is held: the conclusion names the
+ * target to lower to (and, when the limits rather than the markets bind, the
+ * capital or deadline that would reach it). It covers the openings held, not
+ * markets nobody has counted, so the search for other openings continues
+ * (`heldMarkets`).
+ */
+export function judgeHeldMarkets(input: { openings: ModelledOpportunity[]; remaining: number; net: boolean; limits: HeldLimits; required: number }): InfeasibleConclusion | null {
+  const { openings, remaining, net, limits } = input;
+  if (openings.length === 0 || !(remaining > 0)) return null;
+  const total = (l: HeldLimits | null): number => {
+    let sum = 0;
+    for (const one of openings) {
+      const c = heldCeiling(one, net, l);
+      if (c === null) return Infinity;
+      sum += c;
+    }
+    return sum;
+  };
+  const within = total(limits);
+  if (!(within < remaining - 0.5)) return null;
+  const market = total(null);
+  const marketShort = market < remaining - 0.5;
+  const relax: InfeasibleConclusion['relax'] = [];
+  if (!marketShort) {
+    if (limits.capitalCeiling !== null && total({ ...limits, capitalCeiling: null }) >= remaining - 0.5) {
+      const steps = [...new Set(openings.flatMap((one) => (one.capital.value !== null && one.capital.value > 0 ? Array.from({ length: 200 }, (_, k) => (k + 1) * one.capital.value!) : [])))]
+        .filter((c) => c > limits.capitalCeiling! + 1e-9)
+        .sort((a, b) => a - b);
+      const enough = steps.find((c) => total({ ...limits, capitalCeiling: c }) >= remaining - 0.5);
+      relax.push({ constraint: 'CAPITAL', suggestion: enough !== undefined ? `allow the goal to commit at least ${moneyOf(enough)}, what the lots that reach the target need at once` : 'allow the goal to commit more money: the lots the target needs do not fit inside the ceiling' });
+    }
+    if (limits.daysLeft !== null) {
+      let days: number | null = null;
+      for (let d = Math.floor(limits.daysLeft) + 1; d <= 365; d += 1) {
+        if (total({ ...limits, daysLeft: d }) >= remaining - 0.5) {
+          days = d;
+          break;
+        }
+      }
+      if (days !== null) relax.push({ constraint: 'DEADLINE', suggestion: `move the deadline to at least ${days} days from now, when enough lots have settled` });
+    }
+  }
+  relax.push({
+    constraint: 'TARGET',
+    suggestion:
+      within > 0
+        ? `lower the target to about ${moneyOf(within)}, the most the openings held bring with every buyer agreeing at the top price`
+        : 'lower the target: the openings held bring nothing inside the goal\'s limits even with every buyer agreeing',
+  });
+  if (marketShort) relax.unshift(relax.pop()!);
+  const kept = net ? ' net of direct costs' : '';
+  const reason = marketShort
+    ? `the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most ${moneyOf(market)}${kept}, so they cannot reach the ${moneyOf(remaining)} still needed`
+    : `inside the goal's own limits the openings held bring at most ${moneyOf(within)}${kept} of the ${moneyOf(remaining)} still needed, even with every buyer agreeing at the top price`;
+  return { reason, relax, headroomReach: 0, required: input.required, instantOnly: false, heldMarkets: true };
+}
+
 /** The resolutions of the blockers the gate's NOT_VIABLE strategies show (`blockerResolutions`), from the planner's own numbers. */
 function resolutionsOf(strategies: StrategyReading[], included: ModelledOpportunity[], target: TargetReading, acceptance: PlanAcceptance): Resolution[] {
   const byId = new Map(included.map((one) => [one.opportunity.id, one]));
@@ -3321,13 +3484,15 @@ export function notSupported(acceptance: PlanAcceptance, infeasible: InfeasibleC
     sentence: `INFEASIBLE AS STATED: ${infeasible.reason}. To make it supportable, ${infeasible.relax.map((one) => `${one.constraint.toLowerCase()}: ${one.suggestion}`).join('; or ')}. ${
       infeasible.instantOnly
         ? 'Arithmetic still allows a sale to buyers already at a checkout or on a marketplace, so Brain keeps searching, and its search brief asks for buyers who come to the offer.'
-        : 'Brain stops widening research for this goal until its terms or inputs change.'
+        : infeasible.heldMarkets
+          ? 'The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.'
+          : 'Brain stops widening research for this goal until its terms or inputs change.'
     }`,
   };
 }
 
 /** Whether the goal's search keeps widening (C-10): not after the deadline, an outcome, or arithmetic infeasibility. Pure. */
-export function continueSearch(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status']; instantOnly?: boolean }): boolean {
+export function continueSearch(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status']; instantOnly?: boolean; heldMarkets?: boolean }): boolean {
   return continuationOf(input).continues;
 }
 
@@ -3339,7 +3504,7 @@ export function continueSearch(input: { achieved: boolean; daysLeft: number | nu
  * window closing, a missed outcome on the record, or arithmetic ruling the
  * goal out (C-10). Pure.
  */
-export function continuationOf(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status']; instantOnly?: boolean; surplus?: number }): Continuation {
+export function continuationOf(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status']; instantOnly?: boolean; heldMarkets?: boolean; surplus?: number }): Continuation {
   const surplusForSuccessors = Math.max(0, input.surplus ?? 0);
   const open = input.daysLeft === null || input.daysLeft > 0;
   if (input.achieved) {
@@ -3352,6 +3517,8 @@ export function continuationOf(input: { achieved: boolean; daysLeft: number | nu
   if (input.acceptance === 'NOT_SUPPORTED') {
     return input.instantOnly === true
       ? { continues: true, reason: 'only an instantly settling opening could still reach the goal, so the search for one continues', surplusForSuccessors }
+      : input.heldMarkets === true
+        ? { continues: true, reason: 'the openings held cannot reach the goal on their measured markets and limits, but markets nobody has counted are not ruled out, so the search for other openings continues', surplusForSuccessors }
       : { continues: false, reason: 'the goal as stated is not supported by arithmetic; the search resumes when its terms or inputs change', surplusForSuccessors };
   }
   if (input.acceptance === 'ACCEPTED') {
