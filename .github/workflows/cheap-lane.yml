@@ -448,7 +448,11 @@ jobs:
               # machine from OmniRoute's published image, created once and
               # updated in place after.
               [ -n "$OMNIROUTE_PASSWORD" ] || { echo "::error::Set the OMNIROUTE_PASSWORD repository secret first."; exit 1; }
-              image=diegosouzapw/omniroute:latest
+              # Pinned to the digest verified on production 2026-11-23 (cheap-lane test
+              # run 45125632110: both routes HTTP 200). `:latest` let a restart pull an
+              # unvetted startup migration that took the gateway down; a new version is
+              # adopted by changing this digest in a reviewed change, never by a restart.
+              image=diegosouzapw/omniroute@sha256:2be638c210c7a559643e8f68bdcac2167e4eacfef370fdd9eabb825eebe56d32
               flyctl apps list $orgflag --json | grep -q "\"$cheap\"" || flyctl apps create "$cheap" $orgflag
               flyctl volumes list --app "$cheap" --json | grep -q omniroute_data \
                 || flyctl volumes create omniroute_data --app "$cheap" --region iad --size 3 --yes
