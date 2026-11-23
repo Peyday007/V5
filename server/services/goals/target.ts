@@ -22,7 +22,7 @@ import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { getProject } from '../../repos/projects.ts';
-import { getWorkstream } from '../../repos/register.ts';
+import { getWorkstream, workstreamEventsOfKind } from '../../repos/register.ts';
 import { GOAL_METRICS, type GoalMetric, type GoalTarget, type Workstream } from '../../domain/register.ts';
 import { readObjective } from '../industry/construction/intent.ts';
 
@@ -97,6 +97,15 @@ export interface GoalScope {
    * (planningReliability round 10). Absent on a scope built by hand.
    */
   capitalStatedCents?: number | null;
+  /**
+   * The owner removed this target's capital ceiling (a `GOAL_TARGET_LIMITS_SET`
+   * whose `before` held one, since the target was set) and has not set one
+   * since. A removal is the owner's answer to how much may be committed — no
+   * limit — so neither the figure the objective first stated nor a figureless
+   * phrase in it reopens the question (planningReliability round 11). Set only
+   * by `readTarget`, which reads the events.
+   */
+  capitalRemoved?: boolean;
 }
 
 export function goalScope(goal: Pick<Workstream, 'intent' | 'title' | 'target'>, now: Date = new Date()): GoalScope {
@@ -162,10 +171,27 @@ export function achievedFrom(metric: GoalMetric, totals: Record<string, number>)
   }, 0);
 }
 
+/**
+ * Whether the owner removed a capital ceiling this target held: a limits change
+ * recorded since the target was set whose `before` carried one. Called only
+ * while the target holds no ceiling, so a ceiling set again since is not read
+ * as removed.
+ */
+async function capitalRemovedByOwner(goalId: string, setAt: string): Promise<boolean> {
+  const events = await workstreamEventsOfKind(goalId, 'GOAL_TARGET_LIMITS_SET', setAt);
+  return events.some((e) => {
+    const before = (e.detail as { before?: { capitalCeilingCents?: unknown } | null }).before;
+    return typeof before?.capitalCeilingCents === 'number';
+  });
+}
+
 export async function readTarget(goal: Workstream, now: Date = new Date()): Promise<TargetReading | null> {
   const target = goal.target;
   if (!target) return null;
-  const scope = goalScope(goal, now);
+  const base = goalScope(goal, now);
+  const scope = target.capitalCeilingCents === null && (base.capitalStatedCents != null || base.capitalAssumed) && (await capitalRemovedByOwner(goal.id, target.setAt))
+    ? { ...base, capitalStatedCents: null, capitalAssumed: null, capitalRemoved: true }
+    : base;
   // A monthly run-rate is what the ledger settled over the trailing month, never everything since the target was set.
   const trailing = new Date(now.getTime() - RUN_RATE_DAYS * DAY).toISOString();
   const since = scope.recurring === 'MONTHLY' && trailing > target.setAt ? trailing : target.setAt;

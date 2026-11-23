@@ -169,6 +169,19 @@ const THIRD_PARTY_FULFILLER =
   /\b(?:contractor|subcontractor|supplier|vendor|partner|installer|crew|printer|manufacturer|wholesaler|provider|company|agency|studio|dropship)s?\b/i;
 const OWNER_OR_BRAIN = /\b(?:brain|owner|me|myself|we|us|our team|a person|peyton)\b/i;
 
+/**
+ * The party a recorded fulfiller names, without what describes it: a
+ * parenthesis, a clause after a semicolon, and "owner of …" (a possession,
+ * not a person). "LumaRent Stage Systems (owner of the panels; invoiced after
+ * the shoot)" is LumaRent; "BigTop Event Rentals (tent owner)" is BigTop. Read
+ * whole, the description's "owner" named the goal's owner as the performer
+ * (planningReliability round 11). Pure.
+ */
+export function fulfillerParty(named: string): string {
+  const party = named.replace(/\([^)]*\)/g, ' ').split(';')[0]!.replace(/\bowner(?:'s)?\s+of\b[^,]*/gi, ' ').replace(/\s+/g, ' ').trim();
+  return party || named.trim();
+}
+
 export type OperatingFit =
   /** Sold, delivered and managed online by Brain and software. */
   | { kind: 'REMOTE'; because: string }
@@ -226,8 +239,10 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
   // Words can excuse any physical part; a recorded mechanism vouches only for a service someone else performs.
   const brokeredWords = words.match(BROKERED)?.[0] ?? null;
   const brokered = brokeredWords ?? (service ? brokeredMechanism : null);
-  const ownFulfiller = fulfiller !== '' && OWNER_OR_BRAIN.test(fulfiller) && !THIRD_PARTY_FULFILLER.test(fulfiller);
-  const thirdParty = fulfiller && THIRD_PARTY_FULFILLER.test(fulfiller) && !OWNER_OR_BRAIN.test(fulfiller);
+  // Who the fulfiller is reads on the party it names, never on the words describing it (`fulfillerParty`).
+  const party = fulfillerParty(fulfiller);
+  const ownFulfiller = fulfiller !== '' && OWNER_OR_BRAIN.test(party) && !THIRD_PARTY_FULFILLER.test(fulfiller);
+  const thirdParty = fulfiller && THIRD_PARTY_FULFILLER.test(fulfiller) && !OWNER_OR_BRAIN.test(party);
   const gig = words.match(OWNER_AS_GIG_WORKER)?.[0] ?? null;
   /*
    * A listing that recruits drivers or movers is a gig the operator would do

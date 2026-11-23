@@ -306,7 +306,7 @@ export interface PlanReading {
   scenarioRunId: string | null;
   basisNote: string | null;
   /** What the model left out, and why. */
-  excluded: { opportunityId: string; title: string; reason: string }[];
+  excluded: { opportunityId: string; title: string; reason: string; rule?: 'OWNER_PHYSICAL' | 'STOPPED' }[];
   /** Accepted plan versus candidates, under the owner's 90% condition. RECOMMENDABLE iff ACCEPTED. */
   acceptance: PlanAcceptance;
   /** Only from this Brain's own record of earlier recommended plans. */
@@ -2161,7 +2161,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       construction: refusedAcceptance.candidate?.source === 'RECONSTRUCTED' ? constructionOf(refusedAcceptance.candidate, null, []) : (refusedAcceptance.construction ?? constructionOf(refusedAcceptance.candidate, null, [])),
     };
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
-    const qualify = qualifyTest(model.liveOpenings);
+    const qualify = qualifyTest(model.liveOpenings, model.excluded);
     const refusedModels = arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null);
     const refusedLead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: refusedAcceptance.candidate?.opportunityIds ?? [] });
     const refusedSteps = target.achieved || refusedInfeasible
@@ -2219,7 +2219,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         ...reconstructionDiagnosis(refusedReconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }),
         ...diagnoseGoalResearch({
           considered: [],
-          excludedReasons: model.excluded.map((one) => one.reason),
+          excludedReasons: model.excluded.filter((one) => one.rule !== 'STOPPED').map((one) => one.reason),
           rounds: await recentGoalRounds(target.projectId, goal.id),
           remaining: target.remainingCents / 100,
         }),
@@ -2705,7 +2705,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       [...reconstructionDiagnosis(reconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }), ...pathways.failures],
       diagnoseGoalResearch({
         considered: found,
-        excludedReasons: model.excluded.map((one) => one.reason),
+        excludedReasons: model.excluded.filter((one) => one.rule !== 'STOPPED').map((one) => one.reason),
         rounds,
         remaining: target.remainingCents / 100,
       }),
@@ -3037,7 +3037,23 @@ export function changeBelongs(c: Pick<StrategyChange, 'label' | 'clone'>, member
  * missing link is a reachable buyer, not a price (planningReliability round
  * 10, adaptation). Pure.
  */
-export function qualifyTest(liveOpenings: number | undefined): NextTest {
+export function qualifyTest(liveOpenings: number | undefined, excluded: readonly { title: string; rule?: 'OWNER_PHYSICAL' | 'STOPPED' }[] = []): NextTest {
+  /*
+   * A qualified opening left out only because the card names the owner as who
+   * does its physical work has buyers and a price already; what it lacks is
+   * somebody else to perform it (§91: the owner's own action is a refusal, the
+   * service is still a question). Asking to "qualify an opening" there sends
+   * Brain back to establish what it holds (planningReliability round 11).
+   */
+  const physical = liveOpenings ? excluded.find((one) => one.rule === 'OWNER_PHYSICAL') : undefined;
+  if (physical) {
+    return {
+      link: 'FULFILMENT',
+      test: `Find an independent provider who performs "${physical.title.slice(0, 80)}" for its buyers, at a quoted cost a deal: the card names the owner doing physical work, which the owner does not do.`,
+      by: 'BRAIN',
+      blocker: null,
+    };
+  }
   return liveOpenings === 0
     ? { link: 'REACHABLE_BUYER', test: 'No live opening remains: find a buyer who pays and a way to reach them, then establish an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null }
     : { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
@@ -3050,10 +3066,13 @@ export function qualifyTest(liveOpenings: number | undefined): NextTest {
  * question for a plan inside it, even when the target holds none — removing a
  * stored limit loosens the goal, and a looser goal never turns a plan that was
  * recommendable under the limit into an open question (planningReliability
- * round 10, adaptation).
+ * round 10, adaptation). A ceiling the owner removed (`scope.capitalRemoved`)
+ * answers it for any exposure: the removal is the owner saying there is none.
  */
 export function capitalQuestionOpen(target: Pick<TargetReading, 'capitalCeilingCents' | 'scope'>, exposure: number): boolean {
   if (!(exposure > 0)) return false;
+  // The owner removed the ceiling: that is their answer, no limit (planningReliability round 11).
+  if (target.scope?.capitalRemoved) return false;
   if (target.scope?.capitalAssumed) return true;
   if (target.capitalCeilingCents !== null) return false;
   const stated = target.scope?.capitalStatedCents ?? null;

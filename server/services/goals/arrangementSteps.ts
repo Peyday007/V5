@@ -31,7 +31,7 @@
 import { namesOneOrganisation } from '../../domain/industry.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
 import { PART_ASK, provedDeliverable } from '../cash/construct.ts';
-import { OWNER_FULFILS, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { fulfillerIsOwner, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { DELIVERABLE_CAPABILITIES } from '../cash/capabilities.ts';
 import type { TransactionPathway } from './pathways.ts';
 import type { DemandEstimate } from './portfolio.ts';
@@ -682,7 +682,7 @@ export function openingMember(
   const named = (one.fulfilledBy?.value ?? o.fulfillmentOwner ?? '').trim();
   const capability = pathway?.producedBy ?? o.requiredCapabilities.find((c) => DELIVERABLE_IDS.has(c)) ?? null;
   const fulfils: OpeningFulfiller =
-    named && OWNER_FULFILS.test(named)
+    named && fulfillerIsOwner(named)
       ? { by: 'OWNER', hours: valueOf(one.hours) }
       : pathway?.producedBy
         ? { by: 'BRAIN', capability: pathway.producedBy }
