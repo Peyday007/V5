@@ -24,10 +24,33 @@ export const FAILURE_CLASSES = [
   'UNCERTAINTY_AS_FAVOURABLE',
   'OWNER_LABOR_EXCEEDED',
   'OBJECTIVE_CHANGE_IGNORED',
+  /*
+   * Mechanism validity (audit 2026-11-23, docs/audits/2026-11-23-10k-plan-audit.md). Each is
+   * read from the reading's structured fields, whatever its stance: a plan that is "only a
+   * candidate" still directs research and outreach at what it counts.
+   */
+  /** The reading counts, as an established price, money the evidence shows is not a purchase of the deliverable (a reward, grant, prize, rebate…). */
+  'NON_PURCHASE_PRICE',
+  /** The reading models more deals from an opening than its payer(s) can make: one organisation swept as a population. */
+  'PAYER_POPULATION_INFLATED',
+  /** The reading reports reach from a candidate member it itself says cannot transact (no way to the buyer, no offer and price, nobody to fulfil it). */
+  'UNSUPPORTED_REACH',
+  /** The reading accepts, certifies a probability or constructs a plan whose member cannot be acquired, fulfilled or paid, or is not priced by a purchase. */
+  'ACCEPTANCE_UNFEASIBLE',
 ] as const;
 export type FailureClass = (typeof FAILURE_CLASSES)[number];
 /** A failure that would send Brain executing a wrong plan; a refusal loses value but commits nothing. */
-export const CRITICAL: ReadonlySet<FailureClass> = new Set(['FALSE_EXECUTABLE', 'CONSTRAINT_VIOLATED', 'UNSOUND_ECONOMICS', 'UNCERTAINTY_AS_FAVOURABLE', 'OWNER_LABOR_EXCEEDED', 'OBJECTIVE_CHANGE_IGNORED']);
+export const CRITICAL: ReadonlySet<FailureClass> = new Set([
+  'FALSE_EXECUTABLE',
+  'CONSTRAINT_VIOLATED',
+  'UNSOUND_ECONOMICS',
+  'UNCERTAINTY_AS_FAVOURABLE',
+  'OWNER_LABOR_EXCEEDED',
+  'OBJECTIVE_CHANGE_IGNORED',
+  'NON_PURCHASE_PRICE',
+  'PAYER_POPULATION_INFLATED',
+  'ACCEPTANCE_UNFEASIBLE',
+]);
 
 /** The economic inputs a plan may not leave unestablished and still call itself executable. */
 const ECONOMIC_INPUTS = ['price', 'directCost', 'capital', 'daysToCash'];
@@ -76,6 +99,39 @@ export interface ObservedPlan {
    * observation built by hand, which the end-to-end level then cannot judge.
    */
   execution?: ObservedExecution;
+  /**
+   * What the mechanism-validity checks read (audit 2026-11-23): what the reading counts money
+   * from, at what price and how many deals, and its own downside figures. Absent on an
+   * observation built by hand, which those checks then do not judge.
+   */
+  mechanism?: ObservedMechanism;
+}
+
+/** The reading's commercial model as the mechanism-validity checks read it: only structured fields. */
+export interface ObservedMechanism {
+  /**
+   * Keys whose money the reading counts toward the target: the acceptance candidate's members,
+   * the quant portfolio's best combination and the pathway portfolio's leading combination.
+   */
+  counted: string[];
+  /** Per key: the price the reading holds as established (its `price` input not unestablished, the opening not judged missing its price); absent when it holds none. */
+  priceHeld: Record<string, number>;
+  /** Per key: the most deals the reading models (the quant demand's p90 deals). */
+  dealsModelled: Record<string, number>;
+  /** The candidate's reach (share of worlds reaching the target), or null. */
+  reach: number | null;
+  /** Candidate members the reading itself says cannot transact: it judges the buyer unreachable, the offer unpriced or nobody to fulfil it. */
+  untransactable: string[];
+  /** Candidate members the reading judges unacquirable, unfulfillable or unpaid (no buyer reach, no fulfiller, no settlement) — what an accepted plan may not hold. */
+  infeasible: string[];
+  /** The reading certifies the candidate: ACCEPTED, a probability, or a quantitatively constructed / confidence-verified verdict. */
+  certified: boolean;
+  /** The simulated adverse quantile of total collections (`objective.outcome.adverse`), or null. */
+  adverse: number | null;
+  /** The pathway portfolio's leading combination net p10 (`pathways.portfolio.leading.net.p10`), or null. */
+  pathwayP10: number | null;
+  /** What remains of the target, major units. */
+  gap: number;
 }
 
 export interface Grade {
@@ -134,6 +190,13 @@ export const E2E_FAILURE_CLASSES = [
   'ALTERNATIVES_NOT_COMPARED',
   /** An opening research filed that the reading neither considered nor excluded. */
   'OPENING_UNACCOUNTED',
+  /**
+   * Two of the reading's own estimators state contradictory downside figures for the plan: the
+   * pathway portfolio's analytic net p10 against the simulated adverse quantile (audit
+   * 2026-11-23: $368 against $32,266 in one reading). Graded here, beside the verdict, because
+   * on production it is a property of nearly every reading, not of a planning verdict.
+   */
+  'ESTIMATES_CONTRADICT',
 ] as const;
 export type E2EFailureClass = (typeof E2E_FAILURE_CLASSES)[number];
 
@@ -332,6 +395,8 @@ export function gradeE2E(c: PlanningCase, o: ObservedPlan, verdict: Pick<Grade, 
 
   if (o.stance === 'EXECUTABLE') executableChecks(c, o, x, fail, gaps);
   else noPlanChecks(c, o, x, fail);
+  const contradiction = estimatesContradict(o.mechanism);
+  if (contradiction) fail('ESTIMATES_CONTRADICT', contradiction);
 
   const list = E2E_FAILURE_CLASSES.filter((k) => failures.has(k));
   return { pass: list.length === 0, failures: list, gaps: [...gaps].sort(), detail: why.join('; ') || (list.length ? 'verdict incorrect' : 'complete') };
@@ -473,7 +538,118 @@ export function observe(p: PlanReading, keyOf: (opportunityId: string) => string
     targetCents: p.target.targetCents,
     gate: chosen ? { verdict: chosen.verdict, chainComplete: chosen.chainComplete, conservativeSettled: chosen.conservativeSettled } : null,
     execution: observeExecution(p, keyOf),
+    mechanism: observeMechanism(p, keyOf),
   };
+}
+
+/** Links without which a member cannot transact at all: nobody reachable, nothing priced, nobody to deliver. */
+const TRANSACT_LINKS: ReadonlySet<string> = new Set(['REACHABLE_BUYER', 'OFFER_AND_PRICE', 'FULFILMENT']);
+/** Links an accepted plan must hold for every member: acquisition, fulfilment and payment. */
+const FEASIBLE_LINKS: ReadonlySet<string> = new Set(['REACHABLE_BUYER', 'FULFILMENT', 'SETTLES_IN_TIME']);
+const CERTIFYING_VERDICTS: ReadonlySet<string> = new Set(['CONFIDENCE_VERIFIED', 'QUANTITATIVELY_CONSTRUCTED']);
+
+/** Read the mechanism-validity inputs from a real reading (a partial one reads as counting nothing). Pure. */
+export function observeMechanism(p: PlanReading, keyOf: (opportunityId: string) => string): ObservedMechanism {
+  const candidate = p.acceptance?.candidate ?? null;
+  const candidateKeys = (candidate?.opportunityIds ?? []).map(keyOf);
+  const counted = new Set<string>(candidateKeys);
+  for (const m of p.portfolio?.best?.members ?? []) counted.add(keyOf(m.opportunityId));
+  const leading = p.pathways?.portfolio?.leading ?? null;
+  for (const id of leading?.members ?? []) counted.add(keyOf(id));
+  const missing = new Map<string, string[]>((p.considered ?? []).map((c) => [keyOf(c.opportunityId), [...c.missing]]));
+  // A constructed arrangement has no considered row: its own pathway's facts say what it lacks.
+  const pathwayGaps = new Map<string, string[]>();
+  for (const w of p.pathways?.pathways ?? []) {
+    const gaps: string[] = [...(w.failurePoints ?? [])];
+    if (w.channel?.status === 'UNKNOWN') gaps.push('REACHABLE_BUYER');
+    if (w.offer?.status === 'UNKNOWN' || w.revenuePerDeal?.status === 'UNKNOWN') gaps.push('OFFER_AND_PRICE');
+    if (w.fulfiller?.status === 'UNKNOWN') gaps.push('FULFILMENT');
+    if (w.daysToCash?.status === 'UNKNOWN') gaps.push('SETTLES_IN_TIME');
+    pathwayGaps.set(keyOf(w.opportunityId), gaps);
+  }
+  const gapsOf = (key: string) => missing.get(key) ?? pathwayGaps.get(key) ?? [];
+  const priceHeld: Record<string, number> = {};
+  const dealsModelled: Record<string, number> = {};
+  for (const d of p.portfolio?.demand ?? []) {
+    const key = keyOf(d.opportunityId);
+    if (d.deals) dealsModelled[key] = d.deals.p90;
+    if (d.price && d.price.p50 > 0 && !d.unestablished.includes('price') && !(missing.get(key) ?? []).includes('OFFER_AND_PRICE')) priceHeld[key] = d.price.p50;
+  }
+  for (const w of p.pathways?.pathways ?? []) {
+    const key = keyOf(w.opportunityId);
+    const v = w.revenuePerDeal?.value;
+    if (priceHeld[key] === undefined && w.revenuePerDeal?.status !== 'UNKNOWN' && typeof v === 'number' && v > 0 && !(missing.get(key) ?? []).includes('OFFER_AND_PRICE')) priceHeld[key] = v;
+  }
+  const outcome = p.objective?.outcome ?? null;
+  return {
+    counted: [...counted],
+    priceHeld,
+    dealsModelled,
+    reach: candidate?.reach ?? null,
+    untransactable: candidateKeys.filter((k) => gapsOf(k).some((l) => TRANSACT_LINKS.has(l))),
+    infeasible: candidateKeys.filter((k) => gapsOf(k).some((l) => FEASIBLE_LINKS.has(l))),
+    certified:
+      p.acceptance?.status === 'ACCEPTED' || !!p.acceptance?.probability || CERTIFYING_VERDICTS.has(p.acceptance?.verdict ?? '') || candidate?.reachBasis === 'PROBABILITY',
+    adverse: outcome ? outcome.adverse : null,
+    pathwayP10: leading ? leading.net.p10 : null,
+    gap: Math.max(0, (p.target?.remainingCents ?? p.target?.targetCents ?? 0) / 100),
+  };
+}
+
+/**
+ * The mechanism-validity failures of one observation against the case's rubric (audit
+ * 2026-11-23). Judged whatever the stance: a candidate that is not executable still sends
+ * research, outreach and the next sale at what it counts. A conclusion that names the
+ * gap — the opening's price judged missing, its volume left out of the count — is not
+ * failed for it: these fire only where the reading counts the money anyway. Pure.
+ */
+export function mechanismFailures(c: PlanningCase, o: ObservedPlan): { failures: FailureClass[]; why: string[] } {
+  const m = o.mechanism;
+  const failures: FailureClass[] = [];
+  const why: string[] = [];
+  if (!m) return { failures, why };
+  const e = c.expect;
+  const counted = new Set(m.counted);
+  for (const key of e.notAPurchasePrice ?? []) {
+    const held = m.priceHeld[key];
+    if (counted.has(key) && held !== undefined) {
+      failures.push('NON_PURCHASE_PRICE');
+      why.push(`counts ${key} at an established ${Math.round(held)} a deal, which the evidence shows is not a payment for the deliverable`);
+    }
+  }
+  for (const [key, max] of Object.entries(e.payerDealsMax ?? {})) {
+    const modelled = Math.max(m.dealsModelled[key] ?? 0, o.members.find((x) => x.key === key)?.dealsCounted ?? 0);
+    if (counted.has(key) && modelled > max) {
+      failures.push('PAYER_POPULATION_INFLATED');
+      why.push(`models up to ${modelled} deals from ${key}, whose payer can make at most ${max}`);
+    }
+  }
+  if (m.reach !== null && m.reach > 0 && m.untransactable.length) {
+    failures.push('UNSUPPORTED_REACH');
+    why.push(`reports reach ${m.reach.toFixed(3)} from ${m.untransactable.join(', ')}, which it says cannot transact`);
+  }
+  if (m.certified || o.stance === 'EXECUTABLE') {
+    const bad = [...new Set([...m.infeasible, ...(e.notAPurchasePrice ?? []).filter((k) => o.members.some((x) => x.key === k))])];
+    if (bad.length) {
+      failures.push('ACCEPTANCE_UNFEASIBLE');
+      why.push(`${m.certified ? 'certifies' : 'executes'} a plan holding ${bad.join(', ')}, which cannot be acquired, fulfilled or paid as a purchase`);
+    }
+  }
+  return { failures, why };
+}
+
+/**
+ * Whether the reading's two downside estimators contradict each other, and how: both read
+ * against what remains of the target, they disagree by more than twofold (net against gross
+ * is at most that apart under a positive margin) and by more than a tenth of the gap. Null
+ * when they agree or either is absent. Pure.
+ */
+export function estimatesContradict(m: ObservedMechanism | undefined): string | null {
+  if (!m || m.adverse === null || m.pathwayP10 === null || !(m.gap > 0)) return null;
+  const a = Math.min(m.adverse, m.gap);
+  const b = Math.min(m.pathwayP10, m.gap);
+  if (Math.max(a, b) <= 2 * Math.min(a, b) || Math.abs(a - b) <= 0.1 * m.gap) return null;
+  return `its adverse case collects ${Math.round(m.adverse)} while its pathway portfolio's p10 nets ${Math.round(m.pathwayP10)} (against a gap of ${Math.round(m.gap)})`;
 }
 
 /**
@@ -520,11 +696,17 @@ export function grade(c: PlanningCase, o: ObservedPlan): Grade {
 
 /** The verdict level, unchanged by the end-to-end level beside it. */
 function gradeVerdict(c: PlanningCase, o: ObservedPlan): Omit<Grade, 'e2e'> {
-  const g = gradeStance(c, o);
+  const g = withMechanism(gradeStance(c, o), mechanismFailures(c, o));
   const want = c.changedObjective && c.expect.targetAfterChange !== undefined ? Math.round(c.expect.targetAfterChange * 100) : null;
   if (want === null || o.targetCents === want) return g;
   const why = `the plan is read against ${o.targetCents / 100}, not the ${want / 100} the changed objective states`;
   return { pass: false, outcome: null, failures: [...new Set<FailureClass>(['OBJECTIVE_CHANGE_IGNORED', ...g.failures])], detail: g.pass ? why : `${g.detail}; ${why}` };
+}
+
+/** A stance grade with the mechanism-validity failures beside it: any one fails the case. */
+function withMechanism(g: Omit<Grade, 'e2e'>, m: { failures: FailureClass[]; why: string[] }): Omit<Grade, 'e2e'> {
+  if (!m.failures.length) return g;
+  return { pass: false, outcome: null, failures: [...new Set<FailureClass>([...g.failures, ...m.failures])], detail: g.pass ? m.why.join('; ') : `${g.detail}; ${m.why.join('; ')}` };
 }
 
 function gradeStance(c: PlanningCase, o: ObservedPlan): Omit<Grade, 'e2e'> {
