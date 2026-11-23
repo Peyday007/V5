@@ -2342,6 +2342,7 @@ export async function modelOpportunity(
 
   // Price: the column, else the low end of a published revenue range.
   let price: ModelInput | null = null;
+  let priceNature: ReturnType<typeof paymentNatureOf> | null = null;
   if (opportunity.priceCents !== null && opportunity.priceCents > 0) {
     const priceFact = fact('price');
     const p = kindToProvenance(priceFact);
@@ -2362,6 +2363,7 @@ export async function modelOpportunity(
       : known(card, p.provenance === 'UNKNOWN' ? 'ASSUMPTION' : p.provenance, p.source ?? ref, 'the price on the card');
     // The figure is a reward, grant, rebate or wage: real money, but no evidence of what a buyer pays for the deliverable (§116).
     const paidFor = priceFact && typeof priceFact.value === 'string' ? paymentNatureOf(priceFact.value) : null;
+    priceNature = paidFor;
     const offTopic = priceFact && typeof priceFact.value === 'string' && !evidenceIsAbout(priceFact.value, [opportunity.payer, opportunity.title, opportunity.offerScope, opportunity.industry].filter(Boolean).join(' '));
     if (offTopic && !(paidFor && paidFor.nature !== 'PURCHASE')) {
       price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not these buyers' price: the only figure on record ("${String(priceFact!.value).slice(0, 100)}") is about another market; what these buyers pay for the deliverable is not established` };
@@ -2538,10 +2540,12 @@ export async function modelOpportunity(
    * 100 deals). It repeats only where evidence states it buys more than once.
    */
   const evidencedRepeat = volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE';
-  const onePayer = !!opportunity.payer && namesOneOrganisation(opportunity.payer) && !isTestFirstPlay(opportunity) && !evidencedRepeat;
+  // A reward or grant on the price card is won once, whatever kind of play the opening is.
+  const wonOnce = priceNature !== null && (priceNature.nature === 'CONTINGENT_REWARD' || priceNature.nature === 'GRANT');
+  const onePayer = ((!!opportunity.payer && namesOneOrganisation(opportunity.payer)) || wonOnce) && !evidencedRepeat;
   const repeatable = !onePayer && (isTestFirstPlay(opportunity) || evidencedRepeat || estimatedRepeat || unsizedMarket);
   const volume: ModelInput = !repeatable
-    ? known(1, 'ASSUMPTION', ref, onePayer ? `one named buyer ("${opportunity.payer!.slice(0, 60)}") is one deal until evidence shows it buys again` : 'a one-off opening is one deal')
+    ? known(1, 'ASSUMPTION', ref, onePayer ? (wonOnce ? 'a reward or grant is won once' : `one named buyer ("${(opportunity.payer ?? '').slice(0, 60)}") is one deal until evidence shows it buys again`) : 'a one-off opening is one deal')
     : estimatedRepeat
       ? unknown(1, Math.min(MAX_BUYERS_OFFERED, volumeRead!.deals), `estimated, not established: ${volumeRead!.basis}; swept from 1 deal to the estimate`)
     : volumeRead && volumeFact
