@@ -23,6 +23,7 @@ import { isRunpodSlot } from '../cheap/runpod.ts';
 import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
 import { causeOfReason, type RouteFailureCause } from './worker.ts';
 import type { ItemUsage } from './itemMeter.ts';
+import { ROUTE_PROBE_EVENT } from './routeProbe.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
 
@@ -212,6 +213,13 @@ export interface RouteDiagnosis {
   /** Provider failures and accepted items in the last `ROUTE_RECENT_MS` of the window: what decides whether the route is failing now. */
   recentFailures: number;
   recentSubmitted: number;
+  /**
+   * The route's own health probes in the window (`routeProbe.ts`), beside its items: a held route is
+   * asked with one minimal call rather than with a work item, so its failures there are its failures.
+   * A failed probe is also counted in `providerFailures` (and `recentFailures`), never hidden.
+   */
+  probeFailures: number;
+  probeAnswered: number;
   restored: boolean;
   evidence: string;
 }
@@ -350,9 +358,23 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     [since, ...types],
   );
 
+  /*
+   * A held model route is asked with one minimal call (`routeProbe.ts`), not with a work item
+   * (CAP-16-3, structural review): its failures there are provider failures of the model stages it
+   * serves, and they are counted here so moving outage discovery off work items hides none of them.
+   * A probe belongs to a route, not to one work type, and a held route takes neither kind of model
+   * work, so each lane stage counts the route's failed probes. Brain's own database being busy is
+   * not a provider failure, as on the item rows.
+   */
+  const probes = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_events
+      WHERE event_type = ? AND at >= ? AND outcome = 'FAILED' AND reason NOT LIKE '%model call failed [database]%'`,
+    [ROUTE_PROBE_EVENT, since],
+  );
+
   let total = 0;
   let accepted = 0;
-  let providerFailures = 0;
+  let providerFailures = n(probes?.n);
   let dropped = 0;
   let ms = 0;
   for (const row of events) {
@@ -989,11 +1011,11 @@ export async function diagnoseThroughput(since: string, now: number | null = nul
     : null;
   const anchor = now ?? (newest ? Date.parse(newest) : Date.now());
   const recentSince = new Date(anchor - ROUTE_RECENT_MS).toISOString();
-  const rows = await getDb().all<{ outcome: string | null; reason: string | null; k: number | string; recent: number | string | null; last: string | null }>(
-    `SELECT outcome, reason, COUNT(*) AS k, SUM(CASE WHEN at >= ? THEN 1 ELSE 0 END) AS recent, MAX(at) AS last FROM bin_events
-      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model %'
-      GROUP BY outcome, reason`,
-    [recentSince, since],
+  const rows = await getDb().all<{ event_type: string; outcome: string | null; reason: string | null; k: number | string; recent: number | string | null; last: string | null }>(
+    `SELECT event_type, outcome, reason, COUNT(*) AS k, SUM(CASE WHEN at >= ? THEN 1 ELSE 0 END) AS recent, MAX(at) AS last FROM bin_events
+      WHERE event_type IN ('FREE_LANE_ITEM', ?) AND at >= ? AND reason LIKE 'model %'
+      GROUP BY event_type, outcome, reason`,
+    [recentSince, ROUTE_PROBE_EVENT, since],
   );
   const podRows = await readPodRows(since);
   const gpu = gpuPodReading(podRows);
@@ -1002,9 +1024,12 @@ export async function diagnoseThroughput(since: string, now: number | null = nul
     const route = routeOfReason(row.reason);
     if (!route) continue;
     const entry = byRoute.get(route) ?? {
-      route, submitted: 0, providerFailures: 0, cause: null, causeCounts: {}, lastFailureAt: null, lastSubmittedAt: null, recentFailures: 0, recentSubmitted: 0, restored: false, evidence: '',
+      route, submitted: 0, providerFailures: 0, cause: null, causeCounts: {}, lastFailureAt: null, lastSubmittedAt: null, recentFailures: 0, recentSubmitted: 0, probeFailures: 0, probeAnswered: 0, restored: false, evidence: '',
     };
-    if (row.outcome === 'SUBMITTED') {
+    const probe = row.event_type === ROUTE_PROBE_EVENT;
+    // An answered probe says the route answers; it is not accepted work, so it never counts as submitted.
+    if (probe && row.outcome === 'OK') entry.probeAnswered += n(row.k);
+    if (!probe && row.outcome === 'SUBMITTED') {
       entry.submitted += n(row.k);
       entry.recentSubmitted += n(row.recent);
       if (row.last && (!entry.lastSubmittedAt || row.last > entry.lastSubmittedAt)) entry.lastSubmittedAt = row.last;
@@ -1013,6 +1038,7 @@ export async function diagnoseThroughput(since: string, now: number | null = nul
     if (cause && cause !== 'database') {
       entry.providerFailures += n(row.k);
       entry.recentFailures += n(row.recent);
+      if (probe) entry.probeFailures += n(row.k);
       entry.causeCounts[cause] = (entry.causeCounts[cause] ?? 0) + n(row.k);
       if (row.last && (!entry.lastFailureAt || row.last > entry.lastFailureAt)) entry.lastFailureAt = row.last;
     }

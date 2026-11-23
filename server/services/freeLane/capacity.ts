@@ -42,6 +42,8 @@ import {
   closeFiledFreeLaneBins,
   coolingForEveryModel,
   ensureFreeWorkers,
+  probeHeldRoutes,
+  restoreRouteHealth,
   takeOne,
   discoverCandidates,
   freeLaneSkips,
@@ -557,6 +559,17 @@ export async function controlStep(): Promise<ControlReading | null> {
   const config = poolOptions.config ?? laneConfig();
   if (!config) return null;
   if (workersCache.length === 0) workersCache = await ensureFreeWorkers(config);
+  /*
+   * The pool is the lane production runs, so its step owns each route's health (CAP-16-3): the
+   * breaker is rebuilt from the lane's rows before any slot is filled, and every held route that is
+   * due is asked with one call of its own — in the background, so a slow provider never delays the
+   * step, and never by admitting a work item (`routeHeld`).
+   */
+  const routeModels = workersCache.map((w) => w.model);
+  await restoreRouteHealth(routeModels);
+  void probeHeldRoutes({ models: routeModels, completer: poolOptions.completer ?? httpCompleter, config }).catch((error) =>
+    console.warn('[free-lane] route probe failed:', (error as Error).message),
+  );
   const persisted = new Map((await readCapacity()).map((r) => [r.model, r]));
   for (const [index, worker] of workersCache.entries()) {
     if (!pools.has(worker.model)) {
