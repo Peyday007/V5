@@ -8,6 +8,7 @@
  * Nothing here writes a row.
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
+import { DISPATCHABLE_SQL, FIREABLE_SQL, ownerDirectedGoalBinSql, purposeAdmitsSql, workReadySql } from '../server/repos/bins.ts';
 
 async function fragmentFailures(): Promise<void> {
   /*
@@ -117,13 +118,50 @@ async function operatorRuns(): Promise<void> {
   for (const row of refusals) console.log(`  decision: ${row.payload.replace(/\s+/g, ' ').slice(0, 600)}`);
 }
 
+/** Why one bin is or is not fired: each predicate the dispatcher composes, asked of it alone. */
+async function binGates(binId: string): Promise<void> {
+  if (!/^bin_[0-9a-f]+$/.test(binId)) throw new Error('a bin id is bin_ followed by hex');
+  const now = new Date().toISOString();
+  const ask = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
+    const row = await getDb().get<{ id: string }>(`SELECT id FROM bins WHERE id = ? AND ${sql}`, [binId, ...params] as never[]);
+    console.log(`  ${row ? 'yes' : 'NO '} ${label}`);
+  };
+  const bin = await getDb().get<{ purpose: string | null; orchestration_id: string | null; factory_campaign_id: string | null; held_by_workstream_id: string | null; project_id: string; kind: string }>(
+    'SELECT purpose, orchestration_id, factory_campaign_id, held_by_workstream_id, project_id, kind FROM bins WHERE id = ?',
+    [binId],
+  );
+  console.log(`DIAGNOSE: bin-gates ${binId} ${JSON.stringify(bin ?? null)}`);
+  if (!bin) return;
+  await ask('purpose admits (brain-only mode and the owner-directed exception)', purposeAdmitsSql(''));
+  await ask('linked to an owner-directed goal', ownerDirectedGoalBinSql(''));
+  await ask('dispatchable (claimable state and attempts)', DISPATCHABLE_SQL, [now]);
+  await ask('fireable now (no backoff)', FIREABLE_SQL, [now]);
+  await ask('has work a worker can claim', workReadySql('bins.'));
+  const items = await getDb().all<{ state: string; n: number }>(
+    `SELECT state AS state, COUNT(*) AS n FROM work_items WHERE bin_id = ? OR (bin_id IS NULL AND orchestration_id = ?) GROUP BY state`,
+    [binId, bin.orchestration_id ?? '-'],
+  );
+  console.log(`  work items: ${items.map((one) => `${one.state} ${one.n}`).join(', ') || 'none'}`);
+  const links = await getDb().all<{ workstream_id: string; kind: string; relation: string }>(
+    `SELECT workstream_id, kind, relation FROM workstream_links WHERE superseded_at IS NULL AND ref IN (?, ?, ?)`,
+    [binId, bin.orchestration_id ?? '-', bin.factory_campaign_id ?? '-'],
+  );
+  console.log(`  direct links: ${links.map((one) => `${one.workstream_id} ${one.kind} ${one.relation}`).join('; ') || 'none'}`);
+  const missions = await getDb().all<{ id: string; state: string }>(
+    'SELECT id, state FROM russell_missions WHERE bin_id = ? OR (orchestration_id IS NOT NULL AND orchestration_id = ?)',
+    [binId, bin.orchestration_id ?? '-'],
+  );
+  console.log(`  missions: ${missions.map((one) => `${one.id} ${one.state}`).join(', ') || 'none'}`);
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
   try {
     if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
-    else throw new Error('usage: diagnose-readings.ts fragment-failures|operator-runs');
+    else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
+    else throw new Error('usage: diagnose-readings.ts fragment-failures|operator-runs|bin-gates <bin>');
   } finally {
     await closeDatabase();
   }
