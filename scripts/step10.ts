@@ -2714,6 +2714,59 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === 'operator-runs') {
+    /*
+     * The operator's (Hermes's) last runs: how long each took, every tool it
+     * called with whether the call succeeded and its error, and its own
+     * summary — so "21 minutes and zero actions" is read from what it called
+     * and what refused it. Then the operator's events of the last 24 hours by
+     * kind. Read-only.
+     */
+    const runs = await getDb().all<{ id: string; state: string; model: string; started_at: string; finished_at: string | null; summary: string | null; tool_calls: string; error: string | null }>(
+      'SELECT id, state, model, started_at, finished_at, summary, tool_calls, error FROM operator_runs ORDER BY started_at DESC LIMIT 4',
+    );
+    console.log(`STEP10: OK operator-runs ${runs.length}`);
+    for (const run of runs) {
+      const minutes = run.finished_at ? ((Date.parse(run.finished_at) - Date.parse(run.started_at)) / 60_000).toFixed(1) : 'running';
+      console.log('');
+      console.log(`RUN ${run.id} ${run.state} ${run.model} started ${run.started_at} minutes ${minutes}`);
+      if (run.error) console.log(`  error: ${run.error.slice(0, 400)}`);
+      let calls: { tool?: string; ok?: boolean; error?: string }[] = [];
+      try {
+        calls = JSON.parse(run.tool_calls) as typeof calls;
+      } catch {
+        calls = [];
+      }
+      const byTool = new Map<string, { ok: number; failed: number; errors: Set<string> }>();
+      for (const call of calls) {
+        const entry = byTool.get(call.tool ?? '?') ?? { ok: 0, failed: 0, errors: new Set<string>() };
+        if (call.ok === false) entry.failed += 1;
+        else entry.ok += 1;
+        if (call.error) entry.errors.add(call.error.slice(0, 200));
+        byTool.set(call.tool ?? '?', entry);
+      }
+      for (const [tool, entry] of byTool) {
+        console.log(`  ${tool} ok ${entry.ok} failed ${entry.failed}`);
+        for (const error of entry.errors) console.log(`    ! ${error}`);
+      }
+      console.log(`  summary: ${(run.summary ?? '(none)').replace(/\s+/g, ' ').slice(0, 2500)}`);
+    }
+    const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+    const events = await getDb().all<{ event_type: string; n: number }>(
+      `SELECT event_type AS event_type, COUNT(*) AS n FROM project_events
+        WHERE created_at >= ? AND event_type LIKE 'OPERATOR_%' GROUP BY event_type ORDER BY n DESC`,
+      [since],
+    );
+    console.log('');
+    for (const row of events) console.log(`  ${String(row.n).padStart(5)}x ${row.event_type}`);
+    const refusals = await getDb().all<{ payload: string }>(
+      `SELECT payload FROM project_events WHERE created_at >= ? AND event_type LIKE 'OPERATOR_DECISION%' ORDER BY created_at DESC LIMIT 6`,
+      [since],
+    );
+    for (const row of refusals) console.log(`  decision: ${row.payload.replace(/\s+/g, ' ').slice(0, 600)}`);
+    return;
+  }
+
   if (command === 'tick-failures') {
     /*
      * What the dispatcher's own ticks have thrown, grouped by what they said.
