@@ -57,6 +57,8 @@ async function main(): Promise<void> {
     await q('PLAN_Q_WORK', "SELECT w.id, w.work_type, w.state, w.priority, w.available_at, w.attempt_count, w.max_attempts, w.target_worker_id, w.failure_category, w.created_at FROM work_items w WHERE w.payload LIKE '%orc_694532fd32904450968a%' OR w.payload LIKE '%orc_345b17a00c904f55957e%' OR w.correlation_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
     await q('PLAN_Q_BINS', "SELECT b.id, b.kind, b.state, b.priority, substr(b.last_refusal,1,200) AS refusal, b.refusal_count, b.ready_at, b.created_at FROM bins b WHERE b.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
     await q('PLAN_Q_ORCH_FULL', "SELECT o.id, o.status, o.project_id, o.created_at FROM research_orchestrations o WHERE o.id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
+    await q('PLAN_Q_BIN_PURPOSE', "SELECT b.id, b.purpose, b.purpose_basis, b.state FROM bins b WHERE b.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
+    await q('READY_BINS_BY_PURPOSE', "SELECT COALESCE(b.purpose,'NULL') AS purpose, b.kind, COUNT(*) AS n, MIN(b.ready_at) AS oldest FROM bins b WHERE b.state = 'READY' GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 12");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
