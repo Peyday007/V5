@@ -574,7 +574,27 @@ const ONE_BODYS_MEMBERS = /\b(?:the|a|an|one)\s+(?:[\w-]+\s+){0,3}?(?:committee|
 /** The people belonging to one named party ("Toei's investors", "the committee's members"). */
 const ONES_PEOPLE = /['’]s\s+(?:investo\w*|shareholders?|backers?|funders?|donors?|members?|board|founders?|owners?|employees?|staff|team|partners?|stakeholders?|executives?|management)\b/i;
 
+/** One public body by its form ("City of Ridgeport", "Department of Labor"). */
+const PUBLIC_BODY = /^(?:the )?(?:city|county|town|township|village|borough|municipality|state|commonwealth|province|department|ministry|office|bureau|port|university) of\b/i;
+/**
+ * A singular organisation noun as the head of a lower-case description ("State
+ * university continuing-education office", "Regional community foundation",
+ * "State draw-game operator"): one body described, never a kind of buyer, which
+ * is plural ("Dental practices"). Holdout planning cases, 2026-11-23: each was
+ * modelled as a population of repeat buyers.
+ */
+const ORG_HEAD = /^(?:department|office|agency|authority|council|commission|committee|board|bureau|ministry|district|foundation|trust|operator|processor|retailer|wholesaler|manufacturer|distributor|cooperative|co-op|university|college|school|hospital|clinic|city|county|municipality|government|company|corporation|firm|institute|institution|association|society|club|federation|union|regulator|insurer|bank|utility|publisher|platform|marketplace|programme|program|administrator|sponsor|organizer|organiser)$/i;
+function headOfDescription(text: string): string | null {
+  const clause = (text.split(/\s*,\s*|\s+[—–-]\s+|\s*[:;(]\s*/)[0] ?? text).trim();
+  const lead = clause.split(/\s+(?:of|in|at|near|for|across|under|with)\s+/i)[0]!.trim();
+  const words = lead.split(/\s+/).filter(Boolean);
+  return words.length >= 2 ? words[words.length - 1]!.replace(/[^A-Za-z-]/g, '') : null;
+}
+
 function isOneOrganisation(text: string): boolean {
+  if (PUBLIC_BODY.test(text)) return true;
+  const described = headOfDescription(text);
+  if (described && ORG_HEAD.test(described)) return true;
   if (ONE_BODY.test(text) || ONE_BODYS_MEMBERS.test(text) || ONES_PEOPLE.test(text) || DESCRIBED_COMPANY.test(text)) return true;
   if (!/\s/.test(text) && (ONE_BRAND_WORD.test(text) || KNOWN_COMPANY.has(text.toLowerCase()))) return true;
   const words = text.split(' ').filter((w) => !NAME_PARTICLE.test(w));

@@ -50,6 +50,14 @@ const CLAIM_PAYOUT = /\bper (?:approved |eligible |paid |accepted )?(?:[\w-]+ ){
 const TRANSFER_ACT = /\b(?:settlement|class[- ]action|rebate|refund|reimbursement|claims?) (?:administrator|program|fund|payouts?|payments?)\b|\bpays? (?:each |every )?(?:eligible )?(?:claimants?|class members?|policyholders?|homeowners? a)\b/i;
 /** A prize for the best entry: paid to a winner, never bought. */
 const PRIZE = /\b(?:(?:first|second|third|top|grand|cash|1st|2nd|3rd) )?prizes?\b(?!-)|\bawards? (?:an? )?(?:\$|usd)[^.;]{0,40}?\bto (?:the )?(?:single |top |best[\w-]* |winning |first[\w-]* )+(?:entr(?:y|ies)|submissions?|teams?|winners?|applicants?)\b/i;
+/** The source denies that anything is bought or exchanged. */
+const NO_EXCHANGE = /\b(?:not|no|nothing|never)\b[^.;]{0,30}?\b(?:purchased|bought|commissioned|sold|exchanged|is bought|are bought)\b|\bno (?:goods or services|consideration)\b/i;
+/** A supplier's price document, or a payment to a supplier per unit of a deliverable. */
+const SUPPLIER_PRICE_FRAME = /\b(?:rate cards?|price (?:lists?|sheets?)|fee (?:schedules?|sheets?)|pricing pages?|quotes? from|invoiced?)\b|\bcharges?\b[^.;]{0,40}?(?:\$|usd)|\bpa(?:y|ys|id)\s+(?:[\w&'-]+\s+){0,3}?(?:suppliers?|vendors?|providers?|contractors?|freelancers?|agenc(?:y|ies)|studios?|writers?|recruiters?|consultants?|firms?|services?|developers?|designers?|translators?|editors?|specialists?|brokers?)\b/i;
+/** The money is received by someone selected, enrolled, admitted, qualifying or matched, or credited back to them. */
+const RECEIPT = /\b(?:receives?|received|are credited|is credited|credited|is paid|are paid|gets?)\b[^.;]{0,20}?(?:\$|usd)|\b(?:sends?|pays?|paid|gives?)\b[^.;]{0,15}?\b(?:selected|enrolled|admitted|registered|qualifying|eligible|winning|matched|affected|chosen)\b|\b(?:selected|enrolled|admitted|chosen|qualifying|eligible|winning) [\w-]+ (?:receive|get|are paid|are credited)\b/i;
+/** Restitution, compensation, damages or a penalty: owed, never bought. */
+const COMPENSATION = /\b(?:restitution|compensation for|damages|penalt(?:y|ies)|indemnit(?:y|ies)|honorari(?:um|a)|matching contributions?|jackpots?|cash[- ]?back|credited back)\b/i;
 /** Pay to an employee: the employer is buying a job, not a supplier's deliverable. */
 const EMPLOYMENT = /\b(?:salar(?:y|ies)|wages?|annual pay|base pay|per year in pay|hourly wage)\b/i;
 /** Words that make the money a price somebody is charged. */
@@ -66,6 +74,15 @@ export function paymentNatureOf(text: string | null | undefined): PaymentNatureR
   const t = (text ?? '').replace(/\s+/g, ' ').replace(/\bno purchase (?:is )?(?:necessary|required)\b/gi, ' ');
   if (!t) return { nature: 'PURCHASE', cue: null };
   const hit = (re: RegExp): string | null => t.match(re)?.[0] ?? null;
+  // The source says outright that nothing is bought: an exchange is denied, whatever else the sentence names.
+  const denied = hit(NO_EXCHANGE);
+  if (denied) return { nature: 'TRANSFER', cue: denied };
+  // A supplier's price document, or a buyer paying a supplier per deliverable, is a purchase even where its subject is a sweepstakes, a scholarship or a claim.
+  const supplierPrice = hit(SUPPLIER_PRICE_FRAME);
+  if (supplierPrice && !hit(RECEIPT)) return { nature: 'PURCHASE', cue: null };
+  // Money that arrives at someone selected, enrolled, admitted or matched, or that a court orders paid, is not their purchase of anything.
+  const received = hit(RECEIPT) ?? hit(COMPENSATION);
+  if (received) return { nature: 'TRANSFER', cue: received };
   const rewardFor = hit(REWARD_FOR);
   // "pays $500 for each accepted puzzle" is a purchase; "rewards … for a valid finding" is not. Only reward words, or a payment for a finding or a win, count.
   if (rewardFor && (/\b(?:rewards?|awards?|prizes?)\b/i.test(rewardFor) || /\b(?:findings?|vulnerabilit(?:y|ies)|bugs?|exploits?|wins?|winners?|places?)\b/i.test(rewardFor))) return { nature: 'CONTINGENT_REWARD', cue: rewardFor };

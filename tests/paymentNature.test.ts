@@ -125,3 +125,21 @@ describe('production buyer-name fragments are not populations (Surge B report, 2
     expect(namesABuyerPopulation('GitHub Sponsors maintainers')).toBe(true);
   });
 });
+
+describe('structural reading of payments and buyers (holdout, 2026-11-23)', () => {
+  it('reads denial of exchange, receipt by the selected and compensation as non-purchases, and supplier price documents as purchases', async () => {
+    const { evidencesPurchase } = await import('../server/domain/paymentNature.ts');
+    expect(evidencesPurchase("Presenters chosen by the committee receive a $1,500 recognition honorarium; sessions are not commissioned or purchased.")).toBe(false);
+    expect(evidencesPurchase('The foundation sends a $5,000 matching contribution; no goods or services are exchanged.')).toBe(false);
+    expect(evidencesPurchase('The defendant shall pay $2,400 in restitution to each affected merchant.')).toBe(false);
+    expect(evidencesPurchase('Admitted students receive $3,000 per term in tuition support.')).toBe(false);
+    expect(evidencesPurchase('Promotion-compliance firm fee schedule: brands pay $800 per sweepstakes rules review.')).toBe(true);
+    expect(evidencesPurchase('Editing-service price list: students pay $120 per scholarship essay edited.')).toBe(true);
+    expect(evidencesPurchase('Claims-documentation vendor rate card: contractors pay $300 per claim packet.')).toBe(true);
+  });
+  it('reads a singular organisation described in lower case as one organisation', () => {
+    expect(namesABuyerPopulation('City of Ridgeport public-works department')).toBe(false);
+    expect(namesABuyerPopulation('Regional community foundation')).toBe(false);
+    expect(namesABuyerPopulation('Licensed local moving companies')).toBe(true);
+  });
+});
