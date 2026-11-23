@@ -763,7 +763,8 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const targets = targetProperties(limits).map((one) => one.property);
   const nodes = (await listNodes(input.projectId)).filter((one) => !one.retiredAt);
   const byId = new Map(nodes.map((one) => [one.id, one]));
-  const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED');
+  // A reward, prize, grant or rebate is no buyer and no need to construct a sale around (§116).
+  const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED' && !isNonPurchasePayment(openingPaymentText(one)));
   const facts = await cardFactsForProject(input.projectId);
   const evidencedPayer = new Set(facts.filter((one) => one.field === 'payer' && one.kind === 'EVIDENCE').map((one) => one.opportunityId));
   const shown = await shownWorkingIn(input.projectId, facts);
@@ -1307,7 +1308,8 @@ export async function inventionContext(input: ConstructionInput): Promise<Invent
   const exclusions = input.exclusions ?? [];
   const limits: GoalLimits = input.limits ?? { daysLeft: input.daysLeft, remainingCents: Number.MAX_SAFE_INTEGER, capitalCeilingCents: input.capitalCeilingCents, capitalBeforeProofCents: null, bestReachCents: null };
   const allowed = (text: string | null | undefined) => !excludedBy(text, exclusions);
-  const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED');
+  // A reward, prize, grant or rebate is no buyer and no need to construct a sale around (§116).
+  const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED' && !isNonPurchasePayment(openingPaymentText(one)));
   const { priced, tiedUp, facts, capability } = await heldEvidence(input, opportunities, allowed);
   const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, await cardFactsForProject(input.projectId), allowed);
   return { opportunities, priced, tiedUp, facts, leverEvidence, contractLimits, capability, input, limits, targets: targetProperties(limits).map((one) => one.property), exclusions, now };

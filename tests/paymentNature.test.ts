@@ -48,3 +48,20 @@ describe('buyer population: a sentence about one company is one company', () => 
     expect(namesABuyerPopulation('Companies running bug bounty programs')).toBe(true);
   });
 });
+
+describe('a revenue goal leaves non-commercial payouts out unless it asks for them', () => {
+  const bounty = "GitHub's own bug bounty program page states the program has run since 2014. Researchers are paid for valid vulnerabilities via HackerOne.";
+  const revenueGoal = 'Collect 10000 dollars of settled cash within 30 days using little up-front capital';
+  it('excludes a bounty, a prize and a grant from a revenue goal', async () => {
+    const { nonCommercialExclusion } = await import('../server/domain/paymentNature.ts');
+    expect(nonCommercialExclusion(bounty, revenueGoal)).toMatch(/not a sale/);
+    expect(nonCommercialExclusion('Design competition: prize money of $20,000 for the winning entry', revenueGoal)).toMatch(/not a sale/);
+    expect(nonCommercialExclusion('The foundation offers a $25,000 grant to small nonprofits', revenueGoal)).toMatch(/not a sale/);
+  });
+  it('keeps a sale, and keeps a payout the goal asks for by name', async () => {
+    const { nonCommercialExclusion } = await import('../server/domain/paymentNature.ts');
+    expect(nonCommercialExclusion('Dental practices pay $299 a month for appointment-reminder software', revenueGoal)).toBeNull();
+    expect(nonCommercialExclusion(bounty, 'Earn $10,000 from bug bounties this quarter')).toBeNull();
+    expect(nonCommercialExclusion('The foundation offers a $25,000 grant to small nonprofits', 'Win $50,000 in grant funding for the nonprofit')).toBeNull();
+  });
+});

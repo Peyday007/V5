@@ -88,3 +88,29 @@ export function nonPurchaseSentence(reading: PaymentNatureReading): string {
   };
   return reading.nature === 'PURCHASE' ? 'a purchase' : `${what[reading.nature]} ("${reading.cue}"), not a price a buyer pays a supplier for a deliverable`;
 }
+
+/** Goal words that ask for a non-commercial route by name: a goal to win a prize or a grant may pursue one. */
+const REQUESTED: ReadonlyArray<[Exclude<PaymentNature, 'PURCHASE'>, RegExp]> = [
+  ['CONTINGENT_REWARD', /\b(?:bug[- ]?bount(?:y|ies)|bount(?:y|ies)|prizes?|contests?|competitions?|hackathons?|sweepstakes|vulnerability research)\b/i],
+  ['GRANT', /\b(?:grants?|scholarships?|fellowships?|stipends?|subsid(?:y|ies)|non-?dilutive funding)\b/i],
+  ['TRANSFER', /\b(?:rebates?|refunds?|reimbursements?|settlements?|claims?)\b/i],
+  ['EMPLOYMENT', /\b(?:jobs?|employment|salar(?:y|ies)|wages?)\b/i],
+];
+
+/**
+ * The non-commercial routes a goal's own words ask for. Everything else is a
+ * revenue goal, and a reward, grant, rebate or wage is not one of its
+ * strategies (owner, 2026-11-23: "Exclude those categories from ordinary
+ * revenue-generation strategies unless explicitly requested"). Pure.
+ */
+export function requestedNonCommercial(goalText: string | null | undefined): ReadonlySet<PaymentNature> {
+  const t = goalText ?? '';
+  return new Set(REQUESTED.filter(([, re]) => re.test(t)).map(([nature]) => nature));
+}
+
+/** Why an opening is left out of an ordinary revenue goal, or null when it is a sale or the goal asked for its kind. Pure. */
+export function nonCommercialExclusion(openingText: string, goalText: string | null | undefined): string | null {
+  const reading = paymentNatureOf(openingText);
+  if (reading.nature === 'PURCHASE' || requestedNonCommercial(goalText).has(reading.nature)) return null;
+  return `not a sale: ${nonPurchaseSentence(reading)}; a revenue goal's strategies are commercial purchases unless the goal asks for this kind of payout`;
+}

@@ -24,7 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
-import { paymentNatureOf } from '../../domain/paymentNature.ts';
+import { nonCommercialExclusion, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
@@ -2815,6 +2815,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   const included: ModelledOpportunity[] = [];
   // What the goal's owner said to leave out (§82): an excluded opening takes no slot, and says why.
   const exclusions = await goalExclusions(input.goal);
+  const goalText = [input.goal.title, input.goal.intent, input.goal.outcome ?? ''].join('\n');
   // What the goal's own words confine it to (an industry, recurring revenue): this goal's plan only (§105).
   const scope = target.scope;
   const scoped = new Map<string, HeldTerms>();
@@ -2835,6 +2836,12 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.buyingSignal ?? ''} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
     if (excludedClass) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${EXCLUSION_CLASSES[excludedClass].label}` });
+      continue;
+    }
+    // A reward, prize, contest, grant, rebate or wage is not a sale: it never enters a revenue goal's model unless the goal asks for it (§116).
+    const notASale = IN_FLIGHT.has(opportunity.state) ? null : nonCommercialExclusion([opportunity.title, opportunity.offerScope, opportunity.buyingSignal, opportunity.source].filter(Boolean).join('. '), goalText);
+    if (notASale) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: notASale });
       continue;
     }
     // The standing operating rule: a plan never rests on the owner's physical work.
