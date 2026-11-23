@@ -21,6 +21,7 @@
  * the goal has to go. Pure.
  */
 import type { PlanReading } from './plan.ts';
+import { LEG_LABEL } from './pathways.ts';
 
 export interface PlanningReport {
   goal: string;
@@ -52,7 +53,10 @@ export function planningReport(reading: Pick<PlanReading, 'target' | 'acceptance
       : a.candidate?.reach !== null && a.candidate?.reach !== undefined
         ? `UNKNOWN: the ${Math.round(a.candidate.reach * 1000) / 10}% figure is the share of simulated scenarios covered, not a probability, and fewer than ten finished plans exist to calibrate one`
         : 'UNKNOWN: no plan has been measured against real outcomes';
-  const gate = reading.commercialReality ?? null;
+  // The commercial reality check, as acceptance recorded it for every counted leg (`legFeasibility`, §116).
+  const legs = (a as { legs?: ReadonlyArray<{ opportunityId: string; lacks: readonly string[]; supported: boolean }> | null }).legs ?? null;
+  const fromLegs = legs && legs.length > 0 ? { validated: legs.every((l) => l.supported), failing: legs.filter((l) => !l.supported).map((l) => `${l.opportunityId} lacks ${l.lacks.map((k) => LEG_LABEL[k as keyof typeof LEG_LABEL] ?? k).join('; ')}`) } : null;
+  const gate = reading.commercialReality ?? fromLegs;
   const accepted = a.status === 'ACCEPTED';
   const commerciallyValidated = accepted && (gate === null ? false : gate.validated);
   const validation = commerciallyValidated
