@@ -85,3 +85,17 @@ describe('a fee for preparing a grant is a purchase', () => {
     expect(paymentNatureOf('The foundation provides a $25,000 grant to each selected nonprofit.').nature).toBe('GRANT');
   });
 });
+
+describe('price evidence must be about these buyers or this deliverable', () => {
+  it('refuses an HVAC-software price as a trucking workbook price, and keeps on-topic and bare figures', async () => {
+    const { evidenceIsAbout } = await import('../server/domain/paymentNature.ts');
+    expect(evidenceIsAbout('Software Advice analyzed data from HVAC contractors: field-service management software for HVAC businesses costs $1,200 a year per technician seat.', 'Regional trucking fleet managers; preventive-maintenance scheduling workbook')).toBe(false);
+    expect(evidenceIsAbout('Comparable allergen meal-plan workbooks sell for $29 on the marketplace.', 'Allergen-labelled weekly meal-plan workbook')).toBe(true);
+    expect(evidenceIsAbout('$250', 'anything')).toBe(true);
+  });
+  it('reads prizes, settlement payouts and filing fees correctly', () => {
+    expect(paymentNatureOf('The challenge awards a $50,000 first prize to the single best-scoring entry.').nature).toBe('CONTINGENT_REWARD');
+    expect(paymentNatureOf('The settlement administrator pays each eligible claimant about $1,200.').nature).toBe('TRANSFER');
+    expect(paymentNatureOf('Rebate-filing services charge installers $45 for each rebate application filed.').nature).toBe('PURCHASE');
+  });
+});

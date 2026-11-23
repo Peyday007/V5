@@ -43,7 +43,11 @@ const GRANT_MONEY = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:gran
 /** A grant body paying out, or a grant reimbursing an applicant. */
 const GRANT_ACT = /\bgrants?\b[^.;]{0,40}?\b(?:reimburses?|covers?|funds?|awards?|provides?|pays?)\b|\b(?:awarded|receives?|received|won)\s+(?:an?\s+)?(?:[\w-]+\s+){0,2}?grants?\b/i;
 /** Money returned or compensated, not exchanged for a deliverable. */
-const TRANSFER = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages)\b|\b(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages)\s+(?:of|worth|totall?ing|up to)\s+(?:up to\s+)?(?:\$|usd)|\breimburses?\b/i;
+const TRANSFER = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages)\b(?!\s+(?:applications?|filings?|forms?|claims? (?:filed|prepared)|processing|services?|paperwork|packets?))|\b(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages)\s+(?:of|worth|totall?ing|up to)\s+(?:up to\s+)?(?:\$|usd)|\breimburses?\b/i;
+/** A settlement, rebate or refund being paid out to the people it is owed to. */
+const TRANSFER_ACT = /\b(?:settlement|class[- ]action|rebate|refund|reimbursement|claims?) (?:administrator|program|fund|payouts?|payments?)\b|\bpays? (?:each |every )?(?:eligible )?(?:claimants?|class members?|policyholders?|homeowners? a)\b/i;
+/** A prize for the best entry: paid to a winner, never bought. */
+const PRIZE = /\b(?:(?:first|second|third|top|grand|cash|1st|2nd|3rd) )?prizes?\b(?!-)|\bawards? (?:an? )?(?:\$|usd)[^.;]{0,40}?\bto (?:the )?(?:single |top |best[\w-]* |winning |first[\w-]* )+(?:entr(?:y|ies)|submissions?|teams?|winners?|applicants?)\b/i;
 /** Pay to an employee: the employer is buying a job, not a supplier's deliverable. */
 const EMPLOYMENT = /\b(?:salar(?:y|ies)|wages?|annual pay|base pay|per year in pay|hourly wage)\b/i;
 /** Words that make the money a price somebody is charged. */
@@ -63,11 +67,13 @@ export function paymentNatureOf(text: string | null | undefined): PaymentNatureR
   // "pays $500 for each accepted puzzle" is a purchase; "rewards … for a valid finding" is not. Only reward words, or a payment for a finding or a win, count.
   if (rewardFor && (/\b(?:rewards?|awards?|prizes?)\b/i.test(rewardFor) || /\b(?:findings?|vulnerabilit(?:y|ies)|bugs?|exploits?|wins?|winners?|places?)\b/i.test(rewardFor))) return { nature: 'CONTINGENT_REWARD', cue: rewardFor };
   // A program named beside a purchase is the buyer's context, not the payment: "companies running bug bounty programs pay HackerOne $20,000 a year" buy a platform.
+  const prize = PURCHASE.test(t) ? null : hit(PRIZE);
+  if (prize) return { nature: 'CONTINGENT_REWARD', cue: prize };
   const program = hit(REWARD_PROGRAM);
   if (program && !PURCHASE.test(t)) return { nature: 'CONTINGENT_REWARD', cue: program };
   const grant = hit(GRANT_MONEY) ?? (PURCHASE.test(t) ? null : hit(GRANT_ACT));
   if (grant) return { nature: 'GRANT', cue: grant };
-  const transfer = hit(TRANSFER);
+  const transfer = hit(TRANSFER) ?? (PURCHASE.test(t) ? null : hit(TRANSFER_ACT));
   if (transfer) return { nature: 'TRANSFER', cue: transfer };
   const employment = PURCHASE.test(t) ? null : hit(EMPLOYMENT);
   if (employment) return { nature: 'EMPLOYMENT', cue: employment };
@@ -114,4 +120,30 @@ export function nonCommercialExclusion(openingText: string, goalText: string | n
   const reading = paymentNatureOf(openingText);
   if (reading.nature === 'PURCHASE' || requestedNonCommercial(goalText).has(reading.nature)) return null;
   return `not a sale: ${nonPurchaseSentence(reading)}; a revenue goal's strategies are commercial purchases unless the goal asks for this kind of payout`;
+}
+
+const STOP = new Set(['this', 'that', 'these', 'those', 'with', 'from', 'each', 'every', 'their', 'there', 'about', 'which', 'would', 'could', 'other', 'than', 'they', 'them', 'have', 'been', 'were', 'will', 'into', 'over', 'under', 'year', 'month', 'week', 'per', 'cost', 'costs', 'price', 'prices', 'priced', 'pays', 'paid', 'charge', 'charges', 'sell', 'sells', 'sold', 'average', 'typical', 'typically', 'around', 'about', 'business', 'businesses', 'company', 'companies', 'customer', 'customers', 'buyer', 'buyers', 'client', 'clients', 'service', 'services', 'comparable', 'published', 'source', 'data', 'analyzed', 'analysed', 'report', 'listing', 'listings', 'manager', 'managers', 'management', 'owner', 'owners', 'operator', 'operators', 'software', 'tool', 'tools', 'team', 'teams', 'staff', 'small', 'large', 'local', 'state', 'national', 'professional', 'professionals', 'firm', 'firms', 'office', 'offices']);
+const stems = (text: string): Set<string> =>
+  new Set(
+    (text.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? [])
+      .flatMap((w) => w.split('-'))
+      .filter((w) => w.length >= 4 && !STOP.has(w))
+      .map((w) => w.slice(0, 5)),
+  );
+
+/**
+ * Whether a price's own evidence is about these buyers or this deliverable at
+ * all (audit 2026-11-23: an HVAC-software sentence, "Software Advice analyzed
+ * data from 4,415 field service management buyers", became the GitHub leg's
+ * offer, and planningReliability mv-05 files a trucking workbook's price from
+ * HVAC software seats). Evidence that names things, none of which is the
+ * buyer, the deliverable or its industry, is about another market. A bare
+ * figure ("$250") names nothing and is not judged here. Pure.
+ */
+export function evidenceIsAbout(evidence: string | null | undefined, subject: string): boolean {
+  const said = stems((evidence ?? '').replace(/(?:\$|usd)\s?[\d,.]+[km]?/gi, ' '));
+  if (said.size < 3) return true;
+  const about = stems(subject);
+  for (const one of said) if (about.has(one)) return true;
+  return false;
 }
