@@ -54,6 +54,9 @@ async function main(): Promise<void> {
     await q('INFRA_FAILURES', "SELECT 1 AS probe_placeholder");
     await q('FL_ITEMS_SINCE_FIX', "SELECT e.outcome, substr(e.reason,1,80) AS reason, COUNT(*) AS n, MAX(e.at) AS last FROM bin_events e WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at > '2026-11-23T06:50:00' GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10");
     await q('FRAGS_ACCEPTED_SINCE_FIX', "SELECT f.status, COUNT(*) AS n FROM research_fragments f WHERE f.updated_at > '2026-11-23T06:50:00' GROUP BY 1");
+    await q('PLAN_Q_WORK', "SELECT w.id, w.work_type, w.state, w.priority, w.available_at, w.attempt_count, w.max_attempts, w.target_worker_id, w.failure_category, w.created_at FROM work_items w WHERE w.payload LIKE '%orc_694532fd32904450968a%' OR w.payload LIKE '%orc_345b17a00c904f55957e%' OR w.correlation_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
+    await q('PLAN_Q_BINS', "SELECT b.id, b.kind, b.state, b.priority, substr(b.last_refusal,1,200) AS refusal, b.refusal_count, b.ready_at, b.created_at FROM bins b WHERE b.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
+    await q('PLAN_Q_ORCH_FULL', "SELECT o.id, o.status, o.project_id, o.created_at FROM research_orchestrations o WHERE o.id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
