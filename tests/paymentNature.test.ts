@@ -65,3 +65,10 @@ describe('a revenue goal leaves non-commercial payouts out unless it asks for th
     expect(nonCommercialExclusion('The foundation offers a $25,000 grant to small nonprofits', 'Win $50,000 in grant funding for the nonprofit')).toBeNull();
   });
 });
+
+describe('a legitimate purchase beside a reward program stays a purchase', () => {
+  it('reads a bug-bounty platform subscription as what the programs buy', () => {
+    expect(paymentNatureOf('Companies running bug bounty programs pay HackerOne $20,000 a year.').nature).toBe('PURCHASE');
+    expect(paymentNatureOf('Contest organizers pay judging platforms $1,500 per event.').nature).toBe('PURCHASE');
+  });
+});

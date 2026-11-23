@@ -3042,7 +3042,7 @@ const FILED_KEY: Record<FiledInput, FactKey> = {
  * otherwise (`claimPaysPopulation`, industry/expand.ts).
  */
 const PAID_BY_BUYER =
-  'Only money these buyers pay out is this figure, and the claim must say they are the ones paying: a reward, bounty, wage, fee or payout paid to them runs the other way — leave it out.';
+  'Only money these buyers pay out is this figure, and the claim must say they are the ones paying: a reward, bounty, wage, fee or payout paid to them runs the other way — leave it out. And it must be a purchase: a reward, bounty, prize, grant or rebate they pay out is not what they pay a supplier for a deliverable — leave it out too.';
 
 /**
  * The one plan input a constructed arrangement's next round asks for, and the

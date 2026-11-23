@@ -532,7 +532,7 @@ export function namesABuyerPopulation(name: string | null | undefined): boolean 
  */
 export function subjectOf(text: string): string {
   const clause = text.split(/\s+[—–-]\s+|\s*[:;(]\s*/)[0] ?? text;
-  const verb = clause.match(/^(.+?)\s+(?:is|are|was|were|pays?|paid|publishes|published|runs|ran|offers|offered|awards|awarded|rewards|rewarded|operates|hosts|sponsors|funds)\b/i);
+  const verb = clause.match(/^(.+?)\s+(?:is|are|was|were|pays?|paid|publishes|published|runs|ran|offers|offered|awards|awarded|rewards|rewarded)\b/i);
   return bareName(verb ? verb[1] : clause);
 }
 

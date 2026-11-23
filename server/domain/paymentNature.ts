@@ -47,7 +47,7 @@ const TRANSFER = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:rebates
 /** Pay to an employee: the employer is buying a job, not a supplier's deliverable. */
 const EMPLOYMENT = /\b(?:salar(?:y|ies)|wages?|annual pay|base pay|per year in pay|hourly wage)\b/i;
 /** Words that make the money a price somebody is charged. */
-const PURCHASE = /\b(?:charges?|charged|priced|pricing|price|fees?|costs?|invoices?|invoiced|retainers?|subscriptions?|commissions?|quotes?|quoted|per (?:hour|project|order|month|unit|item|page|word|seat|user|license|licence)|buys?|bought|purchases?|purchased|sells?|sold|hires?|hired|rates?)\b/i;
+const PURCHASE = /\b(?:charges?|charged|priced|pricing|price|fees?|costs?|invoices?|invoiced|retainers?|subscriptions?|commissions?|quotes?|quoted|per (?:hour|project|order|month|unit|item|page|word|seat|user|license|licence)|buys?|bought|purchases?|purchased|sells?|sold|hires?|hired|rates?|a (?:year|month)|annually|monthly|platform)\b/i;
 
 /**
  * What a figure's claim says the money is paid for. Non-purchase cues are
@@ -59,11 +59,12 @@ export function paymentNatureOf(text: string | null | undefined): PaymentNatureR
   const t = (text ?? '').replace(/\s+/g, ' ');
   if (!t) return { nature: 'PURCHASE', cue: null };
   const hit = (re: RegExp): string | null => t.match(re)?.[0] ?? null;
-  const program = hit(REWARD_PROGRAM);
-  if (program) return { nature: 'CONTINGENT_REWARD', cue: program };
   const rewardFor = hit(REWARD_FOR);
   // "pays $500 for each accepted puzzle" is a purchase; "rewards … for a valid finding" is not. Only reward words, or a payment for a finding or a win, count.
   if (rewardFor && (/\b(?:rewards?|awards?|prizes?)\b/i.test(rewardFor) || /\b(?:findings?|vulnerabilit|bugs?|exploits?|wins?|winners?|places?)\b/i.test(rewardFor))) return { nature: 'CONTINGENT_REWARD', cue: rewardFor };
+  // A program named beside a purchase is the buyer's context, not the payment: "companies running bug bounty programs pay HackerOne $20,000 a year" buy a platform.
+  const program = hit(REWARD_PROGRAM);
+  if (program && !PURCHASE.test(t)) return { nature: 'CONTINGENT_REWARD', cue: program };
   const grant = hit(GRANT_MONEY) ?? (PURCHASE.test(t) ? null : hit(GRANT_ACT));
   if (grant) return { nature: 'GRANT', cue: grant };
   const transfer = hit(TRANSFER);
