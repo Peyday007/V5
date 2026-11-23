@@ -78,3 +78,10 @@ describe('a bounty platform paying per finding is a reward', () => {
     expect(paymentNatureOf('The huntr bounty platform pays security researchers $500 for each valid vulnerability report in an open-source project.').nature).toBe('CONTINGENT_REWARD');
   });
 });
+
+describe('a fee for preparing a grant is a purchase', () => {
+  it('reads payment per grant application prepared as a purchase', () => {
+    expect(paymentNatureOf('The Pennsylvania Department of Agriculture pays $2,500 per farm grant application prepared.').nature).toBe('PURCHASE');
+    expect(paymentNatureOf('The foundation provides a $25,000 grant to each selected nonprofit.').nature).toBe('GRANT');
+  });
+});
