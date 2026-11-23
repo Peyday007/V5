@@ -302,6 +302,21 @@ describe('C-9: research follows the adopted plan', () => {
     expect(planFieldsFor({ researchPriority: forced } as Pick<PlanReading, 'researchPriority'>, 'o2')).toEqual(['revenueRange']);
   });
 
+  it('asks a plan condition as the measurement it names, never the bare word (production: "close" was researched as Close CRM)', async () => {
+    const questions: string[] = [];
+    const fake = (async (input: { needs: readonly { subject: string; question: string }[] }) => {
+      questions.push(...input.needs.map((n) => n.question));
+      return input.needs.map((n) => ({ subject: n.subject, sent: true as const, to: 'RESEARCH_UNCERTAINTY' as const, ref: 'u', created: true }));
+    }) as unknown as NonNullable<Parameters<typeof sendPlanQuestions>[1]>['sendNeeds'];
+    const asks = ['reply', 'close', 'days to cash', 'something-new'].map((c, i) => ({ variable: `plan:${c}`, opportunityId: null, decision: 'RESEARCH_FIRST', value: 1 - i / 10, reason: 'r' }));
+    await sendPlanQuestions({ goalId: 'wst_g', projectId: 'prj', priority: asks, max: 4 }, { sendNeeds: fake });
+    expect(questions[0]).toMatch(/reply rate to cold outreach/);
+    expect(questions[1]).toMatch(/close rate: the share of qualified buyers offered the deal who buy/);
+    expect(questions[2]).toMatch(/days from a buyer agreeing to the money arriving/);
+    expect(questions[3]).toMatch(/the plan's "something-new" figure/);
+    expect(questions.some((q) => /how (close|reply) behaves/.test(q))).toBe(false);
+  });
+
   it('chooses the search brief by what binds', () => {
     const reply = planSearchBrief(r, 10_000, 30);
     const price = planSearchBrief(reconstruction({ diagnosis: [{ factor: 'PRICE', moved: 'price ×2', reach: 0.3, settledP50: 1, liftReach: 0.3, liftP50: 1 }] }), 10_000, 30);

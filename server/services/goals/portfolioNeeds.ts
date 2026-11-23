@@ -390,6 +390,33 @@ export function priceNeedOf(one: UnpricedPopulation): Need {
   };
 }
 
+/**
+ * What a plan condition measures, in the words a researcher searches with.
+ *
+ * Production 2026-11-23 (orc_345b17a00c904f55957e, orc_694532fd32904450968a):
+ * the $10K plan asked "how close behaves" and "how reply behaves". The free
+ * lane researched Close CRM's pricing page and a game-theory article on "best
+ * reply", every claim landed in the wrong lane, and both fragments ended
+ * REQUIRED_LANE_EMPTY twice. A condition is the engine's short name for a rate
+ * or figure; the question names the measurement, never the bare word.
+ */
+const PLAN_CONDITION_MEANING: Record<string, string> = {
+  reply: 'the reply rate to cold outreach: the share of prospects contacted who reply',
+  respond: 'the response rate to outreach: the share of prospects contacted who respond',
+  close: 'the close rate: the share of qualified buyers offered the deal who buy',
+  ticket: 'the deal size: the amount one buyer pays per purchase',
+  market: 'the market size: how many reachable buyers of this kind exist',
+  'days to cash': 'the time to cash: the days from a buyer agreeing to the money arriving',
+  'direct cost': 'the direct cost per deal: what fulfilling one sale costs',
+  'supplier-cost': 'the supplier cost: what the supplier charges per unit or per deal',
+  'outreach-capacity': 'the outreach capacity: how many prospects can be contacted per day',
+};
+
+/** The measurement a plan condition names, for a researcher. Pure. */
+export function planConditionMeaning(condition: string): string {
+  return PLAN_CONDITION_MEANING[condition] ?? `the plan's "${condition}" figure`;
+}
+
 /** At most this many of the adopted plan's own questions are sent per plan read (C-9). */
 export const PLAN_QUESTIONS_PER_READ = 3;
 
@@ -423,7 +450,7 @@ export async function sendPlanQuestions(
     const condition = one.variable.slice('plan:'.length);
     return {
       subject: `the goal plan's condition "${condition}"`,
-      question: `What published evidence shows how ${condition} behaves for buyers and offers like this plan's? The plan's reading: ${one.reason}`.slice(0, 900),
+      question: `What published evidence measures ${planConditionMeaning(condition)}, for buyers and offers like this plan's? The plan's reading: ${one.reason}`.slice(0, 900),
       route: 'RESEARCH',
       permissions: [],
     };
