@@ -118,3 +118,10 @@ describe('worded price evidence must show a buyer paying a supplier', () => {
     ]) expect(evidencesPurchase(t)).toBe(true);
   });
 });
+
+describe('production buyer-name fragments are not populations (Surge B report, 2026-11-23)', () => {
+  it('refuses the stored fragments', () => {
+    for (const n of ['GitHub Inc operates the bug bounty program and', 'The GitHub Bug Bounty Program Overhaul does not specify who actually pays for it', "GitHub's bug bounty program will restructure on July 27 2026 with lower public payouts and"]) expect(namesABuyerPopulation(n)).toBe(false);
+    expect(namesABuyerPopulation('GitHub Sponsors maintainers')).toBe(true);
+  });
+});
