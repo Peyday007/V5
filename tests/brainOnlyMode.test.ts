@@ -14,6 +14,8 @@ import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createBin, getBin, listBinEvents } from '../server/repos/bins.ts';
 import { createProject } from '../server/repos/projects.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createOrchestration } from '../server/repos/research.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { checkIn } from '../server/services/bins/service.ts';
@@ -23,7 +25,7 @@ import {
   setBrainOnlyMode,
   workItemPurposeAdmits,
 } from '../server/services/bins/brainOnly.ts';
-import { binLane, classifyBinPurpose } from '../server/domain/binPurpose.ts';
+import { OWNER_DIRECTED_GOAL_IDS, binLane, classifyBinPurpose } from '../server/domain/binPurpose.ts';
 import { WORKER_INSTRUCTIONS, instructionProblems } from '../server/services/bins/workerInstructions.ts';
 import type { BinManifest, Principal, ProjectMembership } from '../server/domain/types.ts';
 
@@ -227,6 +229,35 @@ describe('the assignment query enforces it', () => {
     const done = await tool('brain_bin_complete', proof);
     expect(done.state).toBe('COMPLETE');
     expect((await getBin(id))?.state).toBe('COMPLETE');
+  });
+
+  it('hands an idle routine the owner-directed goal’s research, and still no other play bin', async () => {
+    // Production, 2026-11-23: twelve routines idle for weeks beside fifteen
+    // READY bins of the $10K goal the owner put Brain's resources on.
+    const goalId = OWNER_DIRECTED_GOAL_IDS[0]!;
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [goalId, play.project.id, '$10K', 'Collect 10000 dollars', 'REVENUE_DIRECT', now, now],
+    );
+    const other = await bin(play.project.id, 'AI receptionist pricing in Ohio', 9);
+    const goalBin = await bin(play.project.id, 'Constructed: who pays for this arrangement', 3);
+    const layer = await play.layerByName('Discovery Logic');
+    const run = await createRun({ projectId: play.project.id, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const packet = await createOrchestration({ projectId: play.project.id, layerId: layer.id, runId: run.id, title: 'q', assignment: 'q', provider: 'WORKER', autoApprove: false });
+    await getDb().run('UPDATE bins SET orchestration_id = ? WHERE id = ?', [packet.id, goalBin]);
+    await getDb().run(
+      `INSERT INTO workstream_links (id, workstream_id, kind, ref, relation, recorded_by, created_at)
+       VALUES (?, ?, 'PACKET', ?, 'PURSUES', 'BRAIN', ?)`,
+      ['wsl_goal_packet', goalId, packet.id, now],
+    );
+    expect((await getBin(goalBin))?.purpose).toBe('PLAY_RESEARCH');
+    const answer = await checkIn({ principal: routine(), workerId });
+    expect(answer.assigned).toBe(true);
+    if (answer.assigned) expect(answer.assignment.binId).toBe(goalBin);
+    expect((await getBin(other))?.state).toBe('READY');
+    expect((await checkIn({ principal: routine(), workerId })).assigned).toBe(false);
   });
 
   it('keeps play bins assignable once the owner turns the mode off', async () => {

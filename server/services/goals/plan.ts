@@ -2937,14 +2937,18 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
           currency: target.currency,
         });
   const pool = poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length);
+  // The held plan over its supported legs alone, when some are supported and some are not: the figure the reading may
+  // present as the plan's. Started before the ledger read so the evaluator's threads and the database wait overlap.
+  const supportedRead = supportedDistribution(model, acceptance, pathways, degraded);
+  // Observed until it is awaited below, so a rejection during the ledger read is not an unhandled one.
+  supportedRead.catch(() => undefined);
   let ledger: Map<string, OpeningLedger> | null = null;
   try {
     ledger = await readOpeningLedger(target);
   } catch (error) {
     degraded.push(`opening ledger: ${errorText(error)} (the plan set reads no observed collections or executed sales)`);
   }
-  // The held plan over its supported legs alone, when some are supported and some are not: the figure the reading may present as the plan's.
-  const supported = await supportedDistribution(model, acceptance, pathways, degraded);
+  const supported = await supportedRead;
   const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: models, supported });
   const continuation = continuationOf({
     achieved: target.achieved,
