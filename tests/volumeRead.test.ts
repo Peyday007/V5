@@ -7,7 +7,7 @@
  * multiplier the text does not state is never invented.
  */
 import { describe, expect, it } from 'vitest';
-import { payerNounWords, readVolume } from '../server/services/cash/volume.ts';
+import { payerAgentWords, payerNounWords, readVolume } from '../server/services/cash/volume.ts';
 
 describe('readVolume: a count of units each doing a rate multiplies', () => {
   it.each([
@@ -92,5 +92,77 @@ describe('readVolume: the payer names its own buyers, and a stated share narrows
     for (const text of ['300 caterers, at 15% off list', '300 caterers; 30% margin on each order', '300 caterers at a 28% impression share', '300 caterers, 10% of revenue']) {
       expect(readVolume(text, 30, 'Wedding caterers')).toMatchObject({ buyers: 300 });
     }
+  });
+});
+
+/*
+ * Published buyer-volume evidence read both ways (2026-11-23): a real stated
+ * volume read as unknown made Brain refuse plans as MARKET_VOLUME-unknown, and
+ * a count of sellers read as buyers invented volume.
+ */
+describe('readVolume: real stated volume is read', () => {
+  it('counts a payer named for its trade by the trade’s agent noun, repeating at the stated frequency', () => {
+    expect(payerAgentWords('Licensed local moving companies')).toEqual(['mover', 'movers']);
+    expect(payerAgentWords('Roofing contractors')).toEqual(['roofer', 'roofers']);
+    expect(payerAgentWords('Companies entering trade-industry awards programmes')).toEqual([]);
+    const text = 'The state household-goods register lists 2,400 licensed movers; lead marketplaces report they reorder packs monthly.';
+    expect(readVolume(text, 30)).toBeNull();
+    expect(readVolume(text, 30, 'Licensed local moving companies')).toMatchObject({ deals: 2400, buyers: 2400, everyDays: 30, counted: 'BUYERS' });
+    expect(readVolume(text, 60, 'Licensed local moving companies')).toMatchObject({ deals: 4800, buyers: 2400, everyDays: 30 });
+  });
+
+  it('reads paid entries a year as the market’s purchases', () => {
+    const text = 'The twelve largest trade awards programmes receive about 9,000 paid entries a year; three have entry deadlines inside the next 45 days.';
+    expect(readVolume(text, 365, 'Companies entering trade-industry awards programmes')).toMatchObject({ deals: 9000, buyers: null, counted: 'ORDERS' });
+    expect(readVolume(text, 30, 'Companies entering trade-industry awards programmes')).toMatchObject({ deals: 739, counted: 'ORDERS' });
+  });
+
+  it.each([
+    ['45 commercial solar installers operate in the tri-county area; each buys about 10 qualified leads a month.'],
+    ['45 commercial solar installers in the region each buy about 10 qualified leads a month.'],
+  ])('%s → 45 buyers, 10 a month each', (text) => {
+    expect(readVolume(text, 30, 'Commercial solar installers')).toMatchObject({ deals: 450, buyers: 45 });
+    expect(readVolume(text, 90, 'Commercial solar installers')).toMatchObject({ deals: 1350, buyers: 45 });
+  });
+
+  it.each([
+    ['220 heat pump installers are registered with the utility; each files several rebate applications a week.'],
+    ['220 heat pump installers in the state each file several rebate applications a week.'],
+  ])('%s → "several" read at its low end, 2 a week each, and says so', (text) => {
+    const reading = readVolume(text, 7, 'Residential heat pump installers');
+    expect(reading).toMatchObject({ deals: 440, buyers: 220 });
+    expect(reading!.basis).toContain('"several" read at its low end, 2');
+  });
+
+  it('keeps "each of" and a rate belonging to someone else as before', () => {
+    expect(readVolume('Each of the 35 pharmacies ships about 20 deliveries a week.', 30)).toMatchObject({ deals: 3000, buyers: 35 });
+    expect(readVolume('35 pharmacies; the courier makes 20 deliveries a week', 30)).toMatchObject({ deals: 85, buyers: null });
+  });
+});
+
+describe('readVolume: the supply side and web counts are never buyers', () => {
+  it('reads sales over a trailing span as market purchases, never its sellers as buyers', () => {
+    const text = 'The marketplace shows 2,300 sales of comparable meal-plan workbooks in the last 12 months across 40 sellers; buyers return each season.';
+    expect(readVolume(text, 30, 'Home cooks buying meal-plan workbooks')).toMatchObject({ deals: 191, buyers: null, counted: 'ORDERS' });
+    expect(readVolume(text, 360)).toMatchObject({ deals: 2300, buyers: null });
+  });
+
+  it.each([
+    ['The marketplace lists 40 sellers of comparable meal-plan workbooks.', null],
+    ['2,300 copies of comparable workbooks were sold across 40 shops.', null],
+    ['40 agencies offering the service compete for these clients.', null],
+    ['12 vendors selling comparable kits are listed.', null],
+    ['15 firms compete for the same contracts.', null],
+    ['Google shows 2.1M results for moving companies.', 'Licensed local moving companies'],
+    ['Google shows 2,100,000 results for local movers.', 'Licensed local moving companies'],
+    ['The page has 40,000 LinkedIn followers among companies.', 'Companies entering trade-industry awards programmes'],
+    ['The association has 40,000 LinkedIn followers.', null],
+    ['A search returns 1,200 webpages about movers.', 'Licensed local moving companies'],
+  ])('%s → null', (text, payer) => {
+    expect(readVolume(text, 30, payer)).toBeNull();
+  });
+
+  it('still counts a payer that is itself a seller', () => {
+    expect(readVolume('The platform has 3,000 active Etsy sellers in the craft category.', 30, 'Etsy sellers')).toMatchObject({ buyers: 3000 });
   });
 });

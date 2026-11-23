@@ -13800,6 +13800,12 @@ are the repair.
   each buys) is read only where a source states a count. Unstated, the model
   sweeps it, `MARKET_VOLUME` is a missing link and a supported reach counts one
   deal; any opening becomes repeatable once research shows more than one deal.
+  `readVolume` reads a stated volume both ways (2026-11-23): a trade's agent
+  noun counts its payer ("2,400 movers" for moving companies), "each" after a
+  count carries a per-unit rate (a vague "several" read at 2, and said), and a
+  transaction count over a trailing span is market purchases; sellers,
+  vendors, units a sales count is spread across, units offering the same
+  thing, and counts of results, pages or followers are never buyers.
 - **An unsized published rate is bounds.** It locates a rate and states no
   precision, so an estimate resting only on such rates is never a distribution.
 
