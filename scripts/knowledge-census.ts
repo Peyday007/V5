@@ -52,6 +52,8 @@ async function main(): Promise<void> {
     await q('FL_ITEM_OUTCOMES', "SELECT e.outcome, substr(e.reason,1,90) AS reason, COUNT(*) AS n FROM bin_events e WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at > '2026-11-23T00:00:00' GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15");
     await q('FL_ITEM_SAMPLE', "SELECT e.at, e.workload_class AS model, e.outcome, substr(e.reason,1,220) AS reason, e.duration_ms FROM bin_events e WHERE e.event_type = 'FREE_LANE_ITEM' ORDER BY e.at DESC LIMIT 8");
     await q('INFRA_FAILURES', "SELECT 1 AS probe_placeholder");
+    await q('FL_ITEMS_SINCE_FIX', "SELECT e.outcome, substr(e.reason,1,80) AS reason, COUNT(*) AS n, MAX(e.at) AS last FROM bin_events e WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at > '2026-11-23T06:50:00' GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 10");
+    await q('FRAGS_ACCEPTED_SINCE_FIX', "SELECT f.status, COUNT(*) AS n FROM research_fragments f WHERE f.updated_at > '2026-11-23T06:50:00' GROUP BY 1");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
