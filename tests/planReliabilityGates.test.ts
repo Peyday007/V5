@@ -236,9 +236,13 @@ describe('5. an unestablished price never makes a candidate', () => {
   });
 
   it('keeps the combination as the candidate when every member’s price is established', () => {
-    const a = judgeAcceptance({ achieved: false, chosen: strategy, portfolio: portfolio(['close rate']), measuredChance: null, considered });
+    // Round 12: a constructed arrangement beside a qualified strategy is a broken member, so the strategy is held;
+    // with no qualified strategy the priced combination is the candidate, as before.
+    const unqualified = { ...strategy, chainComplete: false };
+    const a = judgeAcceptance({ achieved: false, chosen: unqualified, portfolio: portfolio(['close rate']), measuredChance: null, considered });
     expect(a.candidate?.source).toBe('QUANT_PORTFOLIO');
     expect(a.candidate?.opportunityIds).toEqual(['cleaning', 'arr_constructed']);
+    expect(judgeAcceptance({ achieved: false, chosen: strategy, portfolio: portfolio(['close rate']), measuredChance: null, considered }).candidate?.opportunityIds).toEqual(['cleaning']);
   });
 });
 

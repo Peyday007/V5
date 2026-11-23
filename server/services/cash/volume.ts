@@ -120,7 +120,7 @@ export interface VolumeReading {
 }
 
 /** Words that name a buyer by what they own or run: "boat owners" own boats, "fleet operators" run fleets. */
-const HOLDER_WORDS = /\b((?:[a-z-]{3,}\s+){0,2}[a-z]{3,})\s+(?:owners?|operators?|managers?|proprietors?|holders?|keepers?)\b/gi;
+const HOLDER_WORDS = /\b((?:[a-z-]{3,}\s+){0,2}[a-z]{3,})\s+(?:owners?|operators?|managers?|proprietors?|holders?|keepers?|buyers?|purchasers?)\b/gi;
 
 /**
  * The things a payer is named for holding, as count words: a payer of "Recreational
@@ -132,7 +132,14 @@ const HOLDER_WORDS = /\b((?:[a-z-]{3,}\s+){0,2}[a-z]{3,})\s+(?:owners?|operators
  * them; before, only "revenue" and "facility" (pluralized "facilitys") were
  * read, and a market research had sized stayed unsized. Never more than the
  * three words before the holder word, never a stop word or a size adjective,
- * singular and plural. Pure.
+ * singular and plural.
+ *
+ * A buyer named for what it buys is held the same way (planningReliability
+ * round 12): a payer of "Used-boat buyers" is one buyer per boat being bought,
+ * so "1,100 used boats are under accepted offers" counts them exactly as
+ * "1,100 boat owners" would count a payer of boat owners. Before, only the
+ * head "buyers" counted, and a market research had sized in the thing bought
+ * read as unsized. Pure.
  */
 export function payerHeldWords(payer: string | null | undefined): string[] {
   if (!payer) return [];
@@ -414,7 +421,58 @@ export function readTrialVolume(text: string, windowDays: number, unit: string):
     if (prospects < 1) continue;
     if (!best || prospects < best.deals) best = { deals: prospects, buyers: prospects, everyDays: null, counted: 'BUYERS', basis };
   }
-  return best ?? (/^(?:bids?|tenders?)$/i.test(unit) ? readSolicitorVolume(text, window, unit) : null);
+  if (best) return best;
+  if (!/^(?:bids?|tenders?)$/i.test(unit)) return null;
+  return readPostedWorkVolume(text, window, unit) ?? readSolicitorVolume(text, window, unit);
+}
+
+/** The work a buyer puts out to bid, counted by what is awarded rather than by the solicitation. */
+const POSTED_WORK = 'contracts|jobs|projects|work orders|routes';
+/** Words saying the counted work is open to bidders now, not work already won or done. */
+const OPEN_TO_BID = /\b(?:posted|advertised|published|out\s+(?:to|for)\s+(?:bid|bids|tender)|open\s+(?:to|for)\s+(?:bid|bids|bidding|tender)|up\s+for\s+(?:bid|bids|tender)|(?:put|going)\s+out\s+to\s+(?:bid|tender)|on\s+(?:a|the)\s+(?:[a-z-]+\s+){0,3}?bid\s+board|for\s+award|to\s+be\s+awarded|being\s+(?:bid|tendered))\b/i;
+/** Words saying the counted work was already won, lost or done: a record, never an open trial. */
+const CLOSED_WORK = /\b(?:won|lost|awarded\s+(?:to|us)|completed|delivered|signed|held|ran|finished)\b/i;
+
+/**
+ * Solicitations counted by the work they award (planningReliability round 12):
+ * "45 plowing contracts are posted on the regional bid board for award" states
+ * 45 chances to bid exactly as "45 RFQs" does — each contract open to bidders
+ * is one trial of a win rate measured per bid. Read only for a rate measured
+ * per bid or tender, and only when the count's own sentence says the work is
+ * open to bidders (posted, out to bid, for award) and never that it was won or
+ * done; a period after the count is a rate over the window, a named span
+ * longer than the window is cut to the window's share, exactly as a trial
+ * count is (`readTrialVolume`). Null otherwise. Pure.
+ */
+function readPostedWorkVolume(text: string, window: number, unit: string): VolumeReading | null {
+  const pattern = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,5}?(?:${POSTED_WORK})\\b(?!\\s*%)(?:\\s+${PER}\\s+(day|week|month|quarter|year)\\b)?`, 'gi');
+  let best: VolumeReading | null = null;
+  for (const m of text.matchAll(pattern)) {
+    const count = toInt(m[1]!);
+    if (!(count > 0 && count < 50_000_000)) continue;
+    const sentence = sentenceAt(text, m.index ?? 0);
+    const after = sentence.text.slice((m.index ?? 0) - sentence.start);
+    if (!OPEN_TO_BID.test(after) || CLOSED_WORK.test(after)) continue;
+    const rate = m[2] ?? SENTENCE_RATE.exec(text.slice((m.index ?? 0) + m[0]!.length))?.[1];
+    let prospects: number;
+    let basis: string;
+    if (rate) {
+      const period = rate.toLowerCase();
+      prospects = Math.floor((count * window) / PERIOD_DAYS[period]!);
+      basis = `${count} pieces of work put out to bid a ${period} are stated, so ${prospects} ${unit} opportunities in ${window} days, each one trial of the measured rate`;
+    } else {
+      const named = SPAN.exec(sentence.text);
+      const days = named ? (named[1] ? SPAN_DAYS[named[1].toLowerCase()]! : 30) : null;
+      const cut = days !== null && window < days;
+      prospects = cut ? Math.floor((count * window) / days) : count;
+      basis = cut
+        ? `${count} pieces of work open to bid are stated over about ${days} days, so ${prospects} ${unit} opportunities in ${window} days, each one trial of the measured rate`
+        : `${count} pieces of work open to bid are stated for the window, each one trial of the measured rate`;
+    }
+    if (prospects < 1) continue;
+    if (!best || prospects < best.deals) best = { deals: prospects, buyers: prospects, everyDays: null, counted: 'BUYERS', basis };
+  }
+  return best;
 }
 
 /** A verb by which a buyer puts its own work out to bid: it tenders it, bids it out, issues an RFQ for it. */

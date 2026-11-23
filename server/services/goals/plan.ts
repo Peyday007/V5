@@ -1522,8 +1522,17 @@ export function judgeAcceptance(input: {
    * and qualified it, while the candidate the plan reported still counted the
    * lot — a plan resting on the unknown it was judged without (§39). With a
    * qualified strategy in hand, the candidate is that strategy.
+   *
+   * A constructed arrangement is such a member too (planningReliability round
+   * 12): its buyers are not found, its price is a comparable's and what it
+   * delivers is not specified, so every link of its chain is an estimate. A
+   * combination that added one beside found openings already carrying the
+   * target alone reported a plan whose steps reach buyers nobody found and
+   * deliver work nobody specified, at no established cost. It is broken
+   * unless the qualified strategy itself counts it.
    */
-  const brokenIn = (ids: string[]) => ids.filter((id) => (input.considered.find((one) => one.opportunityId === id)?.missing.length ?? 0) > 0);
+  const constructedOutside = (id: string) => isArrangementId(id) && !(input.chosen?.arrangementIds ?? []).includes(id);
+  const brokenIn = (ids: string[]) => ids.filter((id) => constructedOutside(id) || (input.considered.find((one) => one.opportunityId === id)?.missing.length ?? 0) > 0);
   const qualifiedOver = (ids: string[]) =>
     !!input.chosen?.chainComplete && input.chosen.verdict !== 'NOT_VIABLE' && input.chosen.opportunityIds.length > 0 && brokenIn(ids).some((id) => !input.chosen!.opportunityIds.includes(id));
   const held = pricedHeld && qualifiedOver([...new Set(pricedHeld.members.map((m) => m.opportunityId))]) ? null : pricedHeld;

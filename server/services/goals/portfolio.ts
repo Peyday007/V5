@@ -1535,7 +1535,17 @@ export function evaluateGoalPortfolio(input: {
      * never sell inside it, and is not this goal's line.
      */
     const oneDeal = one.directCost.value;
-    if (!refused && spendCeiling !== null && !one.fundedByBuyer && !stakeFunded && established(one.directCost) && oneDeal !== null && oneDeal > spendCeiling + 1e-9) {
+    /*
+     * Unless the card's own figure for the money a deal ties up says most of
+     * that cost is paid after the buyer pays (planningReliability round 12): a
+     * $600 deposit on a $1,100 rental, settled from the buyer's $1,800, spends
+     * $600 of the goal's money, never $1,100. The gate already judged such a
+     * deal on what it ties up (`lotsUnderCeiling`), so refusing it here on the
+     * whole cost left a qualified strategy with no sale and no transaction.
+     */
+    const tiesUp = established(one.capital) && one.capital.value !== null ? one.capital.value : null;
+    const paidFromBuyer = tiesUp !== null && oneDeal !== null && tiesUp < oneDeal - 1e-9 && spendCeiling !== null && tiesUp <= spendCeiling + 1e-9;
+    if (!refused && spendCeiling !== null && !one.fundedByBuyer && !stakeFunded && !paidFromBuyer && established(one.directCost) && oneDeal !== null && oneDeal > spendCeiling + 1e-9) {
       refused = `one deal costs ${Math.round(oneDeal)} directly, more than the ${Math.round(spendCeiling)} this goal may spend in all`;
     }
     /*
