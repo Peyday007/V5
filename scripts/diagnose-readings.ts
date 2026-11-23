@@ -155,6 +155,8 @@ async function binGates(binId: string): Promise<void> {
     'SELECT id, state FROM russell_missions WHERE bin_id = ? OR (orchestration_id IS NOT NULL AND orchestration_id = ?)',
     [binId, bin.orchestration_id ?? '-'],
   );
+  const packet = await getDb().get<{ status: string }>('SELECT status FROM research_orchestrations WHERE id = ?', [bin.orchestration_id ?? '-']);
+  console.log(`  packet: ${bin.orchestration_id ?? '-'} ${packet?.status ?? '(none)'}`);
   console.log(`  missions: ${missions.map((one) => `${one.id} ${one.state}`).join(', ') || 'none'}`);
 }
 
