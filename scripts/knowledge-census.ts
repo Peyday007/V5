@@ -67,6 +67,7 @@ async function main(): Promise<void> {
     await q('BLOCK_CAUSES_TODAY', "SELECT f.block_cause, COUNT(*) AS n FROM research_fragments f WHERE f.status = 'BLOCKED' AND f.updated_at > '2026-11-23T06:50:00' GROUP BY 1 ORDER BY 2 DESC LIMIT 10");
     await q('NEW_WORDING', "SELECT c.id, c.state, c.created_at, substr(c.statement, 1, 220) AS statement FROM russell_candidates c WHERE c.statement LIKE '%What published evidence measures%' ORDER BY c.created_at DESC LIMIT 6");
     await q('PLAN_Q_ALL', "SELECT n.state, substr(n.blocked_action,90,60) AS cond, n.candidate_id, c.state AS idea, n.created_at FROM cash_needs n LEFT JOIN russell_candidates c ON c.id = n.candidate_id WHERE n.blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' ORDER BY n.created_at DESC LIMIT 10");
+    await q('ARR_PRICE_QS', "SELECT n.state, substr(n.request_key,1,40) AS k, substr(n.blocked_action,40,170) AS what, c.state AS idea, (SELECT m.state FROM russell_missions m WHERE m.candidate_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS mission, n.created_at FROM cash_needs n LEFT JOIN russell_candidates c ON c.id = n.candidate_id WHERE n.request_key LIKE 'goal-price-%' AND (n.blocked_action LIKE '%GitHub%' OR n.blocked_action LIKE '%bug bounty%' OR n.blocked_action LIKE '%domain buyer%') ORDER BY n.created_at DESC LIMIT 8");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
