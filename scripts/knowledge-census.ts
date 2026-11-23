@@ -59,6 +59,8 @@ async function main(): Promise<void> {
     await q('PLAN_Q_ORCH_FULL', "SELECT o.id, o.status, o.project_id, o.created_at FROM research_orchestrations o WHERE o.id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
     await q('PLAN_Q_BIN_PURPOSE', "SELECT b.id, b.purpose, b.purpose_basis, b.state FROM bins b WHERE b.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
     await q('READY_BINS_BY_PURPOSE', "SELECT COALESCE(b.purpose,'NULL') AS purpose, b.kind, COUNT(*) AS n, MIN(b.ready_at) AS oldest FROM bins b WHERE b.state = 'READY' GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 12");
+    await q('PLAN_Q_WORK2', "SELECT w.id, w.work_type, w.state, w.priority, w.available_at, w.attempt_count, w.max_attempts, w.failure_category, w.created_at, w.updated_at FROM work_items w WHERE w.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e') OR w.bin_id IN ('bin_96f8e82b1f614999b67b','bin_246e074280f14dd28ac1')");
+    await q('QUEUED_WORK_PRIORITY', "SELECT w.priority, COUNT(*) AS n, MIN(w.created_at) AS oldest FROM work_items w WHERE w.state = 'QUEUED' AND w.work_type LIKE 'RESEARCH_%' GROUP BY 1 ORDER BY 1");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
