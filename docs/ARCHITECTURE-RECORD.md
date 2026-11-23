@@ -17120,3 +17120,36 @@ only take it away (`refuseForCommittee`), never grant it.
   (or the role's check) and its case kept as a regression test:
   `tests/investmentCommitteeWorld.test.ts` holds the audited GitHub-bounty plan
   and the mechanism-validity cases on the real planner.
+
+## 118. Twelve idle routines beside the owner's plan is a defect, not a policy.
+
+**Production, 2026-11-23.** The operations report read "Claude routines 0/12"
+while the owner-directed $10K goal (`wst_7b4fcbb5f2384f31b6c3`) held fifteen
+READY research bins — `bin_50218154c55c4ddaa1c7` and fourteen siblings, READY
+since 11-14, attempts 0/5, no dispatch intent ever. The fleet was healthy (six
+accounts, twelve routable routines, fire configured). §84's brain-only mode
+classified every one as `PLAY_RESEARCH` and sent it to the free lane, which was
+saturated (4/4, 165 waiting) with its GPU pod paused. The goal's own reading
+said "Brain fires the next free Routine at bin …", which the assignment query
+would never do. Capacity was not unavailable; it was forbidden, and the work's
+only named consumer was full.
+
+The owner's 2026-11-23 order — "Restore productive utilization of existing
+resources: Claude routines 0/12" — on top of 11-14's "THE PRIORITY IS THE
+PLAN. FOCUS RESOURCES THERE." is the owner saying otherwise, for that goal.
+
+- **One exception, in the same SQL.** `purposeAdmitsSql` admits, beside
+  `BRAIN_IMPROVEMENT`, a bin an owner-directed goal links to
+  (`ownerDirectedGoalBinSql`): its `PACKET` or `CAMPAIGN` link, or a `MISSION`
+  link's bin or packet — the paths `goals/model.ts` resolves a goal's work by,
+  unsuperseded and not `SOURCE`/`DEPENDS_ON`. Every assigner, dispatcher,
+  re-arm and clean-up pass composes that predicate, so there is no sixth
+  reader to miss it.
+- **Everything else in §84 stands.** Other play research, grunt work and an
+  untagged bin are still refused; a legal bin is parked whatever the mode; the
+  switch is still the owner's.
+- **One list.** `OWNER_DIRECTED_GOAL_IDS` (`domain/binPurpose.ts`) is the same
+  list the operator may never pause (`OWNER_DIRECTED_GOALS`), checked against a
+  character class before it reaches SQL.
+- Pinned by `tests/brainOnlyMode.test.ts` ("hands an idle routine the
+  owner-directed goal's research, and still no other play bin").

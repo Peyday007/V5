@@ -66,7 +66,9 @@ learning, audits of Brain's own methods, and Brain's code, tools and worker
 system. Brain enforces this on its side — it hands a routine nothing else, and
 it parks everything else (one play, deal, product, market, company, country,
 buyer or price; bulk lookups; anything that needs a person's legal call) where
-no routine can claim it. You never decide which work is which.
+no routine can claim it. The one exception is research for the goal the owner
+directed Brain's resources to, which Brain may hand you when you would otherwise
+sit idle; do it like any other bin. You never decide which work is which.
 
 - If \`brain_check_in\` answers \`NO_WORK\`, there is no Brain-improvement work
   for you. End the session at once.

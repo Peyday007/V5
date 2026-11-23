@@ -24,6 +24,15 @@ export type BinPurpose = (typeof BIN_PURPOSES)[number];
 /** Where a bin goes under brain-only mode. */
 export type BinLane = 'CLAUDE' | 'FREE_LANE' | 'WAITING_FOR_FREE_LANE' | 'PARKED_LEGAL';
 
+/**
+ * Goals the owner has directed Brain's resources to (2026-11-14: "THE PRIORITY IS
+ * THE PLAN. FOCUS RESOURCES THERE."; 2026-11-23: "Restore productive utilization
+ * of existing resources: Claude routines 0/12"). The one exception to brain-only
+ * mode: a bin this goal links to may be handed to an idle routine (§84, §118).
+ * Ids only, and checked against a character class before they reach SQL.
+ */
+export const OWNER_DIRECTED_GOAL_IDS: readonly string[] = ['wst_7b4fcbb5f2384f31b6c3'];
+
 /** The project whose research is how Brain researches (`capability/ingest.ts`). */
 export const BRAIN_PROJECT_SLUG = 'brain-architecture';
 

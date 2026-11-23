@@ -31,7 +31,7 @@ import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import { normalizeSessionRef, sameProviderSession, sessionSpellings } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
-import { classifyBinPurpose, type PurposeDecision } from '../domain/binPurpose.ts';
+import { classifyBinPurpose, OWNER_DIRECTED_GOAL_IDS, type PurposeDecision } from '../domain/binPurpose.ts';
 import { repositoryIdOf } from '../services/bins/routing.ts';
 import { observeConnectorArrival } from '../services/fleet/connectorBinding.ts';
 import { chargesToAuth, connectorHealth } from '../services/fleet/connectorHealth.ts';
@@ -1626,7 +1626,33 @@ export function claimableStateSql(prefix: string): string {
 export function purposeAdmitsSql(prefix: string): string {
   return (
     `(COALESCE(${prefix}purpose, '') <> 'BLOCKED_LEGAL' AND (${prefix}purpose = 'BRAIN_IMPROVEMENT'` +
-    ` OR NOT EXISTS (SELECT 1 FROM brain_switches bs WHERE bs.name = 'brain_only_mode' AND bs.enabled = 1)))`
+    ` OR NOT EXISTS (SELECT 1 FROM brain_switches bs WHERE bs.name = 'brain_only_mode' AND bs.enabled = 1)` +
+    ` OR ${ownerDirectedGoalBinSql(prefix)}))`
+  );
+}
+
+/**
+ * The owner’s one exception to brain-only mode (§118): a bin the owner-directed
+ * goal links to — its packet, its campaign, or a mission's bin or packet, read
+ * the way the goal model resolves them (`goals/model.ts`) — may go to an idle
+ * routine. The free lane stays its first consumer; this only stops twelve paid
+ * routines sitting idle beside the plan the owner said to put resources on.
+ *
+ * With no prefix the outer table is `bins` itself, qualified, because a bare
+ * `id` inside these subqueries would resolve to the inner table's own.
+ */
+export function ownerDirectedGoalBinSql(prefix: string): string {
+  const outer = prefix === '' ? 'bins.' : prefix;
+  const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
+  if (ids.length === 0) return '(1 = 0)';
+  const list = ids.map((id) => `'${id}'`).join(', ');
+  return (
+    `EXISTS (SELECT 1 FROM workstream_links gl WHERE gl.workstream_id IN (${list})` +
+    ` AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')` +
+    ` AND ((gl.kind = 'PACKET' AND gl.ref = ${outer}orchestration_id)` +
+    ` OR (gl.kind = 'CAMPAIGN' AND gl.ref = ${outer}factory_campaign_id)` +
+    ` OR (gl.kind = 'MISSION' AND EXISTS (SELECT 1 FROM russell_missions gm WHERE gm.id = gl.ref` +
+    ` AND (gm.bin_id = ${outer}id OR gm.orchestration_id = ${outer}orchestration_id)))))`
   );
 }
 

@@ -934,7 +934,10 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
       clock.mockRestore();
     }
     expect(slow).toBe(warm);
-  }, 120_000);
+    // Wall clock, not the statement bound: §116's supported-legs evaluation is a second held portfolio
+    // evaluation on a cold read (Postgres suite 45275411151, shard 2: 124 s against 53 s the commit before),
+    // and this test pays four cold reads. What it asserts is the count above, which the timeout never moves.
+  }, 240_000);
 
   it('never builds a plan on the owner doing physical work, and still plans the same service brokered', async () => {
     // The standing rule (domain/operatingModel.ts), owner 2026-11-02: "I DO NOT WANT TO PERFORM PHYSICAL WORK."

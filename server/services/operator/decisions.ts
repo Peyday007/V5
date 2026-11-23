@@ -24,6 +24,7 @@ import { chatFor, firstJson } from '../cheap/modelBench.ts';
 import type { OperatorModel } from '../../domain/operator.ts';
 import { buildLedger, calibrate, diagnose, type ExposureRow, type OutcomeRow, type PredictionRow } from '../quant/forecast.ts';
 import { forecastBias } from '../quant/mathToolkit.ts';
+import { OWNER_DIRECTED_GOAL_IDS } from '../../domain/binPurpose.ts';
 
 export interface DecisionRecord {
   id: string;
@@ -966,7 +967,7 @@ export function operatorCalibration(
  * THE PLAN. FOCUS RESOURCES THERE."). The operator may never pause one; a person
  * can. Kept equal to the operations report's goal, which is the same order.
  */
-export const OWNER_DIRECTED_GOALS: ReadonlySet<string> = new Set(['wst_7b4fcbb5f2384f31b6c3']);
+export const OWNER_DIRECTED_GOALS: ReadonlySet<string> = new Set(OWNER_DIRECTED_GOAL_IDS);
 
 /**
  * Undo an operator pause of an owner-directed goal. Only a pause whose latest
