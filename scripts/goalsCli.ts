@@ -40,6 +40,7 @@
  * which only spawns and bounds the children that read (production OOM,
  * 2026-11-21).
  */
+import { planningReport, planningReportLines } from '../server/services/goals/planningReport.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { finishesWithin } from './boundedChild.ts';
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
@@ -532,6 +533,9 @@ async function printSearching(reading: PlanReading): Promise<void> {
 async function printPlan(reading: PlanReading): Promise<void> {
   const t = reading.target;
   console.log(`PLAN ${reading.goalId}  ${reading.verdict}`);
+  // The owner's permanent planning report first (2026-11-23): never a coverage figure in place of a real-world probability.
+  const due = t.daysLeft === null ? null : new Date(Date.now() + t.daysLeft * 86_400_000).toISOString();
+  for (const line of planningReportLines(planningReport(reading, due))) console.log(line);
   console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left`);
   for (const one of t.notCounted) console.log(`  not counted ${one.label}: ${one.cents / 100} ${t.currency}`);
   console.log(`  limits      capital ${t.capitalCeilingCents === null ? 'not stated (the owner has not said how much may be committed)' : t.capitalCeilingCents / 100} · hours ${t.hoursCeiling ?? 'not stated'}`);
