@@ -15083,6 +15083,26 @@ anything under 25 independent studies. Now:
   a factor of two (L-1) are CONTESTED: widened to their spread, bounds only,
   both sources named.
 
+**A measured ceiling is not a short pool (planningReliability round 13,
+2026-11-23).** `judgeFeasibility` reads a goal against every structure
+outreach could sell, so a held opening whose whole market research counted —
+"exactly 2 cinema owners, both signed" — never concluded anything, and the
+reading said only that conversion was unmeasured. A counted market is a
+measurement, not a search gap. `judgeHeldMarkets` (`plan.ts`) concludes
+`NOT_SUPPORTED` when every held opening is bounded by one — its counted market
+(`buyersLeft`: the agreements are part of it, never counted twice), or the
+goal's own capital and deadline (⌊ceiling ÷ capital⌋ lots at once, turned
+⌊days left ÷ days to cash⌋ times) — and together, every buyer agreeing at the
+top price and every unknown at its favourable end, they fall short. It names
+the target to lower to and, when the limits rather than the markets bind, the
+capital or deadline that would reach it. An opening nobody sized, an order
+rate, an estimate or an unknown price draws no conclusion (§65). The
+conclusion covers the openings held (`InfeasibleConclusion.heldMarkets`), so
+the search for openings outside those markets continues. Agreed money whose
+settlement is unknown needs no sale, so when it alone covers the target no
+structure arithmetic rules the goal out (`agreedInReach`): what blocks it is
+when the buyers pay.
+
 ## 96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
 
 **The gap.** Every safeguard the Factory had was per campaign: one change
