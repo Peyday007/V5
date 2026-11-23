@@ -876,6 +876,52 @@ export const GAP_LABEL: Record<GapKind, string> = {
   REACH_SHORTFALL: 'its share needs more buyers a day than the channel reaches',
 };
 
+/*
+ * What a leg needs before money counted on it is anything but an assumption
+ * (production goal wst_7b4fcbb5f2384f31b6c3, audit 2026-11-23): a "98%" read
+ * almost entirely from legs with no channel, no offer and nobody to fulfil
+ * them, which read as reliability. A leg is SUPPORTED only when nothing
+ * structural is missing; a permission or a provider not yet granted is not
+ * structural — it is the blocker the plan names (§58), never an assumed yes.
+ */
+export const LEG_REQUIREMENTS = ['ACQUISITION', 'OFFER', 'FULFILMENT', 'PAYMENT'] as const;
+export type LegRequirement = (typeof LEG_REQUIREMENTS)[number];
+
+export const LEG_LABEL: Record<LegRequirement, string> = {
+  ACQUISITION: 'a reachable channel to a named buyer',
+  OFFER: 'a specific offer at an established price',
+  FULFILMENT: 'a named fulfiller or a Brain capability',
+  PAYMENT: 'cash that is shown to settle before the deadline',
+};
+
+export interface LegFeasibility {
+  opportunityId: string;
+  /** What is structurally missing; empty means the leg is supported. */
+  lacks: LegRequirement[];
+  /** Permissions and providers not yet granted: never structural, named as the blocker. */
+  permissions: string[];
+  supported: boolean;
+}
+
+/**
+ * Whether one counted leg is executable on its structure, read from its own
+ * pathway — the one reading that already names its gaps — and, when the quant
+ * engine holds its price as unestablished, from that too (`priceEstablished`
+ * false), so an "estimated" price nobody established is not a price. A leg
+ * with no pathway is read as lacking everything: nothing showed otherwise
+ * (invariant 39). Pure.
+ */
+export function legFeasibility(opportunityId: string, p: Pick<TransactionPathway, 'gaps' | 'permissionsMissing'> | null | undefined, priceEstablished = true): LegFeasibility {
+  if (!p || !Array.isArray(p.gaps)) return { opportunityId, lacks: [...LEG_REQUIREMENTS], permissions: [...(p?.permissionsMissing ?? [])], supported: false };
+  const has = (...kinds: GapKind[]) => kinds.some((k) => p.gaps.includes(k));
+  const lacks: LegRequirement[] = [];
+  if (has('NO_BUYER', 'SUPPLY_WITHOUT_BUYER', 'NO_CHANNEL')) lacks.push('ACQUISITION');
+  if (has('NO_OFFER', 'NO_PRICE', 'NO_MARGIN') || !priceEstablished) lacks.push('OFFER');
+  if (has('NO_SUPPLIER')) lacks.push('FULFILMENT');
+  if (has('SLOW_OR_UNKNOWN_CASH', 'CLOSED')) lacks.push('PAYMENT');
+  return { opportunityId, lacks, permissions: [...(p.permissionsMissing ?? [])], supported: lacks.length === 0 };
+}
+
 /** The buyer kind, or the supplier, a pathway's failure is shared with. */
 export function correlationGroupOf(one: ModelledOpportunity): string {
   const o = one.opportunity;
@@ -1157,7 +1203,15 @@ function fitOf(input: {
   return { dealsForGap, dealsForShare, dealsAvailable: available === Infinity ? null : available, prospectsPerDay, verdict, lever };
 }
 
-/** What a pathway could put toward the goal inside the window, over its own bounds. Major units, net. */
+/**
+ * What a pathway could put toward the goal inside the window, over its own
+ * bounds. Major units, net. These are BOUNDS, not percentiles: `p10` puts every
+ * input at its unfavourable end at once (lowest net × lowest reply × lowest
+ * close × lowest volume × slowest settlement), a joint corner the simulation
+ * almost never draws, and `p90` the opposite corner. They rank pathways and
+ * size moves; a plan's outcome distribution is the quant engine's simulated
+ * worlds alone (`composeGoalReadings`), and the render says so.
+ */
 function contributionOf(input: {
   net: PathFact;
   conversion: PathFact;
@@ -1258,7 +1312,11 @@ export function informationValue(pathways: TransactionPathway[], input: { remain
 
 export interface PathwayCombination {
   members: string[];
-  /** Net contribution p10/p50/p90 summed, with a correlated group's second member at half weight. */
+  /**
+   * Each member's contribution bounds (`contributionOf`: low/mid/high corners, named p10/p50/p90
+   * for their callers, never percentiles) summed, with a correlated group's second member at half
+   * weight, and capped at the gap. A ranking quantity: no outcome figure is read from it.
+   */
   net: { p10: number; p50: number; p90: number };
   gross: { p10: number; p50: number; p90: number };
   /** The share of the gap its middle reaches. */
@@ -1595,7 +1653,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   const shown = [...ordered.slice(0, Math.ceil(limit / 2))];
   for (const p of ordered) if (shown.length < limit * 2 && !shown.includes(p) && p.moves.some((m) => m.action === 'CONSTRUCT' || m.action === 'SELL')) shown.push(p);
   for (const p of shown) {
-    out.push(`    pathway   ${p.opportunityId} ${p.origin} ${p.executable ? 'EXECUTABLE' : 'not executable'} · net p10/p50/p90 ${money(p.contribution.p10)}/${money(p.contribution.p50)}/${money(p.contribution.p90)} (gross p50 ${money(p.gross.p50)}) · rights ${S(p.rights)} · capacity ${S(p.capacity)} · fit ${p.fit.verdict}${p.fit.lever.variable ? ` lever ${p.fit.lever.variable}` : ''} · ${p.title.slice(0, 70)}`);
+    out.push(`    pathway   ${p.opportunityId} ${p.origin} ${p.executable ? 'EXECUTABLE' : 'not executable'} · net bounds low/mid/high ${money(p.contribution.p10)}/${money(p.contribution.p50)}/${money(p.contribution.p90)} (gross mid ${money(p.gross.p50)}) · rights ${S(p.rights)} · capacity ${S(p.capacity)} · fit ${p.fit.verdict}${p.fit.lever.variable ? ` lever ${p.fit.lever.variable}` : ''} · ${p.title.slice(0, 70)}`);
     out.push(`      model   buyer ${S(p.buyer)} ${V(p.buyer)} | why ${S(p.motivation)} | channel ${S(p.channel)} ${V(p.channel)} [${p.acquisition.method}] | offer ${S(p.offer)} | fulfils ${S(p.fulfiller)} ${V(p.fulfiller)}`);
     out.push(`      money   price ${S(p.revenuePerDeal)} ${V(p.revenuePerDeal)} | acquire ${S(p.acquisitionCost)} ${V(p.acquisitionCost)} | fulfil ${S(p.fulfilmentCost)} ${V(p.fulfilmentCost)} | net ${S(p.net)} ${V(p.net)} | convert ${S(p.conversion)} ${V(p.conversion)} | volume ${S(p.volume)} ${V(p.volume)} ${String(p.frequency.value)} | cash ${S(p.daysToCash)} ${V(p.daysToCash)}d | capital ${S(p.capital)} ${V(p.capital)}`);
     out.push(`      gaps    ${p.gaps.map((g) => GAP_LABEL[g]).join('; ') || 'none'}${p.permissionsMissing.length ? ` · permissions: ${p.permissionsMissing.join(', ')}` : ''} · ${p.fit.lever.change.slice(0, 140)}`);
@@ -1604,7 +1662,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   const lead = reading.portfolio.leading;
   out.push(`    portfolio ${reading.portfolio.note}`);
   if (lead) {
-    out.push(`      leading ${lead.members.join(' + ')} · net p10/p50/p90 ${money(lead.net.p10)}/${money(lead.net.p50)}/${money(lead.net.p90)} (gross p50 ${money(lead.gross.p50)}) · ${Math.round(lead.coverage * 1000) / 10}% of the gap at p50 · if its largest group fails ${money(lead.ifLeadGroupFails)} · capital ${lead.capital === null ? 'not established' : money(lead.capital)} · groups ${lead.groups.join(' / ')}`);
+    out.push(`      leading ${lead.members.join(' + ')} · net bounds low/mid/high ${money(lead.net.p10)}/${money(lead.net.p50)}/${money(lead.net.p90)}, capped at the gap (gross mid ${money(lead.gross.p50)}) · ${Math.round(lead.coverage * 1000) / 10}% of the gap at mid · bounds, not percentiles: the plan's p10/p50/p90 are the simulation's · if its largest group fails ${money(lead.ifLeadGroupFails)} · capital ${lead.capital === null ? 'not established' : money(lead.capital)} · groups ${lead.groups.join(' / ')}`);
   } else out.push('      leading none: no pathway has a positive contribution yet');
   const fb = reading.portfolio.fallback;
   if (fb) out.push(`      fallback ${fb.members.join(' + ')} · net p50 ${money(fb.net.p50)} · without the leader's group`);

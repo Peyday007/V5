@@ -543,6 +543,14 @@ async function printPlan(reading: PlanReading): Promise<void> {
   if (acc.probability) console.log(`    basis     ${acc.probability.basis} ${Math.round(acc.probability.value * 1000) / 10}% (lower bound ${Math.round(acc.probability.lowerBound * 1000) / 10}%, n=${acc.probability.sample}) · ${acc.probability.note}`);
   if (acc.candidate) console.log(`    candidate ${acc.candidate.source} ${acc.candidate.opportunityIds.join(' + ')} · settled p50 ${acc.candidate.settledP50 === null ? '—' : Math.round(acc.candidate.settledP50)} · ${acc.candidate.reach === null ? 'reach not computed' : `reach ${Math.round(acc.candidate.reach * 1000) / 10}% (${acc.candidate.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage, not a probability'})`}`);
   for (const why of acc.shortfalls) console.log(`    short     ${why}`);
+  if (acc.blocker) console.log(`    blocker   ${acc.blocker}`);
+  for (const leg of acc.legs ?? []) if (!leg.supported) console.log(`    leg       ${leg.opportunityId} not executable · lacks ${leg.lacks.join(', ')}${leg.permissions.length ? ` · waits on ${leg.permissions.join(', ')}` : ''}`);
+  // The plan's outcome from the one source (the simulated worlds), split by what supports it.
+  const outcome = reading.objective?.outcome;
+  const support = reading.objective?.support;
+  if (outcome) console.log(`  outcome     ${support?.basis === 'ASSUMPTION_ONLY' ? 'ASSUMPTION-ONLY ' : ''}expected ${Math.round(outcome.expected)} · upper ${Math.round(outcome.upper)} · adverse (q${outcome.adverseQuantile}) ${Math.round(outcome.adverse)} · ${reading.objective!.basis}`);
+  else if (reading.objective) console.log(`  outcome     none · ${reading.objective.basis}`);
+  if (support) console.log(`    support   ${support.basis} · ${support.sentence}`);
   for (const v of reading.integrity ?? []) console.log(`  integrity   ${v.rule}: ${v.detail}`);
   // One plan (C-6): which plan this is, and whether the reconstruction below is only hypothetical.
   if (reading.adoption) console.log(`  plan        ${reading.adoption.source}${reading.adoption.hypothetical ? ' (the reconstruction is hypothetical)' : ''} · ${reading.adoption.reason}`);

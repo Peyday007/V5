@@ -15103,6 +15103,27 @@ settlement is unknown needs no sale, so when it alone covers the target no
 structure arithmetic rules the goal out (`agreedInReach`): what blocks it is
 when the buyers pay.
 
+**One source for a plan's outcome, and no reliability from legs nobody can
+execute (audit of wst_7b4fcbb5f2384f31b6c3, 2026-11-23).** One reading carried
+a portfolio "net p10" of $368 beside an adverse case of $32,266. Two causes.
+`composeGoalReadings` read the outcome from `portfolio.best` whatever plan the
+acceptance held — here the pathways' leading combination, because `best`
+counted unpriced money. And the leading combination's figures
+(`contributionOf`, `pathways.ts`) are bounds, not percentiles: its "p10" puts
+every input at its unfavourable end at once, sums the legs and caps at the gap.
+Now the outcome is read only from the simulated worlds of the plan held
+(`heldDistribution`), or not at all; a pathways candidate's median is the
+engine's for exactly its members or none; and the pathway render says
+"bounds", not "p10/p50/p90". Second, the 98% and the $55,772 expected came
+from legs with no channel, offer or fulfiller. `legFeasibility` judges each
+counted leg on acquisition, an offer at an established price, a fulfiller and
+settled cash; while any lacks one, the outcome is `ASSUMPTION_ONLY` and the
+figure presented as the plan's (`planOutcomeOf`, the successor surplus,
+`planProgress.supportedReach`) is the engine's reading over the supported legs
+alone — zero when none is. `judgeAcceptance` accepts no plan with such a leg;
+a permission or provider not yet granted is not structural, and an accepted
+plan names it as its one blocker (§58).
+
 ## 96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
 
 **The gap.** Every safeguard the Factory had was per campaign: one change
