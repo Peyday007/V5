@@ -46,12 +46,21 @@ import {
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
-import { admissionRefusedBinIds, listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import {
+  ABANDONED_REVIVE_AFTER_MS,
+  admissionRefusedBinIds,
+  binNeedsWeb,
+  binPurposeAdmits,
+  isDispatchable,
+  listBins,
+  listDispatchesForBin,
+} from '../../repos/bins.ts';
+import { STRANDED_REARM_AFTER_MS, STRANDED_REARM_CEILING } from '../dispatch/rearm.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
 import { fleetSnapshot, sharedFleetSnapshot } from '../dispatch/candidates.ts';
-import { isFactorySurface, surfaceIneligibility } from '../dispatch/router.ts';
+import { isFactorySurface, routeBin, surfaceIneligibility } from '../dispatch/router.ts';
 
 /** The ledger kinds this module writes. */
 export const LINE_EVENT_KINDS = {
@@ -332,6 +341,12 @@ export interface LineBin {
   workerId: string | null;
   lastSentAt: string | null;
   lastRoutine: string | null;
+  /**
+   * Why the dispatcher is deliberately not starting a session for this bin
+   * right now, in its own terms; null when it would fire it on its next pass
+   * (or a worker holds it). See `dispatcherWait`.
+   */
+  waiting: string | null;
 }
 
 /**
@@ -429,6 +444,18 @@ export interface LineReading {
     readyBins: number;
     total: number;
   };
+  /**
+   * READY factory bins the dispatcher is deliberately not firing yet — a fire
+   * backoff, a deferred intent, no attempts left, a goal hold, Brain-only mode —
+   * each with the dispatcher's own reason. A wait with a reason, never idle work.
+   */
+  waiting?: { bins: number; reasons: string[] };
+  /**
+   * Of `executable.readyBins`, those whose only intent at their generation no
+   * dispatcher pass will create, claim or re-arm (`strandedIntent`). Still idle
+   * work, and still a fault; only a person or a new generation moves them.
+   */
+  stranded?: { bins: number; reasons: string[] };
   active: {
     leasedBins: number;
     /** READY bins whose fire was sent recently enough that a worker may still be arriving. */
@@ -467,6 +494,123 @@ function nextFor(campaign: FactoryCampaign, bins: LineBin[], blocked: LineCampai
       : `The ${ready.kind.toLowerCase()} stage is fired at the next free surface.`;
   }
   return 'The next tick derives the next stage from what the last one recorded.';
+}
+
+/**
+ * Why the dispatcher will not start a session for this unleased bin now, or
+ * null when it would.
+ *
+ * The line used to count every READY factory bin as executable, while the
+ * dispatcher — rightly — waits on a fire backoff (`dispatch_not_before`, which
+ * the refire guard and unrouted deferrals set), on an intent it deferred to a
+ * later attempt, on a bin out of attempts, a goal's hold or Brain-only mode. So
+ * the line read "executable work, free surfaces, nothing running: a fault"
+ * over a dispatcher that was correctly waiting, and the operator filed that as
+ * a recurring failure (OPERATOR:RECURRING_OPERATIONAL_FAILURE:3f6ee83968764da2).
+ * The predicates are the dispatcher's own (`isDispatchable`, `binPurposeAdmits`)
+ * and its intent row, so there is no second definition of "fireable" here.
+ */
+async function dispatcherWait(
+  bin: Bin,
+  dispatches: BinDispatches,
+  nowIso: string,
+  fleet: FleetReading,
+): Promise<string | null> {
+  if (bin.heldByWorkstreamId !== null) return `held by goal ${bin.heldByWorkstreamId}`;
+  if (bin.attemptCount >= bin.maxAttempts) {
+    return `out of attempts (${bin.attemptCount} of ${bin.maxAttempts}); it waits for a decision, not a surface`;
+  }
+  if (bin.dispatchNotBefore !== null && bin.dispatchNotBefore > nowIso) {
+    return `fire backoff until ${bin.dispatchNotBefore}`;
+  }
+  if (!isDispatchable(bin, nowIso)) return 'not dispatchable in its current state';
+  if (!(await binPurposeAdmits(bin.id))) return 'Brain-only mode does not admit its purpose';
+  const intent = currentIntent(bin, dispatches);
+  if (intent && intent.state === 'PENDING' && intent.lastErrorKind && intent.nextAttemptAt > nowIso) {
+    return `dispatch deferred (${intent.lastErrorKind}) until ${intent.nextAttemptAt}`;
+  }
+  // A fire the dispatcher has claimed and is sending: its claim lapses at
+  // `next_attempt_at`, after which the intent is a candidate again.
+  if (intent && intent.state === 'SENDING' && intent.nextAttemptAt > nowIso) {
+    return `a fire is being sent (claim held until ${intent.nextAttemptAt})`;
+  }
+  // An intent that gave up while the bin stayed executable is re-armed by the
+  // dispatcher's own tick (`reviveAbandonedNoShowDispatches` for unanswered
+  // fires, `rearmStrandedIntents` for the rest) once its cool-off has passed
+  // and while it is under the shared ceiling. Until then that is the
+  // dispatcher's wait, with its time; at the ceiling it is `strandedIntent`.
+  if (intent && intent.state === 'ABANDONED' && intent.maxAttempts < STRANDED_REARM_CEILING) {
+    const coolOff = intent.lastErrorKind === 'NO_SHOW' ? ABANDONED_REVIVE_AFTER_MS : STRANDED_REARM_AFTER_MS;
+    const rearmAt = new Date(Date.parse(intent.updatedAt) + coolOff).toISOString();
+    if (rearmAt > nowIso) {
+      return `its intent gave up (${intent.lastErrorKind ?? 'unknown'}); the dispatcher re-arms it after ${rearmAt}`;
+    }
+  }
+  return routerWait(bin, fleet, nowIso);
+}
+
+type FleetReading = Awaited<ReturnType<typeof fleetSnapshot>>;
+
+/**
+ * Whether the dispatcher's router would place this bin on a surface now, asked
+ * of the router itself over the snapshot this reading already holds.
+ *
+ * "A free surface" is a fleet-wide count; whether *this* bin may use one is
+ * the router's question — the fleet and Factory in-flight ceilings, the
+ * project, family, repository, capability, web and connector filters, one
+ * activation per surface up to its target. The line used to learn that answer
+ * only after the dispatcher had claimed the intent, been refused and deferred
+ * it, so between that refusal's backoffs (and before the first claim) a bin no
+ * surface could take read as "executable work beside a free surface: a fault".
+ * Asked here with `routeBin` and the same inputs `dispatchTick` passes, the
+ * refusal is the wait, in the router's own words, and there is no second
+ * definition of where a bin may go. With no candidate at all the line already
+ * counts no free surface, so there is nothing to ask.
+ */
+async function routerWait(bin: Bin, fleet: FleetReading, nowIso: string): Promise<string | null> {
+  if (fleet.candidates.length === 0) return null;
+  const needsWeb = fleet.candidates.some((candidate) => candidate.webBlocked)
+    ? await binNeedsWeb(bin).catch(() => true)
+    : true;
+  const decision = routeBin({
+    bin,
+    candidates: fleet.candidates,
+    fleetPolicy: fleet.fleetPolicy,
+    fleetInFlight: fleet.fleetInFlight,
+    factoryInFlight: fleet.factoryInFlight,
+    now: nowIso,
+    needsWeb,
+  });
+  if (decision.ok) return null;
+  return `no surface the router would place it on now (${decision.refusal}): ${decision.reason}`;
+}
+
+type BinDispatches = Awaited<ReturnType<typeof listDispatchesForBin>>;
+
+/** The bin's intent at its current lease generation — the only one the dispatcher acts on. */
+function currentIntent(bin: Bin, dispatches: BinDispatches): BinDispatches[number] | undefined {
+  return dispatches.filter((row) => row.leaseGeneration === bin.leaseGeneration).at(-1);
+}
+
+/**
+ * Why nothing in the dispatcher will ever fire this executable bin again, or
+ * null when a dispatch pass can still act on it.
+ *
+ * The dispatcher keeps one intent per (bin, lease generation) and inserts it
+ * `ON CONFLICT DO NOTHING`, so once that intent is SUPERSEDED, or ABANDONED at
+ * the re-arm ceiling, no tick creates, claims or re-arms anything for the bin
+ * at that generation. It is still idle executable work — a fault, and the line
+ * keeps saying so — but asking the dispatcher for a pass on its account every
+ * twenty seconds buys nothing, so the remote loop does not (`dispatchAfterLinePass`).
+ */
+function strandedIntent(bin: Bin, dispatches: BinDispatches): string | null {
+  const intent = currentIntent(bin, dispatches);
+  if (!intent) return null;
+  if (intent.state === 'SUPERSEDED') return 'its only intent at this generation was superseded';
+  if (intent.state === 'ABANDONED' && intent.maxAttempts >= STRANDED_REARM_CEILING) {
+    return `its only intent gave up (${intent.lastErrorKind ?? 'unknown'}) at the re-arm ceiling of ${STRANDED_REARM_CEILING} fires`;
+  }
+  return null;
 }
 
 /**
@@ -512,12 +656,21 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let arriving = 0;
   // A bin admission refused is waiting on a named limit (a surface it may take), not on this line (`notAdmissionRefusedSql`).
   const refused = await admissionRefusedBinIds(factoryBins.filter((bin) => bin.state === 'READY').map((bin) => bin.id), now);
+  const waitReasons: string[] = [];
+  const strandedReasons: string[] = [];
   for (const bin of factoryBins) {
-    const sent = newestSent(await listDispatchesForBin(bin.id));
+    const dispatches = await listDispatchesForBin(bin.id);
+    const sent = newestSent(dispatches);
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
+    const waiting = leaseLive ? null : await dispatcherWait(bin, dispatches, nowIso, snapshot);
     if (leaseLive) leasedBins += 1;
-    else if (!refused.has(bin.id)) {
+    else if (refused.has(bin.id)) {
+      // Admission refused: waiting on a named limit, counted as neither executable nor a line wait.
+    } else if (waiting) waitReasons.push(`${bin.kind.toLowerCase()} bin ${bin.id}: ${waiting}`);
+    else {
       readyBins += 1;
+      const stranded = strandedIntent(bin, dispatches);
+      if (stranded) strandedReasons.push(`${bin.kind.toLowerCase()} bin ${bin.id}: ${stranded}`);
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
     }
     lineBins.push({
@@ -531,6 +684,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
       workerId: bin.workerId,
       lastSentAt: sent?.sentAt ?? null,
       lastRoutine: sent?.routine ?? null,
+      waiting,
     });
   }
 
@@ -650,11 +804,19 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   else if (unexplainedIdle)
     because =
       `${executableTotal} piece(s) of executable work and ${freeSurfaces} free surface(s), ` +
-      'and nothing is running or arriving. That is a fault, not a wait.';
+      'and nothing is running or arriving. That is a fault, not a wait.' +
+      (strandedReasons.length > 0
+        ? ` ${strandedReasons.length} of them nothing in the dispatcher will fire again: ` +
+          strandedReasons.join('; ') +
+          '.'
+        : '');
   else if (leasedBins > 0 || arriving > 0)
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
     because = `${executableTotal} piece(s) of executable work, but no Factory surface is free to take it.`;
+  else if (waitReasons.length > 0)
+    because =
+      `${waitReasons.length} stage bin(s) waiting on the dispatcher, not on a surface: ` + waitReasons.join('; ') + '.';
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
@@ -664,6 +826,8 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     policy,
     auto: policy.maxActive > 0,
     executable: { queued: admissibleQueued, readyBins, total: executableTotal },
+    waiting: { bins: waitReasons.length, reasons: waitReasons },
+    stranded: { bins: strandedReasons.length, reasons: strandedReasons },
     active: { leasedBins, arriving, workingCampaigns },
     capacity: { freeSurfaces, surfaces },
     unexplainedIdle,
