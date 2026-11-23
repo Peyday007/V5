@@ -90,14 +90,14 @@ jobs:
           # The two readings below are sent with the command, as `goals.yml`'s
           # census is, so they read the running Brain before the script that
           # carries them has been released. Read-only: the copy is removed after.
-          step10_b64=$(base64 -w0 scripts/step10.ts)
+          readings_b64=$(base64 -w0 scripts/diagnose-readings.ts)
           carried() {
-            flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && echo $step10_b64 | base64 -d > scripts/.step10-carried.ts && nice -n 19 node --import tsx scripts/.step10-carried.ts $1; rm -f scripts/.step10-carried.ts'" 2>&1
+            flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && echo $readings_b64 | base64 -d > scripts/.diagnose-carried.ts && nice -n 19 node --import tsx scripts/.diagnose-carried.ts $1; rm -f scripts/.diagnose-carried.ts'" 2>&1
           }
-          echo "=============== step10 fragment-failures ==============="
+          echo "=============== fragment-failures ==============="
           carried fragment-failures | tail -90
 
-          echo "=============== step10 operator-runs ==============="
+          echo "=============== operator-runs ==============="
           carried operator-runs | tail -120
 
           if [ -n "$DIAG_BIN" ]; then
