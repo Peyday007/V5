@@ -25,7 +25,7 @@
  * faster plan beat a bigger, slower one.
  */
 import { namesOneOrganisation } from '../../domain/industry.ts';
-import { evidenceIsAbout, nonCommercialExclusion, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
+import { evidenceIsAbout, evidencesPurchase, nonCommercialExclusion, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
@@ -2370,6 +2370,9 @@ export async function modelOpportunity(
     }
     if (paidFor && paidFor.nature !== 'PURCHASE') {
       price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not a price: the only figure on record is ${nonPurchaseSentence(paidFor)}; what these buyers pay for the deliverable is not established` };
+    } else if (priceFact && typeof priceFact.value === 'string' && !evidencesPurchase(priceFact.value)) {
+      // Worded evidence that shows nobody paying a supplier for anything is not evidence of a purchase (owner, 2026-11-23).
+      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not shown to be a purchase: the only figure on record ("${priceFact.value.slice(0, 100)}") shows no buyer paying a supplier for a deliverable` };
     }
   } else {
     const range = fact('revenueRange');

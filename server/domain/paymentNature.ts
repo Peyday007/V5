@@ -35,15 +35,17 @@ export interface PaymentNatureReading {
 }
 
 /** Money paid to whoever wins, finds or submits first: judged after the work, never bought. */
-const REWARD_PROGRAM = /\b(?:bug[- ]?bount(?:y|ies)|bount(?:y|ies)(?: program(?:me)?s?| payouts?| rewards?| awards?)?|vulnerability (?:disclosure|reward)s?(?: program(?:me)?s?)?|hackathons?|sweepstakes|prize (?:money|pool|purse)s?|cash prizes?|grand prizes?|winnings)\b/i;
+const REWARD_PROGRAM = /\b(?:bug[- ]?bount(?:y|ies)|bount(?:y|ies)(?: program(?:me)?s?| payouts?| rewards?| awards?)?|vulnerability (?:disclosure|reward)s?(?: program(?:me)?s?)?|hackathons?|sweepstakes|giveaways?|raffles?|drawn at random|prize (?:money|pool|purse)s?|purses?|cash prizes?|grand prizes?|winnings)\b/i;
 /** A reward described by what it is paid for: a finding, a report, a submission, a win. */
 const REWARD_FOR = /\b(?:rewards?|awards?|prizes?|pays?(?: out)?|paid(?: out)?)\b[^.;]{0,60}?\bfor (?:(?:a|an|each|every|the|one|any) )?(?:(?:valid|eligible|accepted|qualifying|critical|high|medium|low|severe|winning|first|top)[- ](?:severity )?)*(?:findings?|vulnerabilit(?:y|ies)|bugs?|exploits?|reports?|submissions?|entr(?:y|ies)|wins?|winners?|places?)\b/i;
 /** The award is the payment's own noun: "$5,000 grant", "a grant of $5,000". */
-const GRANT_MONEY = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:grants?|scholarships?|fellowships?|stipends?|subsid(?:y|ies)|donations?|endowments?|bursar(?:y|ies))\b(?!\s+(?:applications?|proposals?|writ\w*|submissions?|reports?|packages?|consult\w*|services?))|\b(?:grants?|scholarships?|fellowships?|stipends?|subsid(?:y|ies)|donations?|bursar(?:y|ies))\s+(?:of|worth|totall?ing|up to|ranging from|between|from|averaging)\s+(?:up to\s+|about\s+|approximately\s+)?(?:\$|usd)/i;
+const GRANT_MONEY = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:grants?|scholarships?|fellowships?|stipends?|subsid(?:y|ies)|donations?|endowments?|bursar(?:y|ies)|funding)\b(?!\s+(?:applications?|proposals?|writ\w*|submissions?|reports?|packages?|consult\w*|services?))|\b(?:grants?|scholarships?|fellowships?|stipends?|subsid(?:y|ies)|donations?|bursar(?:y|ies))\s+(?:of|worth|totall?ing|up to|ranging from|between|from|averaging)\s+(?:up to\s+|about\s+|approximately\s+)?(?:\$|usd)/i;
 /** A grant body paying out, or a grant reimbursing an applicant. */
 const GRANT_ACT = /\bgrants?\b[^.;]{0,40}?\b(?:reimburses?|covers?|funds?|awards?|provides?|pays?)\b|\b(?:awarded|receives?|received|won)\s+(?:an?\s+)?(?:[\w-]+\s+){0,2}?grants?\b/i;
 /** Money returned or compensated, not exchanged for a deliverable. */
-const TRANSFER = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages)\b(?!\s+(?:applications?|filings?|forms?|claims? (?:filed|prepared)|processing|services?|paperwork|packets?))|\b(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages)\s+(?:of|worth|totall?ing|up to)\s+(?:up to\s+)?(?:\$|usd)|\breimburses?\b/i;
+const TRANSFER = /(?:\$|usd\s?)[\d,.]+\s*[km]?\b(?:\s+[\w-]+){0,2}?\s+(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages|royalt(?:y|ies)|claim payouts?)\b(?!\s+(?:applications?|filings?|forms?|claims? (?:filed|prepared)|processing|services?|paperwork|packets?))|\b(?:rebates?|refunds?|reimbursements?|settlements?|cash ?back|damages)\s+(?:of|worth|totall?ing|up to)\s+(?:up to\s+)?(?:\$|usd)|\breimburses?\b/i;
+/** Money paid out per approved claim: an insurer's or a program's claim payout, not a sale. */
+const CLAIM_PAYOUT = /\bper (?:approved |eligible |paid |accepted )?(?:[\w-]+ ){0,2}claims?\b|\b(?:distributed|paid out)\b[^.;]{0,60}?\broyalt(?:y|ies)\b/i;
 /** A settlement, rebate or refund being paid out to the people it is owed to. */
 const TRANSFER_ACT = /\b(?:settlement|class[- ]action|rebate|refund|reimbursement|claims?) (?:administrator|program|fund|payouts?|payments?)\b|\bpays? (?:each |every )?(?:eligible )?(?:claimants?|class members?|policyholders?|homeowners? a)\b/i;
 /** A prize for the best entry: paid to a winner, never bought. */
@@ -60,7 +62,8 @@ const PURCHASE = /\b(?:charges?|charged|priced|pricing|price|fees?|costs?|invoic
  * write a grant") stays a purchase. Pure.
  */
 export function paymentNatureOf(text: string | null | undefined): PaymentNatureReading {
-  const t = (text ?? '').replace(/\s+/g, ' ');
+  // "No purchase necessary" is a sweepstakes' disclaimer, not a purchase.
+  const t = (text ?? '').replace(/\s+/g, ' ').replace(/\bno purchase (?:is )?(?:necessary|required)\b/gi, ' ');
   if (!t) return { nature: 'PURCHASE', cue: null };
   const hit = (re: RegExp): string | null => t.match(re)?.[0] ?? null;
   const rewardFor = hit(REWARD_FOR);
@@ -73,7 +76,7 @@ export function paymentNatureOf(text: string | null | undefined): PaymentNatureR
   if (program && !PURCHASE.test(t)) return { nature: 'CONTINGENT_REWARD', cue: program };
   const grant = hit(GRANT_MONEY) ?? (PURCHASE.test(t) ? null : hit(GRANT_ACT));
   if (grant) return { nature: 'GRANT', cue: grant };
-  const transfer = hit(TRANSFER) ?? (PURCHASE.test(t) ? null : hit(TRANSFER_ACT));
+  const transfer = hit(TRANSFER) ?? hit(CLAIM_PAYOUT) ?? (PURCHASE.test(t) ? null : hit(TRANSFER_ACT));
   if (transfer) return { nature: 'TRANSFER', cue: transfer };
   const employment = PURCHASE.test(t) ? null : hit(EMPLOYMENT);
   if (employment) return { nature: 'EMPLOYMENT', cue: employment };
@@ -146,4 +149,27 @@ export function evidenceIsAbout(evidence: string | null | undefined, subject: st
   const about = stems(subject);
   for (const one of said) if (about.has(one)) return true;
   return false;
+}
+
+/** Somebody paying a supplier: a role that supplies work, a fee or rate, a price, a sale or a subscription. */
+const SUPPLIER_ROLE = String.raw`(?:suppliers?|vendors?|providers?|contractors?|subcontractors?|freelancers?|agenc(?:y|ies)|studios?|writers?|recruiters?|consultants?|partners?|affiliates?|brokers?|services?|developers?|designers?|translators?|firms?|specialists?|professionals?|experts?|shops?|sellers?|stores?|platforms?|companies|businesses|bookkeepers?|accountants?|marketers?|analysts?|auditors?|preparers?|filers?|engineers?|technicians?|installers?|printers?|manufacturers?|wholesalers?|distributors?|lead providers?|outsourcers?)`;
+const PAYS_SUPPLIER = new RegExp(String.raw`\bpa(?:y|ys|id|ying)\s+(?:[\w&'-]+\s+){0,3}?` + SUPPLIER_ROLE + String.raw`\b`, 'i');
+const PAY_PER = /\bpa(?:y|ys|id|ying)\b[^.;]{0,50}?\b(?:per|for)\s+(?:a |an |each |every |one |the )?[\w-]+/i;
+/** A buyer's procurement document or contract states what it will pay for a deliverable. */
+const PROCUREMENT = /\b(?:requests? for (?:quotation|quote|proposal)s?|rfq|rfp|tender|purchase orders?|contracts?|budget(?:s|ed)? (?:of |up to )?(?:\$|usd)|not-to-exceed|payable net|net \d{1,3}\b|statement of work)/i;
+
+/**
+ * Whether worded price evidence shows what a purchase looks like: somebody
+ * paying a supplier, a fee, rate or price charged, something sold or bought,
+ * or a payment per unit of a deliverable (owner, 2026-11-23: "Require evidence
+ * that identifiable customers actually buy it"). A reward, grant or transfer
+ * is never one. A bare figure ("$250") states no mechanism and is left to the
+ * rest of the evidence. Pure.
+ */
+export function evidencesPurchase(text: string | null | undefined): boolean {
+  const t = (text ?? '').replace(/\s+/g, ' ').replace(/\bno purchase (?:is )?(?:necessary|required)\b/gi, ' ');
+  if (paymentNatureOf(t).nature !== 'PURCHASE') return false;
+  const words = t.replace(/(?:\$|usd)\s?[\d,.]+[km]?/gi, ' ').match(/[a-z]{4,}/gi) ?? [];
+  if (words.length < 3) return true;
+  return PURCHASE.test(t) || PAYS_SUPPLIER.test(t) || PAY_PER.test(t) || PROCUREMENT.test(t);
 }

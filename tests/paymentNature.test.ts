@@ -99,3 +99,22 @@ describe('price evidence must be about these buyers or this deliverable', () => 
     expect(paymentNatureOf('Rebate-filing services charge installers $45 for each rebate application filed.').nature).toBe('PURCHASE');
   });
 });
+
+describe('worded price evidence must show a buyer paying a supplier', () => {
+  it('refuses purses, funding, giveaways, claim payouts and royalties, and keeps fees, contracts and per-unit payments', async () => {
+    const { evidencesPurchase } = await import('../server/domain/paymentNature.ts');
+    for (const t of [
+      'The dairy cooperative challenge will award a single purse of $15,000 to the team the judging panel ranks first.',
+      'The arts council provides $6,000 in project funding to each muralist selected.',
+      'One entrant drawn at random wins $3,000 in store credit; no purchase necessary.',
+      'Insurers paid vehicle owners an average of $4,600 per approved hail-damage claim.',
+      'The society distributed an average of $1,800 in annual performance royalties to each composer.',
+    ]) expect(evidencesPurchase(t)).toBe(false);
+    for (const t of [
+      'Small accounting firms pay contingency recruiters a placement fee of $3,500 per bookkeeper hired.',
+      'The port authority awarded an $18,000 contract for records digitisation, payable net 30.',
+      'Homeowners pay $250 per energy audit report.',
+      '$250',
+    ]) expect(evidencesPurchase(t)).toBe(true);
+  });
+});
