@@ -228,7 +228,8 @@ describe('C-8: the adopted plan is a sequence of steps', () => {
     // Selling starts once the changes are in place; the model prices no cost of selling or collecting, so neither is 0.
     expect(steps[3]).toMatchObject({ dependsOn: 3, startDay: { low: 5, high: 5 }, cost: null });
     // No member's days to usable cash are held: the collection names what sets its day.
-    expect(steps[4]).toMatchObject({ dependsOn: 4, startDay: null, cost: null, stage: { stage: 'COLLECT', costSource: 'NONE_HELD', unscheduled: 'NO_MODEL_DAYS' } });
+    // Collecting commits nothing before the buyer pays: the provider's fee comes out of the payment (NOT_OWNERS).
+    expect(steps[4]).toMatchObject({ dependsOn: 4, startDay: null, cost: 0, stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS', unscheduled: 'NO_MODEL_DAYS' } });
   });
 
   it('gives a person only rule-11 kinds: a payment is the owner\'s, the rest is Brain\'s', () => {

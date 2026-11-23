@@ -267,7 +267,9 @@ describe('4. NO_FABRICATED_FIGURE: a stage that commits money carries the model\
     for (const modelled of [sweptModel, null]) {
       const steps = arrangementSteps(a, { ...ctx, modelled, send: [], collect: [] });
       const by = (l: string) => steps.find((s) => s.label.startsWith(l))!;
-      for (const label of ['Reach', 'Validate the offer', 'Collect payment', 'Renew']) expect(by(label).cost, label).toBeNull();
+      for (const label of ['Reach', 'Validate the offer', 'Renew']) expect(by(label).cost, label).toBeNull();
+      // Collecting commits nothing before the buyer pays, and its source says so: a 0 with a source, never a bare one.
+      expect(by('Collect payment')).toMatchObject({ cost: 0, arrangement: { costSource: 'NOT_OWNERS' } });
       expect(by('Deliver and confirm').cost).toBe(modelled ? 90 : null);
       expect(planIntegrity(fromSteps(steps, { lead: leadOf(a, modelled) })).violations.filter((v) => v.rule === 'NO_FABRICATED_FIGURE')).toEqual([]);
     }
@@ -473,7 +475,7 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
       expect(partner).toMatchObject({ cost: 0, startDay: { low: 3, high: 10 } });
       expect(sell).toMatchObject({ cost: null, startDay: { low: 0, high: 10 }, stage: { stage: 'OFFER', costSource: 'NONE_HELD' } });
       // The sale's days plus the members' swept days to usable cash (5–15 and 10–20), as an arrangement's Collect reads them.
-      expect(collect).toMatchObject({ cost: null, startDay: { low: 5, high: 30 }, dependsOn: sell!.order, withinLimits: true, stage: { stage: 'COLLECT', costSource: 'NONE_HELD' } });
+      expect(collect).toMatchObject({ cost: 0, startDay: { low: 5, high: 30 }, dependsOn: sell!.order, withinLimits: true, stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS' } });
       expect(collect!.when).toMatch(/^day 5–30: the sale's day plus 5–20 days to usable cash \(the range the model swept: an assumption, not established\)/);
       expect(planIntegrity(fromSteps(steps)).violations).toEqual([]);
     }
@@ -492,7 +494,7 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     // Selling starts now; cash does not: it lands on the members' days to usable cash.
     expect(steps[2]).toMatchObject({ startDay: { low: 0, high: 0 }, cost: null });
     // (5–15, 10–20 and 10–25 days: the three constructed cards the reserve was cut from.)
-    expect(steps[3]).toMatchObject({ startDay: { low: 5, high: 25 }, cost: null });
+    expect(steps[3]).toMatchObject({ startDay: { low: 5, high: 25 }, cost: 0, stage: { costSource: 'NOT_OWNERS' } });
     expect(planIntegrity(fromSteps(steps)).violations).toEqual([]);
   });
 

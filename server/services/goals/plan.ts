@@ -78,7 +78,7 @@ import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching, staleUnlaunchedRounds } from '../cash/discovery.ts';
 import { constructArrangements, lastConstructionReport, nextInputQuestion, type ConstructedArrangement } from '../cash/construct.ts';
-import { arrangementSteps, modelledCashSpan, type ArrangementStepContext } from './arrangementSteps.ts';
+import { arrangementReachCost, arrangementSteps, COLLECTION_COST, fulfilmentStep, modelledCashSpan, openingMembers, openingSteps, type ArrangementStepContext, type OpeningChainMember } from './arrangementSteps.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
 import { arrangementVerdicts } from '../../repos/monetization.ts';
 import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
@@ -115,10 +115,11 @@ import { implementedFormats } from '../puzzle/formats/index.ts';
 import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
 import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
-import { integrityInput, leadOf, type PlanLead } from './planIntegrityInput.ts';
+import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrityInput.ts';
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
+import { blockerResolutions, type Resolution } from './resolution.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -634,13 +635,23 @@ export interface PlanStep {
    * read cost 0 with nothing saying where the 0 came from.
    */
   stage?: { stage: ArrangementStage; costSource: StepCostSource; unscheduled?: UnscheduledReason };
+  /**
+   * The ids of the rows, claims and card facts the step rests on (the
+   * opening, its card facts' claims, its agreements, an arrangement's
+   * sources): what an executor reads to check the step, never prose.
+   */
+  evidence?: string[];
+  /** On the step that sells: the price a deal was judged at, major units — the strategy's own economics. */
+  price?: number;
+  /** On a step the owner performs: the owner's hours it takes a deal, as the model holds them. */
+  hours?: number;
 }
 
 export interface InfeasibleConclusion {
   /** Why, in arithmetic. */
   reason: string;
   /** The constraints to relax, the one the diagnosis names first. */
-  relax: Array<{ constraint: 'DEADLINE' | 'CAPITAL' | 'TARGET'; suggestion: string }>;
+  relax: Array<{ constraint: 'DEADLINE' | 'CAPITAL' | 'TARGET' | 'OWNER_HOURS'; suggestion: string }>;
   headroomReach: number;
   required: number;
   /**
@@ -2560,6 +2571,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   }
   // The goal as stated, judged on arithmetic rather than on the openings found (C-10, §65).
   const infeasible = acceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(reconstruction, pathways.structures, model.portfolio, target, acceptance.required));
+  // What would resolve the no-plan conclusion's blocker (§3a): advice beside the verdict, never a change of it.
+  const resolutions = acceptance.status === 'ACCEPTED' ? [] : resolutionsOf(strategies, model.included, target, acceptance);
+  if (infeasible) relaxAlso(infeasible, resolutions);
   if (infeasible) acceptance = notSupported(acceptance, infeasible);
   // The verdict follows the plan adopted: a reconstructed candidate is constructed from its own reading, not the baseline's.
   acceptance = {
@@ -2584,7 +2598,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const lead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), ...(adopted ? { adoptedIds: adopted } : {}) });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models), reachCost: arrangementReachCost(models.get(lead.key), pathways.pathways) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), members: openingMembers(planOpenings(model), pathways.pathways, model.portfolio?.demand ?? []), lead: leadIdsOf({ acceptance, portfolio: model.portfolio }), ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -2669,14 +2683,14 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     needsMoreOpenings: continuation.continues,
     inferred: inferredInputs(model.considered),
     // The questions the plan Brain holds needs answered, then the run's own (C-9).
-    researchPriority: planResearchPriority({
+    researchPriority: [...resolutions.map((one) => one.priority), ...planResearchPriority({
       reconstruction,
       adoption: plan.adoption,
       adoptedIds: acceptance.candidate?.opportunityIds ?? [],
       daysLeft: target.daysLeft,
       remaining: target.remainingCents / 100,
       legacy: researchPriority(result, model.included, target, chosen?.key ?? null),
-    }),
+    })],
     // The pool, the ladder and the diagnosis are about openings found; an estimate is none of them.
     pool: infeasible ? { ...pool, sentence: `${pool.sentence} The goal as stated is not supported by arithmetic, so the search stops until its terms or inputs change.` } : pool,
     ladder: ladderOf(considered.filter((one) => !isArrangementId(one.opportunityId))),
@@ -2783,7 +2797,10 @@ export async function reconstructionFor(
       // When it is asked, it may also invent designs for new buyers, composed by construction (S-11).
       explore: { library, stancePrior, ...(due ? { invent: (brief) => inventDirections(brief), ...(design ? { design } : {}) } : {}) },
     });
-    if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
+    if (context.goalId) {
+      for (const [id, one] of explored) if (Date.now() - one.at >= EXPLORATION_HELD_MS) explored.delete(id);
+      explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
+    }
     if (context.persist && context.goalId && r.exploration) {
       // Credited once per (goal, inputs): a re-read of unchanged inputs is the same trial (lens S, S-9).
       await recordExploration(context.goalId, r.exploration, inputsKey).catch((error: unknown) => {
@@ -3239,6 +3256,32 @@ export function judgeFeasibility(input: {
   return { reason, relax, headroomReach: r.headroom.reach, required: input.required, instantOnly };
 }
 
+/** The resolutions of the blockers the gate's NOT_VIABLE strategies show (`blockerResolutions`), from the planner's own numbers. */
+function resolutionsOf(strategies: StrategyReading[], included: ModelledOpportunity[], target: TargetReading, acceptance: PlanAcceptance): Resolution[] {
+  const byId = new Map(included.map((one) => [one.opportunity.id, one]));
+  return blockerResolutions({
+    strategies: strategies
+      .filter((one) => one.verdict === 'NOT_VIABLE')
+      .map((one) => (one.dealsTaken ?? []).flatMap(({ opportunityId, deals }) => (byId.has(opportunityId) ? [{ one: byId.get(opportunityId)!, deals }] : []))),
+    remaining: target.remainingCents / 100,
+    currency: target.currency,
+    daysLeft: target.daysLeft,
+    hoursCeiling: target.hoursCeiling,
+    capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
+    capitalBeforeProof: target.capitalBeforeProofCents === null || target.proven ? null : target.capitalBeforeProofCents / 100,
+    net: countsNet(target.metric),
+    researchDays: RESEARCH_TURNAROUND_DAYS,
+    value: acceptance.required - (acceptance.candidate?.reach ?? 0),
+  });
+}
+
+/** A relaxation the arithmetic's own diagnosis cannot see (owner hours above all), added to a NOT_SUPPORTED conclusion once per constraint. */
+export function relaxAlso(infeasible: InfeasibleConclusion, resolutions: Resolution[]): void {
+  for (const { relax } of resolutions) {
+    if (relax && !infeasible.relax.some((one) => one.constraint === relax.constraint)) infeasible.relax.push(relax);
+  }
+}
+
 /** The acceptance a NOT_SUPPORTED goal reads: no plan, the arithmetic, and which constraint to relax. */
 export function notSupported(acceptance: PlanAcceptance, infeasible: InfeasibleConclusion): PlanAcceptance {
   return {
@@ -3488,7 +3531,7 @@ export function planSteps(input: {
    * the goal's generic next step alone (`arrangementSteps`).
    */
   arrangement?: { arrangement: ConstructedArrangement; context: Omit<ArrangementStepContext, 'send' | 'collect'> } | null;
-  /** The reconstruction's own members, whose sale its "Sell and collect" step already is. */
+  /** The reconstruction's own members (the candidate's ids). Kept for callers; the steps read the members from the reconstruction and `lead`. */
   adoptedIds?: ReadonlySet<string>;
   /** What the goal allows to be spent, major units: the steps say how much of it the plan deploys. */
   capital?: { allowed: number | null; currency: string } | null;
@@ -3506,6 +3549,20 @@ export function planSteps(input: {
   daysLeft?: number | null;
   /** What Brain has registered and connected (`readCapabilityInventory`): who performs each step is read from it. */
   capabilities?: CapabilityInventory | null;
+  /**
+   * Each modelled opening as its transaction's members read it (`openingMembers`):
+   * who fulfils it, the price, direct cost and days to cash it was judged on.
+   * A sale, and a reconstruction's members, are sequenced through to fulfilment
+   * and collection from it (`openingSteps`); an opening it lacks keeps its sale alone.
+   */
+  members?: ReadonlyMap<string, OpeningChainMember> | null;
+  /**
+   * The openings the plan names as its lead (`leadIdsOf`): the members of the
+   * selected strategy. A sale of one of them is its whole transaction, each
+   * step acting on it; a sale beside the lead is no step of the plan
+   * (STEPS_BELONG_TO_PLAN) — the reading's sales still hold it.
+   */
+  lead?: readonly string[] | null;
 }): PlanStep[] {
   const measured = input.measuredReply ?? null;
   const inventory = input.capabilities ?? undefined;
@@ -3514,6 +3571,17 @@ export function planSteps(input: {
   const collect = input.permissionsMissing.filter((one) => /QUOTE_AND_INVOICE|ACCEPT_PAYMENT|billing/i.test(one));
   const r = input.reconstruction;
   const steps: PlanStep[] = [];
+  const currency = input.capital?.currency ?? 'USD';
+  /** A sale as its whole transaction when its opening is a known member: offer, fulfilment, collection (`openingSteps`). */
+  let chained = false;
+  const sellSteps = (sale: MarketTest, detail: string, kill: string, execution: string[]): PlanStep[] => {
+    const offer = saleStep(steps.length + 1, sale, detail, kill, execution, inventory);
+    const member = input.members?.get(sale.opportunityId);
+    if (!member) return [offer];
+    chained = true;
+    const { order: _order, dependsOn: _dependsOn, ...rest } = offer;
+    return openingSteps(member, { currency, daysLeft: input.daysLeft ?? null, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, rest, steps.length + 1);
+  };
   if (input.adoption.source === 'RECONSTRUCTED' && r) {
     const members = membersOf(r.best, input.titles ?? new Map<string, string>());
     // A change on an opening outside the strongest combination is no step: the plan says nothing it will not do (`changeBelongs`).
@@ -3545,7 +3613,7 @@ export function planSteps(input: {
         executor: exec(changeOperation(first.dimension, cost, SENDS.has(first.dimension) ? send : collect, first.supplier)),
         // Its cost is the reconstruction's own figure for the move: what it commits before any opening pays.
         stage: { stage: CHANGE_STAGE[first.dimension] ?? 'OFFER', costSource: 'MODEL' },
-        ...(acts.length > 0 ? { openings: acts } : {}),
+        ...(acts.length > 0 ? { openings: acts, evidence: acts } : {}),
       });
     }
     /*
@@ -3571,23 +3639,6 @@ export function planSteps(input: {
     const direct = Math.max(0, ...changes.filter((c) => CHANGE_STAGE[c.dimension] !== 'REACH' && !(c as { afterProof?: boolean }).afterProof).map((c) => c.startDay?.high ?? 0));
     const sellDay: Span = { low: Math.min(direct, after), high: after };
     const named = namedMembers(r.best.members, input.titles);
-    const sellOrder = steps.length + 1;
-    steps.push({
-      order: sellOrder,
-      label: 'Sell the plan\'s openings',
-      detail: `Offer the plan's openings${named} to their buyers for an actual sale or deposit, and record every reply and sale as the plan's measurements. The model prices no cost for selling.`,
-      startDay: sellDay,
-      when: changes.length > 0 ? `${spanText(sellDay)}: once the plan's changes above are in place` : `${spanText(sellDay)}: nothing it needs is outstanding`,
-      cost: null,
-      basis: 'ESTIMATE',
-      owner: 'BRAIN',
-      ownerReason: null,
-      dependsOn: null,
-      kill: replyKill(r, measured),
-      execution: send,
-      executor: exec({ operation: 'SEND_OFFER', execution: send }),
-      stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
-    });
     // A member is named by its id, or by its title cut at 50 (the reconstruction's own reading): resolved as `adoptReconstruction` resolves it.
     const keptIds = r.best.memberIds && r.best.memberIds.length === r.best.members.length ? r.best.memberIds : null;
     const idOf = (m: string, at: number): string => {
@@ -3596,50 +3647,126 @@ export function planSteps(input: {
       return input.cashDays?.has(m) ? m : (resolveMember(m, undefined, input.titles ?? new Map<string, string>()) ?? m);
     };
     const memberIds = [...new Set(r.best.members.map(idOf))];
-    const held = memberIds.map((id) => input.cashDays?.get(id) ?? null).filter((d): d is { span: Span; standing: string } => d !== null);
-    const cash: Span | null = held.length > 0 ? { low: Math.min(...held.map((d) => d.span.low)), high: Math.max(...held.map((d) => d.span.high)) } : null;
-    const lands: Span | null = cash ? { low: Math.round(sellDay.low + cash.low), high: Math.round(sellDay.high + cash.high) } : null;
-    const daysLeft = input.daysLeft ?? null;
-    const late = lands !== null && daysLeft !== null && lands.low > daysLeft;
-    const standing = [...new Set(held.map((d) => d.standing))].join('; ');
-    const partial = held.length > 0 && held.length < memberIds.length ? ` for the ${held.length} of ${memberIds.length} openings whose days the model holds` : '';
-    steps.push({
-      order: steps.length + 1,
-      label: 'Collect payment',
-      detail: `Collect each buyer's payment or deposit and record it against the goal.${cash ? ` Cash is usable about ${Math.round(cash.low)}–${Math.round(cash.high)} days after a sale${partial} (${standing})${daysLeft !== null && lands ? `, ${lands.high <= daysLeft ? 'inside' : late ? 'OUTSIDE' : 'partly outside'} the ${daysLeft} days left` : ''}.` : ' When cash is usable is not yet established: the first sale measures it.'} The model prices no cost of collecting.`,
-      startDay: late ? null : lands,
-      when: late
-        ? `not scheduled: cash would be usable on ${spanText(lands!)} (${standing}), after the ${daysLeft} days left`
-        : lands
-          ? `${spanText(lands)}: the sale's day plus ${Math.round(cash!.low)}–${Math.round(cash!.high)} days to usable cash${partial} (${standing})`
-          : 'not yet scheduled: set by days to usable cash, which the first sale measures',
-      cost: null,
-      basis: held.length > 0 && held.every((d) => d.standing === 'proven') ? 'EVIDENCE' : 'ASSUMPTION',
-      owner: 'BRAIN',
-      ownerReason: null,
-      dependsOn: sellOrder,
-      kill: `cash would not be usable by day ${daysLeft ?? 'the deadline'} → re-plan the plan's payment terms (a deposit or a presale) or drop the opening`,
-      execution: collect,
-      executor: exec({ operation: 'COLLECT_PAYMENT', execution: collect }),
-      ...(daysLeft !== null && lands ? { withinLimits: lands.high <= daysLeft } : {}),
-      stage: { stage: 'COLLECT', costSource: 'NONE_HELD', ...(late ? { unscheduled: 'AFTER_DEADLINE' as const } : lands ? {} : { unscheduled: 'NO_MODEL_DAYS' as const }) },
-    });
+    const sellWhen = changes.length > 0 ? `${spanText(sellDay)}: once the plan's changes above are in place` : `${spanText(sellDay)}: nothing it needs is outstanding`;
     /*
-     * What the goal sells beside the reconstruction is part of the plan: every
-     * sale the reading holds is pursued (`pursueSales`) whichever plan is
-     * adopted, so the execution sequence names it (rehearsal, 2026-11-18: the
-     * steps of a 7-day and a 30-day goal read the same while their sales differed).
+     * The members' own transactions (§3a), when the plan holds every member's
+     * facts (`openingMembers`): each member is sold at the price it was judged
+     * at, delivered by whoever its evidence names, and collected on its own
+     * days to usable cash (`openingSteps`). Planning reliability, 2026-11-22:
+     * one "Sell the plan's openings" step for several members carried no
+     * price, since no single price is the plan's; a step per opening carries
+     * its own price, cost and evidence, and acts only on a member of the
+     * selected strategy (STEPS_BELONG_TO_PLAN).
      */
-    const adopted = input.adoptedIds ?? new Set<string>();
-    for (const sale of input.sales.filter((one) => !adopted.has(one.opportunityId))) {
-      steps.push(saleStep(steps.length + 1, sale, `Beside the reconstructed plan, inside the goal's limits: ${sale.test.test}`, replyKill(r, measured), [...send, ...collect], inventory));
+    const chain = memberIds.map((id) => input.members?.get(id) ?? null);
+    const known = chain.filter((m): m is OpeningChainMember => m !== null);
+    if (known.length === memberIds.length && known.length > 0) {
+      const saleOf = new Map(input.sales.map((one) => [one.opportunityId, one]));
+      const labels = new Set(steps.map((one) => one.label));
+      const unique = (label: string, n: number) => (labels.has(label) ? `${label} (opening ${n})` : label);
+      for (const [at, m] of known.entries()) {
+        const sale = saleOf.get(m.id);
+        const title = m.title.slice(0, 80);
+        const of = known.length > 1 ? `, one of the plan's ${known.length} openings${named},` : '';
+        const chainSteps = openingSteps(
+          m,
+          { currency, daysLeft: input.daysLeft ?? null, send, collect, sellDay, ...(inventory ? { capabilities: inventory } : {}) },
+          {
+            label: `Sell "${title}"`,
+            detail: `Offer "${title}"${of} to its buyers for an actual sale or deposit, and record every reply and sale as the plan's measurements.${sale ? ` ${sale.test.test}` : ''}`,
+            startDay: sellDay,
+            when: sellWhen,
+            cost: null,
+            basis: 'ESTIMATE',
+            owner: 'BRAIN',
+            ownerReason: null,
+            kill: replyKill(r, measured),
+            execution: send,
+            executor: exec({ operation: 'SEND_OFFER', execution: send }),
+            stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
+          },
+          steps.length + 1,
+        );
+        // Two members titled alike are two transactions, never one label twice (NO_DUPLICATE_STEPS).
+        for (const one of chainSteps) {
+          const label = unique(one.label, at + 1);
+          labels.add(label);
+          steps.push({ ...one, label });
+        }
+      }
+    } else {
+      const sellOrder = steps.length + 1;
+      steps.push({
+        order: sellOrder,
+        label: 'Sell the plan\'s openings',
+        detail: `Offer the plan's openings${named} to their buyers for an actual sale or deposit, and record every reply and sale as the plan's measurements. The model prices no cost for selling.`,
+        startDay: sellDay,
+        when: sellWhen,
+        cost: null,
+        basis: 'ESTIMATE',
+        owner: 'BRAIN',
+        ownerReason: null,
+        dependsOn: null,
+        kill: replyKill(r, measured),
+        execution: send,
+        executor: exec({ operation: 'SEND_OFFER', execution: send }),
+        stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
+      });
+      const held = memberIds.map((id) => input.cashDays?.get(id) ?? null).filter((d): d is { span: Span; standing: string } => d !== null);
+      const cash: Span | null = held.length > 0 ? { low: Math.min(...held.map((d) => d.span.low)), high: Math.max(...held.map((d) => d.span.high)) } : null;
+      const lands: Span | null = cash ? { low: Math.round(sellDay.low + cash.low), high: Math.round(sellDay.high + cash.high) } : null;
+      const daysLeft = input.daysLeft ?? null;
+      const late = lands !== null && daysLeft !== null && lands.low > daysLeft;
+      const standing = [...new Set(held.map((d) => d.standing))].join('; ');
+      const partial = held.length > 0 && held.length < memberIds.length ? ` for the ${held.length} of ${memberIds.length} openings whose days the model holds` : '';
+      steps.push({
+        order: steps.length + 1,
+        label: 'Collect payment',
+        detail: `Collect each buyer's payment or deposit and record it against the goal.${cash ? ` Cash is usable about ${Math.round(cash.low)}–${Math.round(cash.high)} days after a sale${partial} (${standing})${daysLeft !== null && lands ? `, ${lands.high <= daysLeft ? 'inside' : late ? 'OUTSIDE' : 'partly outside'} the ${daysLeft} days left` : ''}.` : ' When cash is usable is not yet established: the first sale measures it.'} ${COLLECTION_COST}`,
+        startDay: late ? null : lands,
+        when: late
+          ? `not scheduled: cash would be usable on ${spanText(lands!)} (${standing}), after the ${daysLeft} days left`
+          : lands
+            ? `${spanText(lands)}: the sale's day plus ${Math.round(cash!.low)}–${Math.round(cash!.high)} days to usable cash${partial} (${standing})`
+            : 'not yet scheduled: set by days to usable cash, which the first sale measures',
+        cost: 0,
+        basis: held.length > 0 && held.every((d) => d.standing === 'proven') ? 'EVIDENCE' : 'ASSUMPTION',
+        owner: 'BRAIN',
+        ownerReason: null,
+        dependsOn: sellOrder,
+        kill: `cash would not be usable by day ${daysLeft ?? 'the deadline'} → re-plan the plan's payment terms (a deposit or a presale) or drop the opening`,
+        execution: collect,
+        executor: exec({ operation: 'COLLECT_PAYMENT', execution: collect }),
+        ...(daysLeft !== null && lands ? { withinLimits: lands.high <= daysLeft } : {}),
+        ...(known.length > 0 ? { evidence: [...new Set(known.flatMap((m) => m.evidence.collect))] } : {}),
+        stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS', ...(late ? { unscheduled: 'AFTER_DEADLINE' as const } : lands ? {} : { unscheduled: 'NO_MODEL_DAYS' as const }) },
+      });
     }
+    /*
+     * A sale beside the reconstruction is no step of it: every execution step
+     * belongs to the strategy actually selected (STEPS_BELONG_TO_PLAN, owner,
+     * 2026-11-20). The reading still holds that sale (`sales`, `pursueSales`);
+     * the sequence is the adopted members' own transactions above. Planning
+     * reliability, 2026-11-22: such a sale stood as one step, with no opening
+     * named so the rule could not see it, no price and no delivery or collection.
+     */
     // Read in order (STEPS_SCHEDULED): a sale that starts now is not listed after a step that starts later.
     inDayOrder(steps);
   } else {
-    for (const sale of input.sales) steps.push(saleStep(steps.length + 1, sale, sale.test.test, replyKill(r, measured), [...send, ...collect], inventory));
+    // Only a sale of a member of the selected strategy is a step of it (STEPS_BELONG_TO_PLAN); with no lead named, every sale is the plan.
+    const lead = new Set((input.lead ?? []).map(openingOfMember));
+    for (const sale of input.sales.filter((one) => lead.size === 0 || lead.has(one.opportunityId))) steps.push(...sellSteps(sale, sale.test.test, replyKill(r, measured), [...send, ...collect]));
     const arrangementOf = (startAt: number) => (input.arrangement ? arrangementSteps(input.arrangement.arrangement, { ...input.arrangement.context, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, startAt) : []);
-    let built = steps.length === 0 ? arrangementOf(1) : [];
+    /*
+     * The leading arrangement is sequenced when nothing else is, and beside
+     * the sales when it is itself a member of the selected strategy: a member
+     * is given its whole chain, never left to a generic goal step (planning
+     * reliability, 2026-11-22: a candidate of an opening and an arrangement
+     * read the opening's sale and "Establish buyers who have actually agreed",
+     * the arrangement a member with no step).
+     */
+    const arrangementLeads = !!input.arrangement && lead.has(`${ARRANGEMENT_ID_PREFIX}${input.arrangement.arrangement.key}`);
+    let built = steps.length === 0 || arrangementLeads ? arrangementOf(steps.length + 1) : [];
     const t = input.nextTest;
     /*
      * The goal's own next step is the plan's honest first step when nothing
@@ -3688,6 +3815,8 @@ export function planSteps(input: {
       });
     }
     steps.push(...built);
+    // A sale's chain runs from day 0 to its collection: read in day order, each step still naming the one it follows (STEPS_SCHEDULED).
+    if (chained) inDayOrder(steps);
   }
   /*
    * The capital the plan deploys, against what the goal allows (transfer test,
@@ -5100,6 +5229,8 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
   trace(`composed ${constructed.length}`);
   const arrangements = constructed.filter((one) => namesABuyerPopulation(one.demand.name));
   trace(`over a population ${arrangements.length}`);
+  // One composed ten minutes ago by the wall clock is never fresh again (`arrangementsFresh`): let it go.
+  for (const [id, one] of lastArrangements) if (Date.now() - one.composedAt >= ARRANGEMENTS_FRESH_MS) lastArrangements.delete(id);
   lastArrangements.set(goal.id, { at: now.getTime(), composedAt: Date.now(), arrangements });
   // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
   await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>

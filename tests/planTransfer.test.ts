@@ -338,16 +338,24 @@ describe('plan integrity holds across varied goals', () => {
       expect(planIntegrity(integrityInput(p)).violations, id).toEqual([]);
       const labels = p.steps.map((s) => s.label);
       expect(new Set(labels).size, `${id}: ${labels.join(' | ')}`).toBe(labels.length);
-      const sell = p.steps.find((s) => s.label === "Sell the plan's openings");
-      const collect = p.steps.find((s) => s.label === 'Collect payment');
-      expect(sell, id).toMatchObject({ cost: null, stage: { stage: 'OFFER', costSource: 'NONE_HELD' } });
-      expect(collect, id).toMatchObject({ cost: null, dependsOn: sell!.order, stage: { stage: 'COLLECT', costSource: 'NONE_HELD' } });
-      // Cash lands no sooner than the sale starts, on the members' days to usable cash, or says why it has no day.
-      if (collect!.startDay) {
-        expect(collect!.startDay.low, id).toBeGreaterThanOrEqual(sell!.startDay!.low);
-        expect(collect!.startDay.high, id).toBeGreaterThan(sell!.startDay!.high);
+      // One sale for the plan, or — where the plan holds every member's facts — one transaction per member.
+      const collects = p.steps.filter((s) => s.stage?.stage === 'COLLECT');
+      expect(collects.length, id).toBeGreaterThan(0);
+      for (const collect of collects) {
+        // Collecting commits nothing before the buyer pays (the provider's fee comes out of the payment), and follows
+        // the sale directly or the members' fulfilment, which follows the sale.
+        expect(collect, id).toMatchObject({ cost: 0, stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS' } });
+        const before = p.steps.find((s) => s.order === collect.dependsOn)!;
+        const sell = before.stage?.stage === 'DELIVER' ? p.steps.find((s) => s.order === before.dependsOn)! : before;
+        expect(sell.stage?.stage, id).toBe('OFFER');
+        // Selling is costed only from what the members' pathways hold (MODEL), else unestablished; never a bare 0.
+        expect(sell.stage!.costSource === 'MODEL' ? typeof sell.cost : sell.cost, id).toBe(sell.stage!.costSource === 'MODEL' ? 'number' : null);
+        // Cash lands no sooner than the sale starts, on the members' days to usable cash, or says why it has no day.
+        if (collect.startDay) {
+          expect(collect.startDay.low, id).toBeGreaterThanOrEqual(sell.startDay!.low);
+          expect(collect.startDay.high, id).toBeGreaterThan(sell.startDay!.high);
+        } else expect(collect.stage!.unscheduled, id).toBeDefined();
       }
-      else expect(collect!.stage!.unscheduled, id).toBeDefined();
       for (const s of p.steps) {
         expect(s.stage ?? s.arrangement, `${id}: ${s.label}`).toBeDefined();
         expect(s.label, id).not.toMatch(/\((?:ALL|OUTREACH|SMALL_TICKET|LARGE_TICKET|FAST_CASH|SLOW_CASH|TOP|REST)\)/);

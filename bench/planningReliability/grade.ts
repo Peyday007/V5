@@ -70,6 +70,12 @@ export interface ObservedPlan {
   targetCents: number;
   /** The evidence gate's reading of the chosen strategy, for the detail line only (never graded on). */
   gate: { verdict: string; chainComplete: boolean; conservativeSettled: number | null } | null;
+  /**
+   * What the end-to-end level reads (docs/COMPLETION-SPEC.md §3a): the plan's steps,
+   * the alternatives it compared and what it names to resolve an unknown. Absent on an
+   * observation built by hand, which the end-to-end level then cannot judge.
+   */
+  execution?: ObservedExecution;
 }
 
 export interface Grade {
@@ -77,6 +83,343 @@ export interface Grade {
   outcome: (typeof OUTCOMES)[number] | null;
   failures: FailureClass[];
   detail: string;
+  /**
+   * The end-to-end level, graded beside the verdict and never into it: `pass`,
+   * `outcome` and `failures` above are the verdict level exactly as before, so the
+   * history stays comparable.
+   */
+  e2e: E2EGrade;
+}
+
+/* ------------------------------------------------------------------ */
+/* The end-to-end level: a complete, AI-executable plan                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Why a result fails the end-to-end level (docs/COMPLETION-SPEC.md §3a). Each is read
+ * from the planner's structured output — its steps and their executor records, the
+ * strategies, considered and excluded openings, next tests, research priorities and
+ * infeasibility — never from its prose.
+ */
+export const E2E_FAILURE_CLASSES = [
+  /** The verdict level failed: an end-to-end pass needs a correct verdict first. */
+  'VERDICT_INCORRECT',
+  /** The observation carried no execution reading (a hand-built observation). */
+  'NOT_OBSERVED',
+  /** An executable plan's steps omit a required link: reaching buyers, fulfilment, collecting payment, paying the supplier. */
+  'CHAIN_STEP_MISSING',
+  /** A field the rubric needs is not in the planner's output at all — a measured gap for the planner, never guessed. */
+  'STEP_FIELD_ABSENT',
+  /** A step nobody performs: no executor, CAPABILITY_MISSING, or NOT_ESTABLISHED. */
+  'STEP_PERFORMER_UNESTABLISHED',
+  /** Brain is said to perform a step through a capability no registry declares, or to fulfil work the evidence gives to someone else. */
+  'BRAIN_CAPABILITY_NOT_HELD',
+  /** The fulfilment step's performer is not the fulfiller the evidence names (a subcontractor, the owner). */
+  'PERFORMER_MISMATCH',
+  /** A step whose cost is unestablished (null): the plan cannot say what executing it commits. */
+  'STEP_COST_UNESTABLISHED',
+  /** An execution step with no day. */
+  'STEP_UNSCHEDULED',
+  /** A later step of the transaction (order, deliver, collect, repeat) that names no step it follows. */
+  'STEP_DEPENDENCY_ABSENT',
+  /** Collecting payment or paying the supplier is scheduled after the deadline, or cannot be scheduled. */
+  'MONEY_STEP_OUTSIDE_DEADLINE',
+  /** The plan gives the owner routine, recurring work the objective allows no hours for. */
+  'OWNER_ROUTINE_WORK',
+  /** A step's figure differs from the economics its strategy was judged on. */
+  'ECONOMICS_DRIFT',
+  /** A no-plan conclusion names no measurement, research or relaxation that would resolve its blocker. */
+  'RESOLUTION_ABSENT',
+  /** A no-plan conclusion where openings existed, with no strategy compared and no opening considered or excluded. */
+  'ALTERNATIVES_NOT_COMPARED',
+  /** An opening research filed that the reading neither considered nor excluded. */
+  'OPENING_UNACCOUNTED',
+] as const;
+export type E2EFailureClass = (typeof E2E_FAILURE_CLASSES)[number];
+
+export interface E2EGrade {
+  pass: boolean;
+  failures: E2EFailureClass[];
+  /** The measured gaps: each field the rubric needed and the reading did not carry. Never case wording. */
+  gaps: string[];
+  detail: string;
+}
+
+/** One step of the plan as the end-to-end level reads it: only structured fields. */
+export interface ObservedStep {
+  order: number;
+  label: string;
+  /** RESEARCH, VALIDATE or EXECUTE; a step its builder left unmarked is EXECUTE (`PlanStep.kind`). */
+  kind: 'RESEARCH' | 'VALIDATE' | 'EXECUTE';
+  /** The transaction stage, from the arrangement's or the step's own `stage` record; null when neither says. */
+  stage: string | null;
+  costSource: string | null;
+  unscheduled: string | null;
+  cost: number | null;
+  startDay: { low: number; high: number } | null;
+  dependsOn: number | null;
+  requires: number[];
+  basis: string;
+  /** The executor record; null when the step carries none. */
+  performer: string | null;
+  operation: string | null;
+  does: string | null;
+  routine: boolean | null;
+  capabilities: { id: string; state: string }[];
+  /** The executor names a payment it makes (an approval of kind PAYMENT). */
+  pays: boolean;
+  /** The members (fixture keys, or the planner's ids) the step acts on: its own `openings`, else its arrangement, else the plan's only member. */
+  members: string[];
+  /** Fields the rubric needs that the step does not carry (`evidence`, `price` on an offer, `hours` on owner work). */
+  absent: string[];
+  /** A price the step itself states, when the planner carries one. */
+  price: number | null;
+}
+
+export interface ObservedExecution {
+  steps: ObservedStep[];
+  daysLeft: number | null;
+  /** The owner hours the goal allows over its window (`TargetReading.hoursCeiling`). */
+  hoursCeiling: number | null;
+  strategies: number;
+  /** Fixture keys of the openings considered and excluded. */
+  considered: string[];
+  excluded: string[];
+  /** The chain links some next test, research priority or sale names a measurement for. */
+  resolves: Link[];
+  /** NOT_SUPPORTED's relaxations, each with a suggestion. */
+  relax: Constraint[];
+  /** Research priorities the reading decides to research first or learn while executing. */
+  researchFirst: number;
+  /** The economics each member's strategy was judged on (`portfolio.demand`): price and direct cost a deal. */
+  economics: Record<string, { price: { low: number; high: number } | null; cost: { low: number; high: number } | null }>;
+}
+
+/** The operations that reach buyers (`STEP_OPERATIONS`). */
+const REACH_OPERATIONS = new Set(['REACH_BUYERS', 'SEND_OFFER', 'RECRUIT_PARTNER', 'BUY_PAID_LEADS']);
+const FULFIL_OPERATIONS = new Set(['BRAIN_PRODUCES', 'SUPPLIER_DELIVERS']);
+/** Performers that are somebody. */
+const PERFORMED = new Set(['BRAIN', 'PROVIDER', 'OWNER']);
+/** Capability states that are a capability Brain declares (connected, unread, or awaiting a one-time connection the step names). */
+const DECLARED = new Set(['PRESENT', 'UNREAD', 'NOT_CONNECTED']);
+/** What each fixture performer is as a step performer. */
+const PERFORMER_OF: Record<string, string> = { BRAIN: 'BRAIN', SUBCONTRACTOR: 'PROVIDER', OWNER: 'OWNER' };
+/** The stages that follow an earlier step of the transaction. */
+const FOLLOWING_STAGES = new Set(['ORDER', 'DELIVER', 'COLLECT', 'REPEAT']);
+
+/**
+ * The chain link a research priority measures, from the closed vocabulary of the model's
+ * variables (`VARIABLE_FIELD`, goals/plan.ts) and the card fields research settles.
+ */
+const FIELD_LINK: Record<string, Link> = {
+  timeToFirstCash: 'SETTLES_IN_TIME',
+  directCosts: 'ECONOMICS',
+  requiredCapital: 'ECONOMICS',
+  revenueRange: 'OFFER_AND_PRICE',
+  buyerVolume: 'MARKET_VOLUME',
+};
+const VARIABLE_LINK: [RegExp, Link][] = [
+  [/(?:^|[:_ ])days$/, 'SETTLES_IN_TIME'],
+  [/(?:^|[:_ ])(?:direct cost|cost|capital)$/, 'ECONOMICS'],
+  [/(?:^|[:_ ])price$/, 'OFFER_AND_PRICE'],
+  [/(?:^|[:_ ])(?:close|reply)$/, 'CONVERSION'],
+  [/(?:^|[:_ ])(?:volume|market)$/, 'MARKET_VOLUME'],
+  [/(?:^|[:_ ])hours$/, 'FULFILMENT'],
+];
+export function priorityLink(p: { variable: string; field: string | null }): Link | null {
+  if (p.field && FIELD_LINK[p.field]) return FIELD_LINK[p.field]!;
+  for (const [re, link] of VARIABLE_LINK) if (re.test(p.variable)) return link;
+  return null;
+}
+
+/** Read the end-to-end level's inputs from a real reading (a partial one reads as carrying nothing). Pure. */
+export function observeExecution(p: PlanReading, keyOf: (opportunityId: string) => string): ObservedExecution {
+  const ids = p.acceptance.candidate?.opportunityIds ?? [];
+  const only = ids.length === 1 ? [keyOf(ids[0]!)] : [];
+  const steps: ObservedStep[] = (p.steps ?? []).map((s) => {
+    const raw = s as unknown as Record<string, unknown>;
+    const e = s.executor ?? null;
+    const stage = s.arrangement?.stage ?? s.stage?.stage ?? null;
+    const operation = e?.operation ?? null;
+    const offers = stage === 'OFFER' || operation === 'SEND_OFFER';
+    const absent: string[] = [];
+    // The planner's step type carries a basis label, never the rows or claims a step rests on.
+    if (!Array.isArray(raw['evidence']) || (raw['evidence'] as unknown[]).length === 0) absent.push('evidence');
+    if (offers && typeof raw['price'] !== 'number') absent.push('price');
+    if (e?.performedBy === 'OWNER' && typeof raw['hours'] !== 'number') absent.push('hours');
+    return {
+      order: s.order,
+      label: s.label,
+      kind: s.kind ?? 'EXECUTE',
+      stage,
+      costSource: s.arrangement?.costSource ?? s.stage?.costSource ?? null,
+      unscheduled: s.arrangement?.unscheduled ?? s.stage?.unscheduled ?? null,
+      cost: s.cost,
+      startDay: s.startDay,
+      dependsOn: s.dependsOn,
+      requires: s.requires ?? [],
+      basis: s.basis,
+      performer: e?.performedBy ?? null,
+      operation,
+      does: e?.does ?? null,
+      routine: e ? e.routine : null,
+      capabilities: e ? e.capabilities.map((c) => ({ id: c.id, state: c.state })) : [],
+      pays: !!e?.approval.reasons.some((r) => r.kind === 'PAYMENT'),
+      // An arrangement's step acts on that arrangement, never on whichever opening the candidate holds.
+      members: s.openings?.length ? s.openings.map(keyOf) : s.arrangement ? [keyOf(s.arrangement.key)] : only,
+      absent,
+      price: typeof raw['price'] === 'number' ? (raw['price'] as number) : null,
+    };
+  });
+  const resolves = new Set<Link>();
+  const named = (t: { link: string; test: string } | null | undefined) => {
+    if (t && t.test.trim()) resolves.add(t.link as Link);
+  };
+  named(p.nextTest);
+  for (const s of p.strategies ?? []) named(s.nextTest);
+  for (const t of [...(p.marketTests ?? []), ...(p.sales ?? [])]) named(t.test);
+  let researchFirst = 0;
+  for (const r of p.researchPriority ?? []) {
+    if (r.decision !== 'RESEARCH_FIRST' && r.decision !== 'LEARN_WHILE_EXECUTING') continue;
+    researchFirst += 1;
+    const link = priorityLink(r);
+    if (link) resolves.add(link);
+  }
+  const economics: ObservedExecution['economics'] = {};
+  for (const d of p.portfolio?.demand ?? []) {
+    economics[keyOf(d.opportunityId)] = {
+      price: d.price ? { low: d.price.p10, high: d.price.p90 } : null,
+      cost: d.costHeld ? { low: d.costHeld.low, high: d.costHeld.high } : null,
+    };
+  }
+  return {
+    steps,
+    daysLeft: p.target?.daysLeft ?? null,
+    hoursCeiling: p.target?.hoursCeiling ?? null,
+    strategies: (p.strategies ?? []).length,
+    considered: (p.considered ?? []).map((c) => keyOf(c.opportunityId)),
+    excluded: (p.excluded ?? []).map((x) => keyOf(x.opportunityId)),
+    resolves: [...resolves],
+    relax: (p.infeasible?.relax ?? []).filter((r) => r.suggestion.trim()).map((r) => r.constraint),
+    researchFirst,
+    economics,
+  };
+}
+
+const within = (x: number, r: { low: number; high: number }) => x >= r.low * 0.99 - 0.5 && x <= r.high * 1.01 + 0.5;
+
+/**
+ * The end-to-end level of one result: the verdict level must pass, and then an
+ * executable plan must be complete and executable step by step, and a no-plan
+ * conclusion must say what would resolve it and show it compared the openings held.
+ * Every failure is collected, not only the first, so the table counts each gap. Pure.
+ */
+export function gradeE2E(c: PlanningCase, o: ObservedPlan, verdict: Pick<Grade, 'pass'>): E2EGrade {
+  const x = o.execution;
+  if (!x) return { pass: false, failures: verdict.pass ? ['NOT_OBSERVED'] : ['VERDICT_INCORRECT', 'NOT_OBSERVED'], gaps: [], detail: 'no execution reading observed' };
+  const failures = new Set<E2EFailureClass>();
+  const gaps = new Set<string>();
+  const why: string[] = [];
+  const fail = (k: E2EFailureClass, line: string) => {
+    failures.add(k);
+    why.push(line);
+  };
+  if (!verdict.pass) failures.add('VERDICT_INCORRECT');
+
+  const accounted = new Set([...x.considered, ...x.excluded]);
+  const unaccounted = c.openings.filter((f) => !accounted.has(f.key)).map((f) => f.key);
+  if (unaccounted.length) fail('OPENING_UNACCOUNTED', `${unaccounted.length} opening(s) neither considered nor excluded`);
+
+  if (o.stance === 'EXECUTABLE') executableChecks(c, o, x, fail, gaps);
+  else noPlanChecks(c, o, x, fail);
+
+  const list = E2E_FAILURE_CLASSES.filter((k) => failures.has(k));
+  return { pass: list.length === 0, failures: list, gaps: [...gaps].sort(), detail: why.join('; ') || (list.length ? 'verdict incorrect' : 'complete') };
+}
+
+function executableChecks(c: PlanningCase, o: ObservedPlan, x: ObservedExecution, fail: (k: E2EFailureClass, line: string) => void, gaps: Set<string>): void {
+  const steps = x.steps;
+  const e = c.expect;
+  if (!steps.length) {
+    fail('CHAIN_STEP_MISSING', 'an executable plan with no steps');
+    return;
+  }
+  const fixtures = o.members.map((m) => fixtureOf(c, m.key)).filter((f): f is OpeningFixture => !!f);
+
+  // 3. The chain's links, each as a step.
+  const agreed = fixtures.reduce((sum, f) => sum + (f.agreements ?? []).reduce((a, b) => a + b, 0), 0);
+  const reachNeeded = agreed < o.targetCents / 100 - 0.5;
+  const missing: string[] = [];
+  if (reachNeeded && !steps.some((s) => (s.stage === 'REACH' || s.stage === 'OFFER') && s.operation !== null && REACH_OPERATIONS.has(s.operation))) missing.push('buyer reach');
+  if (!steps.some((s) => s.stage === 'DELIVER' || (s.operation !== null && FULFIL_OPERATIONS.has(s.operation)))) missing.push('fulfilment');
+  if (!steps.some((s) => s.stage === 'COLLECT' || s.operation === 'COLLECT_PAYMENT')) missing.push('payment collection');
+  const paysSupplier = fixtures.some((f) => f.performer === 'SUBCONTRACTOR' && (f.cost ?? 0) > 0);
+  if (paysSupplier && !steps.some((s) => s.stage === 'ORDER' || s.operation === 'PAY_SUPPLIER' || (s.stage === 'DELIVER' && s.pays))) missing.push('supplier payment');
+  if (missing.length) fail('CHAIN_STEP_MISSING', `no step for ${missing.join(', ')}`);
+
+  // 1. Every step: what, who, the capability, cost, timing, dependencies, evidence.
+  const unperformed = steps.filter((s) => s.performer === null || !PERFORMED.has(s.performer));
+  if (unperformed.length) fail('STEP_PERFORMER_UNESTABLISHED', `${unperformed.length} step(s) nobody performs (${[...new Set(unperformed.map((s) => s.performer ?? 'no executor'))].join(', ')})`);
+  const undeclared = steps.filter((s) => s.performer === 'BRAIN' && s.capabilities.some((k) => !DECLARED.has(k.state)));
+  if (undeclared.length) fail('BRAIN_CAPABILITY_NOT_HELD', `${undeclared.length} Brain step(s) through an undeclared capability`);
+  for (const s of steps.filter((one) => one.stage === 'DELIVER' || (one.operation !== null && FULFIL_OPERATIONS.has(one.operation)))) {
+    for (const key of s.members) {
+      const f = fixtureOf(c, key);
+      if (!f || !s.performer || !PERFORMED.has(s.performer)) continue;
+      const want = PERFORMER_OF[f.performer] ?? null;
+      if (want === s.performer) continue;
+      if (s.performer === 'BRAIN') fail('BRAIN_CAPABILITY_NOT_HELD', `Brain fulfils ${key}, which the evidence gives to ${f.performer.toLowerCase()}`);
+      else fail('PERFORMER_MISMATCH', `${key} is fulfilled by ${s.performer.toLowerCase()}, the evidence names ${f.performer.toLowerCase()}`);
+    }
+  }
+  const unpriced = steps.filter((s) => s.cost === null);
+  if (unpriced.length) fail('STEP_COST_UNESTABLISHED', `${unpriced.length} step(s) with no established cost`);
+  const undated = steps.filter((s) => s.kind === 'EXECUTE' && s.startDay === null && s.unscheduled !== 'AFTER_DEADLINE');
+  if (undated.length) fail('STEP_UNSCHEDULED', `${undated.length} execution step(s) with no day`);
+  const loose = steps.filter((s) => s.stage !== null && FOLLOWING_STAGES.has(s.stage) && s.dependsOn === null && s.requires.length === 0);
+  if (loose.length) fail('STEP_DEPENDENCY_ABSENT', `${loose.length} later step(s) name nothing they follow`);
+  for (const s of steps) for (const field of s.absent) gaps.add(`step.${field}`);
+  if (gaps.size) fail('STEP_FIELD_ABSENT', `steps do not carry ${[...gaps].join(', ')}`);
+
+  // Money steps inside the deadline.
+  const money = steps.filter((s) => s.stage === 'COLLECT' || s.stage === 'ORDER' || s.operation === 'COLLECT_PAYMENT' || s.operation === 'PAY_SUPPLIER');
+  const outside = money.filter((s) => s.startDay === null || (x.daysLeft !== null && s.startDay.high > x.daysLeft + 1e-9));
+  if (outside.length) fail('MONEY_STEP_OUTSIDE_DEADLINE', `${outside.length} money step(s) ${outside.some((s) => s.startDay === null) ? 'unscheduled or ' : ''}after day ${x.daysLeft ?? '—'}`);
+
+  // The owner does no routine work beyond what the objective allows.
+  const allowed = (e.ownerHoursMax ?? 0) > 0 || (x.hoursCeiling ?? 0) > 0 || (o.scope.hoursPerWeek ?? 0) > 0;
+  const routine = steps.filter((s) => s.performer === 'OWNER' && s.routine);
+  if (routine.length && !allowed) fail('OWNER_ROUTINE_WORK', `${routine.length} routine owner step(s) where the objective allows no owner hours`);
+
+  // The economics the steps use are the ones the strategy was judged on.
+  for (const s of steps) {
+    for (const key of s.members) {
+      const judged = x.economics[key];
+      if (!judged) continue;
+      if (s.stage === 'DELIVER' && s.costSource === 'MODEL' && s.cost !== null && s.cost > 0) {
+        if (!judged.cost) fail('ECONOMICS_DRIFT', `${key}'s delivery step commits a cost its strategy held none for`);
+        else if (!within(s.cost, judged.cost)) fail('ECONOMICS_DRIFT', `${key}'s delivery step costs ${Math.round(s.cost)}, judged at ${Math.round(judged.cost.low)}–${Math.round(judged.cost.high)}`);
+      }
+      if (s.price !== null && judged.price && !within(s.price, judged.price)) fail('ECONOMICS_DRIFT', `${key}'s step sells at ${Math.round(s.price)}, judged at ${Math.round(judged.price.low)}–${Math.round(judged.price.high)}`);
+    }
+  }
+}
+
+function noPlanChecks(c: PlanningCase, o: ObservedPlan, x: ObservedExecution, fail: (k: E2EFailureClass, line: string) => void): void {
+  const b = c.expect.verdict === 'NO_PLAN' ? c.expect.blocker : undefined;
+  const resolvesAny = x.resolves.length > 0 || x.relax.length > 0;
+  if (b?.kind === 'INFEASIBLE') {
+    const ok = x.relax.some((k) => b.constraints.includes(k)) || x.resolves.some((l) => (b.links ?? []).includes(l));
+    if (!ok) fail('RESOLUTION_ABSENT', `no relaxation of ${b.constraints.join('/')}${b.links?.length ? ` and no measurement of ${b.links.join('/')}` : ''} is named`);
+  } else if (b?.kind === 'MISSING_EVIDENCE') {
+    if (!x.resolves.some((l) => b.links.includes(l))) fail('RESOLUTION_ABSENT', `no measurement or research of ${b.links.join('/')} is named${x.resolves.length ? ` (names ${x.resolves.join(', ')})` : ''}`);
+  } else if (!resolvesAny) {
+    fail('RESOLUTION_ABSENT', 'no measurement, research or relaxation is named');
+  }
+  if (c.openings.length > 0 && (x.strategies === 0 || x.considered.length + x.excluded.length === 0)) {
+    fail('ALTERNATIVES_NOT_COMPARED', `${x.strategies} strateg(ies), ${x.considered.length} considered, ${x.excluded.length} excluded`);
+  }
+  void o;
 }
 
 /** Read the planner's stance and evidence from a real reading. `keyOf` maps an opportunity id to its fixture key. */
@@ -129,6 +472,7 @@ export function observe(p: PlanReading, keyOf: (opportunityId: string) => string
     scope: { industry: scope?.industry ?? null, recurring: scope?.recurring ?? null, hoursPerWeek: scope?.hoursPerWeek ?? null },
     targetCents: p.target.targetCents,
     gate: chosen ? { verdict: chosen.verdict, chainComplete: chosen.chainComplete, conservativeSettled: chosen.conservativeSettled } : null,
+    execution: observeExecution(p, keyOf),
   };
 }
 
@@ -170,6 +514,12 @@ export function ownerHours(c: PlanningCase, members: ObservedMember[]): number {
 
 /** Grade one observed planning result against the case's rubric. */
 export function grade(c: PlanningCase, o: ObservedPlan): Grade {
+  const v = gradeVerdict(c, o);
+  return { ...v, e2e: gradeE2E(c, o, v) };
+}
+
+/** The verdict level, unchanged by the end-to-end level beside it. */
+function gradeVerdict(c: PlanningCase, o: ObservedPlan): Omit<Grade, 'e2e'> {
   const g = gradeStance(c, o);
   const want = c.changedObjective && c.expect.targetAfterChange !== undefined ? Math.round(c.expect.targetAfterChange * 100) : null;
   if (want === null || o.targetCents === want) return g;
@@ -177,10 +527,10 @@ export function grade(c: PlanningCase, o: ObservedPlan): Grade {
   return { pass: false, outcome: null, failures: [...new Set<FailureClass>(['OBJECTIVE_CHANGE_IGNORED', ...g.failures])], detail: g.pass ? why : `${g.detail}; ${why}` };
 }
 
-function gradeStance(c: PlanningCase, o: ObservedPlan): Grade {
+function gradeStance(c: PlanningCase, o: ObservedPlan): Omit<Grade, 'e2e'> {
   const e = c.expect;
   const changed = !!c.changedObjective;
-  const fail = (failures: FailureClass[], detail: string): Grade => ({ pass: false, outcome: null, failures: [...new Set(failures)], detail });
+  const fail = (failures: FailureClass[], detail: string): Omit<Grade, 'e2e'> => ({ pass: false, outcome: null, failures: [...new Set(failures)], detail });
 
   if (e.verdict === 'NO_PLAN') {
     if (o.stance === 'EXECUTABLE') {

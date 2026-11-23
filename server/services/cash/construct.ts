@@ -914,6 +914,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     else delete one.leader;
   }
   constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
+  dropStale(constructionMemo, CONSTRUCTION_MEMO_MS);
   while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
   const reusable = new Set(reuse.map(([under]) => under));
   constructionReports.set(input.projectId, {
@@ -2236,6 +2237,16 @@ const constructionMemo = new Map<string, { at: number; result: ConstructedArrang
 /** Leverage traces by levered arrangement, the limits it was judged against and the day (S-0103): the trace is pure in all three. */
 const TRACE_MEMO_MAX = 256;
 const traceMemo = new Map<string, { at: number; leverage: ArrangementLeverage }>();
+/**
+ * Drop every entry older than `ttlMs`: one is never served again (each read
+ * checks the same age), and its key — day, hour's rotation, inputs — is rarely
+ * asked twice, so without this a full memo was mostly dead constructions of
+ * several megabytes each, held until eight newer keys displaced them.
+ */
+export function dropStale<V extends { at: number }>(memo: Map<string, V>, ttlMs: number, now = Date.now()): void {
+  for (const [key, one] of memo) if (now - one.at >= ttlMs) memo.delete(key);
+}
+
 /** For tests: forget held constructions. */
 export function clearConstructionMemo(): void {
   constructionMemo.clear();

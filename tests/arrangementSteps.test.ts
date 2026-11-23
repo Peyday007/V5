@@ -235,7 +235,9 @@ describe('a leading arrangement\'s steps can be followed on a schedule', () => {
     expect(by('Deliver and confirm').detail).toMatch(/Direct cost per deal is not yet established: Research the cost per deal \(step \d\)/);
     // No cost is pretended either: a stage the model holds no cost for is unestablished (null), never 0 (production, 2026-11-19).
     expect(steps.every((s) => s.cost === null || s.cost === 0)).toBe(true);
-    for (const label of ['Reach', 'Validate the offer', 'Collect payment', 'Run the next group']) expect(by(label).cost, label).toBeNull();
+    for (const label of ['Reach', 'Validate the offer', 'Run the next group']) expect(by(label).cost, label).toBeNull();
+    // Collecting commits nothing before the buyer pays (the provider's fee comes out of the payment), and says so.
+    expect(by('Collect payment')).toMatchObject({ cost: 0, arrangement: { costSource: 'NOT_OWNERS' } });
   });
 
   it('(a)(b) with the model holding days to usable cash and direct cost, every step has a day and a cost from those same values', () => {
@@ -377,5 +379,53 @@ describe('steps agree with the settlement terms, the window, the capital and the
     expect(leadingArrangement([one, postcard], { portfolio: null, candidateIds: ['arr_one'] })).toBeNull();
     expect(leadingArrangement([one, postcard], { portfolio: null })!.key).toBe('postcard-pool');
     expect(leadingArrangement([one], { portfolio: null })).toBeNull();
+  });
+});
+
+describe('an arrangement\'s steps name what they rest on and the economics they were judged on', () => {
+  it('every step carries the arrangement and its claims; the offer carries the judged price', () => {
+    const steps = arrangementSteps(subcontract, ctx);
+    for (const s of steps) expect(s.evidence, s.label).toEqual(expect.arrayContaining(['bookkeeping-sub', 'clm_3', 'clm_4', 'claim:c9']));
+    expect(steps.find((s) => s.arrangement?.stage === 'OFFER')!.price).toBe(600);
+    // An unpriced arrangement states no price.
+    expect(arrangementSteps(arrangement({ key: 'unpriced' }), ctx).find((s) => s.arrangement?.stage === 'OFFER')!.price).toBeUndefined();
+  });
+
+  it('outreach is costed only from what the plan\'s pathway holds, and otherwise stays unestablished', () => {
+    const held = arrangementSteps(subcontract, { ...ctx, reachCost: { amount: 0, basis: 'reached through an owned channel' } });
+    for (const stage of ['REACH', 'OFFER', 'REPEAT'] as const) {
+      expect(held.find((s) => s.arrangement?.stage === stage)!).toMatchObject({ cost: 0, arrangement: { costSource: 'MODEL' } });
+    }
+    const unheld = arrangementSteps(subcontract, ctx);
+    for (const stage of ['REACH', 'OFFER', 'REPEAT'] as const) {
+      expect(unheld.find((s) => s.arrangement?.stage === stage)!).toMatchObject({ cost: null, arrangement: { costSource: 'NONE_HELD' } });
+    }
+  });
+});
+
+describe('an arrangement that is a member of the selected strategy, beside a sale', () => {
+  const sale = { opportunityId: 'cop_sold', title: 'A sold opening', potentialReach: 1000, test: { link: 'CONVERSION' as const, test: 'Sell it.', by: 'BRAIN' as const, blocker: null } };
+  const conversion: NextTest = { link: 'CONVERSION', test: 'Establish buyers who agree.', by: 'BRAIN', blocker: null };
+  const build = (lead: string[]) =>
+    planSteps({
+      adoption: { source: 'BASELINE', hypothetical: true, reason: 'r' },
+      reconstruction: null,
+      sales: [sale],
+      nextTest: conversion,
+      permissionsMissing: [],
+      arrangement: { arrangement: postcard, context: { currency: 'USD', daysLeft: 30, capitalBeforeProof: 375 } },
+      lead,
+    });
+
+  it('is sequenced as its own chain, and the goal step it already covers is not repeated', () => {
+    const steps = build(['cop_sold', 'arr_postcard-pool']);
+    expect(steps.some((s) => s.arrangement?.key === 'postcard-pool' && s.arrangement.stage === 'COLLECT')).toBe(true);
+    expect(steps.map((s) => s.label)).not.toContain('Establish buyers who have actually agreed to it, or a sized measure of how many agree');
+    expect(steps.filter((s) => s.label.startsWith('Establish'))).toEqual([]);
+    expect(new Set(steps.map((s) => s.order)).size).toBe(steps.length);
+  });
+
+  it('is no step when it is not a member', () => {
+    expect(build(['cop_sold']).some((s) => s.arrangement)).toBe(false);
   });
 });

@@ -18,6 +18,13 @@
  *   passed, cases, errors
  *   accuracy.familiar / accuracy.heldOut — the split
  *   failures.<CLASS>  — cases failed with each class
+ *   e2e.passed, e2e.accuracy, e2e.wilsonLow/High — the end-to-end level (§3a): a
+ *                       correct verdict AND a complete, AI-executable plan (or a
+ *                       no-plan conclusion that says what would resolve it), over
+ *                       the same denominator; reported beside `accuracy`, never in it
+ *   e2e.passedBarFieldGaps — cases that pass the end-to-end level, or fail it only on fields the
+ *                       planner's output does not carry (STEP_FIELD_ABSENT)
+ *   e2e.failures.<CLASS> — cases failed with each end-to-end class
  * Each case also carries its verdict, failure classes, whether one is critical and —
  * for a public case only — the grader's reason; the result's `timing` carries the
  * template, case and total wall-clock milliseconds and the worker count.
@@ -29,9 +36,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { wilson } from '../../server/services/cash/goalScenario.ts';
 import { HIDDEN_PREFIX, type CaseResult, type Suite, type SuiteOptions, type SuiteOutcome } from '../types.ts';
+import { gradeAdaptation } from './adaptation.ts';
 import { caseProblem, type PlanningCase } from './case.ts';
 import { PUBLIC_CASES } from './cases.ts';
-import { CRITICAL, FAILURE_CLASSES, grade, observe, type FailureClass } from './grade.ts';
+import { CRITICAL, E2E_FAILURE_CLASSES, FAILURE_CLASSES, grade, observe, type E2EFailureClass, type FailureClass } from './grade.ts';
 import { buildTemplate, closeWorldDatabase, proveDeliverables, runWorld, type Template } from './world.ts';
 
 export interface PlanningRow {
@@ -45,6 +53,8 @@ export interface PlanningRow {
   failures: FailureClass[];
   ms: number;
   detail: string;
+  /** The end-to-end level (§3a), beside the verdict level above; absent on a row that never reached the grader. */
+  e2e?: { pass: boolean; failures: E2EFailureClass[]; gaps: string[]; detail: string };
 }
 
 export interface PlanningOutcome extends SuiteOutcome {
@@ -83,9 +93,9 @@ export async function runCase(job: CaseJob, template: Template | null, templateE
   } else {
     try {
       const world = await runWorld(c, template, dir, index);
-      const observed = observe(world.reading, world.keyOf);
-      const g = grade(c, observed);
-      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: observed.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail };
+      // Every graded reading of the world: before and after each change (adaptation.ts); a case with no changes grades its one reading.
+      const g = gradeAdaptation(c, world.readings, world.keyOf);
+      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: g.final.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail, e2e: g.e2e };
     } catch (error) {
       row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: `error: ${String((error as Error)?.message ?? error).slice(0, 300)}` };
     }
@@ -133,7 +143,7 @@ export async function runPlanningReliability(options: SuiteOptions = {}): Promis
   const templateMs = Math.round(performance.now() - t0);
   const logRow = (row: PlanningRow) =>
     options.log?.(
-      `${row.pass ? 'pass' : 'FAIL'} ${row.id}${row.hidden ? '' : ` — expected ${row.expect}, observed ${row.observed ?? 'ERROR'}${row.failures.length ? ` [${row.failures.join(', ')}]` : ''}: ${row.detail}`} (${row.ms} ms)`,
+      `${row.pass ? 'pass' : 'FAIL'} ${row.id}${row.hidden ? '' : ` — expected ${row.expect}, observed ${row.observed ?? 'ERROR'}${row.failures.length ? ` [${row.failures.join(', ')}]` : ''}: ${row.detail}`} · e2e ${row.e2e?.pass ? 'pass' : `FAIL [${(row.e2e?.failures ?? ['NOT_OBSERVED']).join(', ')}]`} (${row.ms} ms)`,
     );
   const workers = Math.max(1, Math.min(options.workers ?? 1, jobs.length));
   const t1 = performance.now();
@@ -173,6 +183,8 @@ export function summarise(rows: PlanningRow[], timing?: Record<string, number>):
     critical: r.failures.some((f) => CRITICAL.has(f)),
     // A hidden case's grader detail describes its rubric: only its verdict leaves the run.
     ...(r.hidden ? {} : { reason: r.detail }),
+    // The end-to-end level, by class only for a hidden case (its detail names the rubric's links).
+    e2e: r.e2e ? { pass: r.e2e.pass, failures: r.e2e.failures, gaps: r.e2e.gaps, ...(r.hidden ? {} : { reason: r.e2e.detail }) } : { pass: false, failures: ['NOT_OBSERVED'], gaps: [] },
   }));
   const passed = rows.filter((r) => r.pass).length;
   const interval = wilson(passed, rows.length);
@@ -191,13 +203,31 @@ export function summarise(rows: PlanningRow[], timing?: Record<string, number>):
   if (familiar.length) metrics['accuracy.familiar'] = share(familiar);
   if (heldOut.length) metrics['accuracy.heldOut'] = share(heldOut);
   for (const klass of FAILURE_CLASSES) metrics[`failures.${klass}`] = rows.filter((r) => r.failures.includes(klass)).length;
+  // The end-to-end level, over the same denominator: a row that never reached the grader fails it.
+  const e2eOf = (r: PlanningRow) => r.e2e ?? { pass: false, failures: ['NOT_OBSERVED'] as E2EFailureClass[], gaps: [], detail: '' };
+  const e2ePassed = rows.filter((r) => e2eOf(r).pass).length;
+  const e2eInterval = wilson(e2ePassed, rows.length);
+  metrics['e2e.passed'] = e2ePassed;
+  metrics['e2e.accuracy'] = rows.length ? e2ePassed / rows.length : 0;
+  metrics['e2e.wilsonLow'] = rows.length ? e2eInterval.low : 0;
+  metrics['e2e.wilsonHigh'] = rows.length ? e2eInterval.high : 0;
+  metrics['e2e.passedBarFieldGaps'] = rows.filter((r) => r.pass && e2eOf(r).failures.every((f) => f === 'STEP_FIELD_ABSENT')).length;
+  for (const klass of E2E_FAILURE_CLASSES) metrics[`e2e.failures.${klass}`] = rows.filter((r) => e2eOf(r).failures.includes(klass)).length;
+  const gaps = [...new Set(rows.flatMap((r) => e2eOf(r).gaps))].sort();
   const failed = rows.filter((r) => !r.pass);
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const e2eClasses = E2E_FAILURE_CLASSES.filter((k) => metrics[`e2e.failures.${k}`]! > 0).map((k) => `${k} ${metrics[`e2e.failures.${k}`]}`);
   const summary = [
     `planningReliability: ${passed}/${rows.length} correct · accuracy ${pct(metrics['accuracy']!)} (Wilson 95% ${pct(metrics['wilsonLow']!)}–${pct(metrics['wilsonHigh']!)}) · critical ${metrics['criticalFailures']} · errors ${metrics['errors']}` +
       (timing?.['totalMs'] !== undefined ? ` · ${(timing['totalMs'] / 1000).toFixed(1)} s on ${timing['workers'] ?? 1} worker(s)` : ''),
+    `planningReliability end-to-end: ${e2ePassed}/${rows.length} complete · ${pct(metrics['e2e.accuracy']!)} (Wilson 95% ${pct(metrics['e2e.wilsonLow']!)}–${pct(metrics['e2e.wilsonHigh']!)}) · ${metrics['e2e.passedBarFieldGaps']} pass bar absent fields` +
+      (e2eClasses.length ? ` · ${e2eClasses.join(', ')}` : '') +
+      (gaps.length ? ` · fields absent: ${gaps.join(', ')}` : ''),
     // Hidden cases are named by id only: their content never reaches a log.
     ...failed.map((r) => `  FAIL ${r.id}${r.hidden ? '' : ` [${r.failures.join(', ') || 'ERROR'}] expected ${r.expect}, observed ${r.observed ?? 'ERROR'} — ${r.detail}`}`),
+    ...rows
+      .filter((r) => r.pass && !e2eOf(r).pass)
+      .map((r) => `  E2E ${r.id} [${e2eOf(r).failures.join(', ')}]${r.hidden ? '' : ` — ${e2eOf(r).detail}`}`),
   ];
   return { cases, metrics, summary, rows, ...(timing ? { timing } : {}) };
 }
