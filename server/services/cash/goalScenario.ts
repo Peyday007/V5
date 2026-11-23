@@ -24,6 +24,8 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
+import { describesOneBody, namesOneOrganisation } from '../../domain/industry.ts';
+import { evidenceIsAbout, evidencesPurchase, nonCommercialExclusion, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
@@ -2036,7 +2038,9 @@ export function pickEstimatedArrangements(arrangements: readonly ConstructedArra
 export { COMPETITIVE_AWARD };
 
 export function isCompetitiveAward(o: { title: string; source: string | null; buyingSignal: string | null; offerScope?: string | null }): boolean {
-  return COMPETITIVE_AWARD.test([o.title, o.source, o.buyingSignal].filter(Boolean).join(' '));
+  const text = [o.title, o.source, o.buyingSignal].filter(Boolean).join(' ');
+  // A bounty, prize or contest is won like a tender and paid after it is judged (audit 2026-11-23: GitHub's bug bounty was modelled as a buyer paying on agreement).
+  return COMPETITIVE_AWARD.test(text) || paymentNatureOf(text).nature === 'CONTINGENT_REWARD';
 }
 
 export interface GoalModel {
@@ -2338,6 +2342,7 @@ export async function modelOpportunity(
 
   // Price: the column, else the low end of a published revenue range.
   let price: ModelInput | null = null;
+  let priceNature: ReturnType<typeof paymentNatureOf> | null = null;
   if (opportunity.priceCents !== null && opportunity.priceCents > 0) {
     const priceFact = fact('price');
     const p = kindToProvenance(priceFact);
@@ -2356,6 +2361,19 @@ export async function modelOpportunity(
           contested: { card, stated: contradiction.stated },
         }
       : known(card, p.provenance === 'UNKNOWN' ? 'ASSUMPTION' : p.provenance, p.source ?? ref, 'the price on the card');
+    // The figure is a reward, grant, rebate or wage: real money, but no evidence of what a buyer pays for the deliverable (§116).
+    const paidFor = priceFact && typeof priceFact.value === 'string' ? paymentNatureOf(priceFact.value) : null;
+    priceNature = paidFor;
+    const offTopic = priceFact && typeof priceFact.value === 'string' && !evidenceIsAbout(priceFact.value, [opportunity.payer, opportunity.title, opportunity.offerScope, opportunity.industry].filter(Boolean).join(' '));
+    if (offTopic && !(paidFor && paidFor.nature !== 'PURCHASE')) {
+      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not these buyers' price: the only figure on record ("${String(priceFact!.value).slice(0, 100)}") is about another market; what these buyers pay for the deliverable is not established` };
+    }
+    if (paidFor && paidFor.nature !== 'PURCHASE') {
+      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not a price: the only figure on record is ${nonPurchaseSentence(paidFor)}; what these buyers pay for the deliverable is not established` };
+    } else if (priceFact && typeof priceFact.value === 'string' && !evidencesPurchase(priceFact.value)) {
+      // Worded evidence that shows nobody paying a supplier for anything is not evidence of a purchase (owner, 2026-11-23).
+      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not shown to be a purchase: the only figure on record ("${priceFact.value.slice(0, 100)}") shows no buyer paying a supplier for a deliverable` };
+    }
   } else {
     const range = fact('revenueRange');
     const figures = range ? readMoneyFigures(range.value, currency).filter((one) => !one.perUnit) : [];
@@ -2518,9 +2536,20 @@ export async function modelOpportunity(
    * link stays open until research sizes it.
    */
   const unsizedMarket = !!volumeFact && volumeRead === null;
-  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE') || estimatedRepeat || unsizedMarket;
+  /*
+   * One named organisation is one buyer (§116; audit 2026-11-23: one company
+   * swept as 1–200 repeat buyers; planningReliability mv-03/hmv-08: one health
+   * system's one order and one district's one tender modelled as up to 14 and
+   * 100 deals). It repeats only where evidence states it buys more than once.
+   */
+  const evidencedRepeat = volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE';
+  // A reward or grant on the price card is won once, whatever kind of play the opening is.
+  const wonOnce = priceNature !== null && (priceNature.nature === 'CONTINGENT_REWARD' || priceNature.nature === 'GRANT');
+  // A volume read beside a reward ("212 teams registered; one purse") counts entrants, never repeat purchases.
+  const onePayer = wonOnce || (!!opportunity.payer && (namesOneOrganisation(opportunity.payer) || describesOneBody(opportunity.payer)) && !evidencedRepeat);
+  const repeatable = !onePayer && (isTestFirstPlay(opportunity) || evidencedRepeat || estimatedRepeat || unsizedMarket);
   const volume: ModelInput = !repeatable
-    ? known(1, 'ASSUMPTION', ref, 'a one-off opening is one deal')
+    ? known(1, 'ASSUMPTION', ref, onePayer ? (wonOnce ? 'a reward or grant is won once' : `one named buyer ("${(opportunity.payer ?? '').slice(0, 60)}") is one deal until evidence shows it buys again`) : 'a one-off opening is one deal')
     : estimatedRepeat
       ? unknown(1, Math.min(MAX_BUYERS_OFFERED, volumeRead!.deals), `estimated, not established: ${volumeRead!.basis}; swept from 1 deal to the estimate`)
     : volumeRead && volumeFact
@@ -2812,6 +2841,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   const included: ModelledOpportunity[] = [];
   // What the goal's owner said to leave out (§82): an excluded opening takes no slot, and says why.
   const exclusions = await goalExclusions(input.goal);
+  const goalText = [input.goal.title, input.goal.intent, input.goal.outcome ?? ''].join('\n');
   // What the goal's own words confine it to (an industry, recurring revenue): this goal's plan only (§105).
   const scope = target.scope;
   const scoped = new Map<string, HeldTerms>();
@@ -2832,6 +2862,12 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.buyingSignal ?? ''} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
     if (excludedClass) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${EXCLUSION_CLASSES[excludedClass].label}` });
+      continue;
+    }
+    // A reward, prize, contest, grant, rebate or wage is not a sale: it never enters a revenue goal's model unless the goal asks for it (§116).
+    const notASale = IN_FLIGHT.has(opportunity.state) ? null : nonCommercialExclusion([opportunity.title, opportunity.offerScope, opportunity.buyingSignal, opportunity.source].filter(Boolean).join('. '), goalText);
+    if (notASale) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: notASale });
       continue;
     }
     // The standing operating rule: a plan never rests on the owner's physical work.

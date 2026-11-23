@@ -40,6 +40,8 @@
  * which only spawns and bounds the children that read (production OOM,
  * 2026-11-21).
  */
+import { planningReport, planningReportLines } from '../server/services/goals/planningReport.ts';
+import { committeeLines } from '../server/services/goals/committee.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { finishesWithin } from './boundedChild.ts';
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
@@ -532,6 +534,9 @@ async function printSearching(reading: PlanReading): Promise<void> {
 async function printPlan(reading: PlanReading): Promise<void> {
   const t = reading.target;
   console.log(`PLAN ${reading.goalId}  ${reading.verdict}`);
+  // The owner's permanent planning report first (2026-11-23): never a coverage figure in place of a real-world probability.
+  const due = t.daysLeft === null ? null : new Date(Date.now() + t.daysLeft * 86_400_000).toISOString();
+  for (const line of planningReportLines(planningReport(reading, due))) console.log(line);
   console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left`);
   for (const one of t.notCounted) console.log(`  not counted ${one.label}: ${one.cents / 100} ${t.currency}`);
   console.log(`  limits      capital ${t.capitalCeilingCents === null ? 'not stated (the owner has not said how much may be committed)' : t.capitalCeilingCents / 100} · hours ${t.hoursCeiling ?? 'not stated'}`);
@@ -543,7 +548,17 @@ async function printPlan(reading: PlanReading): Promise<void> {
   if (acc.probability) console.log(`    basis     ${acc.probability.basis} ${Math.round(acc.probability.value * 1000) / 10}% (lower bound ${Math.round(acc.probability.lowerBound * 1000) / 10}%, n=${acc.probability.sample}) · ${acc.probability.note}`);
   if (acc.candidate) console.log(`    candidate ${acc.candidate.source} ${acc.candidate.opportunityIds.join(' + ')} · settled p50 ${acc.candidate.settledP50 === null ? '—' : Math.round(acc.candidate.settledP50)} · ${acc.candidate.reach === null ? 'reach not computed' : `reach ${Math.round(acc.candidate.reach * 1000) / 10}% (${acc.candidate.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage, not a probability'})`}`);
   for (const why of acc.shortfalls) console.log(`    short     ${why}`);
+  if (acc.blocker) console.log(`    blocker   ${acc.blocker}`);
+  for (const leg of acc.legs ?? []) if (!leg.supported) console.log(`    leg       ${leg.opportunityId} not executable · lacks ${leg.lacks.join(', ')}${leg.permissions.length ? ` · waits on ${leg.permissions.join(', ')}` : ''}`);
+  // The plan's outcome from the one source (the simulated worlds), split by what supports it.
+  const outcome = reading.objective?.outcome;
+  const support = reading.objective?.support;
+  if (outcome) console.log(`  outcome     ${support?.basis === 'ASSUMPTION_ONLY' ? 'ASSUMPTION-ONLY ' : ''}expected ${Math.round(outcome.expected)} · upper ${Math.round(outcome.upper)} · adverse (q${outcome.adverseQuantile}) ${Math.round(outcome.adverse)} · ${reading.objective!.basis}`);
+  else if (reading.objective) console.log(`  outcome     none · ${reading.objective.basis}`);
+  if (support) console.log(`    support   ${support.basis} · ${support.sentence}`);
   for (const v of reading.integrity ?? []) console.log(`  integrity   ${v.rule}: ${v.detail}`);
+  // The investment committee (§117): each role's verdict and the defects it cites.
+  if (reading.committee) for (const line of committeeLines(reading.committee)) console.log(line);
   // One plan (C-6): which plan this is, and whether the reconstruction below is only hypothetical.
   if (reading.adoption) console.log(`  plan        ${reading.adoption.source}${reading.adoption.hypothetical ? ' (the reconstruction is hypothetical)' : ''} · ${reading.adoption.reason}`);
   if (reading.infeasible) {

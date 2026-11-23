@@ -1,0 +1,346 @@
+  owner work  none
+  unspecified nothing
+  DEGRADED    construction cap: 400 of 19023 candidate arrangements composed this pass — 4 held as the plan's leaders, 336 on observed or verified evidence (3672 more evidenced beyond the cap), 64 in rotation; 18623 ranked below the cap were not, 11516 never composed yet (336 reused from the library)
+  pool        POOL_COULD_REACH: The 13 openings held could reach the 10000 USD still needed at prices buyers are shown to pay, if every link is established.
+  reasoning   goal-to-transaction loop (§93): 25 pathway(s) (13 found, 12 constructed), 0 executable, 2 can proceed without engineering, 12 with a reachable buyer, 3 with a fulfiller (2 by Brain's own capability), 0 with every permission granted, 0 with a delivery capacity at least estimated; reached by DIRECT_DEMAND 11 · COLD_OUTREACH 1 · UNKNOWN 13; facts P 51 · E 167 · ? 132; 15 construction move(s), 12 new variant(s)
+    backward  10000 USD in 16 day(s), outreach 10–930/day (not stated; bounds); outreach alone needs ≥ 887 net per deal
+    structure HIGH_TICKET    IMPOSSIBLE            1 deal netting 10000 USD each · 578/day middle, 14/day best · a sale takes at least 2 days and its money 14 more; 16 are left
+    structure HIGH_TICKET    IMPOSSIBLE            3 deals netting 3333 USD each · 1733/day middle, 40/day best · a sale takes at least 2 days and its money 14 more; 16 are left
+    structure MID_TICKET     OUTREACH_CAN_CARRY    10 deals netting 1000 USD each · 825/day middle, 19.14/day best · 825 prospects a day at the middle of the conversion bounds, inside the 930 a day the shared outreach can reach
+    structure MID_TICKET     ONLY_AT_BEST_CONVERSION 30 deals netting 333 USD each · 2474/day middle, 57.14/day best · only if conversion is near its best: 57.14 prospects a day at the best bounds, 2474 at the middle, against 930 a day — conversion is the decisive unknown, and o
+    structure HIGH_FREQUENCY ONLY_AT_BEST_CONVERSION 100 deals netting 100 USD each · 4811/day middle, 111/day best · only if conversion is near its best: 111 prospects a day at the best bounds, 4811 at the middle, against 930 a day — conversion is the decisive unknown, and onl
+    structure HIGH_FREQUENCY ONLY_AT_BEST_CONVERSION 300 deals netting 33.33 USD each · 14434/day middle, 333/day best · only if conversion is near its best: 333 prospects a day at the best bounds, 14434 at the middle, against 930 a day — conversion is the decisive unknown, and on
+    structure HIGH_FREQUENCY NEEDS_INBOUND_CHANNEL 1000 deals netting 10 USD each · 48113/day middle, 1111/day best · 1111 prospects a day even at the best conversion, more than the 930 outreach can reach: buyers must come to it (a marketplace listing, a storefront, a partner's
+    structure RECURRING      ONLY_AT_BEST_CONVERSION 30 recurring buyers paying 333 USD a cycle, 1 payment each before the deadline · 1443/day middle, 33.33/day best · only if conversion is near its best: 33.33 prospects a day at the best bounds, 1443 at the middle, against 930 a day — conversion is the decisive unknown, and o
+    structure RECURRING      ONLY_AT_BEST_CONVERSION 100 recurring buyers paying 100 USD a cycle, 1 payment each before the deadline · 4811/day middle, 111/day best · only if conversion is near its best: 111 prospects a day at the best bounds, 4811 at the middle, against 930 a day — conversion is the decisive unknown, and onl
+    structure COMBINATION    ONLY_AT_BEST_CONVERSION 3 deals netting 1667 plus 100 netting 50 USD · 8495/day middle, 196/day best · only if conversion is near its best: 196 prospects a day at the best bounds, 8495 at the middle, against 930 a day — conversion is the decisive unknown, and onl
+    structure INSTANT        NEEDS_INBOUND_CHANNEL 1 instant sale netting 10000 USD each, paid at checkout · 0.63/day middle, 0.13/day best · a checkout or marketplace sale settles the same day, so the 16 days left are enough by arithmetic; it needs buyers already searching for the offer (a listing, a
+    structure INSTANT        NEEDS_INBOUND_CHANNEL 10 instant sales netting 1000 USD each, paid at checkout · 6.25/day middle, 1.25/day best · a checkout or marketplace sale settles the same day, so the 16 days left are enough by arithmetic; it needs buyers already searching for the offer (a listing, a
+    structure INSTANT        NEEDS_INBOUND_CHANNEL 100 instant sales netting 100 USD each, paid at checkout · 62.5/day middle, 12.5/day best · a checkout or marketplace sale settles the same day, so the 16 days left are enough by arithmetic; it needs buyers already searching for the offer (a listing, a
+    pathway   arr_6f3b7a404ca5 CONSTRUCTED not executable · net p10/p50/p90 365/52445/3509824 (gross p50 54376) · rights ? · capacity ? · fit CARRIES_GAP · Constructed: GitHub Inc is the payer its bug bounty page publishes rew
+      model   buyer E GitHub Inc is the payer its bug bounty page publishes reward | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 10000 | acquire ? — | fulfil E 355 | net E 9645 | convert ? 0–0.08 | volume ? 1–200 repeats | cash E 3.87d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · nothing: its own volume and the outreach could carry the whole gap if its unknowns hold
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 47.51 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 7000 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+    pathway   cop_19049af518e44fb1b493 FOUND not executable · net p10/p50/p90 0/2141/328700 (gross p50 3873) · rights ? · capacity ? · fit CARRIES_GAP · Pennsylvania DGS (Commonwealth of Pennsylvania) has an open statewide 
+      model   buyer P The payer is Pennsylvania Department of General Services (DG | why E | channel P Technical support for the JAGGAER portal is available at (80 [COLD_OUTREACH] | offer E | fulfils ? —
+      money   price ? 1000000–5000000 | acquire E 0 | fulfil E 1000000 | net ? -536702–4382668 | convert ? 0–0.08 | volume E 1 one-off | cash E 5.98d | capital E 4994960
+      gaps    no price; nobody named to fulfil it; ties up more than one arrangement may · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · nothing: its own volume and the outreach could carry the whole gap if its unknowns hold
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 1565248 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+      research  Restructure the cash: take the buyer's prepayment or deposit before paying the supplier, or a threshold presale, so nothing of ours is tied up first — must hit: nothing of ours out before the buyer pays
+    pathway   arr_7c86bd58f732 CONSTRUCTED not executable · net p10/p50/p90 2.34/387/25981 (gross p50 408) · rights ? · capacity ? · fit CARRIES_SHARE lever VOLUME · Constructed: domain buyer or seller — what this buyer pays per unit of
+      model   buyer E domain buyer or seller — what this buyer pays per unit of wo | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 75 | acquire ? — | fulfil E 3.88 | net E 71.12 | convert ? 0–0.08 | volume ? 1–200 repeats | cash E 3.87d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; small per sale and volume unknown · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · carries a tenth of the gap; 141 deals would carry all of it, so how many buyers exist decides how much more
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 705 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 52.5 USD a job (70% of the price) leaves a 30% margin; 45 jobs at that margin carry a tenth of the gap
+      research  Research achievable volume instead of excluding it: count the buyers and how often each buys — must hit: 14 sales at 75 USD carry a tenth of the gap; 134 carry all of it
+    pathway   arr_f3a27dfbcc1d CONSTRUCTED not executable · net p10/p50/p90 0.31/46.41/3114 (gross p50 48.94) · rights ? · capacity ? · fit CARRIES_SHARE lever CHANNEL · Constructed: small business operators — what this buyer pays per unit 
+      model   buyer E small business operators — what this buyer pays per unit of  | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 9 | acquire ? — | fulfil E 0.47 | net E 8.53 | convert ? 0–0.08 | volume ? 1–200 repeats | cash E 3.87d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; small per sale and volume unknown; its share needs more buyers a day than the channel reaches · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · its share needs 5607 prospects a day against 930 by cold outreach: a marketplace listing, a partner who already sells to these buyers, or bu
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 5607 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 6.3 USD a job (70% of the price) leaves a 30% margin; 371 jobs at that margin carry a tenth of the gap
+      research  Research achievable volume instead of excluding it: count the buyers and how often each buys — must hit: 112 sales at 9 USD carry a tenth of the gap; 1112 carry all of it
+    pathway   arr_213ac85cdf75 CONSTRUCTED not executable · net p10/p50/p90 0/39.66/18121 (gross p50 41.82) · rights ? · capacity ? · fit CARRIES_SHARE lever CHANNEL · Constructed: domain buyer or seller — what this buyer pays per unit of
+      model   buyer E domain buyer or seller — what this buyer pays per unit of wo | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 75 | acquire ? — | fulfil E 3.88 | net E 71.12 | convert ? 0–0.08 | volume ? 1–200 repeats | cash ? 8–21d | capital ? 0–194
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow; small per sale and volume unknown; its share needs more buyers a day than the channel reaches · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · its share needs 1443 prospects a day against 930 by cold outreach: a marketplace listing, a partner who already sells to these buyers, or bu
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 1443 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 52.5 USD a job (70% of the price) leaves a 30% margin; 45 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   cop_8015b46dd2384dd783e0 FOUND not executable · net p10/p50/p90 0/20.78/986 (gross p50 25.98) · rights ? · capacity ? · fit CARRIES_GAP · Market: Pennsylvania. The PA Department of Agriculture's Farm Vitality
+      model   buyer P Pennsylvania: the Farm Vitality Planning Grant reimburses th | why E | channel ? — [UNKNOWN] | offer E | fulfils ? —
+      money   price E 15000 | acquire ? — | fulfil E 3000 | net E 12000 | convert ? 0–0.08 | volume E 1 one-off | cash E 5.81d | capital E 14985
+      gaps    no way to reach the buyer; nobody named to fulfil it; ties up more than one arrangement may · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · nothing: its own volume and the outreach could carry the whole gap if its unknowns hold
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 46.44 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 10500 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+      research  Restructure the cash: take the buyer's prepayment or deposit before paying the supplier, or a threshold presale, so nothing of ours is tied up first — must hit: nothing of ours out before the buyer pays
+    pathway   arr_96aa6549da5c CONSTRUCTED not executable · net p10/p50/p90 0/4.76/2172 (gross p50 5.02) · rights ? · capacity ? · fit CARRIES_SHARE lever CHANNEL · Constructed: small business operators — what this buyer pays per unit 
+      model   buyer E small business operators — what this buyer pays per unit of  | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 9 | acquire ? — | fulfil E 0.47 | net E 8.53 | convert ? 0–0.08 | volume ? 1–200 repeats | cash ? 8–21d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow; small per sale and volume unknown; its share needs more buyers a day than the channel reaches · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · its share needs 11355 prospects a day against 930 by cold outreach: a marketplace listing, a partner who already sells to these buyers, or b
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 11355 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 6.3 USD a job (70% of the price) leaves a 30% margin; 371 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   arr_2637d8e20ca9 CONSTRUCTED not executable · net p10/p50/p90 0/0.12/9.74 (gross p50 0.13) · rights ? · capacity ? · fit TOO_SMALL_AS_IS lever VOLUME · Constructed: domain buyer or seller — what this buyer pays per unit of
+      model   buyer E domain buyer or seller — what this buyer pays per unit of wo | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 75 | acquire ? — | fulfil E 3.88 | net E 71.12 | convert ? 0–0.08 | volume E 1 one-off | cash ? 8–21d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · one sale of 71.12 is 0.71% of the gap: sell the same deliverable to buyers like this one
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 1443 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 52.5 USD a job (70% of the price) leaves a 30% margin; 45 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   cop_4521ad95cb104405a33e FOUND not executable · net p10/p50/p90 0/0/0.03 (gross p50 0.43) · rights ? · capacity ? · fit TOO_SMALL_AS_IS lever VOLUME · Market: GitHub's public bug bounty program (vulnerability disclosure, 
+      model   buyer P The payer is GitHub (GitHub, Inc.), which pays researchers t | why E | channel P Published route to the buyer is the HackerOne program portal [DIRECT_DEMAND] | offer E | fulfils E Brain produces it: business document
+      money   price P 250 | acquire E 0 | fulfil E 250 | net E 0.25 | convert ? 0–0.08 | volume E 1 one-off | cash E 5.54d | capital P 10000
+      gaps    ties up more than one arrangement may; one buyer, one sale · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · one sale of 0.25 is 0% of the gap: sell the same deliverable to buyers like this one
+      research  Restructure the cash: take the buyer's prepayment or deposit before paying the supplier, or a threshold presale, so nothing of ours is tied up first — must hit: nothing of ours out before the buyer pays
+      construct Sell the same deliverable to the population of buyers like this one (a transfer), instead of to the one buyer found — must hit: 4 buyers like it at 250 USD carry a tenth of the gap · variant: The same deliverable to buyers like it (price P 250, net E 0.25)
+    pathway   arr_6b722dfcb622 CONSTRUCTED not executable · net p10/p50/p90 0/0/18296860 (gross p50 0) · rights ? · capacity ? · fit CARRIES_SHARE lever VOLUME · Constructed: Owner-operated HVAC plumbing and roofing firms with 2 to 
+      model   buyer E Owner-operated HVAC plumbing and roofing firms with 2 to 20  | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 53983 | acquire ? — | fulfil E 36100 | net E 17883 | convert ? 0–0.08 | volume ? 1–200 repeats | cash ? 8–30d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · carries a tenth of the gap; 1 deals would carry all of it, so how many buyers exist decides how much more
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 96.23 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 37788 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   arr_46672ddc6914 CONSTRUCTED not executable · net p10/p50/p90 0/0/2457718 (gross p50 0) · rights ? · capacity ? · fit CARRIES_SHARE lever VOLUME · Constructed: GitHub's bug bounty program will restructure on July 27 2
+      model   buyer E GitHub's bug bounty program will restructure on July 27 2026 | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 10000 | acquire ? — | fulfil E 526 | net E 9474 | convert ? 0–0.08 | volume ? 1–200 repeats | cash ? 8–30d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · carries a tenth of the gap; 2 deals would carry all of it, so how many buyers exist decides how much more
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 96.23 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 7000 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   arr_9a44924d7f35 CONSTRUCTED not executable · net p10/p50/p90 0/0/2435067 (gross p50 0) · rights ? · capacity ? · fit CARRIES_SHARE lever VOLUME · Constructed: GitHub Inc is the payer it runs the bug bounty program an
+      model   buyer E GitHub Inc is the payer it runs the bug bounty program and s | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 10000 | acquire ? — | fulfil E 521 | net E 9479 | convert ? 0–0.08 | volume ? 1–200 repeats | cash ? 8–30d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · carries a tenth of the gap; 2 deals would carry all of it, so how many buyers exist decides how much more
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 96.23 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 7000 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   arr_4bb3ce43942f CONSTRUCTED not executable · net p10/p50/p90 0/0/2242990 (gross p50 0) · rights ? · capacity ? · fit CARRIES_SHARE lever VOLUME · Constructed: Owner-operated HVAC plumbing and roofing firms with 2 to 
+      model   buyer E Owner-operated HVAC plumbing and roofing firms with 2 to 20  | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 5512 | acquire ? — | fulfil E 2200 | net E 3312 | convert ? 0–0.08 | volume ? 1–200 repeats | cash ? 8–30d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · carries a tenth of the gap; 4 deals would carry all of it, so how many buyers exist decides how much more
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 96.23 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 3858 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   arr_06b02949cb25 CONSTRUCTED not executable · net p10/p50/p90 0/0/1232526 (gross p50 0) · rights ? · capacity ? · fit CARRIES_SHARE lever VOLUME · Constructed: Small and mid-size firms sending year-end client and empl
+      model   buyer E Small and mid-size firms sending year-end client and employe | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 5000 | acquire ? — | fulfil E 7.07 | net E 4993 | convert ? 0–0.08 | volume ? 1–200 repeats | cash ? 8–30d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · carries a tenth of the gap; 3 deals would carry all of it, so how many buyers exist decides how much more
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 96.23 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 3500 USD a job (70% of the price) leaves a 30% margin; 1 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   arr_331caf04acaf CONSTRUCTED not executable · net p10/p50/p90 0/0/1.17 (gross p50 0) · rights ? · capacity ? · fit TOO_SMALL_AS_IS lever VOLUME · Constructed: small business operators — what this buyer pays per unit 
+      model   buyer E small business operators — what this buyer pays per unit of  | why ? | channel ? — [UNKNOWN] | offer ? | fulfils ? —
+      money   price E 9 | acquire ? — | fulfil E 0.47 | net E 8.53 | convert ? 0–0.08 | volume E 1 one-off | cash ? 8–30d | capital ? 0–0.01
+      gaps    no way to reach the buyer; no specific offer; nobody named to fulfil it; cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · one sale of 8.53 is 0.09% of the gap: sell the same deliverable to buyers like this one
+      research  Construct an acquisition path: the published place these buyers can be reached (a listing, an inbox, a form, a marketplace, a partner's list) — must hit: about 11355 prospects a day for its share
+      research  Construct a supplier-acquisition path: an independent provider or tool that performs the work while this operation sells and coordinates it — or, wher — must hit: a provider at no more than about 6.3 USD a job (70% of the price) leaves a 30% margin; 371 jobs at that margin carry a tenth of the gap
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   cop_01816621449241ee8291 FOUND not executable · net p10/p50/p90 0/0/0 (gross p50 0) · rights ? · capacity ? · fit CANNOT_SETTLE lever TIMING · The RFPMart item appears to be a re-listing of NEH's National Digital 
+      model   buyer P Market: US federal grants (NEH cooperative agreements), not  | why E | channel P NEH's NDNP page (Washington DC federal agency; national prog [DIRECT_DEMAND] | offer E | fulfils P NEH's NDNP page lists an open funding opportunity for organi
+      money   price E 325000 | acquire E 0 | fulfil E 89409 | net E 235591 | convert ? 0–0.08 | volume E 1 one-off | cash E 24.9d | capital E 290468
+      gaps    cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · its money arrives in 14.75 days at the soonest, after the deadline: a deposit or card payment at order would bring it inside
+      sell      Offer it for an actual sale once CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider is granted; everything else proceeds now
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    pathway   cop_c46683c4a7ba4d6b80ad FOUND not executable · net p10/p50/p90 0/0/0 (gross p50 0) · rights ? · capacity ? · fit CANNOT_SETTLE lever TIMING · Market: United States. NEH's Collections Stewardship program (NOFO) li
+      model   buyer P Market: US federal grants (NEH Collections Stewardship, NOFO | why E | channel P Market: United States. NEH's Collections Stewardship NOFO (2 [DIRECT_DEMAND] | offer E | fulfils E Brain produces it: website
+      money   price P 100 | acquire E 0 | fulfil E 27.51 | net E 72.49 | convert ? 0–0.08 | volume E 1 one-off | cash E 24.9d | capital E 89.42
+      gaps    cash timing unknown or too slow · permissions: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider · its money arrives in 14.75 days at the soonest, after the deadline: a deposit or card payment at order would bring it inside
+      sell      Offer it for an actual sale once CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider is granted; everything else proceeds now
+      research  Settle faster: card payment at order, a deposit at agreement, or milestone billing, where buyers of this kind already pay that way — must hit: money usable within 14 days of the first contact
+    portfolio A provisional portfolio over each pathway's own bounds — never a probability. Executable means every commercial link is established or estimated with a basis; a missing permission blocks only the send.
+      leading arr_6f3b7a404ca5 + arr_7c86bd58f732 + arr_f3a27dfbcc1d + arr_213ac85cdf75 + arr_96aa6549da5c + arr_2637d8e20ca9 · net p10/p50/p90 368/10000/10000 (gross p50 10000) · 100% of the gap at p50 · if its largest group fails 0 · capital 0 · groups github payer / unclassified
+      fallback arr_7c86bd58f732 + arr_f3a27dfbcc1d + arr_213ac85cdf75 + arr_96aa6549da5c + arr_2637d8e20ca9 + cop_880e5bc7ac4b464c952c · net p50 432 · without the leader's group
+      unfunded cop_19049af518e44fb1b493 + cop_482403b0e9674eeabb84 + cop_3a4b4236507742328dac + cop_01816621449241ee8291 + arr_6b722dfcb622 + cop_467c03f8cd664710ab83 + cop_cc7da4e3234844218bd5 · one deal costs more than the money behind the plan, on a price no buyer is shown paying: kept out of every combination
+      gaps    no way to reach the buyer ×6; no specific offer ×6; nobody named to fulfil it ×6; small per sale and volume unknown ×4; cash timing unknown or too slow ×3; its share needs more buyers a day than the channel reaches ×3 · still to grant: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider
+    unknown   CHANGES PLAN 10000 · daysToCash → timeToFirstCash · Constructed: Owner-operated HVAC plumbing and roof · daysToCash from 30 to 8 moves its contribution from 0 to 10670, enough to bring it into the leading combination
+    unknown   CHANGES PLAN 10000 · daysToCash → timeToFirstCash · Constructed: GitHub's bug bounty program will rest · daysToCash from 30 to 8 moves its contribution from 0 to 30521, enough to bring it into the leading combination
+    unknown   CHANGES PLAN 10000 · daysToCash → timeToFirstCash · Constructed: GitHub Inc is the payer it runs the b · daysToCash from 30 to 8 moves its contribution from 0 to 30536, enough to bring it into the leading combination
+    unknown   CHANGES PLAN 10000 · daysToCash → timeToFirstCash · Constructed: Small and mid-size firms sending year · daysToCash from 30 to 8 moves its contribution from 0 to 16085, enough to bring it into the leading combination
+    unknown   CHANGES PLAN 900 · conversion → conversionRates · Market: Pennsylvania. The PA Department of Agricul · conversion from 0 to 0.08 moves its contribution from 0.48 to 900, enough to bring it into the leading combination
+    unknown   CHANGES PLAN 229 · daysToCash → timeToFirstCash · Constructed: domain buyer or seller — what this bu · daysToCash from 21 to 8 moves its contribution from 0 to 229, enough to drop it from the leading combination
+    method    CASH_TIMING_FAILURE: 8 of 12 reachable pathways settle too late or nobody knows when
+    method    VOLUME_UNRESEARCHED: 5 pathways are small per sale with their buyer count unknown
+    method    REPEATED_GAP: 10 of 13 openings fail the same way: nobody named to fulfil it
+    ready     cop_01816621449241ee8291 SELL "Deliver exactly what the published request asks for: The RFP" to Market: US federal grants (NEH cooperative agreements), not  via NEH's NDNP page (Washington DC federal agency; national prog [DIRECT_DEMAND] at 325000 (ESTIMATED), fulfilled by NEH's NDNP page lists an open funding opportunity for organi (PROVEN), cash 24.9d (ESTIMATED) · needs only: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider
+    ready     cop_c46683c4a7ba4d6b80ad SELL "Deliver exactly what the published request asks for: Market:" to Market: US federal grants (NEH Collections Stewardship, NOFO via Market: United States. NEH's Collections Stewardship NOFO (2 [DIRECT_DEMAND] at 100 (PROVEN), fulfilled by Brain produces it: website (ESTIMATED), cash 24.9d (ESTIMATED) · needs only: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider
+    next      SELL cop_01816621449241ee8291 Offer it for an actual sale once CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider is granted; everyt (blocked only by CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider)
+    next      SELL cop_c46683c4a7ba4d6b80ad Offer it for an actual sale once CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider is granted; everyt (blocked only by CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT, a billing provider)
+    next      CONSTRUCT cop_4521ad95cb104405a33e Sell the same deliverable to the population of buyers like this one (a transfer), instead of to the one buyer found
+    next      CONSTRUCT arr_7c86bd58f732 Sell the same deliverable at other transaction sizes — a prepaid bundle of 10 at 10% off; an implementation engagement: 
+    next      CONSTRUCT arr_f3a27dfbcc1d Change the acquisition channel: a marketplace listing, a partner or reseller that already sells to these buyers, or buye
+    next      CONSTRUCT arr_f3a27dfbcc1d Sell the same deliverable at other transaction sizes — a prepaid bundle of 10 at 10% off; an implementation engagement: 
+    next      CONSTRUCT arr_6b722dfcb622 Sell the same deliverable at other transaction sizes — an implementation engagement: setup and process design (3 units' 
+    next      CONSTRUCT arr_46672ddc6914 Sell the same deliverable at other transaction sizes — a prepaid bundle of 10 at 10% off; an implementation engagement: 
+    next      CONSTRUCT arr_9a44924d7f35 Sell the same deliverable at other transaction sizes — a prepaid bundle of 10 at 10% off; an implementation engagement: 
+    next      CONSTRUCT arr_4bb3ce43942f Sell the same deliverable at other transaction sizes — an implementation engagement: setup and process design (3 units' 
+    next      CONSTRUCT arr_06b02949cb25 Sell the same deliverable at other transaction sizes — a prepaid bundle of 10 at 10% off; an implementation engagement: 
+    next      CONSTRUCT arr_213ac85cdf75 Change the acquisition channel: a marketplace listing, a partner or reseller that already sells to these buyers, or buye
+    construct its turn, but construction's share of the live cap is full: 1 constructed round(s) researching against 1
+  considered  13 opening(s), 8 in the simulation; no accepted plan, so Brain keeps constructing and searching
+    model B supported 15 · missing CONVERSION,FULFILMENT,ECONOMICS · Market: Pennsylvania (Philadelphia). The School District of Philadelph
+    model B supported 0 · missing CONVERSION,FULFILMENT,ECONOMICS,SETTLES_IN_TIME · Market: Pennsylvania. PA DEP's Bureau of Abandoned Mine Reclamation ru
+    model B supported 10000 · missing OFFER_AND_PRICE,CONVERSION,FULFILMENT,ECONOMICS,SETTLES_IN_TIME · Buyer request: buyer not yet named — BugsBounty.com
+    model B supported 10000 · missing OFFER_AND_PRICE,CONVERSION,FULFILMENT,ECONOMICS,SETTLES_IN_TIME · Pennsylvania DGS (Commonwealth of Pennsylvania) has an open statewide 
+    model B supported 250 · missing CURRENT_DEMAND,CONVERSION,FULFILMENT,ECONOMICS,SETTLES_IN_TIME · Market: GitHub's public bug bounty program (vulnerability disclosure, 
+    model B supported 0 · missing CURRENT_DEMAND,CONVERSION,FULFILMENT,ECONOMICS,SETTLES_IN_TIME · A Washington DC government authority (unnamed on the aggregator page) 
+    model B supported 0 · missing OFFER_AND_PRICE,CONVERSION,FULFILMENT,ECONOMICS,SETTLES_IN_TIME · Pennsylvania Department of Agriculture's Farm Vitality Planning Grant 
+    model B supported 0 · missing CURRENT_DEMAND,CONVERSION,FULFILMENT,ECONOMICS,SETTLES_IN_TIME · Market: United States. NEH's Collections Stewardship program (NOFO) li
+  quant       coverage of tested conditions, not a probability; 125 combination(s) searched; target 10000 in 16 day(s)
+    limits    start capital 375 · per arrangement 375 · spend ceiling 3000 · outreach 10–930/day (measured: up to 930/day on 12 healthy Instantly accounts (shared); swept) · shared-outreach correlation 0.5
+    measured   reply 0.10%–0.68% on 5090 sends (25 replies, 9 opportunities, 8.2% bounced) from the Instantly workspace
+    authority  CONTEXT_ONLY → AS_IS_FLOOR_ONLY: It does not bind a redesigned implementation: 8.2% of sends bounced (over the 5.0% at which the list and the sender's reputation, not the market, are being measured): Venture Cleaning 10.5%, AI Dispatch 2.5%, Local ad campaign 11.5%, Neighbor Card · Camp Hill Jan 2027 2.0%, Airyn Mailer 40.1%, Neighbor Card · Camp Hill Jan 2027 · personal 6.8%; measured on other offers, lists and copy (Venture Cleaning, AI Dispatch, Local ad campaign, Neighbor Card · Camp Hill Jan 2027, Airyn Mailer, Neighbor Card · Camp Hill Jan 2027 · personal), not on the implementation being planned. It is kept as the as-is floor: what the plan reaches if the new campaign performs no better than the old ones.
+    as-is      if the new campaign does no better: reach 69.5% · settled p10 0 p50 21719 p90 58457
+    best      reaches the target in 98.0% of worlds · settled p10 32109 p50 57262 p90 77450 · capital short 0% · over spend 87%
+      member  arr_6f3b7a404ca5 100% of outreach · Constructed: GitHub Inc is the payer its bug bounty page publishes rew
+      member  arr_2637d8e20ca9 one-off · Constructed: domain buyer or seller — what this buyer pays per unit of
+    alt       98.0% · p50 57262 · Constructed: GitHub Inc is t + Constructed: domain buyer or + Constructed: small business 
+    alt       97.9% · p50 57262 · Constructed: GitHub Inc is t
+    alt       97.9% · p50 57262 · Constructed: GitHub Inc is t + Constructed: small business 
+    compared  13 found opening(s) + 12 constructed estimate(s); refused 13; estimates in the best combination 2
+    demand    arr_6f3b7a404ca5 repeatable · contacted p50 4314 · interested 33/209/534 · deals 4.0/27/94 · revenue 35074/268901/947001 · reply 0.076 close 0.260 price 11691 days 5.8 · not established: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up, outreach a day · Constructed: GitHub Inc is the payer its bug bount
+    demand    arr_7c86bd58f732 repeatable · contacted p50 3997 · interested 30/196/510 · deals 4.0/25/91 · revenue 283/2229/8447 · reply 0.076 close 0.260 price 111 days 6.2 · not established: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up, outreach a day · Constructed: domain buyer or seller — what this bu
+    demand    arr_f3a27dfbcc1d repeatable · contacted p50 4314 · interested 33/209/534 · deals 4.0/27/94 · revenue 38/281/1056 · reply 0.076 close 0.260 price 13 days 5.8 · not established: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up, outreach a day · Constructed: small business operators — what this 
+    demand    arr_213ac85cdf75 repeatable · contacted p50 242 · interested 0.000/8.0/72 · deals 0.000/1.0/15 · revenue 0.000/104/1338 · reply 0.076 close 0.260 price 111 days 15 · not established: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up, outreach a day · Constructed: domain buyer or seller — what this bu
+    demand    arr_96aa6549da5c repeatable · contacted p50 242 · interested 0.000/8.0/72 · deals 0.000/1.0/15 · revenue 0.000/12/160 · reply 0.076 close 0.260 price 13 days 15 · not established: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up, outreach a day · Constructed: small business operators — what this 
+    demand    cop_482403b0e9674eeabb84 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/3000000 · reply 0.076 close 0.260 price 3000000 days 32 · REFUSED no performer is established: nobody has established who does the work, so it is read as the owner's, at least 1 owner hours a deal, more than the 0 owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes · Market: US federal grants (NEH cooperative agreeme
+    demand    cop_19049af518e44fb1b493 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/2911871 · reply 0.076 close 0.256 price 3016029 days 17 · REFUSED no performer is established: nobody has established who does the work, so it is read as the owner's, at least 1 owner hours a deal, more than the 0 owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes · Pennsylvania DGS (Commonwealth of Pennsylvania) ha
+    demand    cop_3a4b4236507742328dac one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/325000 · reply 0.076 close 0.260 price 325000 days 32 · REFUSED ties up 325000 at its start, more than the 3000 this goal may tie up in all · NEH (Washington, DC federal agency) lists the Nati
+    demand    cop_01816621449241ee8291 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/325000 · reply 0.076 close 0.260 price 325000 days 32 · REFUSED no performer is established: nobody has established who does the work, so it is read as the owner's, at least 1 owner hours a deal, more than the 0 owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes · The RFPMart item appears to be a re-listing of NEH
+    demand    cop_76e389df6fbb4e3db45d one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/325000 · reply 0.076 close 0.260 price 325000 days 32 · REFUSED no performer is established: nobody has established who does the work, so it is read as the owner's, at least 1 owner hours a deal, more than the 0 owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes · A Washington DC government authority (unnamed on t
+    demand    cop_467c03f8cd664710ab83 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/19559 · reply 0.076 close 0.256 price 20080 days 17 · REFUSED no performer is established: nobody has established who does the work, so it is read as the owner's, at least 1 owner hours a deal, more than the 0 owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes · Buyer request: buyer not yet named — BugsBounty.co
+    demand    cop_cc7da4e3234844218bd5 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/15000 · reply 0.076 close 0.260 price 15000 days 32 · REFUSED ties up 15000 at its start, more than the 3000 this goal may tie up in all · Pennsylvania Department of Agriculture's Farm Vita
+    demand    cop_8015b46dd2384dd783e0 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/15000 · reply 0.076 close 0.260 price 15000 days 16 · REFUSED no performer is established: nobody has established who does the work, so it is read as the owner's, at least 1 owner hours a deal, more than the 0 owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes · Market: Pennsylvania. The PA Department of Agricul
+    demand    cop_c27f500a33024485b258 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/1000 · reply 0.076 close 0.260 price 1000 days 32 · REFUSED no performer is established: nobody has established who does the work, so it is read as the owner's, at least 1 owner hours a deal, more than the 0 owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes · Pennsylvania Department of Agriculture's Agricultu
+    demand    cop_4521ad95cb104405a33e one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/250 · reply 0.076 close 0.260 price 250 days 15 · REFUSED ties up 10000 at its start, more than the 3000 this goal may tie up in all · Market: GitHub's public bug bounty program (vulner
+    demand    arr_2637d8e20ca9 one-off · contacted p50 1.0 · interested 1.0/1.0/1.0 · deals 0.000/0.000/1.0 · revenue 0.000/0.000/108 · reply 0.076 close 0.256 price 111 days 15 · not established: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up · Constructed: domain buyer or seller — what this bu
+    missing   Constructed: GitHub Inc is the payer its bug bounty page pub: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up, outreach a day not established
+    missing   Constructed: domain buyer or seller — what this buyer pays p: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up not established
+    missing   the best combination reaches the target in 98% of worlds, which is not a defensible 90%: calibration is unavailable: 2 input(s) fail validation; the 97.95% is share of scenarios covered, not a probability; challenge (deep review, IMPROVE_PLAN_AND_EVIDENCE) holds the plan: the plan earns a deep review and its required independent model challenge has not answered (the plan earns a deep review: a portfolio-wide assumption: every plan rests on it); may proceed now: arr_2637d8e20ca9@0; held: arr_6f3b7a404ca5@1 (no independent check has agreed: validate with a different model, held-out evidence or production history before committing)
+    missing   research: bid/win history for OTHER: how many bids or offers were made and how many were won
+    missing   research: transaction counts for OTHER: how many deals the market actually makes in a period
+    missing   research: actual prices paid and spreads in OTHER, not asking prices
+    missing   research: bid/win history for Unclassified / OTHER: how many bids or offers were made and how many were won
+    missing   research: transaction counts for Unclassified / OTHER: how many deals the market actually makes in a period
+  reconstruct baseline reach 98.7% · p10/p50/p90 $34,304/$56,439/$77,450 · coverage · 33 evaluation(s) of 11 variant(s) in 1 round(s)
+    binding   VOLUME      outreach a day ×3 → reach 99.8% (+1.2%), p50 $58,494
+    binding   CLOSE       close rate at the top of its range (×2 if fixed) → reach 99.8% (+1.2%), p50 $56,870
+    binding   REPLY       reply rate at the top of its range (×3 if fixed) → reach 99.8% (+1.2%), p50 $55,533
+    binding   CASH_TIMING days to cash at the bottom of its range (÷2 if fixed) → reach 99.2% (+0.5%), p50 $59,027
+    binding   MARKET_SIZE deals the market can take ×3 → reach 99.2% (+0.5%), p50 $58,456
+    binding   CAPITAL     money limits ×2 (starting capital and spending ceiling) → reach 98.7% (+0.0%), p50 $105,222
+    binding   COST        direct cost at the bottom of its range (÷2 if fixed) → reach 96.8% (-1.8%), p50 $170,321
+    binding   PRICE       price ×2, close rate and market volume ×0.44 (elasticity 1.2, assumed) → reach 96.2% (-2.5%), p50 $102,339
+    headroom  every factor favourable at once → reach 100.0%, p50 $13,199,160
+    challenge [ASSUMPTION] Historical outreach results describe the campaign this plan would run — CONTEXT_ONLY: It does not bind a redesigned implementation: 8.2% of sends bounced (over the 5.0% at which the list and the sender's reputation, not the market, are being measured): Venture Cleaning 10.5%, AI Dispatch 2.5%, Local ad campaign 11.5%, Neighbor Card · Camp Hill Jan 2027 2.0%, Airyn Maile
+    challenge [ESTIMATE] Sending capacity is fixed at what the workspace has today — best capacity purchase: 22 pre-warmed cold-email accounts on 5 domain(s) for $374: +110–550 sends a day from day 0–3, 89–550 a day averaged over the 16 days → 99.5% (from 98.7%)
+    challenge [ASSUMPTION] Cold outreach is the only way to reach buyers — best bought channel: $375 of paid search (Google Ads): 4–6 leads at $66.69–103.54 each, 15–40% real buyers, selling Constructed: Owner-operated HVAC plumbing and roof → 0.0%
+    challenge [ASSUMPTION] Each opening sells one unit at its listed price — best reshaping: TRANSACTION:bundle → 98.7%, p50 $56,439 (close rate assumed)
+    challenge [ASSUMPTION] Cash arrives at each opening's listed timing — deposits at signing: 98.3%; cash-timing factor lift 0.5%
+    challenge [UNTESTED] Buyers pay before suppliers must be paid — of 12 opening(s) with a direct cost: 0 shown paying before delivery (prepaid fulfilment tried), 1 paying in arrears, not tried ("Constructed: GitHub Inc is the payer its bug bounty page pub" states payment after delivery ("in arrears")), 11 with terms nobody stated, not tried — research asks how the
+    challenge [ASSUMPTION] Each opening is fulfilled at the direct cost the plan holds — of 2 opening(s) whose direct cost is at least 20% of the price: 0 with their own evidence of a cheaper supplier (re-routed: 98.7%), 2 with only another population's figure (an assumption, asked as research), 0 with no evidence of another route — research asks who fulfils them and at what cost
+    challenge [ESTIMATE] The openings held are the market — with every input at its favourable end the openings held could reach 100.0%
+    round 1     CAPACITY:cold-email-prewarmed@375 ($374 bought)                        reach 99.5% · p10/p50/p90 $34,102/$50,181/$67,795 · coverage · commits $374
+    round 1     CAPACITY:cold-email-prewarmed@750 ($739 bought)                        reach 99.3% · p10/p50/p90 $35,074/$56,970/$77,450 · coverage · commits $739
+    round 1     FULFILMENT:fulfilment:comparable-supplier@id:arr_4bb3ce43942f + FULFIL reach 98.7% · p10/p50/p90 $34,304/$56,439/$77,450 · coverage
+    round 1     PARTNER:referral-partner                                               reach 98.7% · p10/p50/p90 $34,304/$56,439/$77,450 · coverage
+    round 1     TRANSACTION:bundle                                                     reach 98.7% · p10/p50/p90 $34,304/$56,439/$77,450 · coverage
+    round 1     TRANSACTION:retainer                                                   reach 98.7% · p10/p50/p90 $34,304/$56,439/$77,450 · coverage
+    round 1     CAPACITY:cold-email-new-mailboxes@375 ($362 bought)                    reach 98.7% · p10/p50/p90 $30,691/$50,541/$68,105 · coverage · commits $362
+    round 1     CASH_TIMING:deposit                                                    reach 98.3% · p10/p50/p90 $28,642/$43,577/$63,061 · coverage
+    volume    73/day needs 3–4 mailboxes on 1–2 domains, 14–21 days of warm-up (leaving 0–2 sending days), 0–146 verified contacts, and $110–$436 inside the window: not feasible — warm-up leaves 0–2 days to send, before replies, closes and payment; bounce under 2%, Instantly auto-pauses a campaign at 5% (help.instantly.ai/en/articles/16034903); spam complaints under 0.3% for Gmail and Yahoo, DMARC and one-click unsubscribe over 5,000 a day to Gmail (support.google.com/a/answer/81126)
+    volume    10,000/day needs 334–500 mailboxes on 112–250 domains, 14–21 days of warm-up (leaving 0–2 sending days), 0–20,000 verified contacts, and $1,519–$10,308 inside the window: not feasible — its first purchase ($1422) is over the $375 one commitment may tie up before proof; warm-up leaves 0–2 days to send, before replies, closes and payment; bounce under 2%, Instantly auto-pauses a campaign at 5% (help.instantly.ai/en/articles/16034903)
+    best      as planned · reach 98.7% · p10/p50/p90 $34,304/$56,439/$77,450 · coverage
+    as-is     the same plan on the old campaigns' measured rates · reach 69.5% · p10/p50/p90 $0/$21,719/$58,457 · coverage
+    needs     a reply rate of 0.9% on every outreach opening for 90.0%
+    confidence The strongest plan reaches the target in 98.7% of the worlds tested. That is coverage of stated ranges and assumptions, not a probability: GitHub Inc is the payer its bug bounty page pub: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up, outreach a day not established; domain buyer or seller — what this buyer pays p: price, days to usable cash, reply rate, close rate, direct cost, deals the market can take, money tied up not established. If the new campaign does no better than the measured record, it reaches 69.5% (p50 $21,719). It needs a reply rate of about 0.9% to reach 90.0%; the first sends measure that.
+    limitation VOLUME binds (moving it alone lifts reach by 1.2%). No change tried improves the plan materially. A defensible plan needs those assumptions measured by selling.
+  explore   58 distinct direction(s) across 14 stance(s) (0 from Brain's model, 1 from what worked before, 14 by combining and modifying leaders) over 2 generation(s); none beat §99's plan once challenged (98.7%, 89.5% with its conversion halved). 60 evaluation(s) in 91 s; stopped when nothing improved. Variable sweep: 61,608 variation(s) read, 14 strategy(ies) handed to the engine.
+    budget  40 direction(s) justified by the problem · 60 evaluation(s) on 1 thread(s) · origin algorithm 43, model 0, library 1, recombined 14, mutated 0
+    model   4 call(s), 0 method(s) proposed, 0 refused as off-shape · 4 of 4 call(s) failed: The operation was aborted due to timeout
+    stance  VARIABLE:SUPPORTED       5 direction(s), 0 improved the plan as held, best lift 0.8%
+    stance  VARIABLE:RANKED         11 direction(s), 0 improved the plan as held, best lift 0.8%
+    stance  RESOURCE                12 direction(s), 0 improved the plan as held, best lift 0.8%
+    stance  INVERSION                9 direction(s), 0 improved the plan as held, best lift 0.8%
+    stance  CONSTRAINT               6 direction(s), 0 improved the plan as held, best lift 0.8%
+    stance  PORTFOLIO                9 direction(s), 0 improved the plan as held, best lift 0.8%
+    stance  INCLUSION                7 direction(s), 0 improved the plan as held, best lift 0.8%
+    stance  VARIABLE:BACKWARD        1 direction(s), 0 improved the plan as held, best lift -0.2%
+    stance  VARIABLE:PERSPECTIVE:CASH   1 direction(s), 0 improved the plan as held, best lift -0.2%
+    stance  OPPORTUNITY              3 direction(s), 0 improved the plan as held, best lift -0.2%
+    stance  RELATIONSHIP             3 direction(s), 0 improved the plan as held, best lift -0.2%
+    stance  TRANSACTION              2 direction(s), 0 improved the plan as held, best lift -0.2%
+    stance  FORWARD                  2 direction(s), 0 improved the plan as held, best lift -0.2%
+    stance  BACKWARD                 1 direction(s), 0 improved the plan as held, best lift -98.7%
+    leader    [algorithm · GREEDY] Greedy: §99 one dimension at a time → reach 98.7%, challenged 89.5%
+    leader    [recombined · RESOURCE+INVERSION] Resource: spend on capacity:cold-email-prewarmed@375 + Inversion: drop the small → reach 99.5%, challenged —
+    leader    [recombined · RESOURCE+INCLUSION] Resource: spend on capacity:cold-email-prewarmed@375 + Inclusion: "Constructed:  → reach 99.5%, challenged —
+    leader    [recombined · RESOURCE+PORTFOLIO] Resource: spend on capacity:cold-email-prewarmed@375 + Portfolio: concentrate on → reach 99.5%, challenged —
+    leader    [recombined · RESOURCE+VARIABLE:SUPPORTED] Resource: spend on capacity:cold-email-prewarmed@375 + Variables (supported): fo → reach 99.5%, challenged —
+    leader    [recombined · RESOURCE+PORTFOLIO] Resource: spend on capacity:cold-email-prewarmed@375 + Portfolio: concentrate on → reach 99.5%, challenged —
+    leader    [algorithm · RESOURCE] Resource: spend on capacity:cold-email-prewarmed@375 → reach 99.5%, challenged —
+    leader    [recombined · VARIABLE:SUPPORTED+INVERSION] Variables (supported): focus:3 + Inversion: drop the small tickets → reach 98.5%, challenged —
+    ask     What evidence shows supplier-cost at ×3.07 of today's middle estimate (evidence reaches ×1.00)?
+    ask     What evidence shows ticket at ×19.32 of today's middle estimate (evidence reaches ×1.00)?
+  variables 61,608 variation(s) of 9 decision variable(s) (space 1,244,880) and 78 condition(s), 12,036 equivalent combination(s) not re-read; fast reading: as held mean $84,509, reach 44.4%; §99's plan $84,509, 44.4%; strongest supported $84,515, 44.4% (focus:3); strongest overall (fast ranking, before the engine) $84,515, 44.4%, 0 assumption(s); market binds; 0/8 condition(s) could carry the requirement inside evidence. The engine reads the strongest overall at reach 98.5%, p50 $57,086.
+    counts  screened 143 · factorial 2,239 · local 0 · conditions 59,244 · 5 s · complete
+    var     decision  MONEY_CAPACITY    7 level(s) effect 0.000 · 6 costed operator(s): capacity:cold-email-new-mailboxes@375, capacity:cold-email-new-mailb
+    var     decision  CHANNEL          13 level(s) effect 0.187 · 9 costed operator(s): acquisition:paid-search-inbound@375, acquisition:paid-search-inbound
+    var     decision  PARTNER           5 level(s) effect 0.032 · 1 costed operator(s): partner:referral-partner
+    var     decision  DEAL_SIZE         3 level(s) effect 0.035 · 2 costed operator(s): transaction:bundle, transaction:retainer
+    var     decision  FINANCING         2 level(s) effect 0.000 · 1 costed operator(s): capital:prepaid-fulfilment
+    var     decision  FULFILMENT        2 level(s) effect 0.000 · 2 costed operator(s): fulfilment:cheaper-supplier, fulfilment:comparable-supplier
+    var     decision  CASH_TIMING       2 level(s) effect 0.000 · 1 costed operator(s): timing:deposit
+    var     decision  PRICE            19 level(s) effect 0.000 · 3 scope(s) of the plan's openings
+    var     decision  COMBINATION       6 level(s) effect 0.000 · 12 opening(s) that can be combined or left out
+    conds   78 condition(s): reply, close, market, ticket, supplier-cost, cash-speed, outreach-capacity, time-available + 70 discovered on openings
+    approach FORWARD                   0 local read(s), improved 0×, best score 0.740
+    approach BACKWARD                  0 local read(s), improved 0×, best score 0.739
+    approach MIDDLE_OUT                0 local read(s), improved 0×, best score 0.740
+    approach BOTTLENECK                0 local read(s), improved 0×, best score 0.739
+    approach CHALLENGE                 0 local read(s), improved 0×, best score 0.740
+    approach PERSPECTIVE:CASH          0 local read(s), improved 0×, best score 0.736
+    approach PERSPECTIVE:FLOOR         0 local read(s), improved 0×, best score 0.739
+    approach PERSPECTIVE:SPEED         0 local read(s), improved 0×, best score 0.740
+    approach PERSPECTIVE:CAPITAL       0 local read(s), improved 0×, best score 0.736
+    approach COMBINE                   0 local read(s), improved 0×, best score 0.740
+    strategy [COMBINE] focus:3 → mean $84,515, p10 $673, reach 44.4%, halved 73.6%, commits $0
+    strategy [MIDDLE_OUT] as held → mean $84,509, p10 $673, reach 44.4%, halved 73.6%, commits $0
+    strategy [PERSPECTIVE:FLOOR · assumed] partner:referral-partner>arr_6f3b7a404ca5 + focus:5 → mean $84,467, p10 $681, reach 44.5%, halved 73.6%, commits $0
+    strategy [PERSPECTIVE:CAPITAL · assumed] partner:referral-partner>arr_9a44924d7f35 + transaction:retainer + focus:5 → mean $84,515, p10 $673, reach 44.4%, halved 73.6%, commits $0
+    math    only if the world differs: focus:3 | world: ticket×2, supplier-cost×0.5 → reach 84.7%, mean $338,058
+    needs   reply              no multiple up to ×20 reaches the requirement · evidence reaches ×1.00 · needs evidence (mathematical only)
+    needs   close              no multiple up to ×20 reaches the requirement · evidence reaches ×1.00 · needs evidence (mathematical only)
+    needs   market             no multiple up to ×20 reaches the requirement · evidence reaches ×1.00 · needs evidence (mathematical only)
+    needs   ticket             ×19.32 · evidence reaches ×1.00 · needs evidence (mathematical only)
+    needs   supplier-cost      ×3.07 · evidence reaches ×1.00 · needs evidence (mathematical only)
+    needs   cash-speed         no multiple up to ×20 reaches the requirement · evidence reaches ×1.00 · needs evidence (mathematical only)
+    needs   outreach-capacity  no multiple up to ×20 reaches the requirement · evidence reaches ×1.98 · needs evidence (mathematical only)
+    needs   time-available     no multiple up to ×20 reaches the requirement · evidence reaches ×1.00 · needs evidence (mathematical only)
+    evidence directCost:arr_6f3b7a404ca5              swings mean by $136,698 across its range
+    evidence price:arr_6f3b7a404ca5                   swings mean by $102,382 across its range
+    evidence daysToCash:arr_6b722dfcb622              swings mean by $80,028 across its range
+    evidence volume:arr_6f3b7a404ca5                  swings mean by $74,515 across its range
+    evidence respond:arr_6f3b7a404ca5                 swings mean by $54,876 across its range
+    engine  VARIABLE:SUPPORTED     Variables (supported): focus:3 → engine reach 98.5%, p50 $57,086
+    engine  VARIABLE:BACKWARD      Variables (backward): partner:referral-partner>arr_6f3b7a404ca5 + focus:5 → engine reach 98.5%, p50 $57,086
+    engine  VARIABLE:PERSPECTIVE:CASH Variables (perspective:cash): partner:referral-partner>arr_9a44924d7f35 + transaction:reta → engine reach 98.5%, p50 $57,086
+    engine  VARIABLE:RANKED        Variables (ranked): acquisition:paid-social-inbound@375>arr_6f3b7a404ca5 + focus:5 → engine reach 0.0%, p50 $0
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-new-mailboxes@375 + acquisition:marketplace-leads@ → engine reach 0.0%, p50 $0
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-prewarmed@375 + partner:referral-partner>arr_6f3b7 → engine reach 99.5%, p50 $51,200
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-prewarmed@750 + focus:3 → engine reach 98.5%, p50 $57,691
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-prewarmed@750 + partner:referral-partner>arr_6f3b7 → engine reach 98.5%, p50 $57,691
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-prewarmed@375 + acquisition:paid-search-inbound@37 → engine reach 0.0%, p50 $0
+    engine  VARIABLE:RANKED        Variables (ranked): acquisition:paid-social-inbound@375>arr_6f3b7a404ca5 + fulfilment:comp → engine reach 0.0%, p50 $0
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-prewarmed@375 + acquisition:paid-search-inbound@37 → engine reach 0.0%, p50 $0
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-new-mailboxes@375 + partner:referral-partner>arr_6 → engine reach 97.5%, p50 $38,481
+    engine  VARIABLE:RANKED        Variables (ranked): partner:referral-partner>arr_6b722dfcb622 + timing:deposit + focus:1 → engine reach 0.0%, p50 $958
+    engine  VARIABLE:RANKED        Variables (ranked): capacity:cold-email-new-mailboxes@375 + partner:referral-partner>arr_6 → engine reach 0.0%, p50 $842
+    brief     Reconstruction (§99): volume is what binds this goal. Look in any industry, including ones not searched before, for buyers who already ask for something that can be delivered within 11 days for $500 or more, reachable without cold email — a request posted, a marketplace category with open demand, a partner who already sells to them — with one dated example each, and what the buyer pays and when. Directions Brain explored need answers to: What evidence shows supplier-cost at ×3.07 of today's middle estimate (evidence reaches ×1.00)? What evidence shows ticket at ×19.32 of today's middle estimate (evidence reaches ×1.00)?
+  methods     4273 way(s) of reasoning on record
+    learned   VARIABLE:RANKED+INCLUSION recombined 30 method(s), 512 tri(es), 435 improved, 44 won, mean lift 2.9%
+    learned   VARIABLE:RANKED+INVERSION recombined 4 method(s), 119 tri(es), 119 improved, 30 won, mean lift 9.4%
+    learned   FORWARD                  algorithm  33 method(s), 6113 tri(es), 161 improved, 24 won, mean lift -7.6%
+    learned   RESOURCE+FORWARD         recombined 34 method(s), 131 tri(es), 40 improved, 10 won, mean lift -6.9%
+    learned   RESOURCE                 mutated    117 method(s), 812 tri(es), 253 improved, 9 won, mean lift 22.2%
+    learned   VARIABLE:RANKED+RESOURCE recombined 11 method(s), 83 tri(es), 45 improved, 9 won, mean lift 15.4%
+    learned   VARIABLE:PERSPECTIVE:FLOOR+RESOURCE+RESOURCE+INVERSION+RESOURCE recombined 1 method(s), 12 tri(es), 9 improved, 9 won, mean lift 71.5%
+    learned   RESOURCE                 algorithm  34 method(s), 4376 tri(es), 70 improved, 8 won, mean lift -8.2%
+    learned   VARIABLE:RANKED+RESOURCE mutated    34 method(s), 151 tri(es), 125 improved, 5 won, mean lift 64.6%
+    learned   VARIABLE:RANKED+RESOURCE+VARIABLE_PERSPECTIVE_SPEED+INVERSION+INVERSION recombined 1 method(s), 10 tri(es), 10 improved, 5 won, mean lift 96.4%
+    learned   FORWARD+OPPORTUNITY      recombined 12 method(s), 148 tri(es), 41 improved, 4 won, mean lift -8.8%
+    learned   FORWARD                  mutated    4 method(s), 182 tri(es), 27 improved, 4 won, mean lift -6.2%
+    explored  2026-11-23T14:54:03.646Z 61,608 variation(s) of 87 variable(s), 58 direction(s), 0 from the model; best 98.7% vs greedy 98.7%: greedy kept
+    explored  2026-11-23T14:14:01.193Z 61,608 variation(s) of 87 variable(s), 58 direction(s), 0 from the model; best 98.7% vs greedy 98.7%: greedy kept
+    explored  2026-11-23T13:55:42.903Z 61,608 variation(s) of 87 variable(s), 58 direction(s), 0 from the model; best 98.7% vs greedy 98.7%: greedy kept
+    explored  2026-11-23T13:33:43.609Z 61,608 variation(s) of 87 variable(s), 65 direction(s), 7 from the model; best 98.7% vs greedy 98.7%: greedy kept
+    explored  2026-11-23T12:39:04.223Z 61,608 variation(s) of 87 variable(s), 58 direction(s), 0 from the model; best 98.7% vs greedy 98.7%: greedy kept
+  ladder      A_THEORETICAL 0 · B_EVIDENCED 13 · C_MARKET_TEST_READY 0 · D_BUYER_VALIDATED 0 · E_COMMITTED 0 · F_COLLECTED 0
+  policy      SQUEEZE: a cash target with a deadline; no market-testing phase, sellable openings are sold now, several at once
+  basis       Sweep (Latin hypercube) over declared ranges: shares are coverage of the tested conditions, not probabilities.
+  chance      not stated: this Brain has too few finished recommended plans to measure one
+  strategy    combine_fast NOT_VIABLE  Combined, fastest money first: Market: Pennsylvania (Philadel + Buyer request: buyer not yet n
+    cautious  cannot be computed: an input it needs is unknown

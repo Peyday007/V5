@@ -13800,6 +13800,12 @@ are the repair.
   each buys) is read only where a source states a count. Unstated, the model
   sweeps it, `MARKET_VOLUME` is a missing link and a supported reach counts one
   deal; any opening becomes repeatable once research shows more than one deal.
+  `readVolume` reads a stated volume both ways (2026-11-23): a trade's agent
+  noun counts its payer ("2,400 movers" for moving companies), "each" after a
+  count carries a per-unit rate (a vague "several" read at 2, and said), and a
+  transaction count over a trailing span is market purchases; sellers,
+  vendors, units a sales count is spread across, units offering the same
+  thing, and counts of results, pages or followers are never buyers.
 - **An unsized published rate is bounds.** It locates a rate and states no
   precision, so an estimate resting only on such rates is never a distribution.
 
@@ -15102,6 +15108,27 @@ the search for openings outside those markets continues. Agreed money whose
 settlement is unknown needs no sale, so when it alone covers the target no
 structure arithmetic rules the goal out (`agreedInReach`): what blocks it is
 when the buyers pay.
+
+**One source for a plan's outcome, and no reliability from legs nobody can
+execute (audit of wst_7b4fcbb5f2384f31b6c3, 2026-11-23).** One reading carried
+a portfolio "net p10" of $368 beside an adverse case of $32,266. Two causes.
+`composeGoalReadings` read the outcome from `portfolio.best` whatever plan the
+acceptance held — here the pathways' leading combination, because `best`
+counted unpriced money. And the leading combination's figures
+(`contributionOf`, `pathways.ts`) are bounds, not percentiles: its "p10" puts
+every input at its unfavourable end at once, sums the legs and caps at the gap.
+Now the outcome is read only from the simulated worlds of the plan held
+(`heldDistribution`), or not at all; a pathways candidate's median is the
+engine's for exactly its members or none; and the pathway render says
+"bounds", not "p10/p50/p90". Second, the 98% and the $55,772 expected came
+from legs with no channel, offer or fulfiller. `legFeasibility` judges each
+counted leg on acquisition, an offer at an established price, a fulfiller and
+settled cash; while any lacks one, the outcome is `ASSUMPTION_ONLY` and the
+figure presented as the plan's (`planOutcomeOf`, the successor surplus,
+`planProgress.supportedReach`) is the engine's reading over the supported legs
+alone — zero when none is. `judgeAcceptance` accepts no plan with such a leg;
+a permission or provider not yet granted is not structural, and an accepted
+plan names it as its one blocker (§58).
 
 ## 96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
 
@@ -17019,3 +17046,77 @@ than a hundred. So it is taken from a terminal: `npm run engineering -- cycle
 [--hours 72] [--input DIR] [--record --admin <email>]`, through the forge with
 `BRAIN_FORGE_TOKEN` or from `gh api` JSON in DIR. `npm run engineering --
 report` prints the newest stored reading. Tests: `tests/engineeringCycle.test.ts`.
+
+## 116. A price is what a buyer pays a supplier, a buyer population is more than one company, and coverage over unsupported legs is not reliability.
+
+**Owner's order, 2026-11-23**, after the independent audit of the $10K plan
+(`docs/audits/2026-11-23-10k-plan-audit.md`, kept verbatim with the reading it
+examined). The candidate reported "reach 0.98". Almost all of it came from one
+constructed arrangement that sold a spreadsheet to "GitHub Inc is the payer —
+its bug bounty page publishes rewards of $10,000 or more…" at $10,000 a deal,
+1–200 times, to a median of 4,314 contacts. Without that leg the five others
+had a median of $432, and the reconstruction reached $10K in 0% of worlds.
+
+**The general causes, and where each is closed:**
+
+- **A payment is read for what it is paid for** (`server/domain/paymentNature.ts`).
+  A bounty, prize or contest reward, a grant, a rebate, refund, reimbursement or
+  settlement, and a wage are money, but none is a price a buyer pays a supplier
+  for a deliverable. `claimPaysPopulation` checked direction only; GitHub *is*
+  the payer of its bounty, so the $10,000 passed. Every price back-fill source
+  now refuses such a claim at the one place it files (`fileOne`, industry/expand.ts),
+  construction drops already-filed facts and opening prices that are one, and a
+  bounty, prize or contest opening is a competitive award (paid after it is
+  judged), like a tender.
+- **One organisation is not a population** (`namesABuyerPopulation`). A buyer
+  name written as a sentence is read by its subject (`subjectOf`): the sentence
+  about GitHub passed because the whole sentence is not a proper name.
+- **A payer an opening named is evidence about that opening's need only.** The
+  GitHub payer was paired with an HVAC-software sentence from another opening
+  in its sector, which became the offer text.
+
+Each refusal is read from the claim's own words by a closed set of cues (§8),
+and each is pinned by `tests/paymentNature.test.ts` with the audit's own claims
+and their counter-cases (a grant *writer's* fee, a contract won by bid, a
+per-puzzle purchase stay prices).
+
+## 117. An investment committee reads every plan independently, and agreement is not evidence.
+
+**Owner's order, 2026-11-23**: a permanent, independent, adversarial review
+inside the planning architecture, reusing what exists. It is
+`server/services/goals/committee.ts`, read where the plan's integrity already
+is (`gateIntegrity`, plan.ts), so there is one acceptance and the committee can
+only take it away (`refuseForCommittee`), never grant it.
+
+- **Six roles, each with a deterministic layer** over the reading's own
+  structured record — the pathway facts and the evidence sentence each rests
+  on, the simulation's inputs, the goal's limits: SKEPTIC (what the money is,
+  re-read with `paymentNatureOf`; price evidence about another market,
+  `evidenceIsAbout`; two readings of one price; a constructed market counted),
+  MARKET_EXPERT (one organisation counted as a population; an unevidenced price
+  or volume), OPERATOR (channel, offer, fulfiller, cash inside the window),
+  INVESTOR (capital ceiling, a losing deal, one unevidenced leg carrying the
+  plan), QUANT (the figure rebuilt from evidenced price × evidenced deals − cost
+  against what the reading presents; coverage claimed as a probability; the two
+  downside estimators against each other), OWNER_PROXY (speculation counted as
+  repeatable business, routine owner delivery, the goal reached on evidence).
+- **No vote.** Any FAIL fails; any critical defect blocks whatever the other
+  roles say. Every defect names its claim, its evidence reference and why.
+- **Independence.** Each role reads its own copy of the inputs; only QUANT,
+  SKEPTIC and INVESTOR read the planner's figures, and only to challenge them;
+  none reads the acceptance's status, verdict or sentence.
+- **Specialists through existing owners.** A judgment the code cannot settle
+  is UNKNOWN. On a final plan (an acceptance not on the ledger, or a material
+  capital commitment — `committeeTier`) it is a research need through
+  `sendNeeds` (`sendCommitteeNeeds`, scope `goal:<id>:committee`), whose
+  question carries the objective and the leg's evidence and none of the
+  planner's conclusions; SKEPTIC's specialist layer is the existing independent
+  model challenge (`quant/modelChallenge.ts`). Two roles reading one fact the
+  opposite way is an investigation, sent the same way; the FAIL still stands.
+- **Recorded and reported.** The verdicts are stored in the reading's forecast
+  JSON (no schema change), printed by `npm run goals -- plan`, and the planning
+  report's "commercially validated" requires the committee's PASS.
+- **Learning.** A confirmed reviewer miss is corrected in the planning mechanism
+  (or the role's check) and its case kept as a regression test:
+  `tests/investmentCommitteeWorld.test.ts` holds the audited GitHub-bounty plan
+  and the mechanism-validity cases on the real planner.

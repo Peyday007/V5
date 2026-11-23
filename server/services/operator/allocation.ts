@@ -52,7 +52,9 @@ export function activityFrom(input: {
   const level = LADDER.reduce((best, key, i) => ((ladder[key] ?? 0) > 0 ? i : best), 0);
   const target = input.goal.target as { amountCents?: number } | null;
   const remaining = num(f['remainingCents']) ?? (target?.amountCents ?? null);
-  const reach = num(f['reach']) ?? num(candidate['reach']);
+  // A reach that counts legs nobody can execute is coverage over assumptions; capacity follows the supported reach (§116).
+  const assumptionOnly = f['reachBasis'] === 'ASSUMPTION_ONLY';
+  const reach = assumptionOnly ? (num(f['supportedReach']) ?? 0) : (num(f['reach']) ?? num(candidate['reach']));
   const beforeReach = num(input.before?.forecast?.['reach']);
   const daysLeft = num(f['daysLeft']) ?? (input.goal.dueAt ? Math.max(0, Math.round((Date.parse(input.goal.dueAt) - input.nowMs) / 86_400_000)) : null);
   return {

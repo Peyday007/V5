@@ -49,6 +49,7 @@
  * next pass. The cap is the one the allocator works under, so role questions
  * never raise what the kernel may have open.
  */
+import { isNonPurchasePayment, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
@@ -1149,6 +1150,7 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[],
     if (FACT_KEYS[key].kind === 'POSITIVE' && amount <= 0) return refuse('a figure that must be positive is zero or less: a free tier or an unstated amount is not what a paying buyer pays');
     // A price is money these buyers pay: a figure the claim says is paid to them runs the other way (invariant 39).
     if (key === 'price_per_unit' && claimPaysPopulation(claim.claim, asked.name)) return refuse(`the claim states money paid to "${asked.name}", not a price they pay`);
+    if (key === 'price_per_unit' && isNonPurchasePayment(claim.claim)) return refuse(`the claim states ${nonPurchaseSentence(paymentNatureOf(claim.claim))}`);
     const buyer = planBuyerType(asked.name, nodes);
     if (!buyer && !namesABuyerPopulation(asked.name)) return refuse('the population the price question asked about is not a buyer population, so none is mapped', asked.name);
     return {
@@ -1171,6 +1173,7 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[],
   const buyer = matchBuyerType(claim.structuralQualifier, nodes);
   if (!buyer) return refuse('buyer qualifier matches no mapped buyer type', claim.structuralQualifier);
   if (key === 'price_per_unit' && claimPaysPopulation(claim.claim, buyer.name)) return refuse(`the claim states money paid to "${buyer.name}", not a price they pay`);
+  if (key === 'price_per_unit' && isNonPurchasePayment(claim.claim)) return refuse(`the claim states ${nonPurchaseSentence(paymentNatureOf(claim.claim))}`);
   const amount = (claim.structuralAmountCents ?? NaN) / 100;
   if (!Number.isFinite(amount)) return refuse('declared amount is not a number');
   if (FACT_KEYS[key].kind === 'RATE' && amount > 1) return refuse('rate is more than the whole');
@@ -1814,6 +1817,11 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
 
   const fileOne = async (input: BackfillCandidate): Promise<void> => {
     const { claim } = input;
+    // Every source's price passes here: a reward, grant, rebate or wage is never what a buyer pays (audit 2026-11-23, `paymentNatureOf`).
+    if (input.key === 'price_per_unit' && isNonPurchasePayment(claim.claim)) {
+      out.skipped += 1;
+      return;
+    }
     let buyer = input.buyer;
     if (!buyer && input.newBuyer) {
       // An earlier candidate this pass may already have mapped this population.

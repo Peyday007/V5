@@ -73,6 +73,15 @@ Every case run ends in exactly one correct outcome or one or more failure classe
 | `UNCERTAINTY_AS_FAVOURABLE` | an executable plan rests on an unestablished price, cost, capital or settlement, or on a price that is only a person's word or is contradicted by other evidence | yes |
 | `OWNER_LABOR_EXCEEDED` | an executable plan needs more owner hours than the objective allows | yes |
 | `OBJECTIVE_CHANGE_IGNORED` | after the objective changed, the plan still follows the old one (its scope or its target) | yes |
+| `NON_PURCHASE_PRICE` | the reading counts (candidate, quant best or pathway leading combination) an opening at an established price the rubric's `notAPurchasePrice` says is not a payment for the deliverable — a reward, bounty, grant, prize, rebate, settlement, a price from another buyer's claim — whatever its stance | yes |
+| `PAYER_POPULATION_INFLATED` | the reading counts an opening and models more deals from it (quant demand p90, or the deals its strategy counts) than the rubric's `payerDealsMax` allows: one organisation swept as a population | yes |
+| `UNSUPPORTED_REACH` | the candidate reports reach above zero while a member of it is one the reading itself says cannot transact (no reachable buyer, no offer and price, nobody to fulfil it) | no |
+| `ACCEPTANCE_UNFEASIBLE` | the reading accepts, certifies a probability or a quantitatively constructed plan, or calls a plan executable, while it holds a member it judges unacquirable, unfulfillable or unpaid, or one priced by a non-purchase | yes |
+
+The last four (audit 2026-11-23, `docs/audits/2026-11-23-10k-plan-audit.md`; cases
+`bench/planningReliability/mechanismCases.ts`) are read from structured fields only
+(`observeMechanism`) and fire only where the reading counts the money: a conclusion that
+judges the price missing, or does not count the opening, is not failed for them.
 
 A critical failure would send Brain executing a wrong plan; an unjustified refusal
 loses value but commits nothing. The suite reports both, and the critical count is a
@@ -134,6 +143,7 @@ A case passes end to end when its verdict is correct **and**:
 | `RESOLUTION_ABSENT` | a no-plan conclusion names nothing that would resolve its blocker |
 | `ALTERNATIVES_NOT_COMPARED` | a no-plan conclusion compared no strategy and considered no opening |
 | `OPENING_UNACCOUNTED` | an opening neither considered nor excluded |
+| `ESTIMATES_CONTRADICT` | the pathway portfolio's net p10 and the simulated adverse quantile, both capped at the gap, differ more than twofold and by more than a tenth of the gap (on production it is true of most readings, so it is measured here rather than in the verdict) |
 
 **A field the planner does not carry is a measured gap, never a guess.** `PlanStep`
 carries a `basis` label but no reference to the rows or claims a step rests on
@@ -257,6 +267,7 @@ passes them to the runner with `--cases`.
       "price": 400,                           // USD a deal (a month, with "monthly": true)
       "priceBasis": "EVIDENCE",               // or "PERSON": somebody only said so
       "priceContradiction": 40,               // optional: the sourced price contradicts the card's
+      "priceEvidence": "…",                   // optional: what the price's source says, filed as the price fact (must restate the price)
       "cost": 0,                              // omitted or null: unknown
       "capital": 0,                           // money tied up before it pays
       "daysToCash": 7,                        // omitted or null: unknown
@@ -280,7 +291,9 @@ passes them to the runner with `--cases`.
     "capitalMax": 0,                          // USD one member may tie up
     "ownerHoursMax": 13,                      // owner hours the plan's members may take in all
     "maxCostShare": 1,                        // a member's cost may be at most this share of its price
-    "targetAfterChange": 1500                 // with changedObjective: the target the new words state
+    "targetAfterChange": 1500,                // with changedObjective: the target the new words state
+    "notAPurchasePrice": ["…"],               // openings whose evidenced figure is not a purchase of the deliverable
+    "payerDealsMax": { "…": 1 }               // the most deals an opening's payer(s) can make in the window
   }
 }
 ```

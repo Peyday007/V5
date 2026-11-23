@@ -138,7 +138,7 @@ describe('a figure paid to the population is never filed as the price it pays', 
     expect(claimPaysPopulation('Restaurants receive a monthly invoice of $300.', 'Independent restaurants')).toBe(false);
   });
 
-  it('files the bounty against the programs that pay it and refuses it against the researchers it is paid to', async () => {
+  it('files the bounty as nobody\'s price: not the researchers it is paid to, and not the programs that pay it (§116)', async () => {
     const sector = await seedSubject({ projectId, name: 'Application security', actorRef: 'BRAIN' });
     const researchers = await seedSubject({ projectId, name: 'Security researchers', kind: 'BUYER_TYPE', parentId: sector.node.id, actorRef: 'BRAIN' });
     const programs = await seedSubject({ projectId, name: 'Companies running bug bounty programs', kind: 'BUYER_TYPE', parentId: sector.node.id, actorRef: 'BRAIN' });
@@ -148,7 +148,8 @@ describe('a figure paid to the population is never filed as the price it pays', 
     }));
     await backfillClaimFacts(projectId);
     const facts = await listProjectConstructionFacts(projectId);
-    expect(facts.map((one) => [one.sourceClaimId, one.key, one.low, one.segment])).toEqual([[fromPrograms, 'price_per_unit', 10_000, `map_${programs.node.id}`]]);
+    // A bounty is a reward for a finding, not what its programs pay a supplier for a deliverable (audit 2026-11-23).
+    expect(facts.filter((one) => one.sourceClaimId === fromPrograms || one.segment === `map_${programs.node.id}`)).toEqual([]);
     expect(facts.some((one) => one.sourceClaimId === toResearchers || one.segment === `map_${researchers.node.id}`)).toBe(false);
   });
 

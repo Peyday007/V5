@@ -62,7 +62,7 @@ import { raiseNeed } from './needs.ts';
 import { collectable, dealPosition, owedBackReading, owedBackUnclaimedCents } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
-import { COMMERCIAL_EFFECTS } from './effects.ts';
+import { COMMERCIAL_EFFECTS, PAYMENT_LINK_NAMESPACE } from './effects.ts';
 import {
   COMMERCIAL_ACTIONS,
   actionContext,
@@ -1514,6 +1514,16 @@ export async function recordMoneyEvent(input: {
    */
   paidInvoiceId?: string | null;
   /**
+   * The payment-link operation (`cash.payment_link`) whose link the provider
+   * says took this payment (`offerExperiment.ts`). Internal, like
+   * `paidInvoiceId` and for its reason: the link was created under
+   * ACCEPT_PAYMENT and the buyer paid on the provider's own page, so the money
+   * arrived whatever has happened to a grant since. Read back from the
+   * database — SUCCEEDED, in this project, with the link as its result — never
+   * taken on the caller's word.
+   */
+  paidThroughLinkOperationId?: string | null;
+  /**
    * What a payment a **person** records pays, while this piece has an issued
    * invoice still unpaid: that invoice, or money that arrived outside every
    * invoice. Required in exactly that case, because a payment nobody
@@ -1577,10 +1587,18 @@ export async function recordMoneyEvent(input: {
       invoice.opportunityId === (input.opportunityId ?? null) &&
       invoice.providerInvoiceId !== null &&
       (invoice.state === 'ISSUED' || invoice.state === 'PAID' || invoice.state === 'SETTLED');
-    providerFact = confirmed || paidInvoice;
+    const link = input.paidThroughLinkOperationId ? await getOperation(input.paidThroughLinkOperationId) : null;
+    const paidThroughLink =
+      link !== null &&
+      link.state === 'SUCCEEDED' &&
+      link.projectId === input.projectId &&
+      link.namespace === PAYMENT_LINK_NAMESPACE.name &&
+      link.resultRef !== null &&
+      (input.verifiedReference ?? '').trim() !== '';
+    providerFact = confirmed || paidInvoice || paidThroughLink;
     takenByBrain = confirmed && !paidInvoice;
     readOfInvoice = paidInvoice;
-    if (!confirmed && !paidInvoice) {
+    if (!confirmed && !paidInvoice && !paidThroughLink) {
       // Recording money a person says arrived: Brain operated nothing to take it.
       const decision = await checkCommercialAuthority({
         projectId: input.projectId,

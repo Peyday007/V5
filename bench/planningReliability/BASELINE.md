@@ -27,3 +27,28 @@ Reproduce: `npm run bench -- --suite planningReliability --out result.json`
 own database). Cases now run on a pool of case processes — 433 s serial, 196 s on 3
 workers on a shared 4-core machine — and `npm run loop` diffs a change against this
 suite's result on production (docs/COMPLETION-SPEC.md §7).
+
+## Mechanism validity (audit 2026-11-23) — measured on production `1ce9b9874`
+
+The audit of the production $10K plan (`docs/audits/2026-11-23-10k-plan-audit.md`)
+found failure classes the grader could not see. `mechanismCases.ts` reproduces them
+(mv-01…05); nine unfamiliar-mechanism pairs (commission, affiliate, contract award,
+grant, prize, rebate, one-RFP, settlement) are hidden cases, not in the repository.
+Each was run on unmodified production planner code through the grader as it stood
+(`a`) and as extended (`b`); public cases only below.
+
+| case | class it reproduces | grader before (a) | grader after (b) |
+|---|---|---|---|
+| mv-01 GitHub bug-bounty reward as price | non-purchase price, single payer, no channel/fulfiller | FAIL `UNJUSTIFIED_REFUSAL` (names REACHABLE_BUYER…, not the price) — the counted $10,000 unseen | FAIL `UNJUSTIFIED_REFUSAL`, `NON_PURCHASE_PRICE` (pathway leading combination counts GitHub at $10,000) |
+| mv-02 bounty payout as price, all else evidenced | non-purchase price | FAIL `UNJUSTIFIED_REFUSAL` (names MARKET_VOLUME) | FAIL + `NON_PURCHASE_PRICE` (candidate at $500, reach 0.98 coverage) |
+| mv-03 one health system's one PO | single payer as population | **pass** (names MARKET_VOLUME) | FAIL `PAYER_POPULATION_INFLATED` (deals p90 14, reach 0.62) |
+| mv-04 marketplace, many repeat buyers (control) | — | FAIL `UNJUSTIFIED_REFUSAL` (planner) | same |
+| mv-05 price spliced from an HVAC-software claim | unevidenced mechanism | FAIL `FALSE_EXECUTABLE` | FAIL `FALSE_EXECUTABLE`, `NON_PURCHASE_PRICE`, `ACCEPTANCE_UNFEASIBLE` |
+
+The existing 35 public cases all passed (a). Under (b) two fail, non-critically,
+on `UNSUPPORTED_REACH`: fam-15 (reach 1.000 from the farm opening nobody can
+fulfil) and ho-03 (reach 0.711 from maritime, with no way to the buyer). The
+pathway p10 and the simulated adverse quantile contradict each other in 17 of the
+35 (fam-02: adverse $4,862 against a pathway p10 of $10 on a $2,000 gap; the
+pathway estimator does not count signed agreements), so `ESTIMATES_CONTRADICT` is
+graded on the end-to-end level, not the verdict.

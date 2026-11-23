@@ -462,7 +462,8 @@ const GENERIC_PAYER: ReadonlySet<string> = new Set(['buyer', 'payer', 'customer'
 /** A name that opens on a connective, a pronoun or an adverb is the rest of a sentence, not who buys ("therefore an unidentified individual"). */
 const FRAGMENT_START = /^(?:therefore|thus|hence|so|then|also|however|moreover|furthermore|accordingly|consequently|i\.?e\.?|e\.?g\.?|itself|themselves|himself|herself|it|its|this|that|which|these|those|they|them|he|she|we|you|someone|anyone|whoever|whom|who)\b/i;
 /** A name that ends on a reflexive points back at a sentence's subject ("Crucinova itself"). */
-const FRAGMENT_END = /\b(?:itself|themselves|himself|herself)$/i;
+// A name cut off mid-clause ends on a connective or an article (production 2026-11-20: "GitHub Inc operates the bug bounty program and").
+const FRAGMENT_END = /\b(?:itself|themselves|himself|herself|and|or|but|with|of|the|to|for|a|an|which|that|who)$/i;
 /** A bare verb form names an act, not anyone who acts ("paying"): the participles payer prose leaves behind. */
 const BARE_VERB = /^(?:pay|paying|paid|pays|buy|buying|bought|buys|purchas(?:e|es|ed|ing)|hir(?:e|es|ed|ing)|us(?:e|es|ed|ing)|sell(?:s|ing)?|sold|order(?:s|ed|ing)?|seek(?:s|ing)?|want(?:s|ed|ing)?|need(?:s|ed|ing)?|request(?:s|ed|ing)|post(?:s|ed|ing)|contract(?:s|ed|ing)|subscrib(?:e|es|ed|ing)|book(?:s|ed|ing)|spend(?:s|ing)?|spent|fund(?:s|ed|ing)|commission(?:s|ed|ing))$/i;
 /** A party described as not known is nobody a list can be built of ("anonymous members of the public", "… of unknown business"). */
@@ -517,7 +518,23 @@ const CAMEL_FIELD = /\b[a-z]+(?:Id|ID|Info)\b/;
  */
 export function namesABuyerPopulation(name: string | null | undefined): boolean {
   const text = bareName(name);
-  return namesABuyer(text) && !isOneOrganisation(text);
+  return namesABuyer(text) && !isOneOrganisation(text) && !isOneOrganisation(subjectOf(text));
+}
+
+/**
+ * The subject of a buyer name written as a sentence: the words before a
+ * spaced dash, a colon, a semicolon or a parenthesis, and before the first
+ * verb of a clause ("GitHub Inc is the payer — its bug bounty page publishes
+ * rewards …" is about "GitHub Inc"). Audit of goal wst_7b4fcbb5f2384f31b6c3,
+ * 2026-11-23: that sentence reached the industry map as a buyer node, passed
+ * as a population because the whole sentence is not a proper name, and the
+ * plan swept one company as 1–200 repeat buyers and 4,314 contacts. A name
+ * with no such boundary is its own subject. Pure.
+ */
+export function subjectOf(text: string): string {
+  const clause = text.split(/\s+[—–-]\s+|\s*[:;(]\s*/)[0] ?? text;
+  const verb = clause.match(/^(.+?)\s+(?:is|are|was|were|pays?|paid|publishes|published|runs|ran|offers|offered|awards|awarded|rewards|rewarded|operates|operated|hosts|hosted|will)\b/i);
+  return bareName(verb ? verb[1] : clause);
 }
 
 /** Words a proper name keeps in lower case ("Society of Actuaries", "Bank of the West"). */
@@ -556,6 +573,37 @@ const ONE_BODY = /\b(?:committee|commission|consortium|syndicate|board|council|p
 const ONE_BODYS_MEMBERS = /\b(?:the|a|an|one)\s+(?:[\w-]+\s+){0,3}?(?:committee|commission|consortium|syndicate|panel|jury|tribunal)\s+(?:members?|investo\w*|backers?|shareholders?|funders?|donors?|partners?|chairs?|officers?)\b/i;
 /** The people belonging to one named party ("Toei's investors", "the committee's members"). */
 const ONES_PEOPLE = /['’]s\s+(?:investo\w*|shareholders?|backers?|funders?|donors?|members?|board|founders?|owners?|employees?|staff|team|partners?|stakeholders?|executives?|management)\b/i;
+
+/** One public body by its form ("City of Ridgeport", "Department of Labor"). */
+const PUBLIC_BODY = /^(?:the )?(?:city|county|town|township|village|borough|municipality|state|commonwealth|province|department|ministry|office|bureau|port|university) of\b/i;
+/**
+ * A singular organisation noun as the head of a lower-case description ("State
+ * university continuing-education office", "Regional community foundation",
+ * "State draw-game operator"): one body described, never a kind of buyer, which
+ * is plural ("Dental practices"). Holdout planning cases, 2026-11-23: each was
+ * modelled as a population of repeat buyers.
+ */
+const ORG_HEAD = /^(?:department|office|agency|authority|council|commission|committee|board|bureau|ministry|district|foundation|trust|operator|processor|retailer|wholesaler|manufacturer|distributor|cooperative|co-op|university|college|school|hospital|clinic|city|county|municipality|government|company|corporation|firm|institute|institution|association|society|club|federation|union|regulator|insurer|bank|utility|publisher|platform|marketplace|programme|program|administrator|sponsor|organizer|organiser)$/i;
+function headOfDescription(text: string): string | null {
+  const clause = (text.split(/\s*,\s*|\s+[—–-]\s+|\s*[:;(]\s*/)[0] ?? text).trim();
+  const lead = clause.split(/\s+(?:of|in|at|near|for|across|under|with)\s+/i)[0]!.trim();
+  const words = lead.split(/\s+/).filter(Boolean);
+  return words.length >= 2 ? words[words.length - 1]!.replace(/[^A-Za-z-]/g, '') : null;
+}
+
+/**
+ * Whether a found opening's payer, as its own source describes it, is one body
+ * (one city department, one foundation, one operator). Read for an opening's
+ * payer only: a map node with the same shape ("state technical utility
+ * services bureau") is a kind of buyer across states. Pure.
+ */
+export function describesOneBody(name: string | null | undefined): boolean {
+  const text = bareName(name);
+  if (!text) return false;
+  if (PUBLIC_BODY.test(text)) return true;
+  const described = headOfDescription(text);
+  return !!described && ORG_HEAD.test(described);
+}
 
 function isOneOrganisation(text: string): boolean {
   if (ONE_BODY.test(text) || ONE_BODYS_MEMBERS.test(text) || ONES_PEOPLE.test(text) || DESCRIBED_COMPANY.test(text)) return true;

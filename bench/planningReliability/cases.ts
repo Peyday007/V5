@@ -11,6 +11,7 @@
  * those fixtures use.
  */
 import type { CaseDimensions, OpeningFixture, PlanningCase } from './case.ts';
+import { MECHANISM_CASES } from './mechanismCases.ts';
 
 const dims = (over: Partial<CaseDimensions> & Pick<CaseDimensions, 'industry' | 'mechanism'>): CaseDimensions => ({
   capital: 'none',
@@ -468,4 +469,7 @@ export const PUBLIC_CASES: PlanningCase[] = [
     openings: [FUNERAL],
     expect: { verdict: 'NO_PLAN', blocker: { kind: 'MISSING_EVIDENCE', links: ['CONVERSION'] } },
   },
+
+  /* ================= mechanism validity (audit 2026-11-23; mechanismCases.ts) ================= */
+  ...MECHANISM_CASES,
 ];

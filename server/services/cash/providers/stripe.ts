@@ -416,3 +416,227 @@ export async function probeStripe(options: { fetch?: FetchLike; env?: NodeJS.Pro
   }
   return { verdict: 'UNREACHABLE', detail: answer.kind === 'REFUSED' ? answer.detail : answer.reason };
 }
+
+/* ------------------------------------------------------------------------- */
+/* A Payment Link: one offer, one price, many buyers                          */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A Stripe Payment Link for one fixed-price offer (`offerExperiment.ts`).
+ *
+ * An invoice bills one named customer for an agreed scope; an offer sent to a
+ * list has no customer until somebody pays, so the way to be paid is a link
+ * every recipient can use. Creating it is an effect — a price and a link exist
+ * at Stripe afterwards, and the link takes money from whoever opens it — so it
+ * is an adapter the effects engine runs under the ACCEPT_PAYMENT grant, never
+ * a call made beside it.
+ *
+ * Two requests, each with an `Idempotency-Key` derived from Brain's own
+ * business id, so a retry inside Stripe's window replays rather than creating a
+ * second price or link. Every object carries `metadata[brain_payment_link]`,
+ * and the payments the link takes carry it on their PaymentIntent. The list
+ * endpoint is read for reconciliation (payment links have no search), and an
+ * absence there is INCONCLUSIVE, never ABSENT: a link past the first page, or
+ * one created a moment ago, is not evidence that nothing was created.
+ *
+ * `paymentLinkRequests` builds the exact request bodies and is shared with the
+ * dry-run preview, so what the preview says Brain *would* send is what the
+ * adapter sends.
+ */
+export const STRIPE_PAYMENT_LINK_ADAPTER_NAME = 'stripe.payment_link';
+export const PAYMENT_LINK_METADATA = 'brain_payment_link';
+const PRICE_PLACEHOLDER = '{{price}}';
+
+export interface PaymentLinkRequest {
+  method: 'POST';
+  path: string;
+  idempotencyKey: string;
+  /** The form fields; `{{price}}` stands for the price id the first request returns. */
+  body: Record<string, string | number>;
+}
+
+export function validatePaymentLinkPayload(payload: unknown): Record<string, unknown> {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('A payment link request must be an object.');
+  }
+  const record = payload as Record<string, unknown>;
+  const amount = record.amountCents;
+  if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
+    throw new Error('A payment link price is a positive whole number of cents.');
+  }
+  const currency = record.currency;
+  if (typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) {
+    throw new Error('A payment link currency is a three-letter code.');
+  }
+  const productName = record.productName;
+  if (typeof productName !== 'string' || productName.trim() === '' || productName.length > 250) {
+    throw new Error('A payment link names the product it sells.');
+  }
+  const confirmation = record.confirmationMessage;
+  if (typeof confirmation !== 'string' || confirmation.trim() === '' || confirmation.length > 500) {
+    throw new Error('A payment link tells the buyer what happens after they pay.');
+  }
+  return { amountCents: amount, currency, productName: productName.trim(), confirmationMessage: confirmation.trim() };
+}
+
+/** The exact requests a payment link is created with. Pure; nothing is sent. */
+export function paymentLinkRequests(payload: Record<string, unknown>, tag: string): [PaymentLinkRequest, PaymentLinkRequest] {
+  const p = validatePaymentLinkPayload(payload);
+  const metadata = { [`metadata[${PAYMENT_LINK_METADATA}]`]: tag };
+  return [
+    {
+      method: 'POST',
+      path: '/v1/prices',
+      idempotencyKey: `brain-${tag}-price`,
+      body: {
+        currency: String(p.currency).toLowerCase(),
+        unit_amount: Number(p.amountCents),
+        'product_data[name]': String(p.productName),
+        ...metadata,
+      },
+    },
+    {
+      method: 'POST',
+      path: '/v1/payment_links',
+      idempotencyKey: `brain-${tag}-link`,
+      body: {
+        'line_items[0][price]': PRICE_PLACEHOLDER,
+        'line_items[0][quantity]': 1,
+        'after_completion[type]': 'hosted_confirmation',
+        'after_completion[hosted_confirmation][custom_message]': String(p.confirmationMessage),
+        [`payment_intent_data[metadata][${PAYMENT_LINK_METADATA}]`]: tag,
+        ...metadata,
+      },
+    },
+  ];
+}
+
+export function createStripePaymentLinkAdapter(options: {
+  fetch?: FetchLike;
+  env?: NodeJS.ProcessEnv;
+  namespace: string;
+}): EffectAdapter {
+  const doFetch: FetchLike = options.fetch ?? ((url, init) => fetch(url, init));
+  const env = (): NodeJS.ProcessEnv => options.env ?? process.env;
+  const call = async (
+    key: string,
+    method: 'GET' | 'POST',
+    path: string,
+    body?: Record<string, string | number>,
+    idempotencyKey?: string,
+  ): Promise<ProviderAnswer> =>
+    await providerRequest({
+      fetch: doFetch,
+      url: `${STRIPE_API}${path}`,
+      method,
+      headers: authHeaders(key, idempotencyKey),
+      body: body ? form(body) : undefined,
+      uncertainStatuses: [409],
+    });
+
+  return {
+    name: STRIPE_PAYMENT_LINK_ADAPTER_NAME,
+    effectClass: 'EXTERNAL_RECONCILABLE',
+    namespace: options.namespace,
+    validate: validatePaymentLinkPayload,
+    fingerprintInputs: (payload) => payload,
+    health(): AdapterHealth {
+      const reading = billingConfig(env());
+      return reading.configured
+        ? { usable: true, reason: `Stripe is configured (${reading.mode} mode).` }
+        : { usable: false, reason: `Stripe is not usable: missing or malformed ${reading.problems.join(', ')}.` };
+    },
+
+    async send(request: EffectRequest): Promise<SendOutcome> {
+      const key = secretValue(STRIPE_KEY_ENV, env());
+      if (!key || !billingConfig(env()).configured) {
+        return { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: `${STRIPE_KEY_ENV} is not configured, so nothing was sent` };
+      }
+      const [priceRequest, linkRequest] = paymentLinkRequests(request.payload, request.businessId);
+      const price = await call(key, 'POST', priceRequest.path, priceRequest.body, priceRequest.idempotencyKey);
+      if (price.kind !== 'OK') return refusalOf(price);
+      const priceId = String(price.body.id ?? '');
+      if (!priceId) return { kind: 'UNCERTAIN', reason: 'Stripe created a price and returned no id' };
+      const body = Object.fromEntries(Object.entries(linkRequest.body).map(([k, v]) => [k, v === PRICE_PLACEHOLDER ? priceId : v]));
+      const link = await call(key, 'POST', linkRequest.path, body, linkRequest.idempotencyKey);
+      // A price alone takes no money: a refused link created nothing a buyer can pay.
+      if (link.kind !== 'OK') return refusalOf(link);
+      const linkId = String(link.body.id ?? '');
+      const url = typeof link.body.url === 'string' ? link.body.url : null;
+      if (!linkId || !url) return { kind: 'UNCERTAIN', reason: 'Stripe created a payment link and returned no id or url' };
+      return { kind: 'CONFIRMED', receiptRef: linkId, receiptMeta: { provider: 'stripe', url } };
+    },
+
+    async reconcile(businessId: string): Promise<ReconcileOutcome> {
+      const key = secretValue(STRIPE_KEY_ENV, env());
+      if (!key) return { kind: 'INCONCLUSIVE', reason: `${STRIPE_KEY_ENV} is not configured` };
+      const answer = await call(key, 'GET', '/v1/payment_links?limit=100');
+      if (answer.kind !== 'OK') return { kind: 'INCONCLUSIVE', reason: answer.kind === 'REFUSED' ? answer.detail : answer.reason };
+      const data = Array.isArray(answer.body.data) ? (answer.body.data as Record<string, unknown>[]) : [];
+      const found = data.find((one) => {
+        const meta = one.metadata && typeof one.metadata === 'object' ? (one.metadata as Record<string, unknown>) : {};
+        return meta[PAYMENT_LINK_METADATA] === businessId && typeof one.id === 'string';
+      });
+      if (found) {
+        return { kind: 'FOUND', receiptRef: String(found.id), receiptMeta: { provider: 'stripe', url: typeof found.url === 'string' ? found.url : null } };
+      }
+      return { kind: 'INCONCLUSIVE', reason: "no payment link carrying this id is on the first page of Stripe's list, which is not evidence that none was created" };
+    },
+
+    redactReceipt: (meta) => ({
+      provider: 'stripe',
+      // A payment link's URL is public by design: it is what every recipient is sent.
+      url: typeof meta.url === 'string' && /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9_/-]{1,200}$/.test(meta.url) ? meta.url : null,
+    }),
+  };
+}
+
+/** One completed, paid checkout through a payment link, as Stripe states it. */
+export interface LinkPayment {
+  /** The PaymentIntent, else the Checkout Session: the provider's reference for this payment. */
+  reference: string;
+  sessionId: string;
+  amountCents: number;
+  currency: string;
+  paidAt: string | null;
+  /** Where the deliverable goes; null when Stripe recorded none. */
+  buyerEmail: string | null;
+}
+
+/**
+ * The paid checkouts a payment link has taken. A read, never an effect. Only
+ * sessions Stripe reports `complete` and `paid` count, and only those whose
+ * own `payment_link` is the link asked about.
+ */
+export async function readStripePaymentLinkPayments(
+  linkId: string,
+  options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv } = {},
+): Promise<{ kind: 'READ'; payments: LinkPayment[]; complete: boolean } | { kind: 'UNREADABLE'; reason: string }> {
+  const env = options.env ?? process.env;
+  const key = secretValue(STRIPE_KEY_ENV, env);
+  if (!key) return { kind: 'UNREADABLE', reason: `${STRIPE_KEY_ENV} is not configured` };
+  if (!/^plink_[A-Za-z0-9]+$/.test(linkId)) return { kind: 'UNREADABLE', reason: 'that is not a payment link id' };
+  const answer = await providerRequest({
+    fetch: options.fetch ?? ((url, init) => fetch(url, init)),
+    url: `${STRIPE_API}/v1/checkout/sessions?payment_link=${encodeURIComponent(linkId)}&status=complete&limit=100`,
+    method: 'GET',
+    headers: authHeaders(key),
+  });
+  if (answer.kind !== 'OK') return { kind: 'UNREADABLE', reason: answer.kind === 'REFUSED' ? answer.detail : answer.reason };
+  const data = Array.isArray(answer.body.data) ? (answer.body.data as Record<string, unknown>[]) : [];
+  const payments: LinkPayment[] = [];
+  for (const one of data) {
+    if (one.payment_link !== linkId || one.status !== 'complete' || one.payment_status !== 'paid') continue;
+    if (typeof one.id !== 'string' || typeof one.amount_total !== 'number' || one.amount_total <= 0) continue;
+    const details = one.customer_details && typeof one.customer_details === 'object' ? (one.customer_details as Record<string, unknown>) : {};
+    payments.push({
+      reference: typeof one.payment_intent === 'string' ? one.payment_intent : one.id,
+      sessionId: one.id,
+      amountCents: one.amount_total,
+      currency: String(one.currency ?? '').toUpperCase(),
+      paidAt: isoFromSeconds(one.created),
+      buyerEmail: typeof details.email === 'string' && ADDRESS.test(details.email) ? details.email : null,
+    });
+  }
+  return { kind: 'READ', payments, complete: answer.body.has_more !== true };
+}

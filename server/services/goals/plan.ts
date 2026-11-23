@@ -99,12 +99,12 @@ import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
-import { inputEvidence, type GoalPortfolio, type InputEvidence, type UnpricedPopulation } from './portfolio.ts';
-import { sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
+import { heldEvaluation, inputEvidence, type GoalPortfolio, type InputEvidence, type PortfolioCombination, type UnpricedPopulation } from './portfolio.ts';
+import { sendCommitteeNeeds, sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
-import { readPathways, requiredStructures, type BrainCapabilities, type GoalStructures, type PathwayReading } from './pathways.ts';
+import { LEG_LABEL, legFeasibility, readPathways, requiredStructures, type BrainCapabilities, type GoalStructures, type LegFeasibility, type PathwayReading, type TransactionPathway } from './pathways.ts';
 import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Factor, type Reconstruction, type StrategyChange, type VariantReading } from './reconstruction.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
@@ -116,6 +116,7 @@ import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
 import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
 import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrityInput.ts';
+import { committeeOf, type CommitteeReading } from './committee.ts';
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
@@ -241,6 +242,13 @@ export interface PlanAcceptance {
     reach: number | null;
     reachBasis: 'PROBABILITY' | 'COVERAGE' | null;
     /**
+     * Its counted legs that lack a channel, an offer, a fulfiller or settled
+     * cash (`legFeasibility`): while any is listed, `reach` is assumption-only
+     * coverage and never the plan's outcome. Absent when no pathway reading
+     * judged the legs.
+     */
+    unsupported?: string[];
+    /**
      * What the candidate would reach if the unmeasured assumptions its plan
      * tests held (invariant 39): reported beside `reach`, never as it. Absent
      * when the candidate rests on no assumed move.
@@ -249,6 +257,17 @@ export interface PlanAcceptance {
   } | null;
   /** Why the candidate is not accepted, each a thing work can change. */
   shortfalls: string[];
+  /**
+   * Each counted leg of the accepted plan (or, without one, the candidate):
+   * what it structurally lacks and the permissions it still waits on. Absent
+   * when no pathway reading was passed.
+   */
+  legs?: LegFeasibility[];
+  /**
+   * An accepted plan's one named blocker: the permissions and providers its
+   * legs still wait on (§58). Null when nothing is missing.
+   */
+  blocker?: string | null;
   sentence: string;
   /**
    * The verdict, as the owner names them (Q2-8, 2026-11-14). Kept beside
@@ -400,6 +419,12 @@ export interface PlanReading {
    */
   integrity?: PlanIntegrityViolation[];
   /**
+   * The investment committee's review of this reading (`committee.ts`, §117):
+   * six independent role verdicts with cited defects. A reading it blocks is
+   * never ACCEPTED. Absent on a reading built before it existed.
+   */
+  committee?: CommitteeReading | null;
+  /**
    * Why the goal's research is not yet producing openings this plan can use,
    * read from the openings it judged and the goal's recent rounds
    * (`researchYield.ts`). The next goal round is asked differently for each.
@@ -465,6 +490,39 @@ export interface ObjectiveReading {
   tradeOffs: PlanTradeOff[];
   /** What the outcome was read from, and what it does not model. */
   basis: string;
+  /**
+   * Whether `outcome` is the plan's outcome or only assumption-only coverage,
+   * and the figure over the supported legs alone. Null when no pathway reading
+   * judged the legs.
+   */
+  support?: OutcomeSupport | null;
+}
+
+/**
+ * The outcome split by what supports it (audit 2026-11-23, wst_7b4fcbb5f2384f31b6c3:
+ * a 98% and an expected $55,772 read almost wholly from legs with no channel, no
+ * offer and nobody to fulfil them). SUPPORTED: every counted leg has a channel, an
+ * offer at an established price, a fulfiller and settled cash, so `outcome` is the
+ * plan's. ASSUMPTION_ONLY: at least one does not, so `outcome` is exploration over
+ * assumptions, and the figures a person may read as the plan's are `reach` and
+ * `outcome` here — the same simulation over the supported legs alone.
+ */
+export interface OutcomeSupport {
+  basis: 'SUPPORTED' | 'ASSUMPTION_ONLY';
+  legs: LegFeasibility[];
+  /** Share of worlds reaching the target over the supported legs alone; null when that was not simulated. */
+  reach: number | null;
+  /** Expected, upper and adverse over the supported legs alone; null when that was not simulated. */
+  outcome: OutcomeReading | null;
+  /** The full figure's reach, kept beside it and named for what it is. */
+  assumptionReach: number | null;
+  sentence: string;
+}
+
+/** The outcome a reading presents as the plan's: the supported one whenever the full one is assumption-only. Pure. */
+export function planOutcomeOf(reading: Pick<ObjectiveReading, 'outcome' | 'support'> | null | undefined): OutcomeReading | null {
+  if (!reading) return null;
+  return reading.support?.basis === 'ASSUMPTION_ONLY' ? reading.support.outcome : reading.outcome;
 }
 
 /** The plan set the plan carries (GOAL-23), with the rebuild after the most important change. */
@@ -1470,6 +1528,45 @@ export function pathwayLabel(members: readonly string[], pathways: ReadonlyArray
   return members.map((id) => (titles.get(id) ?? (isArrangementId(id) ? 'a constructed arrangement' : 'a held opening')).slice(0, 60)).join(' + ');
 }
 
+/**
+ * Each counted leg judged on its structure (`legFeasibility`), from the
+ * pathway reading and the quant engine's own price judgment. Null when no
+ * pathway reading was passed: then nothing is judged here (the plan read
+ * always passes one). Pure.
+ */
+export function legsOf(
+  ids: readonly string[],
+  pathways: ReadonlyArray<Pick<TransactionPathway, 'opportunityId' | 'gaps' | 'permissionsMissing'>> | null | undefined,
+  portfolio: Pick<GoalPortfolio, 'demand'> | null | undefined,
+): LegFeasibility[] | null {
+  if (!pathways) return null;
+  const by = new Map(pathways.map((p) => [p.opportunityId, p]));
+  const unpriced = (id: string) => !!(portfolio?.demand ?? []).find((d) => d.opportunityId === id)?.unestablished.includes('price');
+  return [...new Set(ids)].map((id) => legFeasibility(id, by.get(id), !unpriced(id)));
+}
+
+/** What the unsupported legs lack, in words, each leg by title. Pure. */
+export function lacksSentence(legs: readonly LegFeasibility[], titles: ReadonlyMap<string, string> = new Map()): string {
+  return legs
+    .filter((l) => !l.supported)
+    .slice(0, 6)
+    .map((l) => `"${(titles.get(l.opportunityId) ?? (isArrangementId(l.opportunityId) ? 'a constructed arrangement' : 'a held opening')).slice(0, 60)}" lacks ${l.lacks.map((k) => LEG_LABEL[k]).join(', ')}`)
+    .join('; ');
+}
+
+/** The candidate with its unsupported legs marked (`unsupported`), when legs were judged. Pure. */
+export function withLegSupport(candidate: PlanAcceptance['candidate'], legs: readonly LegFeasibility[] | null): PlanAcceptance['candidate'] {
+  if (!candidate || !legs) return candidate;
+  const own = new Set(candidate.opportunityIds);
+  return { ...candidate, unsupported: legs.filter((l) => own.has(l.opportunityId) && !l.supported).map((l) => l.opportunityId) };
+}
+
+/** The one named blocker of legs that lack nothing structural: the permissions and providers they wait on. Pure. */
+export function permissionBlocker(legs: readonly LegFeasibility[] | null): string | null {
+  const missing = [...new Set((legs ?? []).flatMap((l) => l.permissions))];
+  return missing.length > 0 ? `selling and collecting wait only on ${missing.join(', ')}, which the owner grants or connects` : null;
+}
+
 export function judgeAcceptance(input: {
   achieved: boolean;
   chosen: StrategyReading | null;
@@ -1544,14 +1641,35 @@ export function judgeAcceptance(input: {
     !!input.chosen?.chainComplete && input.chosen.verdict !== 'NOT_VIABLE' && input.chosen.opportunityIds.length > 0 && brokenIn(ids).some((id) => !input.chosen!.opportunityIds.includes(id));
   const held = pricedHeld && qualifiedOver([...new Set(pricedHeld.members.map((m) => m.opportunityId))]) ? null : pricedHeld;
   const heldIds = held ? [...new Set(held.members.map((m) => m.opportunityId))] : [];
-  const candidate: PlanAcceptance['candidate'] =
+  const pathwayRows = input.pathways?.pathways;
+  const judge = (ids: readonly string[]) => legsOf(ids, pathwayRows, input.portfolio);
+  const titles = new Map<string, string>([...(input.portfolio?.demand ?? []).map((d) => [d.opportunityId, d.title] as const), ...(pathwayRows ?? []).filter((p) => !!p.title).map((p) => [p.opportunityId, p.title] as const)]);
+  const proposed: PlanAcceptance['candidate'] =
     held && heldIds.length > 0
       ? { label: held.members.map((m) => m.title.slice(0, 60)).join(' + '), opportunityIds: heldIds, source: 'QUANT_PORTFOLIO', settledP50: held.settledP50, reach: held.reach, reachBasis: input.portfolio!.basis }
       : input.chosen && input.chosen.verdict !== 'NOT_VIABLE'
         ? { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds, source: 'STRATEGY', settledP50: input.chosen.conservativeSettled ?? input.chosen.sweep.settledP50, reach: input.chosen.sweep.goalMetShare, reachBasis: input.chosen.sweep.goalMetShare === null ? null : input.chosen.sweep.probabilistic ? 'PROBABILITY' : 'COVERAGE' }
         : input.pathways?.portfolio.leading
-          ? { label: pathwayLabel(input.pathways.portfolio.leading.members, input.pathways.pathways ?? [], input.portfolio ?? null), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
+          ? {
+              label: pathwayLabel(input.pathways.portfolio.leading.members, input.pathways.pathways ?? [], input.portfolio ?? null),
+              opportunityIds: input.pathways.portfolio.leading.members,
+              source: 'PATHWAYS',
+              /*
+               * One source for a plan's settled figures: the simulated worlds. The leading
+               * combination's own figures are contribution bounds (each leg's inputs at their
+               * own ends, summed and capped at the gap), not a distribution, so its median is
+               * the engine's for exactly these members when the engine simulated them, and
+               * otherwise none (production wst_7b4fcbb5f2384f31b6c3: a $10,000 "p50" beside a
+               * $368 "p10" and a $32,266 adverse case, from two estimators).
+               */
+              settledP50: simulatedCombination(input.pathways.portfolio.leading.members, input.portfolio ?? null)?.settledP50 ?? null,
+              reach: null,
+              reachBasis: null,
+            }
           : null;
+  const candidate = withLegSupport(proposed, proposed ? judge(proposed.opportunityIds) : null);
+  const bestLegs = judge(bestIds);
+  const bestUnsupported = !!bestLegs?.some((l) => !l.supported);
   // An alternative's construction is not the best combination's: the engine's assurance and interval are the best one's.
   const constructionPortfolio = pricedAlternative || !held ? null : (input.portfolio ?? null);
   if (input.achieved) {
@@ -1606,7 +1724,11 @@ export function judgeAcceptance(input: {
       );
     } else if (bounds.low < required) {
       shortfalls.push(`the evidenced combination's defensible lower bound is ${pct(bounds.low)} over its smallest sample${sample ? ` (${sample})` : ''}, under the required ${pct(required)}`);
+    } else if (bestUnsupported) {
+      // Complete feasibility before acceptance: a counted leg nobody can reach, offer, fulfil or collect from is not executable, however its inputs were measured.
+      shortfalls.push(`the evidenced combination counts money from legs that cannot be executed yet: ${lacksSentence(bestLegs!, titles)}`);
     } else {
+      const blocker = permissionBlocker(bestLegs);
       return {
         status: 'ACCEPTED',
         required,
@@ -1622,7 +1744,8 @@ export function judgeAcceptance(input: {
         accepted: { label: candidate!.label, opportunityIds: bestIds },
         candidate,
         shortfalls: [],
-        sentence: `Accepted: the evidenced combination collects the target before the deadline with a defensible lower bound of ${pct(bounds.low)} ≥ ${pct(required)} ${interval ? `(5th percentile under parameter uncertainty, weakest input ${sample} events)` : `over its smallest evidence sample (${sample})`}.`,
+        ...(bestLegs ? { legs: bestLegs, blocker } : {}),
+        sentence: `Accepted: the evidenced combination collects the target before the deadline with a defensible lower bound of ${pct(bounds.low)} ≥ ${pct(required)} ${interval ? `(5th percentile under parameter uncertainty, weakest input ${sample} events)` : `over its smallest evidence sample (${sample})`}.${blocker ? ` Its one blocker: ${blocker}.` : ''}`,
         verdict: 'CONFIDENCE_VERIFIED',
         construction,
       };
@@ -1632,7 +1755,13 @@ export function judgeAcceptance(input: {
   }
   // 3. This Brain's own record.
   const m = input.measuredChance;
-  if (input.chosen?.chainComplete && m && m.lowerBound >= required) {
+  const chosenLegs = input.chosen ? judge([...input.chosen.opportunityIds, ...(input.chosen.arrangementIds ?? [])]) : null;
+  const chosenUnsupported = !!chosenLegs?.some((l) => !l.supported);
+  if (input.chosen?.chainComplete && m && m.lowerBound >= required && chosenUnsupported) {
+    shortfalls.push(`"${input.chosen.label.slice(0, 120)}" has every chain link established, but counts money from legs that cannot be executed yet: ${lacksSentence(chosenLegs!, titles)}`);
+  }
+  if (input.chosen?.chainComplete && m && m.lowerBound >= required && !chosenUnsupported) {
+    const blocker = permissionBlocker(chosenLegs);
     return {
       status: 'ACCEPTED',
       required,
@@ -1640,7 +1769,8 @@ export function judgeAcceptance(input: {
       accepted: { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds },
       candidate,
       shortfalls: [],
-      sentence: `Accepted: "${input.chosen.label}" has every link established, and ${m.sampleSize} accepted plans like it ended with a success rate whose lower bound is ${pct(m.lowerBound)} ≥ ${pct(required)}.`,
+      ...(chosenLegs ? { legs: chosenLegs, blocker } : {}),
+      sentence: `Accepted: "${input.chosen.label}" has every link established, and ${m.sampleSize} accepted plans like it ended with a success rate whose lower bound is ${pct(m.lowerBound)} ≥ ${pct(required)}.${blocker ? ` Its one blocker: ${blocker}.` : ''}`,
       verdict: 'CONFIDENCE_VERIFIED',
       construction,
     };
@@ -1659,7 +1789,7 @@ export function judgeAcceptance(input: {
    */
   const missingAny = bestIds.some((id) => (input.considered.find((one) => one.opportunityId === id)?.missing.length ?? 1) > 0);
   const evidencedInterval = !!construction?.interval && construction.interval.basis === 'EVIDENCE';
-  const constructed = !!candidate && candidate.source === 'QUANT_PORTFOLIO' && input.portfolio?.basis === 'PROBABILITY' && !missingAny && evidencedInterval;
+  const constructed = !!candidate && candidate.source === 'QUANT_PORTFOLIO' && input.portfolio?.basis === 'PROBABILITY' && !missingAny && evidencedInterval && !bestUnsupported;
   const out: PlanAcceptance = {
     status: candidate ? 'CANDIDATE_ONLY' : 'NO_CANDIDATE',
     required,
@@ -1667,6 +1797,7 @@ export function judgeAcceptance(input: {
     accepted: null,
     candidate,
     shortfalls,
+    ...(candidate && pathwayRows ? { legs: judge(candidate.opportunityIds) ?? [] } : {}),
     sentence: candidateSentence(candidate, required),
     verdict: constructed ? 'QUANTITATIVELY_CONSTRUCTED' : 'IMPROVEMENT_REQUIRED',
     construction,
@@ -1720,10 +1851,56 @@ export function candidateSentence(candidate: PlanAcceptance['candidate'], requir
   return (
     `NOT ACCEPTED: no plan has a defensible ${pct(required)} probability of collecting the target before the deadline. ` +
     `The strongest candidate is ${candidate.source === 'RECONSTRUCTED' ? 'the reconstructed plan ' : ''}"${candidate.label.slice(0, 160)}"` +
-    (candidate.reach !== null ? ` (reaches the target in ${pct(candidate.reach)} of worlds, ${candidate.reachBasis === 'PROBABILITY' ? 'a probability' : 'coverage, not a probability'})` : '') +
+    (candidate.reach !== null
+      ? candidate.unsupported?.length
+        ? ` (assumption-only coverage: it reaches the target in ${pct(candidate.reach)} of worlds only by counting ${candidate.unsupported.length} of ${new Set(candidate.opportunityIds).size} leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome)`
+        : ` (reaches the target in ${pct(candidate.reach)} of worlds, ${candidate.reachBasis === 'PROBABILITY' ? 'a probability' : 'coverage, not a probability'})`
+      : candidate.unsupported?.length
+        ? ` (${candidate.unsupported.length} of ${new Set(candidate.opportunityIds).size} leg(s) have no reachable channel, offer, fulfiller or settled cash yet)`
+        : '') +
     (candidate.assumedUpside ? `; ${candidate.assumedUpside.sentence}` : '') +
     '; Brain keeps constructing, combining and comparing strategies.'
   );
+}
+
+/** A combination's settled distribution, as the quant engine or the reconstruction read it. */
+export type SimulatedDistribution = Pick<PortfolioCombination, 'reach' | 'settledP10' | 'settledP50' | 'settledP90'>;
+
+/**
+ * The combination the quant engine simulated with exactly these members, or
+ * null when it simulated none: the best one, the priced best, or an
+ * alternative. Members compare as a set. Pure.
+ */
+export function simulatedCombination(ids: readonly string[], portfolio: Pick<GoalPortfolio, 'best' | 'pricedBest' | 'alternatives'> | null): PortfolioCombination | null {
+  if (!portfolio || ids.length === 0) return null;
+  const key = [...new Set(ids)].sort().join('|');
+  const combos = [portfolio.best, portfolio.pricedBest ?? null, ...(portfolio.alternatives ?? [])];
+  return combos.find((c): c is PortfolioCombination => !!c && [...new Set(c.members.map((m) => m.opportunityId))].sort().join('|') === key) ?? null;
+}
+
+/**
+ * The distribution of the plan the acceptance holds — the accepted plan, or
+ * else the candidate — and nothing else (production wst_7b4fcbb5f2384f31b6c3,
+ * 2026-11-23): the outcome was read from `portfolio.best` whichever plan was
+ * held, so a reading whose candidate was the pathways' leading combination
+ * carried the engine's best's $32,266 adverse case beside the leading
+ * combination's own figures. A reconstructed candidate reads the variant it
+ * was adopted on; a candidate the engine never simulated has no distribution,
+ * and so no outcome. Pure.
+ */
+export function heldDistribution(acceptance: Pick<PlanAcceptance, 'accepted' | 'candidate'>, portfolio: Pick<GoalPortfolio, 'best' | 'pricedBest' | 'alternatives'> | null, reconstruction: Pick<Reconstruction, 'best' | 'established'> | null): { ids: string[]; distribution: SimulatedDistribution } | null {
+  const c = acceptance.candidate;
+  if (acceptance.accepted && acceptance.accepted.opportunityIds.length > 0) {
+    const found = simulatedCombination(acceptance.accepted.opportunityIds, portfolio);
+    return found ? { ids: [...acceptance.accepted.opportunityIds], distribution: found } : null;
+  }
+  if (!c || c.opportunityIds.length === 0) return null;
+  if (c.source === 'RECONSTRUCTED') {
+    const held = reconstruction ? (reconstruction.established ?? reconstruction.best) : null;
+    return held && held.feasible ? { ids: [...c.opportunityIds], distribution: held } : null;
+  }
+  const found = simulatedCombination(c.opportunityIds, portfolio);
+  return found ? { ids: [...c.opportunityIds], distribution: found } : null;
 }
 
 /**
@@ -1902,6 +2079,58 @@ export function arrangementModels(
   return out;
 }
 
+/**
+ * The held plan's outcome split by support (`OutcomeSupport`). A leg that
+ * lacks a channel, an offer at an established price, a fulfiller or settled
+ * cash contributes nothing to the supported figure: with none supported that
+ * figure is exactly what is already held, with every leg supported it is the
+ * full figure, and between the two it is the engine's own reading of the
+ * supported legs alone (`supported`), or not stated when none was made —
+ * never interpolated. Pure.
+ */
+export function outcomeSupport(input: {
+  objective: GoalObjective;
+  held: number;
+  remaining: number;
+  ids: readonly string[];
+  legs: LegFeasibility[] | null;
+  full: SimulatedDistribution | null;
+  fullOutcome: OutcomeReading | null;
+  supported: SimulatedDistribution | null;
+  read: (d: SimulatedDistribution, ids: readonly string[]) => OutcomeReading;
+  titles?: ReadonlyMap<string, string>;
+}): OutcomeSupport | null {
+  const { legs } = input;
+  if (!legs || legs.length === 0) return null;
+  const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+  const usd = (x: number) => `$${Math.round(x).toLocaleString('en-US')}`;
+  const ok = legs.filter((l) => l.supported).map((l) => l.opportunityId);
+  const assumptionReach = input.full?.reach ?? null;
+  if (ok.length === legs.length) {
+    return { basis: 'SUPPORTED', legs, reach: assumptionReach, outcome: input.fullOutcome, assumptionReach, sentence: `every one of the ${legs.length} counted leg(s) has a reachable channel, an offer at an established price, a fulfiller and settled cash: the outcome is the plan's` };
+  }
+  let reach: number | null;
+  let outcome: OutcomeReading | null;
+  if (ok.length === 0) {
+    // Nothing supported collects anything: what is already held is the whole supported figure.
+    reach = input.remaining <= 0 ? 1 : 0;
+    outcome = input.read({ reach, settledP10: 0, settledP50: 0, settledP90: 0 }, []);
+  } else if (input.supported) {
+    reach = input.supported.reach;
+    outcome = input.read(input.supported, ok);
+  } else {
+    reach = null;
+    outcome = null;
+  }
+  const full = input.fullOutcome;
+  const sentence =
+    `assumption-only coverage: ${assumptionReach === null ? 'any full figure would' : `the ${pct(assumptionReach)} reach${full ? ` and expected ${usd(full.expected)} (adverse ${usd(full.adverse)})` : ''}`} count ${legs.length - ok.length} of ${legs.length} leg(s) that cannot be executed yet (${lacksSentence(legs, input.titles)}); ` +
+    (reach === null
+      ? `the ${ok.length} supported leg(s) were not simulated on their own, so no supported figure is stated`
+      : `over the ${ok.length} supported leg(s) alone it reaches the target in ${pct(reach)} of worlds${outcome ? `, expected ${usd(outcome.expected)}, adverse ${usd(outcome.adverse)}` : ''}`);
+  return { basis: 'ASSUMPTION_ONLY', legs, reach, outcome, assumptionReach, sentence };
+}
+
 export function composeGoalReadings(input: {
   objective: GoalObjective;
   target: TargetReading;
@@ -1914,6 +2143,12 @@ export function composeGoalReadings(input: {
   ledger?: ReadonlyMap<string, OpeningLedger> | null;
   /** Each arrangement's own scenario conversion, by arrangement key (`arrangementModels`): what its plan candidate reads its inputs from (W2b). */
   arrangementModels?: ReadonlyMap<string, ModelledOpportunity> | null;
+  /**
+   * The quant engine's reading over the held plan's supported legs alone
+   * (`supportedDistribution`), when some legs are supported and some are not;
+   * absent, that split is reported as not simulated.
+   */
+  supported?: SimulatedDistribution | null;
 }): { timelines: TimelineReading; objective: ObjectiveReading; planSet: GoalPlanSet } {
   const { objective, target, portfolio, acceptance } = input;
   const calibration = planCalibration(acceptance);
@@ -1944,9 +2179,9 @@ export function composeGoalReadings(input: {
       .reduce((sum, c) => sum + c.amount, 0);
   const combos = portfolio ? [portfolio.best, ...portfolio.alternatives].filter((c): c is NonNullable<GoalPortfolio['best']> => c !== null) : [];
   const keyOf = (c: (typeof combos)[number]) => c.members.map((m) => m.opportunityId).join('+');
-  const readingOf = (c: (typeof combos)[number]): OutcomeReading => {
+  const readingOf = (c: SimulatedDistribution, ids: readonly string[]): OutcomeReading => {
     // The accepted combination's calibration is its own; an alternative beside it is not calibrated by it.
-    const own = calibrationFor({ opportunityIds: [...new Set(c.members.map((m) => m.opportunityId))] }, calibration) ?? calibration;
+    const own = calibrationFor({ opportunityIds: [...new Set(ids)] }, calibration) ?? calibration;
     const r = readOutcome(objective, settledWorlds(held, { p10: c.settledP10, p50: c.settledP50, p90: c.settledP90 }), {
       calibrated: own.calibrated,
       commitments,
@@ -1956,10 +2191,24 @@ export function composeGoalReadings(input: {
     // Only the plan's own acceptance accepts: the outcome reading never promotes a candidate by itself.
     return acceptance.status === 'ACCEPTED' && r.status === 'ACCEPTED' ? r : { ...r, status: 'CANDIDATE' };
   };
-  const outcome = portfolio?.best ? readingOf(portfolio.best) : null;
+  // One source: the plan the acceptance holds, read from the simulated worlds that gave its reach — never another combination's.
+  const heldPlan = heldDistribution(acceptance, portfolio, input.reconstruction);
+  const outcome = heldPlan ? readingOf(heldPlan.distribution, heldPlan.ids) : null;
+  const support = outcomeSupport({
+    objective,
+    held,
+    remaining,
+    ids: heldPlan?.ids ?? acceptance.accepted?.opportunityIds ?? acceptance.candidate?.opportunityIds ?? [],
+    legs: input.pathways ? legsOf(heldPlan?.ids ?? acceptance.accepted?.opportunityIds ?? acceptance.candidate?.opportunityIds ?? [], input.pathways.pathways, portfolio) : null,
+    full: heldPlan?.distribution ?? null,
+    fullOutcome: outcome,
+    supported: input.supported ?? null,
+    read: (d, ids) => readingOf(d, ids),
+    titles: new Map((input.pathways?.pathways ?? []).map((p) => [p.opportunityId, p.title] as const)),
+  });
   const counts = new Map<string, number>();
   for (const c of combos) for (const id of new Set(c.members.map((m) => m.opportunityId))) counts.set(id, (counts.get(id) ?? 0) + 1);
-  const readings = combos.map((c) => ({ c, r: readingOf(c) }));
+  const readings = combos.map((c) => ({ c, r: readingOf(c, c.members.map((m) => m.opportunityId)) }));
   const trade = tradeOffs(
     objective,
     readings.map(({ c, r }) => {
@@ -1978,8 +2227,11 @@ export function composeGoalReadings(input: {
     outcome,
     tradeOffs: trade,
     basis: outcome
-      ? `the quant engine's strongest combination over ${portfolio!.worlds} worlds (${portfolio!.basis.toLowerCase()}), read at its p10/p50/p90 and added to the ${held} already held; tails beyond p10 and p90 are not modelled, so an adverse quantile below 10% reads at p10 and says less than it would on a calibrated tail`
-      : 'no combination of the openings held is modelled, so no outcome is read; the threshold still binds as a minimum',
+      ? `the plan the acceptance holds, as the quant engine simulated it over ${portfolio?.worlds ?? 'its'} worlds (${(portfolio?.basis ?? 'COVERAGE').toLowerCase()}) — the same worlds its reach is read from — at its p10/p50/p90, added to the ${held} already held; tails beyond p10 and p90 are not modelled, so an adverse quantile below 10% reads at p10 and says less than it would on a calibrated tail`
+      : acceptance.candidate || acceptance.accepted
+        ? 'the plan held was not simulated as a combination, so no outcome is read: its pathway figures are contribution bounds, not a distribution; the threshold still binds as a minimum'
+        : 'no combination of the openings held is modelled, so no outcome is read; the threshold still binds as a minimum',
+    support,
   };
 
   // The candidate plans, proven distinct (GOAL-23).
@@ -2084,6 +2336,18 @@ export function readingsSummary(reading: Pick<PlanReading, 'timelines' | 'object
                 floor: o.outcome.floor,
                 protection: o.outcome.protection,
                 surplusForSuccessors: o.outcome.surplusForSuccessors,
+                basis: o.support?.basis ?? null,
+              }
+            : null,
+          support: o.support
+            ? {
+                basis: o.support.basis,
+                reach: o.support.reach,
+                assumptionReach: o.support.assumptionReach,
+                expected: o.support.outcome?.expected ?? null,
+                adverse: o.support.outcome?.adverse ?? null,
+                legs: o.support.legs.map((l) => ({ opportunityId: l.opportunityId, lacks: l.lacks, permissions: l.permissions })),
+                sentence: o.support.sentence,
               }
             : null,
         }
@@ -2586,7 +2850,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
    */
   const plan = adoptReconstruction({ reconstruction, baseline: model.portfolio, openings: planOpenings(model) });
   if (plan.candidate && acceptance.status !== 'ACCEPTED') {
-    acceptance = { ...acceptance, status: 'CANDIDATE_ONLY', candidate: plan.candidate, sentence: candidateSentence(plan.candidate, acceptance.required) };
+    const adoptedLegs = legsOf(plan.candidate.opportunityIds, pathways.pathways, model.portfolio);
+    const adoptedCandidate = withLegSupport(plan.candidate, adoptedLegs);
+    acceptance = { ...acceptance, status: 'CANDIDATE_ONLY', candidate: adoptedCandidate, ...(adoptedLegs ? { legs: adoptedLegs } : {}), sentence: candidateSentence(adoptedCandidate, acceptance.required) };
   }
   // The goal as stated, judged on arithmetic rather than on the openings found (C-10, §65).
   // Or on measurements alone: every opening held bounded by a counted market or by the goal's own limits (round 13).
@@ -2677,7 +2943,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   } catch (error) {
     degraded.push(`opening ledger: ${errorText(error)} (the plan set reads no observed collections or executed sales)`);
   }
-  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: models });
+  // The held plan over its supported legs alone, when some are supported and some are not: the figure the reading may present as the plan's.
+  const supported = await supportedDistribution(model, acceptance, pathways, degraded);
+  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: models, supported });
   const continuation = continuationOf({
     achieved: target.achieved,
     daysLeft: target.daysLeft,
@@ -2685,7 +2953,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     policy,
     acceptance: acceptance.status,
     instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets,
-    surplus: readings.objective.outcome?.surplusForSuccessors ?? Math.max(0, (target.achievedCents - target.targetCents) / 100),
+    // Surplus is financed only by what supported legs collect: an assumption-only outcome finances nothing.
+    surplus: planOutcomeOf(readings.objective)?.surplusForSuccessors ?? Math.max(0, (target.achievedCents - target.targetCents) / 100),
   });
   const built: PlanReading = {
     ...base,
@@ -2754,7 +3023,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   };
   // The plan's integrity (`planIntegrity`), checked on the steps, the lead and every text a person reads: a reading that breaks a rule is never ACCEPTED.
   const reading = gateIntegrity(built, (refused) => {
-    const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models });
+    const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models, supported });
     return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets, surplus: continuation.surplusForSuccessors }) };
   });
   if (input.persist) {
@@ -2763,6 +3032,44 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     await pursueSales(goal, reading);
   }
   return reading;
+}
+
+/**
+ * The quant engine over the held plan's supported legs alone (`OutcomeSupport`),
+ * on the same inputs, limits and seed as the plan's own evaluation: run only when
+ * some counted legs are supported and some are not — with none supported the
+ * figure is what is held, and with all it is the plan's own. Null otherwise, or
+ * when the evaluation fails (said in `degraded`).
+ */
+async function supportedDistribution(
+  model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null },
+  acceptance: PlanAcceptance,
+  pathways: PathwayReading,
+  degraded: string[],
+): Promise<SimulatedDistribution | null> {
+  const ids = acceptance.accepted?.opportunityIds.length ? acceptance.accepted.opportunityIds : (acceptance.candidate?.opportunityIds ?? []);
+  const legs = legsOf(ids, pathways.pathways, model.portfolio) ?? [];
+  const ok = new Set(legs.filter((l) => l.supported).map((l) => l.opportunityId));
+  if (ok.size === 0 || ok.size === legs.length || !model.portfolioInput) return null;
+  const already = simulatedCombination([...ok], model.portfolio);
+  if (already) return already;
+  const { openings, reserve: _reserve, knowledge: _knowledge, ...limits } = model.portfolioInput;
+  const only = openings.filter((one) => ok.has(one.opportunity.id));
+  if (only.length === 0) return null;
+  try {
+    const read = await heldEvaluation({ ...limits, openings: only, knowledge: null, causal: false }, async (one) => {
+      const evaluator = sharedEvaluator();
+      try {
+        return await evaluator.evaluate(one);
+      } finally {
+        await evaluator.close();
+      }
+    });
+    return read.best;
+  } catch (error) {
+    degraded.push(`supported-legs evaluation: ${errorText(error)} (no supported figure is stated)`);
+    return null;
+  }
 }
 
 /** How long a goal's exploration is reused while its inputs are unchanged (§101); after it, the library and the model get another turn. */
@@ -4604,6 +4911,12 @@ export async function listReadings(goalId: string): Promise<ReadingRow[]> {
  */
 export function planProgress(reading: PlanReading): {
   reach: number | null;
+  /**
+   * ASSUMPTION_ONLY when the held plan counts a leg that cannot be executed yet: `reach` is then
+   * coverage over assumptions, and `supportedReach` is the reach over its supported legs alone.
+   */
+  reachBasis?: 'SUPPORTED' | 'ASSUMPTION_ONLY' | null;
+  supportedReach?: number | null;
   settledP50: number | null;
   bestReach: number | null;
   considered: number;
@@ -4618,6 +4931,9 @@ export function planProgress(reading: PlanReading): {
   const m = reading.pathways?.measures ?? null;
   return {
     reach: best ? Math.round(best.reach * 100) / 100 : null,
+    ...(reading.objective?.support
+      ? { reachBasis: reading.objective.support.basis, supportedReach: reading.objective.support.reach === null ? null : Math.round(reading.objective.support.reach * 100) / 100 }
+      : {}),
     settledP50: best ? Math.round(best.settledP50 / 50) * 50 : null,
     bestReach: reading.bestReach === null ? null : Math.round(reading.bestReach / 50) * 50,
     considered: reading.considered.length,
@@ -4702,6 +5018,8 @@ export function readingDigest(reading: PlanReading): string {
     reconstruction: reconstructionDigest(reading.reconstruction ?? null),
     // Whether the goal's work continues is a conclusion: a change in it is recorded as a new reading.
     ...(reading.continuation ? { continues: reading.continuation.continues } : {}),
+    // The committee's verdict is a conclusion; its timing is not.
+    ...(reading.committee ? { committee: reading.committee.verdict } : {}),
   };
   return sha256(canonicalJson(summary));
 }
@@ -4753,6 +5071,26 @@ export function refuseForIntegrity(acceptance: PlanAcceptance, violations: reado
 }
 
 /**
+ * An acceptance refused by the investment committee (`committee.ts`, §117): a
+ * failed role, a critical defect, or — on a final plan — a role a specialist
+ * has not yet settled. A candidate at most, the committee's blocker first among
+ * the shortfalls, and never a probability or an accepted plan. Pure.
+ */
+export function refuseForCommittee(acceptance: PlanAcceptance, committee: Pick<CommitteeReading, 'blocks' | 'blocker' | 'roles' | 'verdict'>): PlanAcceptance {
+  if (!committee.blocks || acceptance.status !== 'ACCEPTED') return acceptance;
+  const reasons = committee.roles.flatMap((r) => [...r.defects.map((d) => `committee ${r.role}${d.critical ? ' (critical)' : ''}: ${d.claim} — ${d.why}`), ...(r.verdict === 'UNKNOWN' ? r.open.map((q) => `committee ${r.role} has not settled ${q.subject.replace(/^[A-Z_]+: /, '')}`) : [])]);
+  const refused: PlanAcceptance = {
+    ...acceptance,
+    status: acceptance.candidate ? 'CANDIDATE_ONLY' : 'NO_CANDIDATE',
+    probability: null,
+    accepted: null,
+    shortfalls: [...reasons, ...acceptance.shortfalls],
+    sentence: `Not accepted: the investment committee ${committee.verdict === 'FAIL' ? 'failed' : 'has not settled'} the plan — ${(committee.blocker ?? reasons[0] ?? 'a role is unsettled').slice(0, 400)}.`,
+  };
+  return { ...storableAcceptance(refused), verdict: verdictOf(refused) };
+}
+
+/**
  * The reading with its integrity checked (`reading.integrity`). A reading
  * ACCEPTED with any violation is refused (`refuseForIntegrity`): its verdict
  * is no longer RECOMMENDABLE (RECOMMENDABLE iff ACCEPTED), its summary says
@@ -4765,13 +5103,17 @@ export function gateIntegrity(
   recompose: (refused: PlanAcceptance) => Pick<PlanReading, 'timelines' | 'objective' | 'planSet' | 'continuation'>,
 ): PlanReading {
   const { violations } = planIntegrity(integrityInput(reading));
-  if (reading.acceptance.status !== 'ACCEPTED' || violations.length === 0) return { ...reading, integrity: violations };
-  const acceptance = refuseForIntegrity(reading.acceptance, violations);
+  // The investment committee (§117) reads the same reading; it can only take an acceptance away.
+  const committee = committeeOf(reading);
+  const committeeRefuses = reading.acceptance.status === 'ACCEPTED' && reading.acceptance.probability?.basis !== 'TARGET_MET' && committee.blocks;
+  if (reading.acceptance.status !== 'ACCEPTED' || (violations.length === 0 && !committeeRefuses)) return { ...reading, integrity: violations, committee };
+  const acceptance = violations.length > 0 ? refuseForIntegrity(reading.acceptance, violations) : refuseForCommittee(reading.acceptance, committee);
   const again = recompose(acceptance);
   return {
     ...reading,
     ...again,
     integrity: violations,
+    committee,
     acceptance,
     verdict: reading.verdict === 'RECOMMENDABLE' ? 'NEEDS_EVIDENCE' : reading.verdict,
     // An accepted reading's summary is its acceptance's sentence: the refusal replaces it, never stands beside "Accepted".
@@ -4828,6 +5170,19 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     infeasible: reading.infeasible,
     degraded: reading.degraded,
     priceVariables: reading.priceVariables ?? [],
+    // The investment committee (§117): each role's verdict and cited defects, on the production record.
+    committee: reading.committee
+      ? {
+          tier: reading.committee.tier,
+          verdict: reading.committee.verdict,
+          blocks: reading.committee.blocks,
+          blocker: reading.committee.blocker,
+          criticalDefects: reading.committee.criticalDefects,
+          reviewMs: reading.committee.reviewMs ?? null,
+          roles: reading.committee.roles.map((r) => ({ role: r.role, verdict: r.verdict, critical: r.critical, defects: r.defects.slice(0, 6), open: r.open.map((q) => q.subject).slice(0, 4), citations: r.citations.slice(0, 6) })),
+          investigations: reading.committee.investigations.map((i) => ({ opportunityId: i.opportunityId, fact: i.fact, established: i.established, broken: i.broken })),
+        }
+      : null,
     // GOAL-13-6, GOAL-18-4, GOAL-23 and the continuation rule (S-0199), compact, on the production record.
     ...readingsSummary(reading),
   };
@@ -5818,6 +6173,14 @@ export async function advanceGoalPlans(
         await sendPlanQuestions({ goalId: id, projectId: reading.target.projectId, priority: reading.researchPriority });
       } catch (error) {
         await recordDegraded(id, reading.target.projectId, [`plan questions: ${errorText(error)}`]);
+      }
+    }
+    // The investment committee's disputes and, on a final plan, its specialist questions (§117), keyed per goal and subject.
+    if (reading?.committee) {
+      try {
+        await sendCommitteeNeeds({ goalId: id, projectId: reading.target.projectId, committee: reading.committee });
+      } catch (error) {
+        await recordDegraded(id, reading.target.projectId, [`committee questions: ${errorText(error)}`]);
       }
     }
     // What Brain holds cannot reach the goal however it is combined: look for

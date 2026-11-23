@@ -111,6 +111,14 @@ export interface OpeningFixture {
   price: number;
   /** EVIDENCE: a source shows buyers pay it. PERSON: somebody only said so. */
   priceBasis?: 'EVIDENCE' | 'PERSON';
+  /**
+   * What the price's source says, in its own words, filed as the card's price evidence
+   * (absent: the bare figure, `$<price>`). It is how a case states what the money is —
+   * a buyer's purchase price, a commission, or a reward, grant or prize paid the other
+   * way — so the planner must read the evidence, never a label the case hands it. It
+   * must restate the card's figure (`price`), or it reads as a contradicting price.
+   */
+  priceEvidence?: string;
   /** A second sourced price that contradicts the first: the record states this figure as the evidenced price. */
   priceContradiction?: number;
   monthly?: boolean;
@@ -160,6 +168,19 @@ export interface Rubric {
   maxCostShare?: number;
   /** With `changedObjective`: the target (USD) the changed words state, which the plan must be read against. */
   targetAfterChange?: number;
+  /**
+   * Openings whose evidenced figure is not money the payer pays for the deliverable: a
+   * reward, bounty, grant, prize, rebate, reimbursement, settlement, donation, stipend or
+   * wage — paid for something else, or the other way. A correct reading never counts it
+   * as an established price in its candidate (`NON_PURCHASE_PRICE`).
+   */
+  notAPurchasePrice?: string[];
+  /**
+   * The most deals an opening's payer(s) can make inside the window, from the evidence —
+   * 1 for one named organisation's one procurement. A reading whose candidate models more
+   * is sweeping one payer as a population (`PAYER_POPULATION_INFLATED`).
+   */
+  payerDealsMax?: Record<string, number>;
 }
 
 /**
@@ -318,6 +339,15 @@ function rubricProblem(e: Rubric | undefined, keys: Set<string>): string | null 
     if (b.kind === 'MISSING_EVIDENCE' && b.opening !== undefined && !keys.has(b.opening)) return 'the blocker names an opening the case does not hold';
   }
   for (const k of e.mustNotUse ?? []) if (!keys.has(k)) return `mustNotUse names ${k}, which the case does not hold`;
+  if (e.notAPurchasePrice !== undefined && !Array.isArray(e.notAPurchasePrice)) return 'notAPurchasePrice is not a list';
+  for (const k of e.notAPurchasePrice ?? []) if (!keys.has(k)) return `notAPurchasePrice names ${k}, which the case does not hold`;
+  if (e.payerDealsMax !== undefined) {
+    if (!e.payerDealsMax || typeof e.payerDealsMax !== 'object' || Array.isArray(e.payerDealsMax)) return 'payerDealsMax is not a map of opening to deals';
+    for (const [k, n] of Object.entries(e.payerDealsMax)) {
+      if (!keys.has(k)) return `payerDealsMax names ${k}, which the case does not hold`;
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) return `payerDealsMax for ${k} is not a whole number of deals`;
+    }
+  }
   return null;
 }
 
