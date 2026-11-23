@@ -58,6 +58,7 @@
  *     asked differently through the door that already exists.
  */
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import { payerNounWords } from '../cash/volume.ts';
 import type { VariableProvenance } from '../../domain/scenario.ts';
 import type { GoalPortfolio } from './portfolio.ts';
 import type { TargetReading } from './target.ts';
@@ -628,6 +629,28 @@ export function byCollectibility(a: TransactionPathway, b: TransactionPathway, d
 }
 
 /**
+ * Whether a card's named fulfiller is the payer itself (production, 2026-11-08:
+ * a card naming the publication that pays as who does the work names nobody).
+ *
+ * A payer named as a kind of buyer ("Dairy farm owners", "Seed growers") is
+ * itself only where the fulfiller names that kind — its head noun, as a whole
+ * word ("Dental practices" for a payer of dental practices). The words that
+ * describe what the buyers run are not the buyer (planningReliability round
+ * 12): "Midstate Dairy Supply" for dairy farm owners, "CleanSeed Mobile" for
+ * seed growers and "Roastline Office Coffee" for office managers are suppliers
+ * of that trade, and reading them as the buyer left a quoted subcontractor's
+ * delivery with nobody to perform it. A payer that is one named party (a
+ * publication, a firm) keeps the first-word reading. Pure.
+ */
+export function namesThePayer(fulfiller: string, payer: string | null | undefined): boolean {
+  const text = fulfiller.toLowerCase();
+  const kind = payerNounWords(payer);
+  if (kind.length > 0) return kind.some((w) => new RegExp(`(?:^|[^a-z])${w}(?:[^a-z]|$)`).test(text));
+  const payerWord = (payer ?? '').toLowerCase().split(/[^a-z0-9]+/).find((w) => w.length > 3 && !['market', 'payer', 'english', 'language'].includes(w)) ?? null;
+  return payerWord !== null && text.includes(payerWord);
+}
+
+/**
  * A pathway's transaction model from what the plan composed for it. Pure.
  * `remaining` and `daysLeft` are the goal's; `outreach` is the shared capacity
  * the portfolio models; `permissionsMissing` what this project's authority and
@@ -651,8 +674,7 @@ export function pathwayOf(
     ? { value: one.fulfilledBy.value.slice(0, 240), low: null, high: null, status: (one.fulfilledBy.provenance === 'EVIDENCE' || one.fulfilledBy.provenance === 'HISTORICAL' ? 'PROVEN' : 'ESTIMATED') as FactStatus, basis: 'the card names who does the work' }
     : textFact(o.fulfillmentOwner, 'who does the work', columnStatus(one.columns?.fulfillmentOwner));
   // The buyer is never its own fulfiller: a card naming the payer as who does the work names nobody (production, 2026-11-08).
-  const payerWord = (o.payer ?? '').toLowerCase().split(/[^a-z0-9]+/).find((w) => w.length > 3 && !['market', 'payer', 'english', 'language'].includes(w)) ?? null;
-  if (named.status !== 'UNKNOWN' && payerWord && String(named.value).toLowerCase().includes(payerWord)) {
+  if (named.status !== 'UNKNOWN' && namesThePayer(String(named.value), o.payer)) {
     named.value = null;
     named.status = 'UNKNOWN';
     named.basis = 'the card names the buyer itself as who does the work, which names nobody';
