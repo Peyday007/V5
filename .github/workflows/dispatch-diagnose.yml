@@ -87,11 +87,18 @@ jobs:
           echo "=============== step10 fire-check ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fire-check" 2>&1 | tail -80
 
+          # The two readings below are sent with the command, as `goals.yml`'s
+          # census is, so they read the running Brain before the script that
+          # carries them has been released. Read-only: the copy is removed after.
+          step10_b64=$(base64 -w0 scripts/step10.ts)
+          carried() {
+            flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && echo $step10_b64 | base64 -d > scripts/.step10-carried.ts && nice -n 19 node --import tsx scripts/.step10-carried.ts $1; rm -f scripts/.step10-carried.ts'" 2>&1
+          }
           echo "=============== step10 fragment-failures ==============="
-          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fragment-failures" 2>&1 | tail -90
+          carried fragment-failures | tail -90
 
           echo "=============== step10 operator-runs ==============="
-          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh operator-runs" 2>&1 | tail -120
+          carried operator-runs | tail -120
 
           if [ -n "$DIAG_BIN" ]; then
             echo "=============== step10 trace $DIAG_BIN ==============="
