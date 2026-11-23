@@ -36,7 +36,7 @@ function opening(id: string, ready: boolean, price = 900): ModelledOpportunity {
   } as unknown as CashOpportunity;
   return {
     opportunity: o, index: 1, tier: 'CANDIDATE', repeatable: true, price: evidence(price), capital: evidence(0), hours: unknown(1, 2), daysToCash: evidence(4),
-    close: unknown(0.02, 0.5), respond: unknown(0.002, 0.15), directCost: evidence(90), volume: unknown(1, 200), agreed: false, agreedValue: 0, agreedDeals: 0,
+    close: unknown(0.02, 0.5), respond: unknown(0.002, 0.15), directCost: evidence(90), volume: ready ? evidence(30) : unknown(1, 200), agreed: false, agreedValue: 0, agreedDeals: 0,
     fulfilledBy: ready ? { value: 'Brain produces it', provenance: 'EVIDENCE', source: null } : null, competitiveAward: false,
   } as unknown as ModelledOpportunity;
 }
@@ -121,11 +121,11 @@ describe('one source for the plan\'s outcome figures', () => {
 describe('a leg nobody can execute does not count toward the figure presented as the plan\'s outcome', () => {
   it('judges each leg on a channel, an offer at an established price, a fulfiller and settled cash', () => {
     expect(legFeasibility('ready', ready)).toMatchObject({ supported: true, lacks: [] });
-    expect(legFeasibility('bare', bare).lacks).toEqual(['ACQUISITION', 'OFFER', 'FULFILMENT']);
+    expect(legFeasibility('bare', bare).lacks).toEqual(['MECHANISM', 'ACQUISITION', 'OFFER', 'FULFILMENT']);
     // A price the quant engine holds unestablished is not a price, whatever the pathway estimated.
     expect(legFeasibility('ready', ready, false).lacks).toEqual(['OFFER']);
     // No pathway: nothing showed the leg has anything.
-    expect(legFeasibility('missing', null).lacks).toEqual(['ACQUISITION', 'OFFER', 'FULFILMENT', 'PAYMENT']);
+    expect(legFeasibility('missing', null).lacks).toEqual(['MECHANISM', 'ACQUISITION', 'OFFER', 'FULFILMENT', 'PAYMENT']);
   });
 
   it('presents a plan resting only on unsupported legs as assumption-only coverage, beside a supported figure of zero', () => {
@@ -140,7 +140,7 @@ describe('a leg nobody can execute does not count toward the figure presented as
     expect(objective.support?.reach).toBe(0);
     expect(objective.support?.outcome?.expected).toBe(0);
     expect(objective.support?.sentence).toMatch(/assumption-only coverage/);
-    expect(objective.support?.sentence).toMatch(/lacks a reachable channel/);
+    expect(objective.support?.sentence).toMatch(/lacks a real purchase by a valid buyer population at an evidenced volume, a reachable channel/);
     // The outcome a reading presents as the plan's is the supported one.
     expect(planOutcomeOf(objective)?.expected).toBe(0);
     expect(planOutcomeOf(objective)?.surplusForSuccessors).toBe(0);
@@ -174,8 +174,8 @@ describe('complete feasibility before acceptance', () => {
   it('does not accept an evidenced combination counting a leg with no channel, offer or fulfiller, and names what it lacks', () => {
     const a = judgeAcceptance({ achieved: false, chosen: null, portfolio: evidenced(['ready', 'bare']), measuredChance: null, considered: [{ opportunityId: 'ready', missing: [] }, { opportunityId: 'bare', missing: [] }], pathways: { ...leading, pathways: [ready, bare] } as unknown as PathwayReading });
     expect(a.status).toBe('CANDIDATE_ONLY');
-    expect(a.shortfalls.join(' ')).toMatch(/cannot be executed yet: "Opening bare" lacks a reachable channel to a named buyer, a specific offer at an established price, a named fulfiller/);
-    expect(a.legs?.find((l) => l.opportunityId === 'bare')?.lacks).toEqual(['ACQUISITION', 'OFFER', 'FULFILMENT']);
+    expect(a.shortfalls.join(' ')).toMatch(/cannot be executed yet: "Opening bare" lacks a real purchase by a valid buyer population at an evidenced volume, a reachable channel to a named buyer, a specific offer at an established price, a named fulfiller/);
+    expect(a.legs?.find((l) => l.opportunityId === 'bare')?.lacks).toEqual(['MECHANISM', 'ACQUISITION', 'OFFER', 'FULFILMENT']);
     expect(a.candidate?.unsupported).toEqual(['bare']);
   });
 

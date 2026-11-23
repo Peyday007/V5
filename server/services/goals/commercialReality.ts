@@ -26,7 +26,7 @@
  * same evidence as the simulation, so the check and the model cannot disagree
  * about the facts. Pure.
  */
-import { namesOneOrganisation } from '../../domain/industry.ts';
+import { describesOneBody, namesOneOrganisation } from '../../domain/industry.ts';
 import { nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
 import type { ModelledOpportunity } from '../cash/goalScenario.ts';
 
@@ -61,7 +61,7 @@ export function commercialRealityOf(leg: Leg, daysLeft: number | null): Commerci
     else if (leg.estimated?.transfer && leg.estimated.transfer.unbridged.length > 0) fail('BUYERS_BUY_IT', `its price is carried from "${leg.estimated.transfer.precedent.slice(0, 60)}" with ${leg.estimated.transfer.unbridged.join(', ')} not bridged`);
   }
   const volumeHigh = leg.volume.high ?? leg.volume.value ?? 1;
-  if (o.payer && namesOneOrganisation(o.payer) && volumeHigh > 1 && !EVIDENCED.has(leg.volume.provenance)) fail('BUYER_POPULATION', `"${o.payer.slice(0, 60)}" is one organisation, counted for up to ${Math.round(volumeHigh)} deals with no evidence it buys more than once`);
+  if (o.payer && (namesOneOrganisation(o.payer) || describesOneBody(o.payer)) && volumeHigh > 1 && !EVIDENCED.has(leg.volume.provenance)) fail('BUYER_POPULATION', `"${o.payer.slice(0, 60)}" is one organisation, counted for up to ${Math.round(volumeHigh)} deals with no evidence it buys more than once`);
   if (!leg.agreed && !o.reachableChannel) fail('ACQUISITION', 'no way to reach the buyers is established');
   if (!leg.agreed && leg.repeatable && volumeHigh > 1 && !EVIDENCED.has(leg.volume.provenance)) fail('VOLUME', `up to ${Math.round(volumeHigh)} deals counted, and nothing establishes that many (${leg.volume.note.slice(0, 120)})`);
   if (!leg.fulfilledBy && !o.fulfillmentOwner) fail('DELIVERY_AND_PAYMENT', 'nobody is named to deliver it');

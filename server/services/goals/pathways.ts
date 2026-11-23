@@ -795,7 +795,6 @@ export function pathwayOf(
     if (f.requirement === 'PURCHASE') gaps.push('NOT_A_PURCHASE');
     else if (f.requirement === 'BUYER_POPULATION') gaps.push('ONE_PAYER_REPEATS');
     else if (f.requirement === 'VOLUME' && !gaps.includes('SMALL_TICKET_VOLUME_UNKNOWN')) gaps.push('VOLUME_UNEVIDENCED');
-    else if (f.requirement === 'BUYERS_BUY_IT' && !gaps.includes('NO_PRICE') && !constructed) gaps.push('NO_PRICE');
   }
 
   const fit = fitOf({ net: quantNet, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward, outreachBound: acquisition.method === 'COLD_OUTREACH' || acquisition.method === 'DIRECTORY' || acquisition.method === 'UNKNOWN' });

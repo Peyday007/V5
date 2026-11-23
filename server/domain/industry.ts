@@ -591,10 +591,21 @@ function headOfDescription(text: string): string | null {
   return words.length >= 2 ? words[words.length - 1]!.replace(/[^A-Za-z-]/g, '') : null;
 }
 
-function isOneOrganisation(text: string): boolean {
+/**
+ * Whether a found opening's payer, as its own source describes it, is one body
+ * (one city department, one foundation, one operator). Read for an opening's
+ * payer only: a map node with the same shape ("state technical utility
+ * services bureau") is a kind of buyer across states. Pure.
+ */
+export function describesOneBody(name: string | null | undefined): boolean {
+  const text = bareName(name);
+  if (!text) return false;
   if (PUBLIC_BODY.test(text)) return true;
   const described = headOfDescription(text);
-  if (described && ORG_HEAD.test(described)) return true;
+  return !!described && ORG_HEAD.test(described);
+}
+
+function isOneOrganisation(text: string): boolean {
   if (ONE_BODY.test(text) || ONE_BODYS_MEMBERS.test(text) || ONES_PEOPLE.test(text) || DESCRIBED_COMPANY.test(text)) return true;
   if (!/\s/.test(text) && (ONE_BRAND_WORD.test(text) || KNOWN_COMPANY.has(text.toLowerCase()))) return true;
   const words = text.split(' ').filter((w) => !NAME_PARTICLE.test(w));

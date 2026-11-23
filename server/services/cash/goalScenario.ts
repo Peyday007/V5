@@ -24,7 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
-import { namesOneOrganisation } from '../../domain/industry.ts';
+import { describesOneBody, namesOneOrganisation } from '../../domain/industry.ts';
 import { evidenceIsAbout, evidencesPurchase, nonCommercialExclusion, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
@@ -2546,7 +2546,7 @@ export async function modelOpportunity(
   // A reward or grant on the price card is won once, whatever kind of play the opening is.
   const wonOnce = priceNature !== null && (priceNature.nature === 'CONTINGENT_REWARD' || priceNature.nature === 'GRANT');
   // A volume read beside a reward ("212 teams registered; one purse") counts entrants, never repeat purchases.
-  const onePayer = wonOnce || (!!opportunity.payer && namesOneOrganisation(opportunity.payer) && !evidencedRepeat);
+  const onePayer = wonOnce || (!!opportunity.payer && (namesOneOrganisation(opportunity.payer) || describesOneBody(opportunity.payer)) && !evidencedRepeat);
   const repeatable = !onePayer && (isTestFirstPlay(opportunity) || evidencedRepeat || estimatedRepeat || unsizedMarket);
   const volume: ModelInput = !repeatable
     ? known(1, 'ASSUMPTION', ref, onePayer ? (wonOnce ? 'a reward or grant is won once' : `one named buyer ("${(opportunity.payer ?? '').slice(0, 60)}") is one deal until evidence shows it buys again`) : 'a one-off opening is one deal')

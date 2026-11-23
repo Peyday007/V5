@@ -138,9 +138,10 @@ describe('structural reading of payments and buyers (holdout, 2026-11-23)', () =
     expect(evidencesPurchase('Editing-service price list: students pay $120 per scholarship essay edited.')).toBe(true);
     expect(evidencesPurchase('Claims-documentation vendor rate card: contractors pay $300 per claim packet.')).toBe(true);
   });
-  it('reads a singular organisation described in lower case as one organisation', () => {
-    expect(namesABuyerPopulation('City of Ridgeport public-works department')).toBe(false);
-    expect(namesABuyerPopulation('Regional community foundation')).toBe(false);
-    expect(namesABuyerPopulation('Licensed local moving companies')).toBe(true);
+  it("reads an opening's singular organisation payer as one body", async () => {
+    const { describesOneBody } = await import('../server/domain/industry.ts');
+    expect(describesOneBody('City of Ridgeport public-works department')).toBe(true);
+    expect(describesOneBody('Regional community foundation')).toBe(true);
+    expect(describesOneBody('Licensed local moving companies')).toBe(false);
   });
 });
