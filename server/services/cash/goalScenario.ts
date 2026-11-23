@@ -24,6 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
+import { paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
@@ -2036,7 +2037,9 @@ export function pickEstimatedArrangements(arrangements: readonly ConstructedArra
 export { COMPETITIVE_AWARD };
 
 export function isCompetitiveAward(o: { title: string; source: string | null; buyingSignal: string | null; offerScope?: string | null }): boolean {
-  return COMPETITIVE_AWARD.test([o.title, o.source, o.buyingSignal].filter(Boolean).join(' '));
+  const text = [o.title, o.source, o.buyingSignal].filter(Boolean).join(' ');
+  // A bounty, prize or contest is won like a tender and paid after it is judged (audit 2026-11-23: GitHub's bug bounty was modelled as a buyer paying on agreement).
+  return COMPETITIVE_AWARD.test(text) || paymentNatureOf(text).nature === 'CONTINGENT_REWARD';
 }
 
 export interface GoalModel {

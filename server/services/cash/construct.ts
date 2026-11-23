@@ -50,6 +50,7 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { namesOnlyAPlace, statesNamedIn } from '../../domain/jurisdiction.ts';
 import { buyerNameKey, namesABuyerPopulation } from '../../domain/industry.ts';
+import { isNonPurchasePayment } from '../../domain/paymentNature.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
@@ -936,7 +937,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
 async function heldEvidence(input: ConstructionInput, opportunities: CashOpportunity[], allowed: (text: string | null | undefined) => boolean): Promise<{ priced: Observation[]; tiedUp: Observation[]; facts: FactObservations; capability: Primitive | null; paysFor: PaidFor[] }> {
   // Published prices the project holds, as observations about the buyers who paid them.
   const priced = opportunities
-    .filter((one) => one.payer && one.priceCents && one.priceCents > 0 && one.currency === input.currency && allowed(one.title))
+    .filter((one) => one.payer && one.priceCents && one.priceCents > 0 && one.currency === input.currency && allowed(one.title) && !isNonPurchasePayment(openingPaymentText(one)))
     .map((one): Observation => ({
       id: `opp:${one.id}`,
       value: { kind: 'POINT', value: one.priceCents! / 100 },
@@ -1108,6 +1109,8 @@ export async function constructionObservations(
     if ((kind === 'conversion' || kind === 'commission') && high > 1) continue;
     // A rate per word or per hour is not what one purchase costs: read beside a plan's price it would widen one range across units.
     if (kind === 'priced' && statesMeasuredRate(fact.sourceClaimId ? priceClaims.get(fact.sourceClaimId) : undefined, low, high)) continue;
+    // A reward, grant, rebate or wage is not what anyone pays for a deliverable (audit 2026-11-23: GitHub's $10,000 bug-bounty reward was read as the price GitHub pays).
+    if (kind === 'priced' && isNonPurchasePayment(fact.sourceClaimId ? (priceClaims.get(fact.sourceClaimId) ?? fact.measures) : fact.measures)) continue;
     // What the figure is a price of, in its source's words: what these buyers are shown paying for (`paidForParts`).
     if (kind === 'priced' && fact.measures?.trim()) out.paysFor.push({ payer: node.name, name: fact.measures, claimId: fact.sourceClaimId ?? null, ref: `fact:${fact.id}` });
     out[kind].push({
@@ -1651,7 +1654,22 @@ export function forEachCandidate(job: ConstructionJob, visit: (one: Candidate) =
          * when nothing names it does the need stay unknown (null), and then
          * it is asked (`compose`'s question) and ranks after a named one.
          */
-        const needs = s.needs.length > 0 ? s.needs : (paidFor.get(payerKey(demand.name)) ?? [null]);
+        const sectorNeeds = s.needs.length > 0 ? s.needs : (paidFor.get(payerKey(demand.name)) ?? [null]);
+        /*
+         * A payer an opening named is evidence about that opening's need, not
+         * every need its sector holds (audit 2026-11-23: the GitHub bug-bounty
+         * payer was sold "what the published request asks for Software
+         * Advice analyzed data from 4,415 field service management buyers",
+         * an HVAC-software sentence from another opening in the sector). Its
+         * own opening's need, or what it is shown paying for, or unknown.
+         */
+        const needs =
+          demand.from === 'OPENING'
+            ? (() => {
+                const own = sectorNeeds.filter((one) => one !== null && one.from === 'OPENING' && one.ref === demand.ref);
+                return own.length > 0 ? own : (paidFor.get(payerKey(demand.name)) ?? [null]);
+              })()
+            : sectorNeeds;
         for (const need of needs) {
           const supplies = def.needsSupply ? s.supply : [capability];
           // Brain produces only what it can make online; a physical need is brokered or subcontracted, never produced by the owner.
@@ -3390,4 +3408,14 @@ export function missingLinkQuestions(result: Pick<GraphConstructionResult, 'kept
     .map((q) => ({ ...q, value: Math.round(q.value * 1000) / 1000 }))
     .sort((a, b) => b.value - a.value || b.structures.length - a.structures.length || a.key.localeCompare(b.key))
     .slice(0, Math.max(0, limit));
+}
+
+/**
+ * An opening's own words about its money: its title, what it offers, its
+ * buying signal and where it came from. Read for what the price is paid for
+ * (`paymentNatureOf`): a bounty's reward or a grant's award is never evidence
+ * of what its payer pays a supplier (audit 2026-11-23). Pure.
+ */
+export function openingPaymentText(one: Pick<CashOpportunity, 'title' | 'offerScope' | 'buyingSignal' | 'source'>): string {
+  return [one.title, one.offerScope, one.buyingSignal, one.source].filter(Boolean).join('. ');
 }

@@ -517,7 +517,23 @@ const CAMEL_FIELD = /\b[a-z]+(?:Id|ID|Info)\b/;
  */
 export function namesABuyerPopulation(name: string | null | undefined): boolean {
   const text = bareName(name);
-  return namesABuyer(text) && !isOneOrganisation(text);
+  return namesABuyer(text) && !isOneOrganisation(text) && !isOneOrganisation(subjectOf(text));
+}
+
+/**
+ * The subject of a buyer name written as a sentence: the words before a
+ * spaced dash, a colon, a semicolon or a parenthesis, and before the first
+ * verb of a clause ("GitHub Inc is the payer — its bug bounty page publishes
+ * rewards …" is about "GitHub Inc"). Audit of goal wst_7b4fcbb5f2384f31b6c3,
+ * 2026-11-23: that sentence reached the industry map as a buyer node, passed
+ * as a population because the whole sentence is not a proper name, and the
+ * plan swept one company as 1–200 repeat buyers and 4,314 contacts. A name
+ * with no such boundary is its own subject. Pure.
+ */
+export function subjectOf(text: string): string {
+  const clause = text.split(/\s+[—–-]\s+|\s*[:;(]\s*/)[0] ?? text;
+  const verb = clause.match(/^(.+?)\s+(?:is|are|was|were|pays?|paid|publishes|published|runs|ran|offers|offered|awards|awarded|rewards|rewarded|operates|hosts|sponsors|funds)\b/i);
+  return bareName(verb ? verb[1] : clause);
 }
 
 /** Words a proper name keeps in lower case ("Society of Actuaries", "Bank of the West"). */
