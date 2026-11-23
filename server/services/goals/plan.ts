@@ -100,7 +100,7 @@ import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
 import { heldEvaluation, inputEvidence, type GoalPortfolio, type InputEvidence, type PortfolioCombination, type UnpricedPopulation } from './portfolio.ts';
-import { sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
+import { sendCommitteeNeeds, sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
@@ -116,6 +116,7 @@ import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
 import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
 import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrityInput.ts';
+import { committeeOf, type CommitteeReading } from './committee.ts';
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
@@ -417,6 +418,12 @@ export interface PlanReading {
    * A reading with any is never ACCEPTED. Empty when none.
    */
   integrity?: PlanIntegrityViolation[];
+  /**
+   * The investment committee's review of this reading (`committee.ts`, §117):
+   * six independent role verdicts with cited defects. A reading it blocks is
+   * never ACCEPTED. Absent on a reading built before it existed.
+   */
+  committee?: CommitteeReading | null;
   /**
    * Why the goal's research is not yet producing openings this plan can use,
    * read from the openings it judged and the goal's recent rounds
@@ -5011,6 +5018,8 @@ export function readingDigest(reading: PlanReading): string {
     reconstruction: reconstructionDigest(reading.reconstruction ?? null),
     // Whether the goal's work continues is a conclusion: a change in it is recorded as a new reading.
     ...(reading.continuation ? { continues: reading.continuation.continues } : {}),
+    // The committee's verdict is a conclusion; its timing is not.
+    ...(reading.committee ? { committee: reading.committee.verdict } : {}),
   };
   return sha256(canonicalJson(summary));
 }
@@ -5062,6 +5071,26 @@ export function refuseForIntegrity(acceptance: PlanAcceptance, violations: reado
 }
 
 /**
+ * An acceptance refused by the investment committee (`committee.ts`, §117): a
+ * failed role, a critical defect, or — on a final plan — a role a specialist
+ * has not yet settled. A candidate at most, the committee's blocker first among
+ * the shortfalls, and never a probability or an accepted plan. Pure.
+ */
+export function refuseForCommittee(acceptance: PlanAcceptance, committee: Pick<CommitteeReading, 'blocks' | 'blocker' | 'roles' | 'verdict'>): PlanAcceptance {
+  if (!committee.blocks || acceptance.status !== 'ACCEPTED') return acceptance;
+  const reasons = committee.roles.flatMap((r) => [...r.defects.map((d) => `committee ${r.role}${d.critical ? ' (critical)' : ''}: ${d.claim} — ${d.why}`), ...(r.verdict === 'UNKNOWN' ? r.open.map((q) => `committee ${r.role} has not settled ${q.subject.replace(/^[A-Z_]+: /, '')}`) : [])]);
+  const refused: PlanAcceptance = {
+    ...acceptance,
+    status: acceptance.candidate ? 'CANDIDATE_ONLY' : 'NO_CANDIDATE',
+    probability: null,
+    accepted: null,
+    shortfalls: [...reasons, ...acceptance.shortfalls],
+    sentence: `Not accepted: the investment committee ${committee.verdict === 'FAIL' ? 'failed' : 'has not settled'} the plan — ${(committee.blocker ?? reasons[0] ?? 'a role is unsettled').slice(0, 400)}.`,
+  };
+  return { ...storableAcceptance(refused), verdict: verdictOf(refused) };
+}
+
+/**
  * The reading with its integrity checked (`reading.integrity`). A reading
  * ACCEPTED with any violation is refused (`refuseForIntegrity`): its verdict
  * is no longer RECOMMENDABLE (RECOMMENDABLE iff ACCEPTED), its summary says
@@ -5074,13 +5103,17 @@ export function gateIntegrity(
   recompose: (refused: PlanAcceptance) => Pick<PlanReading, 'timelines' | 'objective' | 'planSet' | 'continuation'>,
 ): PlanReading {
   const { violations } = planIntegrity(integrityInput(reading));
-  if (reading.acceptance.status !== 'ACCEPTED' || violations.length === 0) return { ...reading, integrity: violations };
-  const acceptance = refuseForIntegrity(reading.acceptance, violations);
+  // The investment committee (§117) reads the same reading; it can only take an acceptance away.
+  const committee = committeeOf(reading);
+  const committeeRefuses = reading.acceptance.status === 'ACCEPTED' && reading.acceptance.probability?.basis !== 'TARGET_MET' && committee.blocks;
+  if (reading.acceptance.status !== 'ACCEPTED' || (violations.length === 0 && !committeeRefuses)) return { ...reading, integrity: violations, committee };
+  const acceptance = violations.length > 0 ? refuseForIntegrity(reading.acceptance, violations) : refuseForCommittee(reading.acceptance, committee);
   const again = recompose(acceptance);
   return {
     ...reading,
     ...again,
     integrity: violations,
+    committee,
     acceptance,
     verdict: reading.verdict === 'RECOMMENDABLE' ? 'NEEDS_EVIDENCE' : reading.verdict,
     // An accepted reading's summary is its acceptance's sentence: the refusal replaces it, never stands beside "Accepted".
@@ -5137,6 +5170,19 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     infeasible: reading.infeasible,
     degraded: reading.degraded,
     priceVariables: reading.priceVariables ?? [],
+    // The investment committee (§117): each role's verdict and cited defects, on the production record.
+    committee: reading.committee
+      ? {
+          tier: reading.committee.tier,
+          verdict: reading.committee.verdict,
+          blocks: reading.committee.blocks,
+          blocker: reading.committee.blocker,
+          criticalDefects: reading.committee.criticalDefects,
+          reviewMs: reading.committee.reviewMs ?? null,
+          roles: reading.committee.roles.map((r) => ({ role: r.role, verdict: r.verdict, critical: r.critical, defects: r.defects.slice(0, 6), open: r.open.map((q) => q.subject).slice(0, 4), citations: r.citations.slice(0, 6) })),
+          investigations: reading.committee.investigations.map((i) => ({ opportunityId: i.opportunityId, fact: i.fact, established: i.established, broken: i.broken })),
+        }
+      : null,
     // GOAL-13-6, GOAL-18-4, GOAL-23 and the continuation rule (S-0199), compact, on the production record.
     ...readingsSummary(reading),
   };
@@ -6127,6 +6173,14 @@ export async function advanceGoalPlans(
         await sendPlanQuestions({ goalId: id, projectId: reading.target.projectId, priority: reading.researchPriority });
       } catch (error) {
         await recordDegraded(id, reading.target.projectId, [`plan questions: ${errorText(error)}`]);
+      }
+    }
+    // The investment committee's disputes and, on a final plan, its specialist questions (§117), keyed per goal and subject.
+    if (reading?.committee) {
+      try {
+        await sendCommitteeNeeds({ goalId: id, projectId: reading.target.projectId, committee: reading.committee });
+      } catch (error) {
+        await recordDegraded(id, reading.target.projectId, [`committee questions: ${errorText(error)}`]);
       }
     }
     // What Brain holds cannot reach the goal however it is combined: look for

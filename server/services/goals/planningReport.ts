@@ -22,6 +22,7 @@
  */
 import type { PlanReading } from './plan.ts';
 import { LEG_LABEL } from './pathways.ts';
+import type { CommitteeReading } from './committee.ts';
 
 export interface PlanningReport {
   goal: string;
@@ -37,7 +38,10 @@ export interface PlanningReport {
 const money = (cents: number, currency: string) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(cents / 100).toLocaleString('en-US')}`;
 
 /** The five lines of the standard, from a plan reading. Pure. */
-export function planningReport(reading: Pick<PlanReading, 'target' | 'acceptance' | 'measuredChance' | 'verdict' | 'summary'> & { commercialReality?: { validated: boolean; failing: readonly string[] } | null }, dueAt: string | null): PlanningReport {
+export function planningReport(
+  reading: Pick<PlanReading, 'target' | 'acceptance' | 'measuredChance' | 'verdict' | 'summary'> & { commercialReality?: { validated: boolean; failing: readonly string[] } | null; committee?: Pick<CommitteeReading, 'verdict' | 'blocker'> | null },
+  dueAt: string | null,
+): PlanningReport {
   const t = reading.target;
   const goal = `${t.metricLabel} of ${money(t.targetCents, t.currency)}`;
   const a = reading.acceptance;
@@ -58,15 +62,22 @@ export function planningReport(reading: Pick<PlanReading, 'target' | 'acceptance
   const fromLegs = legs && legs.length > 0 ? { validated: legs.every((l) => l.supported), failing: legs.filter((l) => !l.supported).map((l) => `${l.opportunityId} lacks ${l.lacks.map((k) => LEG_LABEL[k as keyof typeof LEG_LABEL] ?? k).join('; ')}`) } : null;
   const gate = reading.commercialReality ?? fromLegs;
   const accepted = a.status === 'ACCEPTED';
-  const commerciallyValidated = accepted && (gate === null ? false : gate.validated);
+  // Commercial validation also requires the investment committee's pass (§117): agreement is not evidence, a pass of every role is.
+  const committee = reading.committee ?? null;
+  const committeePassed = committee !== null && committee.verdict === 'PASS';
+  const commerciallyValidated = accepted && (gate === null ? false : gate.validated) && committeePassed;
   const validation = commerciallyValidated
-    ? 'accepted, and every counted strategy passed the commercial reality check'
+    ? 'accepted, every counted strategy passed the commercial reality check, and every committee role passed'
     : gate && !gate.validated
       ? `not validated: ${gate.failing[0] ?? 'a counted strategy failed the commercial reality check'}`
-      : accepted
-        ? 'not validated: the commercial reality check did not run on this reading'
-        : `not validated: the plan is ${a.status.replace('_', ' ').toLowerCase()}`;
-  const blocker = commerciallyValidated ? null : (gate && !gate.validated ? gate.failing[0] : null) ?? a.shortfalls?.[0] ?? reading.summary ?? null;
+      : committee && committee.verdict !== 'PASS'
+        ? `not validated: the investment committee ${committee.verdict === 'FAIL' ? 'failed' : 'has not settled'} it — ${committee.blocker ?? 'a role is unsettled'}`
+        : accepted
+          ? committee === null
+            ? 'not validated: the investment committee did not review this reading'
+            : 'not validated: the commercial reality check did not run on this reading'
+          : `not validated: the plan is ${a.status.replace('_', ' ').toLowerCase()}`;
+  const blocker = commerciallyValidated ? null : (gate && !gate.validated ? gate.failing[0] : null) ?? (committee && committee.verdict !== 'PASS' ? committee.blocker : null) ?? a.shortfalls?.[0] ?? reading.summary ?? null;
   return { goal, deadline: dueAt, probability, evidence, commerciallyValidated, validation, blocker };
 }
 

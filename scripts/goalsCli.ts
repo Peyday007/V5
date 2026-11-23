@@ -41,6 +41,7 @@
  * 2026-11-21).
  */
 import { planningReport, planningReportLines } from '../server/services/goals/planningReport.ts';
+import { committeeLines } from '../server/services/goals/committee.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { finishesWithin } from './boundedChild.ts';
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
@@ -556,6 +557,8 @@ async function printPlan(reading: PlanReading): Promise<void> {
   else if (reading.objective) console.log(`  outcome     none · ${reading.objective.basis}`);
   if (support) console.log(`    support   ${support.basis} · ${support.sentence}`);
   for (const v of reading.integrity ?? []) console.log(`  integrity   ${v.rule}: ${v.detail}`);
+  // The investment committee (§117): each role's verdict and the defects it cites.
+  if (reading.committee) for (const line of committeeLines(reading.committee)) console.log(line);
   // One plan (C-6): which plan this is, and whether the reconstruction below is only hypothetical.
   if (reading.adoption) console.log(`  plan        ${reading.adoption.source}${reading.adoption.hypothetical ? ' (the reconstruction is hypothetical)' : ''} · ${reading.adoption.reason}`);
   if (reading.infeasible) {

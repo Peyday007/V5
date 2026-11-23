@@ -17079,3 +17079,44 @@ Each refusal is read from the claim's own words by a closed set of cues (§8),
 and each is pinned by `tests/paymentNature.test.ts` with the audit's own claims
 and their counter-cases (a grant *writer's* fee, a contract won by bid, a
 per-puzzle purchase stay prices).
+
+## 117. An investment committee reads every plan independently, and agreement is not evidence.
+
+**Owner's order, 2026-11-23**: a permanent, independent, adversarial review
+inside the planning architecture, reusing what exists. It is
+`server/services/goals/committee.ts`, read where the plan's integrity already
+is (`gateIntegrity`, plan.ts), so there is one acceptance and the committee can
+only take it away (`refuseForCommittee`), never grant it.
+
+- **Six roles, each with a deterministic layer** over the reading's own
+  structured record — the pathway facts and the evidence sentence each rests
+  on, the simulation's inputs, the goal's limits: SKEPTIC (what the money is,
+  re-read with `paymentNatureOf`; price evidence about another market,
+  `evidenceIsAbout`; two readings of one price; a constructed market counted),
+  MARKET_EXPERT (one organisation counted as a population; an unevidenced price
+  or volume), OPERATOR (channel, offer, fulfiller, cash inside the window),
+  INVESTOR (capital ceiling, a losing deal, one unevidenced leg carrying the
+  plan), QUANT (the figure rebuilt from evidenced price × evidenced deals − cost
+  against what the reading presents; coverage claimed as a probability; the two
+  downside estimators against each other), OWNER_PROXY (speculation counted as
+  repeatable business, routine owner delivery, the goal reached on evidence).
+- **No vote.** Any FAIL fails; any critical defect blocks whatever the other
+  roles say. Every defect names its claim, its evidence reference and why.
+- **Independence.** Each role reads its own copy of the inputs; only QUANT,
+  SKEPTIC and INVESTOR read the planner's figures, and only to challenge them;
+  none reads the acceptance's status, verdict or sentence.
+- **Specialists through existing owners.** A judgment the code cannot settle
+  is UNKNOWN. On a final plan (an acceptance not on the ledger, or a material
+  capital commitment — `committeeTier`) it is a research need through
+  `sendNeeds` (`sendCommitteeNeeds`, scope `goal:<id>:committee`), whose
+  question carries the objective and the leg's evidence and none of the
+  planner's conclusions; SKEPTIC's specialist layer is the existing independent
+  model challenge (`quant/modelChallenge.ts`). Two roles reading one fact the
+  opposite way is an investigation, sent the same way; the FAIL still stands.
+- **Recorded and reported.** The verdicts are stored in the reading's forecast
+  JSON (no schema change), printed by `npm run goals -- plan`, and the planning
+  report's "commercially validated" requires the committee's PASS.
+- **Learning.** A confirmed reviewer miss is corrected in the planning mechanism
+  (or the role's check) and its case kept as a regression test:
+  `tests/investmentCommitteeWorld.test.ts` holds the audited GitHub-bounty plan
+  and the mechanism-validity cases on the real planner.

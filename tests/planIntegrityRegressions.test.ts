@@ -651,11 +651,13 @@ describe('a plan that breaks a rule is never accepted', () => {
   });
 
   it('leaves a clean or unaccepted reading as it is, and always exposes its integrity', () => {
-    const clean = gateIntegrity(reading({ acceptance: accepted, verdict: 'RECOMMENDABLE' }), () => {
-      throw new Error('not recomposed');
-    });
-    expect(clean.acceptance.status).toBe('ACCEPTED');
+    // Clean on integrity; the investment committee (§117) still reads it, and a plan whose counted legs carry no
+    // evidence record and whose probability no evidenced portfolio stands behind is held, not accepted.
+    const clean = gateIntegrity(reading({ acceptance: accepted, verdict: 'RECOMMENDABLE' }), () => ({}));
     expect(clean.integrity).toEqual([]);
+    expect(clean.committee!.blocks).toBe(true);
+    expect(clean.acceptance.status).toBe('CANDIDATE_ONLY');
+    expect(clean.acceptance.shortfalls[0]).toMatch(/^committee /);
     const candidate = gateIntegrity(reading({ steps: [keyed] }), () => {
       throw new Error('not recomposed');
     });

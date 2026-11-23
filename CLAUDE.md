@@ -304,7 +304,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–116. The architecture record
+## 8–117. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -422,6 +422,7 @@ resolves. Read the section for the area you are changing before you change it
 - §114. Done is planning reliability across unfamiliar objectives, never one goal's financial reach.
 - §115. Engineering throughput is measured from the forge, and its limiting stage is a deficiency, never a second optimizer.
 - §116. A price is what a buyer pays a supplier, a buyer population is more than one company, and coverage over unsupported legs is not reliability.
+- §117. An investment committee reads every plan independently, and agreement is not evidence.
 
 ## Conventions
 
