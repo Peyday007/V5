@@ -122,7 +122,9 @@ async function operatorRuns(): Promise<void> {
 async function binGates(binId: string): Promise<void> {
   if (!/^bin_[0-9a-f]+$/.test(binId)) throw new Error('a bin id is bin_ followed by hex');
   const now = new Date().toISOString();
-  const ask = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
+  // Every `?` a composed predicate carries is bound to now, as the dispatcher binds them.
+  const ask = async (label: string, sql: string): Promise<void> => {
+    const params = Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => now);
     const row = await getDb().get<{ id: string }>(`SELECT id FROM bins WHERE id = ? AND ${sql}`, [binId, ...params] as never[]);
     console.log(`  ${row ? 'yes' : 'NO '} ${label}`);
   };
@@ -134,8 +136,8 @@ async function binGates(binId: string): Promise<void> {
   if (!bin) return;
   await ask('purpose admits (brain-only mode and the owner-directed exception)', purposeAdmitsSql(''));
   await ask('linked to an owner-directed goal', ownerDirectedGoalBinSql(''));
-  await ask('dispatchable (claimable state and attempts)', DISPATCHABLE_SQL, [now]);
-  await ask('fireable now (no backoff)', FIREABLE_SQL, [now]);
+  await ask('dispatchable (claimable state and attempts)', DISPATCHABLE_SQL);
+  await ask('fireable now (no backoff)', FIREABLE_SQL);
   await ask('has work a worker can claim', workReadySql('bins.'));
   const items = await getDb().all<{ state: string; n: number }>(
     `SELECT state AS state, COUNT(*) AS n FROM work_items WHERE bin_id = ? OR (bin_id IS NULL AND orchestration_id = ?) GROUP BY state`,
@@ -143,8 +145,10 @@ async function binGates(binId: string): Promise<void> {
   );
   console.log(`  work items: ${items.map((one) => `${one.state} ${one.n}`).join(', ') || 'none'}`);
   const links = await getDb().all<{ workstream_id: string; kind: string; relation: string }>(
-    `SELECT workstream_id, kind, relation FROM workstream_links WHERE superseded_at IS NULL AND ref IN (?, ?, ?)`,
-    [binId, bin.orchestration_id ?? '-', bin.factory_campaign_id ?? '-'],
+    `SELECT workstream_id, kind, relation FROM workstream_links WHERE superseded_at IS NULL AND (ref IN (?, ?, ?)
+       OR ref IN (SELECT candidate_id FROM russell_missions WHERE candidate_id IS NOT NULL AND (bin_id = ? OR orchestration_id = ?))
+       OR ref IN (SELECT id FROM russell_missions WHERE bin_id = ? OR orchestration_id = ?))`,
+    [binId, bin.orchestration_id ?? '-', bin.factory_campaign_id ?? '-', binId, bin.orchestration_id ?? '-', binId, bin.orchestration_id ?? '-'],
   );
   console.log(`  direct links: ${links.map((one) => `${one.workstream_id} ${one.kind} ${one.relation}`).join('; ') || 'none'}`);
   const missions = await getDb().all<{ id: string; state: string }>(
