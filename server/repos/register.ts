@@ -330,6 +330,15 @@ export async function recordWorkstreamEvent(input: {
   return mapEvent(row);
 }
 
+/** A workstream's events of one kind recorded at or after `since`, newest first. */
+export async function workstreamEventsOfKind(workstreamId: string, kind: string, since: string, limit = 20): Promise<WorkstreamEvent[]> {
+  const rows = await getDb().all<WorkstreamEventRow>(
+    `SELECT * FROM workstream_events WHERE workstream_id = ? AND kind = ? AND created_at >= ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [workstreamId, kind, since, limit],
+  );
+  return rows.map(mapEvent);
+}
+
 export async function listWorkstreamEvents(
   workstreamId: string,
   limit = 50,

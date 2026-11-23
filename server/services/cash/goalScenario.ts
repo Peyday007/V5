@@ -25,7 +25,7 @@
  * faster plan beat a bigger, slower one.
  */
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
-import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactMap } from '../../repos/cashCardFacts.ts';
@@ -100,6 +100,8 @@ export const MAX_BUYERS_OFFERED = 200;
 
 const LIVE = new Set(['DISCOVERED', 'EVIDENCE_CARD', 'READY', 'EXECUTING', 'DELIVERING']);
 const IN_FLIGHT = new Set(['EXECUTING', 'DELIVERING']);
+/** States an opening reaches when it stops: no longer planned, still accounted for (`composeGoalModel`). */
+const STOPPED = new Set(['ARCHIVED', 'DECLINED']);
 const TIER_ORDER: Record<string, number> = { READY_TO_TEST: 0, QUALIFIED: 1, CANDIDATE: 2, SIGNAL: 3 };
 
 /** One quantity about one opportunity, with where it came from. */
@@ -896,7 +898,17 @@ export function foundOwnerHours(
 }
 
 /** A fulfiller's name that is the owner doing the work themself. */
-export const OWNER_FULFILS = /\b(?:the\s+)?owner(?:'s)?\b|\bmyself\b|\bpersonally\b|\bme\b|\bfounder\b/i;
+const OWNER_WORDS = /\b(?:the\s+)?owner(?:'s)?\b|\bmyself\b|\bpersonally\b|\bme\b|\bfounder\b/i;
+
+/**
+ * Whether a card's named fulfiller is the goal's owner doing the work, read on
+ * the party it names (`fulfillerParty`), never on the words that describe it:
+ * a panel-rental firm described as "owner of the panels" read as the goal's
+ * owner, and the plan gave the owner the delivery (planningReliability round 11). Pure.
+ */
+export function fulfillerIsOwner(named: string): boolean {
+  return OWNER_WORDS.test(fulfillerParty(named));
+}
 
 /**
  * Whose hours a card's stated hours are (planningReliability round 8). A
@@ -922,7 +934,7 @@ export function statedHoursNotOwners(
   if (o.humanHours === null) return null;
   const named = o.fulfillmentOwner?.trim() ?? '';
   if (named) {
-    if (OWNER_FULFILS.test(named) || !fulfilmentEstablished) return null;
+    if (fulfillerIsOwner(named) || !fulfilmentEstablished) return null;
     return known(0, 'ASSUMPTION', source, `the card's ${o.humanHours} hours a deal are "${named.slice(0, 120)}"'s, who fulfils; Brain only messages, invoices and records: 0 owner hours per deal`);
   }
   const brain = foundOwnerHours({ ...o, humanHours: null }, delivers, source, delivery);
@@ -2030,7 +2042,15 @@ export function isCompetitiveAward(o: { title: string; source: string | null; bu
 export interface GoalModel {
   definition: ScenarioModelDefinition;
   included: ModelledOpportunity[];
-  excluded: { opportunityId: string; title: string; reason: string }[];
+  /**
+   * Each opening left out, with why. `rule` marks an exclusion whose cure is
+   * structural: OWNER_PHYSICAL — a qualified opening (buyers who pay are known)
+   * left out only because its recorded fulfiller is the owner doing physical
+   * work, so the missing link is who else performs it (`qualifyTest`);
+   * STOPPED — archived or declined while the goal ran, accounted for and
+   * never read as a reason research is not yielding.
+   */
+  excluded: { opportunityId: string; title: string; reason: string; rule?: 'OWNER_PHYSICAL' | 'STOPPED' }[];
   /**
    * Every opening that could be read at all, modelled or not. The engine fits
    * a few into one simulation; the gate still judges every one of these on
@@ -2709,9 +2729,21 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   const tiers = await frontierTiers(target.projectId);
   trace(`shared frontier: ${tiers.size} opening(s)`);
   const tierOf = new Map([...tiers].map(([id, one]) => [id, one.tier as string]));
-  const live = (await listOpportunities({ projectId: target.projectId })).filter(
-    (one) => LIVE.has(one.state) && !one.duplicateOfId && one.currency === target.currency,
-  );
+  const listed = await listOpportunities({ projectId: target.projectId });
+  const live = listed.filter((one) => LIVE.has(one.state) && !one.duplicateOfId && one.currency === target.currency);
+  /*
+   * An opening stopped while this goal ran (archived — a buyer withdrew, a person
+   * stopped it — or declined) is no longer planned, but the reading still says
+   * what became of it: it is excluded with the reason recorded when it stopped,
+   * so an opening the previous plan held never silently vanishes from the next
+   * one (planningReliability round 11). Openings stopped before the goal was set
+   * were never this goal's, and are not listed.
+   */
+  for (const one of listed) {
+    if (!STOPPED.has(one.state) || one.duplicateOfId || one.currency !== target.currency || one.updatedAt < input.goal.createdAt) continue;
+    const why = (one.state === 'ARCHIVED' ? one.archivedReason : one.declinedReason)?.trim();
+    excluded.push({ opportunityId: one.id, title: one.title, reason: `${one.state === 'ARCHIVED' ? 'stopped' : 'declined'} while this goal ran${why ? `: ${why.slice(0, 200)}` : ''}`, rule: 'STOPPED' });
+  }
   const ordered = live.sort((a, b) => {
     const fa = IN_FLIGHT.has(a.state) ? 0 : 1;
     const fb = IN_FLIGHT.has(b.state) ? 0 : 1;
@@ -2764,7 +2796,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     // The standing operating rule: a plan never rests on the owner's physical work.
     const fit = operatingFit(operatingFactsOf({ ...opportunity, title: [opportunity.title, opportunity.buyingSignal].filter(Boolean).join(' \n ') }));
     if (breaksOperatingModel(fit)) {
-      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `needs the owner's physical work: ${fit.because}` });
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `needs the owner's physical work: ${fit.because}`, ...(tier !== 'SIGNAL' || IN_FLIGHT.has(opportunity.state) ? { rule: 'OWNER_PHYSICAL' as const } : {}) });
       continue;
     }
     if (tier === 'SIGNAL' && !IN_FLIGHT.has(opportunity.state)) {
