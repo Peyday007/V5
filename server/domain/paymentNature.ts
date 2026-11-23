@@ -137,6 +137,8 @@ export function requestedNonCommercial(goalText: string | null | undefined): Rea
 
 /** Why an opening is left out of an ordinary revenue goal, or null when it is a sale or the goal asked for its kind. Pure. */
 export function nonCommercialExclusion(openingText: string, goalText: string | null | undefined): string | null {
+  // A topic is not a payment: "sweepstakes rules review" names what a brand buys. Only money the text states is read.
+  if (!/(?:\$|usd\s?)\s?\d/i.test(openingText)) return null;
   const reading = paymentNatureOf(openingText);
   if (reading.nature === 'PURCHASE' || requestedNonCommercial(goalText).has(reading.nature)) return null;
   return `not a sale: ${nonPurchaseSentence(reading)}; a revenue goal's strategies are commercial purchases unless the goal asks for this kind of payout`;
