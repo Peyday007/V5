@@ -92,6 +92,10 @@ describe('judgeHeldMarkets: a measured ceiling, not a short pool', () => {
     expect(judgeHeldMarkets({ openings: [counted, opening({ price: 500 })], remaining: 3100, net: false, limits, required: 0.9 })).toBeNull();
     expect(judgeHeldMarkets({ openings: [opening({ price: null, volume: 12 })], remaining: 3100, net: false, limits, required: 0.9 })).toBeNull();
     expect(judgeHeldMarkets({ openings: [opening({ price: 180, volume: 12, counted: false })], remaining: 3100, net: false, limits, required: 0.9 })).toBeNull();
+    // A contested price is not a measurement: the lots it prices bound nothing.
+    const contested = opening({ price: 3750, cost: 2050, capital: 6335, days: 22 });
+    (contested.price as ModelInput) = { value: null, low: 2300, high: 3750, provenance: 'ASSUMPTION', source: null, note: 'contested' } as ModelInput;
+    expect(heldCeiling(contested, true, { daysLeft: 60, capitalCeiling: 7000 })).toBeNull();
   });
   it('names the capital and the deadline that would reach it when the limits bind', () => {
     const lots = opening({ price: 7000, cost: 4200, capital: 4200, days: 15, agreed: [7000, 7000] });

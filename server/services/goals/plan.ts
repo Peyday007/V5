@@ -3348,13 +3348,15 @@ export interface HeldLimits {
  *   start, and a ceiling of ⌊ceiling ÷ capital⌋ lots at once turned
  *   ⌊days left ÷ days to cash⌋ times holds that many lots, agreed ones first.
  *
- * A one-off nobody sized, an order rate, an estimate or an unknown price is
+ * A one-off nobody sized, an order rate, an estimate, or a deal priced by a
+ * figure nobody has shown buyers pay (unknown, assumed or contested) is
  * unmeasured: it returns null, and the conclusion is not drawn.
  */
 export function heldCeiling(one: ModelledOpportunity, net: boolean, limits: HeldLimits | null): number | null {
   if (one.competitiveAward) return null;
   const known = (x: ModelInput): number | null => (x.value !== null && x.provenance !== 'UNKNOWN' ? x.value : null);
-  const price = one.price.high ?? one.price.value;
+  // Only a price buyers are shown to pay measures what a deal brings: a contested or assumed one bounds nothing.
+  const price = priceSupported(one) ? (one.price.high ?? one.price.value) : null;
   const each = price === null ? null : perDealToward(one, price, net, 'LOW');
   const agreed = agreedToward(one, net, 'LOW');
   const lots = agreedLots(one);
