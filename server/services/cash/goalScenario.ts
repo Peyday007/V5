@@ -24,6 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
+import { namesOneOrganisation } from '../../domain/industry.ts';
 import { nonCommercialExclusion, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
@@ -2521,9 +2522,17 @@ export async function modelOpportunity(
    * link stays open until research sizes it.
    */
   const unsizedMarket = !!volumeFact && volumeRead === null;
-  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE') || estimatedRepeat || unsizedMarket;
+  /*
+   * One named organisation is one buyer (§116; audit 2026-11-23: one company
+   * swept as 1–200 repeat buyers; planningReliability mv-03/hmv-08: one health
+   * system's one order and one district's one tender modelled as up to 14 and
+   * 100 deals). It repeats only where evidence states it buys more than once.
+   */
+  const evidencedRepeat = volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE';
+  const onePayer = !!opportunity.payer && namesOneOrganisation(opportunity.payer) && !isTestFirstPlay(opportunity) && !evidencedRepeat;
+  const repeatable = !onePayer && (isTestFirstPlay(opportunity) || evidencedRepeat || estimatedRepeat || unsizedMarket);
   const volume: ModelInput = !repeatable
-    ? known(1, 'ASSUMPTION', ref, 'a one-off opening is one deal')
+    ? known(1, 'ASSUMPTION', ref, onePayer ? `one named buyer ("${opportunity.payer!.slice(0, 60)}") is one deal until evidence shows it buys again` : 'a one-off opening is one deal')
     : estimatedRepeat
       ? unknown(1, Math.min(MAX_BUYERS_OFFERED, volumeRead!.deals), `estimated, not established: ${volumeRead!.basis}; swept from 1 deal to the estimate`)
     : volumeRead && volumeFact
