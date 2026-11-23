@@ -25,13 +25,13 @@ describe('the permanent planning report', () => {
   });
 
   it('keeps an evidenced Monte Carlo out of the probability line', () => {
-    const r = planningReport({ target, verdict: 'VIABLE', summary: '', measuredChance: null, acceptance: { status: 'ACCEPTED', required: 0.9, probability: { value: 0.93, lowerBound: 0.91, basis: 'EVIDENCED_PORTFOLIO', sample: 2000, note: 'all inputs evidenced' }, accepted: { label: 'a', opportunityIds: [] }, candidate: null, shortfalls: [], sentence: '' } as never, commercialReality: { validated: true, failing: [] } }, null);
+    const r = planningReport({ target, verdict: 'RECOMMENDABLE', summary: '', measuredChance: null, acceptance: { status: 'ACCEPTED', required: 0.9, probability: { value: 0.93, lowerBound: 0.91, basis: 'EVIDENCED_PORTFOLIO', sample: 2000, note: 'all inputs evidenced' }, accepted: { label: 'a', opportunityIds: [] }, candidate: null, shortfalls: [], sentence: '' } as never, commercialReality: { validated: true, failing: [] } }, null);
     expect(r.probability).toBe('UNKNOWN');
     expect(r.commerciallyValidated).toBe(true);
   });
 
   it('reports a probability measured against real outcomes', () => {
-    const r = planningReport({ target, verdict: 'VIABLE', summary: '', measuredChance: null, acceptance: { status: 'ACCEPTED', required: 0.9, probability: { value: 0.92, lowerBound: 0.9, basis: 'MEASURED_RECORD', sample: 40, note: '37 of 40 met' }, accepted: { label: 'a', opportunityIds: [] }, candidate: null, shortfalls: [], sentence: '' } as never, commercialReality: { validated: false, failing: ['arr_x: the buyer population is one organisation'] } }, null);
+    const r = planningReport({ target, verdict: 'RECOMMENDABLE', summary: '', measuredChance: null, acceptance: { status: 'ACCEPTED', required: 0.9, probability: { value: 0.92, lowerBound: 0.9, basis: 'MEASURED_RECORD', sample: 40, note: '37 of 40 met' }, accepted: { label: 'a', opportunityIds: [] }, candidate: null, shortfalls: [], sentence: '' } as never, commercialReality: { validated: false, failing: ['arr_x: the buyer population is one organisation'] } }, null);
     expect(r.probability).toEqual({ value: 0.92, lowerBound: 0.9 });
     expect(r.commerciallyValidated).toBe(false);
     expect(r.blocker).toMatch(/one organisation/);
