@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget | runpod-start | runpod-launch'
+        description: 'deploy | status | prune | heal | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget | runpod-start | runpod-launch'
         required: true
         default: deploy
       recipes:
@@ -240,6 +240,30 @@ jobs:
             FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl ssh console --app "$cheap" -C "sh -c 'find /app/data/call_logs -type f -mmin +120 -delete 2>/dev/null; find /app/data/call_logs -mindepth 1 -type d -empty -delete 2>/dev/null; ls -1t /app/data/logs/application/app.*.log 2>/dev/null | tail -n +3 | xargs -r rm -f; df -h /app/data | tail -1'" \
               || echo "::warning title=cheap lane::The gateway prune did not run."
           }
+          # A gateway that answers every call 5xx is down, whatever Brain's own
+          # readings call it. Production 2026-11-22 18:58Z to 11-23 06:45Z: its
+          # heap guard (985 MB > 911 MB) returned 503 to every call, Brain recorded
+          # "every free-lane route is held" and nothing restarted it for twelve
+          # hours. One real question; on a 5xx the machine restarts in place, on the
+          # image it already runs (never `deploy`, which can change the image).
+          gateway_heal() {
+            [ -n "${FLY_ORG_TOKEN:-}" ] && [ -n "${OMNIROUTE_API_KEY:-}" ] || return 0
+            model=$(echo "${OMNIROUTE_MODEL:-auto}" | cut -d, -f1)
+            code=$(curl -sS -o heal.json -w '%{http_code}' --max-time 120 \
+              -H "authorization: Bearer $OMNIROUTE_API_KEY" -H 'content-type: application/json' \
+              -d "{\"model\":\"$model\",\"max_tokens\":200,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the word ok.\"}]}" \
+              "https://$cheap.fly.dev/v1/chat/completions") || code=000
+            case "$code" in
+              5??)
+                machine=$(FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl machine list --app "$cheap" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
+                [ -n "$machine" ] || { echo "::warning title=cheap lane::The gateway answered HTTP $code and no machine was found to restart."; return 0; }
+                FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl machine restart "$machine" --app "$cheap" \
+                  && echo "::warning title=cheap lane::The gateway answered HTTP $code; machine $machine restarted on its current image." \
+                  || echo "::warning title=cheap lane::The gateway answered HTTP $code and the restart failed."
+                ;;
+              *) echo "gateway answered HTTP $code" ;;
+            esac
+          }
           case "$ACTION" in
             runpod-test)
               [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
@@ -398,8 +422,12 @@ jobs:
             prune)
               gateway_prune
               ;;
+            heal)
+              gateway_heal
+              ;;
             runpod-auto)
               gateway_prune
+              gateway_heal
               if [ -z "$RUNPOD_VLLM_URL" ]; then
                 echo "::notice title=runpod::Waiting for the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY secrets. Free providers only."
                 exit 0
