@@ -31,6 +31,7 @@
  */
 import { withActivity } from '../../db/infra.ts';
 import type { Bin } from '../../domain/types.ts';
+import type { LineReading } from './line.ts';
 import type {
   FactoryBlockerKind,
   FactoryCampaign,
@@ -3024,6 +3025,33 @@ export async function recordTickFailure(campaignId: string, message: string): Pr
 /* ------------------------------------------------------------------------- */
 
 const DEFAULT_INTERVAL_MS = 20_000;
+/**
+ * Whether this pass asks the dispatcher to place work now.
+ *
+ * A creation on this pass is one reason. The other is a line reading that says
+ * executable work sits beside a free surface with nothing running or arriving:
+ * a bin that became READY without being created here — a lease that expired, a
+ * bin handed back, a reopened no-show, a revived intent — would otherwise wait
+ * for the dispatcher's own wake, and while that wake is busy or skipped the line
+ * reads waiting=1, running=0, capacity=1 indefinitely. A pass whose line reading
+ * failed (`reading` null) keeps the creation-only rule, and a reading whose idle
+ * bins are all stranded (no dispatcher pass can fire them) adds no pass. The dispatch itself goes
+ * through the dispatcher's single-flight guard either way, so this never runs a
+ * second pass beside the dispatcher's own.
+ */
+export function dispatchAfterLinePass(
+  reports: readonly Pick<RemoteTickReport, 'created'>[],
+  reading: (Pick<LineReading, 'unexplainedIdle'> & Partial<Pick<LineReading, 'executable' | 'stranded'>>) | null,
+): boolean {
+  if (reports.some((report) => report.created.length > 0)) return true;
+  if (reading?.unexplainedIdle !== true) return false;
+  // Idle bins whose only intent the dispatcher will never fire again
+  // (`stranded`) are a fault for a person, not work a dispatch pass can place:
+  // ask the dispatcher only when some idle bin is one it can still act on.
+  if (reading.stranded && reading.executable) return reading.executable.readyBins > reading.stranded.bins;
+  return true;
+}
+
 let timer: NodeJS.Timeout | null = null;
 let running = false;
 
@@ -3051,9 +3079,11 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
          * its queue must never stop the campaigns already running.
          */
         const reports = [...ticked];
+        let reading: LineReading | null = null;
         try {
           const { runLinePass } = await import('./line.ts');
           const pass = await runLinePass();
+          reading = pass.reading;
           for (const started of pass.admission.admitted) {
             reports.push(await tickRemoteCampaign(started.campaignId));
           }
@@ -3086,7 +3116,7 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
          * is two indexed reads, and one already in flight cannot double-fire:
          * every fire takes the surface with a compare-and-swap.
          */
-        if (!reports.some((report) => report.created.length > 0)) return;
+        if (!dispatchAfterLinePass(reports, reading)) return;
         // Through the dispatcher's own guard, so this pass and the loop's never
         // run side by side over the same intents.
         const { dispatchTickIfIdle } = await import('../dispatch/loop.ts');

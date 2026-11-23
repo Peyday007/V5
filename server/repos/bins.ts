@@ -1633,8 +1633,9 @@ export function purposeAdmitsSql(prefix: string): string {
 
 /**
  * The owner’s one exception to brain-only mode (§118): a bin the owner-directed
- * goal links to — its packet, its campaign, or a mission's bin or packet, read
- * the way the goal model resolves them (`goals/model.ts`) — may go to an idle
+ * goal links to — its packet, its campaign, or the bin or packet of a mission it
+ * links directly or through a candidate, read the way the goal model resolves
+ * them (`goals/model.ts`) — may go to an idle
  * routine. The free lane stays its first consumer; this only stops twelve paid
  * routines sitting idle beside the plan the owner said to put resources on.
  *
@@ -1651,7 +1652,8 @@ export function ownerDirectedGoalBinSql(prefix: string): string {
     ` AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')` +
     ` AND ((gl.kind = 'PACKET' AND gl.ref = ${outer}orchestration_id)` +
     ` OR (gl.kind = 'CAMPAIGN' AND gl.ref = ${outer}factory_campaign_id)` +
-    ` OR (gl.kind = 'MISSION' AND EXISTS (SELECT 1 FROM russell_missions gm WHERE gm.id = gl.ref` +
+    ` OR (gl.kind IN ('MISSION', 'CANDIDATE') AND EXISTS (SELECT 1 FROM russell_missions gm` +
+    ` WHERE (CASE WHEN gl.kind = 'MISSION' THEN gm.id ELSE gm.candidate_id END) = gl.ref` +
     ` AND (gm.bin_id = ${outer}id OR gm.orchestration_id = ${outer}orchestration_id)))))`
   );
 }

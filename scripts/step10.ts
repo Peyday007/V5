@@ -2657,63 +2657,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command === 'fragment-failures') {
-    /*
-     * Why research fragments failed in the last 24 hours, grouped by what the
-     * gate recorded (`block_cause`, then the first words of `blocked_reason`),
-     * so a shared cause reads as one large group. The operations report counts
-     * failures by `updated_at` and completions by `completed_at`, so it also
-     * prints how many of the failures were *created* in the window — a sweep
-     * that touches old blocked rows is not 45 new failures.
-     *
-     * Read-only. Prints no claim text and no conversation content.
-     */
-    const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-    const totals = await getDb().get<{ failed: number; failed_new: number; accepted: number; accepted_touched: number }>(
-      `SELECT
-         (SELECT COUNT(*) FROM research_fragments WHERE updated_at >= ? AND status IN ('REJECTED','BLOCKED')) AS failed,
-         (SELECT COUNT(*) FROM research_fragments WHERE created_at >= ? AND status IN ('REJECTED','BLOCKED')) AS failed_new,
-         (SELECT COUNT(*) FROM research_fragments WHERE completed_at >= ? AND status = 'ACCEPTED') AS accepted,
-         (SELECT COUNT(*) FROM research_fragments WHERE updated_at >= ? AND status = 'ACCEPTED') AS accepted_touched`,
-      [since, since, since, since],
-    );
-    console.log(`STEP10: OK fragment-failures since ${since}`);
-    console.log(`  failed (updated in window) ${totals?.failed ?? 0}; of them created in window ${totals?.failed_new ?? 0}`);
-    console.log(`  accepted (completed in window) ${totals?.accepted ?? 0}; accepted rows touched in window ${totals?.accepted_touched ?? 0}`);
-    const rows = await getDb().all<{ status: string; cause: string | null; reason: string | null; n: number; last_at: string }>(
-      `SELECT status AS status, block_cause AS cause, SUBSTR(COALESCE(blocked_reason, ''), 1, 160) AS reason,
-              COUNT(*) AS n, MAX(updated_at) AS last_at
-         FROM research_fragments
-        WHERE updated_at >= ? AND status IN ('REJECTED','BLOCKED')
-        GROUP BY status, block_cause, SUBSTR(COALESCE(blocked_reason, ''), 1, 160)
-        ORDER BY n DESC
-        LIMIT 40`,
-      [since],
-    );
-    for (const row of rows) {
-      console.log(`  ${String(row.n).padStart(4)}x ${row.status} ${row.cause ?? '(no cause)'}  last ${row.last_at}`);
-      console.log(`         ${row.reason || '(no reason recorded)'}`);
-    }
-    const claims = await getDb().all<{ reason: string | null; n: number }>(
-      `SELECT SUBSTR(COALESCE(c.rejection_reason, ''), 1, 120) AS reason, COUNT(*) AS n
-         FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id
-        WHERE f.updated_at >= ? AND f.status IN ('REJECTED','BLOCKED') AND c.accepted = 0
-        GROUP BY SUBSTR(COALESCE(c.rejection_reason, ''), 1, 120)
-        ORDER BY n DESC
-        LIMIT 15`,
-      [since],
-    );
-    if (claims.length > 0) console.log('  rejected claims inside those fragments, by reason:');
-    for (const row of claims) console.log(`  ${String(row.n).padStart(5)}x ${row.reason || '(no reason recorded)'}`);
-    const projects = await getDb().all<{ project_id: string; n: number }>(
-      `SELECT project_id AS project_id, COUNT(*) AS n FROM research_fragments
-        WHERE updated_at >= ? AND status IN ('REJECTED','BLOCKED') GROUP BY project_id ORDER BY n DESC LIMIT 10`,
-      [since],
-    );
-    for (const row of projects) console.log(`  project ${row.project_id} ${row.n}`);
-    return;
-  }
-
   if (command === 'tick-failures') {
     /*
      * What the dispatcher's own ticks have thrown, grouped by what they said.

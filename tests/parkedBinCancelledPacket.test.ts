@@ -12,6 +12,7 @@ import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createBin, getBin, listBinEvents } from '../server/repos/bins.ts';
 import { createOrchestration } from '../server/repos/research.ts';
+import { cancelWork, enqueueWork } from '../server/repos/workQueue.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { reconcileBins } from '../server/services/bins/service.ts';
 
@@ -92,4 +93,21 @@ describe('a parked research bin under a terminal packet', () => {
     await reconcileBins(projectId);
     expect((await getBin(binId))?.state).toBe('NEEDS_HUMAN');
   });
+
+  it('closes a READY bin whose FAILED packet holds nothing claimable, and keeps one whose packet still has work (production, 2026-11-23)', async () => {
+    const shell = await parkedBinUnder('FAILED');
+    await getDb().run(`UPDATE bins SET state = 'READY', attempt_count = 0, terminal_reason = NULL WHERE id = ?`, [shell.binId]);
+    const spent = await enqueueWork({ projectId, workType: 'RESEARCH_FRAGMENT', createdByType: 'SYSTEM', requiredScopes: ['queue:claim'], orchestrationId: shell.packetId });
+    await cancelWork(spent.id, 'test: the mission failed');
+    const live = await parkedBinUnder('FAILED');
+    await getDb().run(`UPDATE bins SET state = 'READY', attempt_count = 0, terminal_reason = NULL WHERE id = ?`, [live.binId]);
+    await enqueueWork({ projectId, workType: 'RESEARCH_FRAGMENT', createdByType: 'SYSTEM', requiredScopes: ['queue:claim'], orchestrationId: live.packetId });
+
+    const report = await reconcileBins(projectId);
+    expect((await getBin(shell.binId))?.state).toBe('CANCELLED');
+    expect((await getBin(shell.binId))?.terminalReason).toContain('no work a worker can claim');
+    expect(report.details.find((d) => d.binId === shell.binId)?.disposition).toBe('CLOSED_WITH_PACKET');
+    expect((await getBin(live.binId))?.state).toBe('READY');
+  });
 });
+

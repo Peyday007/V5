@@ -260,6 +260,34 @@ describe('the assignment query enforces it', () => {
     expect((await checkIn({ principal: routine(), workerId })).assigned).toBe(false);
   });
 
+  it('reaches the goal’s research through a mission the goal links, as the goal model does', async () => {
+    const goalId = OWNER_DIRECTED_GOAL_IDS[0]!;
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [goalId, play.project.id, '$10K', 'Collect 10000 dollars', 'REVENUE_DIRECT', now, now],
+    );
+    const goalBin = await bin(play.project.id, 'Constructed: who pays for this arrangement', 3);
+    const layer = await play.layerByName('Discovery Logic');
+    const run = await createRun({ projectId: play.project.id, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const packet = await createOrchestration({ projectId: play.project.id, layerId: layer.id, runId: run.id, title: 'q', assignment: 'q', provider: 'WORKER', autoApprove: false });
+    await getDb().run('UPDATE bins SET orchestration_id = ? WHERE id = ?', [packet.id, goalBin]);
+    await getDb().run(
+      `INSERT INTO russell_missions (id, project_id, objective, why_now, state, orchestration_id, idempotency_key, created_at, updated_at)
+       VALUES ('rms_goal', ?, 'who pays', 'the plan needs it', 'RUNNING', ?, 'key_goal', ?, ?)`,
+      [play.project.id, packet.id, now, now],
+    );
+    expect((await checkIn({ principal: routine(), workerId })).assigned).toBe(false);
+    await getDb().run(
+      `INSERT INTO workstream_links (id, workstream_id, kind, ref, relation, recorded_by, created_at)
+       VALUES ('wsl_goal_mission', ?, 'MISSION', 'rms_goal', 'PURSUES', 'BRAIN', ?)`,
+      [goalId, now],
+    );
+    const answer = await checkIn({ principal: routine(), workerId });
+    expect(answer.assigned).toBe(true);
+    if (answer.assigned) expect(answer.assignment.binId).toBe(goalBin);
+  });
+
   it('keeps play bins assignable once the owner turns the mode off', async () => {
     const id = await bin(play.project.id, 'AI receptionist pricing in Ohio');
     await setBrainOnlyMode(false, 'owner', 'owner said so');

@@ -58,6 +58,7 @@ import {
   reopenNeedsHumanBin,
   resolveNeedsHumanBin,
   terminateUnleasedBin,
+  binWorkReady,
   type BinProof,
   type ReopenOutcome,
   dispatchExhaustedFor,
@@ -1892,6 +1893,29 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     // An expired lease is claimable work by construction, and the attempt
     // budget is what bounds it. Either is a healthy answer.
     const assignable = bin.attemptCount < bin.maxAttempts;
+    /*
+     * A READY research bin whose packet already ended FAILED or CANCELLED, with
+     * no work in it a worker could claim, is a shell: no session can do
+     * anything inside it, and the goal it belongs to kept reading "Brain fires
+     * the next free Routine at" it. Production, 2026-11-23: the $10K goal's
+     * fifteen READY bins (`bin_50218154c55c4ddaa1c7` and siblings, READY since
+     * 2026-11-03, attempts 0/5) each held only CANCELLED and FAILED work items
+     * under a FAILED mission, so twelve routines sat beside them. The bin
+     * follows its packet to CANCELLED, guarded on the generation, keeping every
+     * event; the goal's own continuation then asks for research that can run.
+     */
+    if (bin.state === 'READY' && bin.completionContract === 'RESEARCH_PACKET_V1' && bin.orchestrationId && !(await binWorkReady(bin))) {
+      const packet = await getOrchestration(bin.orchestrationId);
+      if (packet && (packet.status === 'FAILED' || packet.status === 'CANCELLED')) {
+        const reason =
+          `Its packet ${packet.id} is ${packet.status} and holds no work a worker can claim, so there is nothing in this ` +
+          'bin for any session to do. Closed with its packet; every attempt and event keeps its row.';
+        if (await terminateUnleasedBin(bin.id, bin.leaseGeneration, 'CANCELLED', reason)) {
+          report.details.push({ binId: bin.id, disposition: 'CLOSED_WITH_PACKET', reason });
+          continue;
+        }
+      }
+    }
     if (bin.state === 'READY' && assignable) {
       /*
        * Assignable is not the same fact as reachable. A READY bin whose intent
