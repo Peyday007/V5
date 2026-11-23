@@ -126,6 +126,22 @@ describe('the report', () => {
     expect(r.text).not.toContain('PARTIAL REPORT');
   });
 
+  it('shows the four capacity pools, so an empty worker table or cheap lane is not read as missing capacity (2026-11-23)', () => {
+    const now = win({ pools: [
+      { pool: 'ROUTINES', waiting: 1, running: 0, capacity: 12, idle: true },
+      { pool: 'FREE_LANE', waiting: 153, running: 32, capacity: 42, idle: false },
+      { pool: 'FACTORY', waiting: 1, running: 0, capacity: 2, idle: true },
+    ] });
+    const r = renderReport({
+      hourEnding: '2026-11-23T21:00:00.000Z', now, prev: win(), baseline: { hours: 5, pipeline: win().pipeline }, partial: [],
+      plan: plan(), planPrev: plan(), planHistory: [], hermesSummary: '', openEngineering: [], persistence: {}, lastKeys: [],
+      ownerOpportunities: [], unmeasured: [],
+    });
+    expect(r.text).toContain('Capacity pools (brain_operator_capacity): ROUTINES 0 running/12, 1 waiting, IDLE beside waiting work; FREE_LANE 32 running/42, 153 waiting; FACTORY 0 running/2');
+    expect(r.text).toContain('Cheap screening lane (GPU calls outside the free lane)');
+    expect(r.text).toContain('Factory workers (registered-worker table; Factory surfaces are counted in the pools above)');
+  });
+
   it('publishes a partial report that names what it could not read and shows those figures as n/a, never as zero', () => {
     const now = win();
     now.hermes.runsStarted = Number.NaN;

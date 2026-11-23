@@ -275,6 +275,12 @@ async function readWindowInto(db: ReturnType<typeof getDb>, start: string, end: 
   ), missing, 'factory workers');
   const leasedByWorker = await safe([], () => db.all<{ lease_worker_id: string; n: number }>(`SELECT lease_worker_id, COUNT(*) AS n FROM factory_work_units WHERE state = 'LEASED' GROUP BY lease_worker_id`, []), missing, 'worker leases');
   const leasedMap = new Map(leasedByWorker.map((r) => [r.lease_worker_id, Number(r.n)]));
+  // Pools: the last reading brain_operator_capacity served in this process (the watchdog keeps it current); no statement is spent on it.
+  const pools = await safe(null, async () => {
+    const { cachedUtilization } = await import('../engineering/watchdog.ts');
+    const held = cachedUtilization();
+    return held ? held.pools.map((one) => ({ pool: one.pool, waiting: one.waiting, running: one.running, capacity: one.capacity, idle: one.idle })) : null;
+  }, missing, 'capacity pools');
   // Models ------------------------------------------------------------------
   const jobs = await safe([], () => db.all<{ model: string | null; provider: string; status: string; duration_ms: number | null }>(
     'SELECT model, provider, status, duration_ms FROM research_jobs WHERE completed_at >= ? AND completed_at < ?',
@@ -353,6 +359,7 @@ async function readWindowInto(db: ReturnType<typeof getDb>, start: string, end: 
       })),
       waitingByClass,
     },
+    pools,
     models: { researchJobsByModel, cheapCallsByModel },
     money: { collectedCents, spentCents, spendHeldMicros: spend?.held ?? null, spendCeilingMicros: spend?.ceiling ?? null },
     incidents: incidents.map((i) => ({ kind: i.kind, count: Number(i.n) })),

@@ -114,6 +114,14 @@ export interface OpsWindow {
     /** Units waiting, by the model class they require. */
     waitingByClass: Record<string, number>;
   };
+  /**
+   * Brain's four pools as `brain_operator_capacity` reads them, when a reading
+   * was available: the routines, the free lane (the GPU and the free models),
+   * the research slots and the Factory surfaces. `factory.workers` and
+   * `models.cheapCallsByModel` are narrower tables — an empty one is not idle
+   * capacity, and this is what says so (2026-11-23).
+   */
+  pools?: { pool: string; waiting: number; running: number; capacity: number; idle: boolean }[] | null;
   models: {
     researchJobsByModel: Record<string, { done: number; failed: number; avgSeconds: number | null }>;
     cheapCallsByModel: Record<string, { ok: number; failed: number }>;
@@ -479,8 +487,11 @@ export function renderReport(r: ReportInput): { subject: string; text: string; b
   L.push('');
   L.push('RESOURCE UTILIZATION');
   L.push(`Models: ${Object.entries(now.models.researchJobsByModel).map(([m, v]) => `${m} ${v.done} done/${v.failed} failed${v.avgSeconds !== null ? ` ~${Math.round(v.avgSeconds)}s` : ''}`).join('; ') || 'no research model jobs'}.`);
-  L.push(`GPU (cheap lane): ${Object.entries(now.models.cheapCallsByModel).map(([m, v]) => `${m} ${v.ok} ok/${v.failed} failed`).join('; ') || 'no calls recorded'}.`);
-  L.push(`Factory workers: ${now.factory.workers.map((w) => `${w.name} [${w.modelClass}] ${w.leased}/${w.maxConcurrency}${w.availability !== 'AVAILABLE' ? ` ${w.availability}` : ''}${w.rateLimited ? ' rate-limited' : ''}`).join('; ') || 'none registered'}.`);
+  if (now.pools && now.pools.length > 0) {
+    L.push(`Capacity pools (brain_operator_capacity): ${now.pools.map((one) => `${one.pool} ${one.running} running/${one.capacity}, ${one.waiting} waiting${one.idle ? ', IDLE beside waiting work' : ''}`).join('; ')}. The free lane is where the GPU and the free models do research; the Factory pool is its routine surfaces.`);
+  }
+  L.push(`Cheap screening lane (GPU calls outside the free lane): ${Object.entries(now.models.cheapCallsByModel).map(([m, v]) => `${m} ${v.ok} ok/${v.failed} failed`).join('; ') || 'no calls recorded'}.`);
+  L.push(`Factory workers (registered-worker table; Factory surfaces are counted in the pools above): ${now.factory.workers.map((w) => `${w.name} [${w.modelClass}] ${w.leased}/${w.maxConcurrency}${w.availability !== 'AVAILABLE' ? ` ${w.availability}` : ''}${w.rateLimited ? ' rate-limited' : ''}`).join('; ') || 'none registered'}.`);
   L.push(`Research capacity: ${now.queues.research.running} running, ${now.queues.research.queued} queued.`);
   L.push(`Budget: ${now.money.spendCeilingMicros === null ? 'no spend ceiling recorded' : `held $${((now.money.spendHeldMicros ?? 0) / 1e6).toFixed(2)} of $${(now.money.spendCeilingMicros / 1e6).toFixed(2)} this period`}.`);
   L.push(`Idle or constrained: ${now.factory.workers.filter((w) => w.availability === 'AVAILABLE' && w.leased === 0).map((w) => `${w.name} idle`).concat(now.factory.workers.filter((w) => w.rateLimited || w.availability !== 'AVAILABLE').map((w) => `${w.name} unavailable`)).join('; ') || 'none'}. Incidents: ${now.incidents.map((i) => `${i.kind} ×${i.count}`).join(', ') || 'none'}.`);
