@@ -9,12 +9,12 @@
  * all. Nothing here sends anything or reaches the network.
  */
 import { registerAdapter, type EffectAdapter } from '../../effects/adapter.ts';
-import { CONTACT_BUYER_NAMESPACE, ISSUE_INVOICE_NAMESPACE } from '../effects.ts';
+import { CONTACT_BUYER_NAMESPACE, ISSUE_INVOICE_NAMESPACE, PAYMENT_LINK_NAMESPACE } from '../effects.ts';
 import { billingAlternates, billingConfig, messagingAlternates, messagingConfig } from './config.ts';
 import { registerPaymentReader } from './payments.ts';
 import { createResendAdapter } from './resend.ts';
 import { createInstantlyAdapter, instantlyCapacity } from './instantly.ts';
-import { createStripeInvoiceAdapter, readStripeInvoice } from './stripe.ts';
+import { createStripeInvoiceAdapter, createStripePaymentLinkAdapter, readStripeInvoice } from './stripe.ts';
 import { registerProbe } from '../../factory/program/probes.ts';
 import { PROVIDER_COUNTERPARTY_PROBE, providerCounterpartyProbe } from './counterparty.ts';
 import { ALTERNATIVE_COUNTERPARTIES as ALTERNATIVES, failoverCounterparty, providerCounterpartyId, type SeatedAdapter } from './counterpartyRecord.ts';
@@ -96,6 +96,9 @@ export function registerCommercialProviders(env: NodeJS.ProcessEnv = process.env
     if (area.alternates.length > 0) out.billingAlternates = area.alternates;
   }
   if (billingChosen === 'stripe') {
+    // The offer experiment's payment link (`offerExperiment.ts`): its own namespace, judged under ACCEPT_PAYMENT
+    // before every send, and unusable until the Stripe key is configured. Registering it sends nothing.
+    registerAdapter(createStripePaymentLinkAdapter({ namespace: PAYMENT_LINK_NAMESPACE.name }));
     registerPaymentReader({
       name: 'stripe.invoice_payments',
       provider: 'stripe',

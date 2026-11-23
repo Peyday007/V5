@@ -676,6 +676,31 @@ export async function issueInvoiceReserved(projectId: string, invoiceId: string)
  * Refunds
  * ------------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------------- */
+/* A payment link                                                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Creating one fixed-price payment link for an offer sent to a list
+ * (`offerExperiment.ts`). Its own namespace rather than ACCEPT_PAYMENT's
+ * `cash.take_payment`, which is a charge Brain performs against one agreed
+ * piece: registering a link adapter there would make every piece's take-payment
+ * press read as performable. It is still judged under the ACCEPT_PAYMENT grant
+ * before it is sent, and its business identity is the offer's, so one offer
+ * has at most one link whatever retries happen.
+ */
+export const PAYMENT_LINK_NAMESPACE: OperationNamespace = {
+  name: 'cash.payment_link',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'PERMANENT',
+};
+
+/** The payment-link adapter that can send now — registered and healthy — or none. */
+export function paymentLinkAdapter(): EffectAdapter | null {
+  return usableAdapter(PAYMENT_LINK_NAMESPACE);
+}
+
 /**
  * Paying a buyer back, through the same machinery every commercial effect goes
  * through (ported from PR #124, and the only refund path in the post-sale
