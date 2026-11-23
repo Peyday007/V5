@@ -32,6 +32,7 @@ import type { ResearchClaim } from '../../domain/types.ts';
 import { timingOfText } from '../cash/paymentTiming.ts';
 import { GOAL_PRICE_KEY_PREFIX, GOAL_PRICE_SCOPE_PREFIX, goalPriceSubject } from './goalWork.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
+import { committeeNeeds, type CommitteeReading } from './committee.ts';
 
 /**
  * Asking a counterparty is contacting the buyer: the commercial authority an
@@ -415,6 +416,41 @@ const PLAN_CONDITION_MEANING: Record<string, string> = {
 /** The measurement a plan condition names, for a researcher. Pure. */
 export function planConditionMeaning(condition: string): string {
   return PLAN_CONDITION_MEANING[condition] ?? `the plan's "${condition}" figure`;
+}
+
+/** At most this many committee questions are sent per plan read; disputes first. */
+export const COMMITTEE_QUESTIONS_PER_READ = 3;
+
+/** The graph the investment committee's questions belong to: the goal's committee, one per goal. */
+export function goalCommitteeScope(goalId: string): string {
+  return `goal:${goalId}:committee`;
+}
+
+/**
+ * Send the investment committee's disputed facts and, on a final plan, the
+ * judgments its roles could not settle (§117), as research through `sendNeeds`
+ * — the owner every other goal question already goes through, so a worker
+ * claims it from the existing queue. Each question carries the objective and
+ * the leg's original evidence only (`committeeNeeds`), never the planner's
+ * verdict. Keyed by the goal's committee scope and the subject, so a re-read
+ * raises nothing new.
+ */
+export async function sendCommitteeNeeds(
+  input: { goalId: string; projectId: string; committee: CommitteeReading; actorRef?: string; max?: number },
+  deps: Pick<PortfolioNeedsDeps, 'sendNeeds'> = {},
+): Promise<PortfolioNeedsSent> {
+  const send = deps.sendNeeds ?? sendNeeds;
+  const out: PortfolioNeedsSent = { sent: 0, created: 0, historyRequested: 0, refused: [] };
+  const needs = committeeNeeds(input.committee).slice(0, input.max ?? COMMITTEE_QUESTIONS_PER_READ);
+  if (needs.length === 0) return out;
+  const delivered = await send({ projectId: input.projectId, actorRef: input.actorRef ?? 'BRAIN', graphScope: goalCommitteeScope(input.goalId), needs });
+  for (const one of delivered) {
+    if (one.sent) {
+      out.sent += 1;
+      if (one.created) out.created += 1;
+    } else out.refused.push(`${one.subject}: ${one.reason}`);
+  }
+  return out;
 }
 
 /** At most this many of the adopted plan's own questions are sent per plan read (C-9). */

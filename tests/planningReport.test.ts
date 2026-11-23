@@ -25,9 +25,18 @@ describe('the permanent planning report', () => {
   });
 
   it('keeps an evidenced Monte Carlo out of the probability line', () => {
-    const r = planningReport({ target, verdict: 'RECOMMENDABLE', summary: '', measuredChance: null, acceptance: { status: 'ACCEPTED', required: 0.9, probability: { value: 0.93, lowerBound: 0.91, basis: 'EVIDENCED_PORTFOLIO', sample: 2000, note: 'all inputs evidenced' }, accepted: { label: 'a', opportunityIds: [] }, candidate: null, shortfalls: [], sentence: '' } as never, commercialReality: { validated: true, failing: [] } }, null);
+    const r = planningReport({ target, verdict: 'RECOMMENDABLE', summary: '', measuredChance: null, acceptance: { status: 'ACCEPTED', required: 0.9, probability: { value: 0.93, lowerBound: 0.91, basis: 'EVIDENCED_PORTFOLIO', sample: 2000, note: 'all inputs evidenced' }, accepted: { label: 'a', opportunityIds: [] }, candidate: null, shortfalls: [], sentence: '' } as never, commercialReality: { validated: true, failing: [] }, committee: { verdict: 'PASS', blocker: null } }, null);
     expect(r.probability).toBe('UNKNOWN');
     expect(r.commerciallyValidated).toBe(true);
+  });
+
+  it('requires the investment committee to pass: a failed or absent committee is not validation (§117)', () => {
+    const acceptance = { status: 'ACCEPTED', required: 0.9, probability: { value: 0.93, lowerBound: 0.91, basis: 'EVIDENCED_PORTFOLIO', sample: 2000, note: 'all inputs evidenced' }, accepted: { label: 'a', opportunityIds: [] }, candidate: null, shortfalls: [], sentence: '' } as never;
+    const failed = planningReport({ target, verdict: 'RECOMMENDABLE', summary: '', measuredChance: null, acceptance, commercialReality: { validated: true, failing: [] }, committee: { verdict: 'FAIL', blocker: 'QUANT (critical): the evidence supports $80' } }, null);
+    expect(failed.commerciallyValidated).toBe(false);
+    expect(failed.validation).toMatch(/investment committee failed it — QUANT/);
+    expect(failed.blocker).toMatch(/QUANT/);
+    expect(planningReport({ target, verdict: 'RECOMMENDABLE', summary: '', measuredChance: null, acceptance, commercialReality: { validated: true, failing: [] } }, null).commerciallyValidated).toBe(false);
   });
 
   it('reports a probability measured against real outcomes', () => {
