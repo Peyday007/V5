@@ -808,7 +808,10 @@ const decideTool: McpTool = {
     "each with probability, value and cost in dollars (null when unknown) and its evidence; the chosen option; the " +
     'assumptions it rests on; and a prediction (observable outcome, probability, horizon in days). Brain checks it, ' +
     'has a second model challenge a high-impact one, and records the prediction on the ledger so it is judged later. ' +
-    'Returns REVISE with the challenge when a flaw could change the choice; call again with answered_challenge to stand by it.',
+    'Returns REVISE with the challenge when a flaw could change the choice; call again with answered_challenge to stand by it. ' +
+    'Returns REVISE with problems when this kind of decision is miscalibrated: `next` names the assumptions to add, each with its ' +
+    'prefix (mechanism:, capacity:, condition:, execution:, timing:, estimate:) — add them and call again in the same run; ' +
+    'a REVISE is a correction to make, not a reason to stop.',
   inputSchema: {
     type: 'object',
     properties: {

@@ -480,6 +480,33 @@ describe('the free research lane', () => {
     expect((await getWorkItem(itemId))?.state).toBe('SUCCEEDED');
   });
 
+  it('asks the model again for a payer claim that never says anybody pays, instead of submitting a claim the gate rejects (production, 2026-11-23)', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await getDb().run('UPDATE research_fragments SET required_evidence = ? WHERE id = ?', [
+      JSON.stringify([{ id: 'payer', description: 'Who actually pays for this', necessity: 'REQUIRED' }]),
+      fragment.id,
+    ]);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const prompts: string[] = [];
+    const completer: Completer = async (config, name, system, prompt) => {
+      if (!prompt.includes('Extract the material claims')) return model().completer(config, name, system, prompt);
+      prompts.push(prompt);
+      const line = prompt.split('\n').find((one) => one.startsWith('[S') && one.includes('median hourly wage'));
+      const ref = /\[S(\d+)\.(\d+)\]/.exec(line ?? '');
+      const repair = prompt.includes('Brain could not use your previous answer');
+      const claim = repair
+        ? 'Employers pay receptionists a median hourly wage of $17.39 (May 2024).'
+        : 'The U.S. Bureau of Labor Statistics publishes the receptionist occupation profile.';
+      return JSON.stringify({ claims: [{ claim, source: Number(ref?.[1]), sentences: [Number(ref?.[2])], evidence_lane: 'payer' }] });
+    };
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toMatch(/payer lane asks who pays/);
+    expect(tick.submitted).toBe(1);
+    const claims = await listClaimsForFragment(fragment.id);
+    expect(claims.map((one) => one.claim)).toEqual(['Employers pay receptionists a median hourly wage of $17.39 (May 2024).']);
+  });
+
   it('hands an item back with its attempt refunded when Brain\'s own database is unavailable', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);

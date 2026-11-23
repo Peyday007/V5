@@ -43,6 +43,7 @@ import { findTool } from '../../mcp/tools.ts';
 import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
+import { laneFitFailure } from '../research/gate.ts';
 import { isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, servedRoute, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
@@ -2060,6 +2061,19 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       }
       if (laneIds.size > 0 && !laneIds.has(String(c['evidence_lane']))) {
         drop('unknown evidence lane');
+        continue;
+      }
+      /*
+       * The gate's own lane-fit rule, asked before submitting rather than after
+       * (production, 2026-11-23: 23 payer claims that named an organisation and
+       * never said it paid were rejected, and their rejections sank the
+       * fragments they sat in as MOSTLY_REJECTED or NOTHING_SURVIVED). A claim
+       * that does not answer its lane is not offered; if nothing is left the
+       * model is asked again, told why. The gate is unchanged.
+       */
+      const misfit = laneFitFailure(String(c['evidence_lane'] ?? '') || null, c['claim']);
+      if (misfit) {
+        drop(misfit);
         continue;
       }
       const cited = citedExcerpt(c, numbered);
