@@ -72,3 +72,9 @@ describe('a legitimate purchase beside a reward program stays a purchase', () =>
     expect(paymentNatureOf('Contest organizers pay judging platforms $1,500 per event.').nature).toBe('PURCHASE');
   });
 });
+
+describe('a bounty platform paying per finding is a reward', () => {
+  it('reads a per-report payout on a bounty platform as a contingent reward', () => {
+    expect(paymentNatureOf('The huntr bounty platform pays security researchers $500 for each valid vulnerability report in an open-source project.').nature).toBe('CONTINGENT_REWARD');
+  });
+});

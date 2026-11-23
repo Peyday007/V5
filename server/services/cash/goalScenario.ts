@@ -25,7 +25,7 @@
  * faster plan beat a bigger, slower one.
  */
 import { namesOneOrganisation } from '../../domain/industry.ts';
-import { nonCommercialExclusion, paymentNatureOf } from '../../domain/paymentNature.ts';
+import { nonCommercialExclusion, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
@@ -2360,6 +2360,11 @@ export async function modelOpportunity(
           contested: { card, stated: contradiction.stated },
         }
       : known(card, p.provenance === 'UNKNOWN' ? 'ASSUMPTION' : p.provenance, p.source ?? ref, 'the price on the card');
+    // The figure is a reward, grant, rebate or wage: real money, but no evidence of what a buyer pays for the deliverable (§116).
+    const paidFor = priceFact && typeof priceFact.value === 'string' ? paymentNatureOf(priceFact.value) : null;
+    if (paidFor && paidFor.nature !== 'PURCHASE') {
+      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not a price: the only figure on record is ${nonPurchaseSentence(paidFor)}; what these buyers pay for the deliverable is not established` };
+    }
   } else {
     const range = fact('revenueRange');
     const figures = range ? readMoneyFigures(range.value, currency).filter((one) => !one.perUnit) : [];

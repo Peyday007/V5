@@ -61,7 +61,7 @@ export function paymentNatureOf(text: string | null | undefined): PaymentNatureR
   const hit = (re: RegExp): string | null => t.match(re)?.[0] ?? null;
   const rewardFor = hit(REWARD_FOR);
   // "pays $500 for each accepted puzzle" is a purchase; "rewards … for a valid finding" is not. Only reward words, or a payment for a finding or a win, count.
-  if (rewardFor && (/\b(?:rewards?|awards?|prizes?)\b/i.test(rewardFor) || /\b(?:findings?|vulnerabilit|bugs?|exploits?|wins?|winners?|places?)\b/i.test(rewardFor))) return { nature: 'CONTINGENT_REWARD', cue: rewardFor };
+  if (rewardFor && (/\b(?:rewards?|awards?|prizes?)\b/i.test(rewardFor) || /\b(?:findings?|vulnerabilit(?:y|ies)|bugs?|exploits?|wins?|winners?|places?)\b/i.test(rewardFor))) return { nature: 'CONTINGENT_REWARD', cue: rewardFor };
   // A program named beside a purchase is the buyer's context, not the payment: "companies running bug bounty programs pay HackerOne $20,000 a year" buy a platform.
   const program = hit(REWARD_PROGRAM);
   if (program && !PURCHASE.test(t)) return { nature: 'CONTINGENT_REWARD', cue: program };
