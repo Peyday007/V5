@@ -62,6 +62,9 @@ async function main(): Promise<void> {
     await q('PLAN_Q_WORK2', "SELECT w.id, w.work_type, w.state, w.priority, w.available_at, w.attempt_count, w.max_attempts, w.failure_category, w.created_at, w.updated_at FROM work_items w WHERE w.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e') OR w.bin_id IN ('bin_96f8e82b1f614999b67b','bin_246e074280f14dd28ac1')");
     await q('QUEUED_WORK_PRIORITY', "SELECT w.priority, COUNT(*) AS n, MIN(w.created_at) AS oldest FROM work_items w WHERE w.state = 'QUEUED' AND w.work_type LIKE 'RESEARCH_%' GROUP BY 1 ORDER BY 1");
     await q('OUTPUT_DROPS', "SELECT e.at, e.event_type, e.workload_class AS k, substr(e.reason,1,160) AS reason FROM bin_events e WHERE e.event_type IN ('FREE_LANE_MODEL_OUTPUT_DROP','FREE_LANE_MODEL_OUTPUT_RECOVERED','FREE_LANE_IDLE') AND e.at > '2026-11-22T18:00:00' ORDER BY e.at LIMIT 30");
+    await q('PLAN_Q_BLOCK', "SELECT f.orchestration_id AS o, f.attempt, f.block_cause, f.block_host, substr(f.repair_plan,1,200) AS repair, substr(f.question,1,160) AS question FROM research_fragments f WHERE f.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e') ORDER BY f.orchestration_id, f.attempt");
+    await q('PLAN_Q_CLAIMS', "SELECT c.orchestration_id AS o, c.accepted, c.evidence_lane, substr(c.rejection_reason,1,140) AS why, substr(c.claim,1,120) AS claim, substr(c.source_url,1,80) AS url FROM research_claims c WHERE c.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e') LIMIT 20");
+    await q('BLOCK_CAUSES_TODAY', "SELECT f.block_cause, COUNT(*) AS n FROM research_fragments f WHERE f.status = 'BLOCKED' AND f.updated_at > '2026-11-23T06:50:00' GROUP BY 1 ORDER BY 2 DESC LIMIT 10");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
