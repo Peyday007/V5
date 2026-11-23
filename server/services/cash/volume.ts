@@ -29,20 +29,36 @@
  *     courier making 20 a week") is a total and is never multiplied;
  *   * a frequency word (weekly, monthly, quarterly, yearly) or "N times a
  *     month" says how often one buyer buys, and with none stated each buyer is
- *     credited one purchase in the window — never more.
+ *     credited one purchase in the window — never more;
+ *   * a rate whose subject is "each" in the clause after a count ("2,400 movers
+ *     are licensed; each buys 10 leads a month") is that count's per-unit
+ *     rate, and a vague per-unit count ("several applications a week") is read
+ *     at its low end, 2, and the basis says so;
+ *   * a transaction count over a trailing span ("2,300 sales in the last 12
+ *     months") is the market's purchase rate, shared among its sellers;
+ *   * the supply side is never a buyer: sellers, vendors, the count a sales
+ *     figure is spread "across", units "offering the same service" or
+ *     "competing", and a count of results, pages, followers or listings.
  *
  * Its failure mode is missing a volume, never inventing one: shorthand like
  * "thousands of buyers" states no number and reads as unknown.
  */
 
 const BUYER_WORDS =
-  'buyers|businesses|companies|firms|customers|clients|households|homeowners|stores|shops|retailers|restaurants|practices|offices|owners|landlords|managers|agencies|contractors|organizations|organisations|members|accounts|venues|schools|clinics|dealers|dealerships|properties|operators|brokers|sellers|merchants|hotels|salons|studios|nonprofits|charities|teams|users|subscribers|employers|carriers|farms|wineries|breweries|builders|fleets|hospitals|pharmacies|gyms|churches|associations|shippers|distributors|manufacturers|wholesalers|vendors|families|parents|drivers|freelancers|creators|authors|publishers|photographers|realtors|agents|lawyers|attorneys|dentists|physicians|therapists|coaches|boards|homeowners|tenants';
+  'buyers|businesses|companies|firms|customers|clients|households|homeowners|stores|shops|retailers|restaurants|practices|offices|owners|landlords|managers|agencies|contractors|organizations|organisations|members|accounts|venues|schools|clinics|dealers|dealerships|properties|operators|brokers|merchants|hotels|salons|studios|nonprofits|charities|teams|users|subscribers|employers|carriers|farms|wineries|breweries|builders|fleets|hospitals|pharmacies|gyms|churches|associations|shippers|distributors|manufacturers|wholesalers|families|parents|drivers|freelancers|creators|authors|publishers|photographers|realtors|agents|lawyers|attorneys|dentists|physicians|therapists|coaches|boards|homeowners|tenants';
 
 const COUNT = '(\\d{1,3}(?:,\\d{3})+|\\d+)';
 // The words between a count and what it counts may carry an ampersand or an apostrophe:
 // "12 B&B owners" and "40 children's clinics" count buyers as "12 inn owners" does (round 13).
 const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`, 'gi');
-const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts|renewals';
+const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts|renewals|entries|registrations|applications|filings|enrolments|enrollments|leads';
+/** A vague count of a per-unit rate, read at its low end (2); never a count of buyers. */
+const VAGUE = 'several|a few|a couple of|a couple|multiple|a handful of';
+/** A rate's count: a stated number, or (only in per-unit forms) a vague one. Group 1. */
+const RATE_COUNT = `(\\d{1,3}(?:,\\d{3})+|\\d+|${VAGUE})`;
+function rateCount(text: string): number {
+  return /^\d/.test(text) ? toInt(text) : 2;
+}
 const PER = '(?:a|per|each|every)';
 const PERIODS = '(day|week|month|year)';
 /** "<count> [≤2 words] <orders> a/per <period>": a stated rate; group 1 the count, 2 the period. */
@@ -63,11 +79,33 @@ const APPROX = '(?:about|around|roughly|approximately|nearly|some|an average of|
  * unit count, 2 an adverb, 3 the verb, 4 the rate count, 5 the period, 6 a
  * trailing qualifier.
  */
-const SUBJECT_RATE = new RegExp(
-  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS})` +
-    `(?:\\s+(?:in|within|on|of|around|near|throughout|listed|registered|licensed)\\s+(?:[A-Za-z&'’-]+\\s+){0,1}?[A-Za-z-]+)?` +
-    `\\s+(?:(${ADVERBS})\\s+)?([A-Za-z-]+)\\s+(?:${APPROX}\\s+)?${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b` +
-    `(\\s+(?:each|apiece|between them|in total|combined|together|altogether|in all|overall))?`,
+const subjectRate = (buyerWords: string) =>
+  new RegExp(
+    `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${buyerWords})` +
+      `(?:\\s+(?:in|within|on|of|around|near|throughout|listed|registered|licensed)\\s+(?:[A-Za-z&'’-]+\\s+){0,1}?[A-Za-z-]+)?` +
+      `\\s+(?:(${ADVERBS})\\s+)?([A-Za-z-]+)\\s+(?:${APPROX}\\s+)?${RATE_COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b` +
+      `(\\s+(?:each|apiece|between them|in total|combined|together|altogether|in all|overall))?`,
+    'gi',
+  );
+/**
+ * "each" as the subject of a rate, in the clause after a count: "2,400 movers
+ * are licensed; each buys about 10 leads a month", "...and they each file
+ * several applications a week". Groups: 1 the verb, 2 the rate count, 3 the
+ * period. The units are the nearest buyer count stated before it.
+ */
+const EACH_SUBJECT = new RegExp(
+  `(?:^|[.;:,]\\s+|\\b(?:and|but)\\s+)(?:they\\s+)?(?:each|every\\s+one)(?:\\s+(?:one|of\\s+them))?\\s+(?:(?:typically|usually|regularly|routinely|normally|generally|currently|also)\\s+)?` +
+    `([A-Za-z-]+)\\s+(?:${APPROX}\\s+)?${RATE_COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b`,
+  'gi',
+);
+/**
+ * A transaction count over a trailing span: "2,300 sales of comparable
+ * workbooks in the last 12 months". The market's purchases in that span,
+ * never a count of buyers. Groups: 1 the count, 2 the span's length, 3 its unit.
+ */
+const SPAN_NUMBERS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, six: 6, nine: 9, twelve: 12, eighteen: 18, 'twenty-four': 24 };
+const SPAN_TOTAL = new RegExp(
+  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${RATE_NOUNS})(?:\\s+of(?:\\s+[A-Za-z&'’-]+){1,6}?)?\\s+(?:in|over|during|within)\\s+(?:the\\s+)?(?:last|past|previous|prior|trailing|latest)\\s+(?:(\\d+|${Object.keys(SPAN_NUMBERS).join('|')})\\s+)?(day|week|month|quarter|year)s?\\b`,
   'gi',
 );
 /** Words that, standing where the verb is, make the subject's rate ambiguous or someone else's. */
@@ -170,12 +208,36 @@ export function payerHeldWords(payer: string | null | undefined): string[] {
  */
 export function payerNounWords(payer: string | null | undefined): string[] {
   if (!payer) return [];
-  const head = payer.split(/\s+(?:and|or|who|that|which|with|without|in|of|for|on|at|across|from|by|to|renting|running|using|buying|selling|needing|seeking|looking|operating|owning|managing)\b/i)[0]!.trim();
+  const head = payer.split(/\s+(?:and|or|who|that|which|with|without|in|of|for|on|at|across|from|by|to|renting|running|using|buying|selling|needing|seeking|looking|operating|owning|managing|entering|filing|submitting|ordering|hiring|booking)\b/i)[0]!.trim();
   const word = head.split(/\s+/).pop()?.toLowerCase().replace(/[^a-z-]/g, '') ?? '';
   // The same refusal as `industryBuyerWords`: a word for what is sold or done never counts buyers.
   if (word.length < 4 || !/^[a-z][a-z-]*s$/.test(word) || word.endsWith('ss') || NOT_A_BUYER_NOUN.test(word)) return [];
   const one = word.replace(/(?:ies)$/, 'y').replace(/(?<=(?:s|x|ch|sh))es$/, '').replace(/s$/, '');
   return [...new Set([word, one])];
+}
+
+/** Head nouns that name a business by what it does: "moving companies", "roofing contractors". */
+const TRADE_HEAD = /^(?:companies|company|firms|firm|businesses|business|contractors|services|operators|shops|outfits|crews)$/i;
+
+/**
+ * The agent noun of the trade a payer is named for (volume reader, 2026-11-23):
+ * a payer of "Licensed local moving companies" is counted by "2,400 licensed
+ * movers" exactly as by "2,400 moving companies", and "roofing contractors" by
+ * "roofers". Only a word in -ing standing directly before a business head
+ * noun is taken, as its stem plus -er, singular and plural. Pure.
+ */
+export function payerAgentWords(payer: string | null | undefined): string[] {
+  if (!payer) return [];
+  const words = payer.toLowerCase().match(/[a-z-]+/g) ?? [];
+  const out = new Set<string>();
+  for (const [i, w] of words.entries()) {
+    const next = words[i + 1];
+    if (!next || !TRADE_HEAD.test(next) || !/^[a-z]{3,}ing$/.test(w)) continue;
+    const agent = `${w.slice(0, -3)}er`;
+    out.add(agent);
+    out.add(`${agent}s`);
+  }
+  return [...out];
 }
 
 /**
@@ -224,6 +286,41 @@ interface StatedRate {
   /** The rate one unit does, and its period, for the basis. */
   each: number;
   period: string;
+  /** The vague word a per-unit count was read from at its low end, when it was one. */
+  vague?: string;
+}
+
+/** Words between a count and its buyer word that say the count is of something else: results, pages, followers. */
+const MEASURE_NOUNS = /^(?:results?|pages?|webpages?|websites?|sites?|followers?|views?|impressions?|searches|queries|hits|posts?|likes?|reviews?|listings?|ads|adverts?|mentions?|downloads?|visits?|visitors?|clicks?|keywords?|links?|backlinks?|profiles?|articles?|ratings?)$/i;
+/** After a count: the counted units sell what is sold, or compete with it — the supply side. */
+const SUPPLYING_AFTER = /^\s+(?:(?:that|who|which)\s+)?(?:already\s+|also\s+|now\s+)?(?:(?:offer|sell|provide|supply|list|advertise|market)(?:s|ing)?\s+(?:the|this|that|these|those|similar|comparable|competing|equivalent|such|identical|it|them)\b|compet(?:e|es|ing)\b)/i;
+/** Before a count, in its sentence: a transaction count spread "across" the units — they are its sellers. */
+const SPREAD_ACROSS_BEFORE = /\b(?:sales|orders|purchases|transactions|sold)\b[^.;]*\b(?:across|among|between|from|by|split between|shared by)\s+(?:the\s+|its\s+|their\s+)?(?:about\s+|around\s+|some\s+|roughly\s+)?$/i;
+
+/**
+ * Every buyer count the text states, with where it stands. A count is refused
+ * when the words before its buyer word name a measure that is not a buyer
+ * ("2,100,000 results for local movers", "40,000 LinkedIn followers of
+ * companies"), when the units supply what is sold ("40 agencies offering the
+ * service", "12 vendors selling comparable kits"), or when a transaction count
+ * is spread across them ("2,300 sales across 40 shops"): those are sellers,
+ * and a seller is never a buyer.
+ */
+function buyerCounts(text: string, pattern: RegExp): Array<{ at: number; n: number }> {
+  const out: Array<{ at: number; n: number }> = [];
+  for (const m of text.matchAll(pattern)) {
+    const at = m.index ?? 0;
+    const end = at + m[0]!.length;
+    if (/^\s*%/.test(text.slice(at + m[1]!.length))) continue;
+    const between = m[0]!.split(/\s+/).slice(1, -1);
+    if (between.some((w) => MEASURE_NOUNS.test(w))) continue;
+    if (SUPPLYING_AFTER.test(text.slice(end))) continue;
+    const sentence = sentenceAt(text, at);
+    if (SPREAD_ACROSS_BEFORE.test(text.slice(sentence.start, at))) continue;
+    const n = toInt(m[1]!);
+    if (n > 0 && n < 50_000_000) out.push({ at, n });
+  }
+  return out;
 }
 
 /** The sentence around a position: the text between the nearest sentence breaks. */
@@ -235,7 +332,7 @@ function sentenceAt(text: string, at: number): { start: number; text: string } {
 }
 
 /** Every rate the text states, multiplied by a count only where each counted unit is said to do it. */
-function readRates(text: string): StatedRate[] {
+function readRates(text: string, buyerWords: string, buyerCount: RegExp): StatedRate[] {
   // Keyed by where the rate's own count stands, so a rate read per unit replaces its plain reading.
   const byPosition = new Map<number, StatedRate>();
   const put = (at: number, rate: StatedRate) => {
@@ -255,10 +352,9 @@ function readRates(text: string): StatedRate[] {
     if (/^(?:day|week|month|quarter|year)s?$/i.test(unitWord)) return;
     const at = m.index ?? 0;
     const sentence = sentenceAt(text, at);
-    const counts = [...sentence.text.matchAll(BUYER_COUNT)]
-      .filter((c) => sentence.start + (c.index ?? 0) !== at)
-      .map((c) => toInt(c[1]!))
-      .filter((c) => c > 0 && c < 50_000_000);
+    const counts = buyerCounts(sentence.text, buyerCount)
+      .filter((c) => sentence.start + c.at !== at)
+      .map((c) => c.n);
     put(at, plain(n, period, counts.length > 0 ? Math.min(...counts) : null));
   };
   for (const m of text.matchAll(PER_UNIT_AFTER)) perUnit(m, toInt(m[1]!), m[2]!.toLowerCase(), m[3]!);
@@ -266,14 +362,39 @@ function readRates(text: string): StatedRate[] {
 
   for (const m of text.matchAll(EACH_OF_RATE)) put(m.index ?? 0, plain(toInt(m[1]!), m[2]!.toLowerCase(), toInt(m[3]!)));
 
-  for (const m of text.matchAll(SUBJECT_RATE)) {
+  // A transaction count over a trailing span is the market's rate: "2,300 sales in the last 12 months".
+  for (const m of text.matchAll(SPAN_TOTAL)) {
+    const length = m[2] ? (/^\d/.test(m[2]) ? toInt(m[2]) : SPAN_NUMBERS[m[2].toLowerCase()]!) : 1;
+    const days = length * PERIOD_DAYS[m[3]!.toLowerCase()]!;
+    const n = toInt(m[1]!);
+    if (n > 0 && days > 0) byPosition.set(m.index ?? 0, { perDay: n / days, units: null, each: n, period: `${length} ${m[3]!.toLowerCase()}${length === 1 ? '' : 's'}` });
+  }
+
+  const vagueRate = (rateText: string, period: string, units: number | null): StatedRate => {
+    const rate = plain(rateCount(rateText), period, units);
+    return /^\d/.test(rateText) ? rate : { ...rate, vague: rateText.toLowerCase() };
+  };
+
+  // "each" as the subject in the clause after a count: that count's per-unit rate.
+  const counted = buyerCounts(text, buyerCount);
+  for (const m of text.matchAll(EACH_SUBJECT)) {
+    const [, verb, rateText, period] = m;
+    if (NOT_A_VERB.test(verb!)) continue;
+    const at = m.index ?? 0;
+    const before = counted.filter((c) => c.at < at);
+    const units = before.length > 0 ? before[before.length - 1]!.n : null;
+    const rateAt = at + m[0]!.lastIndexOf(rateText!);
+    put(rateAt, vagueRate(rateText!, period!.toLowerCase(), units));
+  }
+
+  for (const m of text.matchAll(subjectRate(buyerWords))) {
     const [, unitText, adverb, verb, rateText, period, trailing] = m;
     if (NOT_A_VERB.test(verb!) || (adverb && COLLECTIVE.test(adverb)) || (trailing && COLLECTIVE.test(trailing.trim()))) continue;
     const units = toInt(unitText!);
     if (!(units > 0 && units < 50_000_000)) continue;
     // Nothing after the rate's count holds a digit, so its last occurrence is the rate's own position.
     const rateAt = (m.index ?? 0) + m[0]!.lastIndexOf(rateText!);
-    put(rateAt, plain(toInt(rateText!), period!.toLowerCase(), units));
+    put(rateAt, vagueRate(rateText!, period!.toLowerCase(), units));
   }
   return [...byPosition.values()];
 }
@@ -281,33 +402,32 @@ function readRates(text: string): StatedRate[] {
 /** Read the deals a market can take inside `windowDays`, or null when no number is stated. */
 export function readVolume(text: string, windowDays: number, payer: string | null = null, industry: string | null = null): VolumeReading | null {
   if (!text || !(windowDays > 0)) return null;
-  const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer), ...industryBuyerWords(industry)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
-  const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS}|${held.join('|')})\\b`, 'gi');
+  const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer), ...payerAgentWords(payer), ...industryBuyerWords(industry)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
+  const buyerWords = held.length === 0 ? BUYER_WORDS : `${BUYER_WORDS}|${held.join('|')}`;
+  const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${buyerWords})\\b`, 'gi');
   const window = Math.max(1, Math.floor(windowDays));
 
   // An order rate states the volume directly; the slowest one stated is taken.
-  const rates = readRates(text);
+  const rates = readRates(text, buyerWords, buyerCount);
   if (rates.length > 0) {
     const slowest = rates.sort((a, b) => a.perDay - b.perDay)[0]!;
     const deals = Math.floor(slowest.perDay * window);
     if (deals >= 1) {
       const monthly = Math.round(slowest.perDay * 30);
+      const vague = slowest.vague ? ` ("${slowest.vague}" read at its low end, ${slowest.each})` : '';
       return slowest.units === null
-        ? { deals, buyers: null, everyDays: null, counted: 'ORDERS', basis: `about ${monthly} orders a month are stated, so ${deals} in ${window} days` }
+        ? { deals, buyers: null, everyDays: null, counted: 'ORDERS', basis: `about ${monthly} orders a month are stated${vague}, so ${deals} in ${window} days` }
         : {
             deals,
             buyers: slowest.units,
             everyDays: null,
             counted: 'ORDERS',
-            basis: `${slowest.units} units each doing ${slowest.each} a ${slowest.period} are stated, about ${monthly} orders a month, so ${deals} in ${window} days`,
+            basis: `${slowest.units} units each doing ${slowest.each} a ${slowest.period} are stated${vague}, about ${monthly} orders a month, so ${deals} in ${window} days`,
           };
     }
   }
 
-  const counts = [...text.matchAll(buyerCount)]
-    .filter((m) => !/^\s*%/.test(text.slice((m.index ?? 0) + m[1]!.length)))
-    .map((m) => toInt(m[1]!))
-    .filter((n) => n > 0 && n < 50_000_000);
+  const counts = buyerCounts(text, buyerCount).map((c) => c.n);
   if (counts.length === 0) return null;
   const counted = Math.min(...counts);
   const share = buyingShare(text);
