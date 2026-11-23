@@ -451,7 +451,15 @@ jobs:
               image=diegosouzapw/omniroute:latest
               flyctl apps list $orgflag --json | grep -q "\"$cheap\"" || flyctl apps create "$cheap" $orgflag
               flyctl volumes list --app "$cheap" --json | grep -q omniroute_data \
-                || flyctl volumes create omniroute_data --app "$cheap" --region iad --size 1 --yes
+                || flyctl volumes create omniroute_data --app "$cheap" --region iad --size 3 --yes
+              # Room for the gateway's own migration snapshot (production 2026-11-23 06:26Z):
+              # a newer image refuses to start without first copying its 565 MB
+              # storage.sqlite, and the 1 GB volume holding it had 159 MB free, so every
+              # call answered 500 "database or disk is full". A volume only grows.
+              vol=$(flyctl volumes list --app "$cheap" --json | python3 -c 'import json,sys; v=[x for x in json.load(sys.stdin) if x.get("name")=="omniroute_data"]; print((v[0]["id"]+" "+str(v[0].get("size_gb") or v[0].get("SizeGb") or 0)) if v else "")')
+              if [ -n "$vol" ] && [ "${vol#* }" -lt 3 ]; then
+                flyctl volumes extend "${vol%% *}" --app "$cheap" --size 3 --yes
+              fi
               flyctl ips list --app "$cheap" --json | grep -q '"v6"' || flyctl ips allocate-v6 --app "$cheap"
               flyctl ips list --app "$cheap" --json | grep -q 'shared_v4\|"v4"' || flyctl ips allocate-v4 --shared --app "$cheap" --yes
               machine=$(flyctl machine list --app "$cheap" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
