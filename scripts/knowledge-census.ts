@@ -49,6 +49,9 @@ async function main(): Promise<void> {
     await q('FL_CAP_EVENTS', "SELECT e.at, e.workload_class AS model, e.outcome, substr(e.reason,1,160) AS reason, substr(e.measures,1,160) AS measures FROM bin_events e WHERE e.event_type = 'FREE_LANE_CAPACITY' AND e.at > '2026-11-22T20:00:00' ORDER BY e.at DESC LIMIT 15");
     await q('FL_CLAIMS_BY_HOUR', "SELECT substr(e.at,1,13) AS hour, e.event_type, COUNT(*) AS n FROM bin_events e WHERE e.at > '2026-11-23T00:00:00' AND e.event_type IN ('CLAIMED','COMPLETED','FAILED','RELEASED','LEASE_EXPIRED','CHECKPOINT') GROUP BY 1, 2 ORDER BY 1, 2");
     await q('BIN_EVENT_TYPES', "SELECT e.event_type, COUNT(*) AS n FROM bin_events e WHERE e.at > '2026-11-23T03:00:00' GROUP BY 1 ORDER BY 2 DESC LIMIT 25");
+    await q('FL_ITEM_OUTCOMES', "SELECT e.outcome, substr(e.reason,1,90) AS reason, COUNT(*) AS n FROM bin_events e WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at > '2026-11-23T00:00:00' GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15");
+    await q('FL_ITEM_SAMPLE', "SELECT e.at, e.workload_class AS model, e.outcome, substr(e.reason,1,220) AS reason, e.duration_ms FROM bin_events e WHERE e.event_type = 'FREE_LANE_ITEM' ORDER BY e.at DESC LIMIT 8");
+    await q('INFRA_FAILURES', "SELECT 1 AS probe_placeholder");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
