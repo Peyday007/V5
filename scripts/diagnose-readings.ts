@@ -9,6 +9,7 @@
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { DISPATCHABLE_SQL, FIREABLE_SQL, ownerDirectedGoalBinSql, purposeAdmitsSql, workReadySql } from '../server/repos/bins.ts';
+import * as binsRepo from '../server/repos/bins.ts';
 
 async function fragmentFailures(): Promise<void> {
   /*
@@ -144,6 +145,27 @@ async function binGates(binId: string): Promise<void> {
     [binId, bin.orchestration_id ?? '-'],
   );
   console.log(`  work items: ${items.map((one) => `${one.state} ${one.n}`).join(', ') || 'none'}`);
+  const detail = await getDb().all<{ id: string; work_type: string; state: string; worker_id: string | null; attempt_count: number; failure_category: string | null; result_summary: string | null; updated_at: string }>(
+    `SELECT id, work_type, state, worker_id, attempt_count, failure_category, result_summary, updated_at FROM work_items
+      WHERE bin_id = ? OR (bin_id IS NULL AND orchestration_id = ?) ORDER BY updated_at DESC LIMIT 5`,
+    [binId, bin.orchestration_id ?? '-'],
+  );
+  for (const one of detail) {
+    console.log(`    ${one.id} ${one.work_type} ${one.state} worker=${one.worker_id ?? '-'} attempts=${one.attempt_count} ${one.updated_at} ${one.failure_category ?? ''} ${(one.result_summary ?? '').replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
+  // The stranded-pin query reconcile runs (present only once that release is live).
+  const stranded = (binsRepo as Record<string, unknown>)['strandedPinnedBins'];
+  if (typeof stranded === 'function') {
+    const rows = await (stranded as (before: string) => Promise<unknown[]>)(new Date(Date.now() - 6 * 3_600_000).toISOString());
+    console.log(`  stranded pins now: ${JSON.stringify(rows).slice(0, 600)}`);
+  } else console.log('  stranded pins: strandedPinnedBins not in the running image');
+  const pin = await getDb().get<{ pinned_routine_id: string | null; created_at: string }>('SELECT pinned_routine_id, created_at FROM bins WHERE id = ?', [binId]);
+  console.log(`  pin: ${pin?.pinned_routine_id ?? '-'} created ${pin?.created_at ?? '-'}`);
+  const recent = await getDb().all<{ event_type: string; at: string; outcome: string | null; reason: string | null }>(
+    `SELECT event_type, at, outcome, reason FROM bin_events WHERE bin_id = ? ORDER BY at DESC LIMIT 6`,
+    [binId],
+  );
+  for (const one of recent) console.log(`    event ${one.at} ${one.event_type} ${one.outcome ?? ''} ${(one.reason ?? '').slice(0, 160)}`);
   const links = await getDb().all<{ workstream_id: string; kind: string; relation: string }>(
     `SELECT workstream_id, kind, relation FROM workstream_links WHERE superseded_at IS NULL AND (ref IN (?, ?, ?)
        OR ref IN (SELECT candidate_id FROM russell_missions WHERE candidate_id IS NOT NULL AND (bin_id = ? OR orchestration_id = ?))
