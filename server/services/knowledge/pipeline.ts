@@ -62,14 +62,28 @@ export interface PassReport {
 
 const DISCOVERY_EVERY_MS = 24 * 3_600_000;
 let lastDiscoveryAt = 0;
+const CANDIDATE_SCAN_EVERY_MS = 3_600_000;
+let lastCandidateScanAt = 0;
 
 /** Find each family's newest vintage, register it, and stop reading the one it replaces. */
 export async function discoverSources(deps: KnowledgeDeps = {}, force = false): Promise<{ discovered: string[]; candidates: string[]; errors: string[] }> {
   const now = (deps.now ?? (() => new Date()))();
   const out = { discovered: [] as string[], candidates: [] as string[], errors: [] as string[] };
+  const get = deps.getText ?? httpText;
+  // Other programs: a window an hour, so the whole publisher is walked within a day.
+  if (force || now.getTime() - lastCandidateScanAt >= CANDIDATE_SCAN_EVERY_MS) {
+    lastCandidateScanAt = now.getTime();
+    try {
+      const keys = new Set((await listSources()).map((s) => s.source_key));
+      for (const def of await discoverCandidatePrograms(get, keys, Math.floor(now.getTime() / 3_600_000), 12, deps.getText ? 0 : 250)) {
+        if (await registerSource(def, now.toISOString())) out.candidates.push(def.sourceKey);
+      }
+    } catch (error) {
+      out.errors.push(`candidate programs: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
+    }
+  }
   if (!force && now.getTime() - lastDiscoveryAt < DISCOVERY_EVERY_MS) return out;
   lastDiscoveryAt = now.getTime();
-  const get = deps.getText ?? httpText;
   const known = await listSources();
   const receiptsYear = known.filter((s) => s.family === 'SUSB').map((s) => s.period).sort().pop() ?? null;
   // SUSB first: the receipts year decides which CBP vintage is the comparable one.
@@ -105,14 +119,6 @@ export async function discoverSources(deps: KnowledgeDeps = {}, force = false): 
     }
   } catch (error) {
     out.errors.push(`SEC_XBRL: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
-  }
-  try {
-    const keys = new Set((await listSources()).map((s) => s.source_key));
-    for (const def of await discoverCandidatePrograms(get, keys, Math.floor(now.getTime() / 3_600_000))) {
-      if (await registerSource(def, now.toISOString())) out.candidates.push(def.sourceKey);
-    }
-  } catch (error) {
-    out.errors.push(`candidate programs: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
   }
   return out;
 }

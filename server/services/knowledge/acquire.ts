@@ -401,12 +401,17 @@ export function sourceFor(family: Family, found: { url: string; period: string }
 }
 
 /**
- * Other Census programs that publish NAICS-coded bulk files and that no
+ * Other Census programs that publish industry-coded bulk files and that no
  * reader covers yet: candidates, named with what was found, so the gap is a
- * row (and the Command Center shows it) rather than a silence. Bounded: a
- * window of programs per call, rotated by the hour.
+ * row (and the Command Center shows it) rather than a silence. A program
+ * publishes either under `datasets/<year>/` (where only a file naming NAICS
+ * counts: that tree also carries population surveys) or, as the economic
+ * programs do (the Annual Business Survey, the Annual Survey of Manufactures,
+ * the Economic Census), under `data/<year>/`. Bounded: a window of programs
+ * per call, rotated by the hour, paced so the publisher does not answer 429.
  */
-export async function discoverCandidatePrograms(get: TextFetch, known: ReadonlySet<string>, hour: number, window = 4): Promise<SourceDefinition[]> {
+export async function discoverCandidatePrograms(get: TextFetch, known: ReadonlySet<string>, hour: number, window = 12, paceMs = 250): Promise<SourceDefinition[]> {
+  const pause = () => (paceMs > 0 ? new Promise((r) => setTimeout(r, paceMs)) : Promise.resolve());
   const programs = listingLinks(await get(`${CENSUS}/`))
     .filter((h) => /^[a-z0-9-]+\/$/.test(h))
     .map((h) => h.slice(0, -1))
@@ -415,29 +420,34 @@ export async function discoverCandidatePrograms(get: TextFetch, known: ReadonlyS
   if (programs.length === 0) return [];
   const start = (hour * window) % programs.length;
   const out: SourceDefinition[] = [];
-  for (const program of [...programs, ...programs].slice(start, start + window)) {
-    const datasets = `${CENSUS}/${program}/datasets/`;
-    const years = await yearsUnder(get, datasets).catch(() => [] as string[]);
-    const year = years[0];
-    if (!year) continue;
-    const files = await get(`${datasets}${year}/`).then(listingLinks).catch(() => [] as string[]);
-    const naicsFile = files.find((f) => /naics|ind/i.test(f) && /\.(zip|txt|csv|xlsx)$/i.test(f));
-    if (!naicsFile) continue;
-    const key = `candidate-${program}-${year}`;
-    if (known.has(key)) continue;
-    out.push({
-      sourceKey: key,
-      family: `CANDIDATE:${program}`,
-      title: `Census ${program} ${year}: ${naicsFile}`,
-      publisher: `U.S. Census Bureau (${program})`,
-      url: `${datasets}${year}/${naicsFile}`,
-      period: year,
-      format: naicsFile.split('.').pop()!.toUpperCase(),
-      origin: 'DISCOVERED',
-      discoveredFrom: datasets,
-      valueReason: `an industry-coded (${naicsFile}) dataset Brain found in the Census ${program} program; no reader maps its columns yet`,
-      status: 'CANDIDATE',
-    });
+  for (const program of [...programs, ...programs].slice(start, start + Math.min(window, programs.length))) {
+    if ([...known].some((k) => k.startsWith(`candidate-${program}-`))) continue;
+    for (const tree of ['data', 'datasets'] as const) {
+      await pause();
+      const base = `${CENSUS}/${program}/${tree}/`;
+      const year = (await yearsUnder(get, base).catch(() => [] as string[]))[0];
+      if (!year) continue;
+      await pause();
+      const files = (await get(`${base}${year}/`).then(listingLinks).catch(() => [] as string[])).filter((f) => /\.(zip|txt|csv|xlsx?)$/i.test(f));
+      const file = files.find((f) => /naics/i.test(f)) ?? (tree === 'data' ? files.find((f) => /\.zip$/i.test(f)) : undefined);
+      if (!file) continue;
+      const key = `candidate-${program}-${year}`;
+      if (known.has(key)) break;
+      out.push({
+        sourceKey: key,
+        family: `CANDIDATE:${program}`,
+        title: `Census ${program} ${year}: ${files.length} bulk file(s), e.g. ${file}`,
+        publisher: `U.S. Census Bureau (${program})`,
+        url: `${base}${year}/${file}`,
+        period: year,
+        format: file.split('.').pop()!.toUpperCase(),
+        origin: 'DISCOVERED',
+        discoveredFrom: `${base}${year}/`,
+        valueReason: `a business dataset Brain found in the Census ${program} program (${files.length} bulk file(s) for ${year}); no reader maps its columns yet`,
+        status: 'CANDIDATE',
+      });
+      break;
+    }
   }
   return out;
 }

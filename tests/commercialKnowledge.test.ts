@@ -27,7 +27,7 @@ import {
   stateNamedIn,
   type FactLike,
 } from '../server/domain/commercialKnowledge.ts';
-import { conditionalBytes, csvFields, nextDueAfter, parseCbp, parseNonemployer, parseSusb, type BytesTransport } from '../server/services/knowledge/acquire.ts';
+import { conditionalBytes, csvFields, discoverCandidatePrograms, nextDueAfter, parseCbp, parseNonemployer, parseSusb, type BytesTransport } from '../server/services/knowledge/acquire.ts';
 import { readSecYear, sectorOfSic } from '../server/services/knowledge/sec.ts';
 import { discoverSources, runKnowledgePass, type KnowledgeDeps } from '../server/services/knowledge/pipeline.ts';
 import { buyerCountClaimId, notePlanEffects } from '../server/services/knowledge/apply.ts';
@@ -390,6 +390,29 @@ describe('the pass: acquire, understand, apply — with no person in it', () => 
     expect(retried.reads.find((r) => r.source === 'cbp-2023')!.outcome).toBe('MODIFIED');
     expect((await listSources()).find((s) => s.source_key === 'cbp-2023')).toMatchObject({ status: 'ACTIVE', consecutive_failures: 0 });
   }, 60_000);
+
+  it('finds other business programs under data/ or by a NAICS file name, and never a population survey', async () => {
+    const pages: Record<string, string> = {
+      [`${CENSUS}/`]: listing(['abs/', 'apes/', 'cbp/', 'ewks/']),
+      [`${CENSUS}/abs/data/`]: listing(['2022/', '2023/']),
+      [`${CENSUS}/abs/data/2023/`]: listing(['AB2300CSA01.zip', 'AB2300CSA02.zip']),
+      [`${CENSUS}/apes/datasets/`]: listing(['2025/']),
+      [`${CENSUS}/apes/datasets/2025/`]: listing(['2025_individual_unit_files.zip']),
+      [`${CENSUS}/ewks/datasets/`]: listing(['2024/']),
+      [`${CENSUS}/ewks/datasets/2024/`]: listing(['readme.txt', 'ewks_naics6_2024.csv']),
+    };
+    const get = async (url: string) => {
+      const page = pages[url];
+      if (page === undefined) throw new Error(`HTTP 404 for ${url}`);
+      return page;
+    };
+    const found = await discoverCandidatePrograms(get, new Set(), 0, 12, 0);
+    expect(found.map((f) => f.sourceKey).sort()).toEqual(['candidate-abs-2023', 'candidate-ewks-2024']);
+    expect(found.find((f) => f.sourceKey === 'candidate-ewks-2024')!.url).toBe(`${CENSUS}/ewks/datasets/2024/ewks_naics6_2024.csv`);
+    expect(found.every((f) => f.status === 'CANDIDATE' && f.origin === 'DISCOVERED')).toBe(true);
+    // A program already a candidate is not walked again.
+    expect(await discoverCandidatePrograms(get, new Set(['candidate-abs-2023', 'candidate-ewks-2024']), 0, 12, 0)).toEqual([]);
+  });
 
   it('a newer vintage supersedes the older source, whose facts stay', async () => {
     const w = world();
