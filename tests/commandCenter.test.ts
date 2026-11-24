@@ -211,6 +211,17 @@ describe('reports, backlog and resources', () => {
     }
   });
 
+  it("serves the owner the Factory's operational state, and refuses a viewer", async () => {
+    current = owner();
+    const factory = await get('/api/command/factory');
+    expect(factory.status).toBe(200);
+    expect(typeof factory.body.line.because).toBe('string');
+    expect(Array.isArray(factory.body.corrections)).toBe(true);
+    expect(Array.isArray(factory.body.completed)).toBe(true);
+    current = viewer();
+    expect((await get('/api/command/factory')).status).toBe(404);
+  });
+
   it('serves resources to anyone who can read a project', async () => {
     current = viewer();
     const resources = await get('/api/command/resources');

@@ -172,3 +172,13 @@ commandRouter.get(
     return await readResources();
   }),
 );
+
+/** The Factory's operational state for the Command Center (`factory/stranded.ts readFactoryOperations`). */
+commandRouter.get(
+  '/command/factory',
+  handler(async () => {
+    await requireOperatorPerson();
+    const { readFactoryOperations } = await import('../services/factory/stranded.ts');
+    return await readFactoryOperations();
+  }),
+);

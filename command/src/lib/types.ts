@@ -198,3 +198,20 @@ export interface ReportsView {
   audits: Section<{ id: string; projectId: string; layerId: string | null; verdict: string; summary: string; confidence: number | null; mode: string; createdAt: string }[]>;
   interventions: Section<{ byKind: Record<string, number>; minutesAvoided: number; [k: string]: unknown }>;
 }
+
+// server/services/factory/stranded.ts readFactoryOperations
+export interface FactoryOperations {
+  line: {
+    at: string;
+    executable: { queued: number; readyBins: number; total: number };
+    waiting?: { bins: number; reasons: string[] };
+    stranded?: { bins: number; reasons: string[] };
+    active: { leasedBins: number; arriving: number; workingCampaigns: number };
+    capacity: { freeSurfaces: number; surfaces: { routineId: string; routineName: string; accountName: string; inFlight: number; target: number | null; refusal: string | null; free: boolean }[] };
+    unexplainedIdle: boolean;
+    because: string;
+    campaigns: { campaign: { id: string; state: string; stageDetail: string | null; prUrl: string | null }; objective: string; working: boolean; blocked: null | { kind: string; detail: string; remedy: string }; next: string; elapsedMs: number | null }[];
+  };
+  corrections: { at: string; binId: string; kind: string; reason: string | null }[];
+  completed: { campaignId: string; objective: string; state: string; stageDetail: string | null; prUrl: string | null; finishedAt: string | null }[];
+}

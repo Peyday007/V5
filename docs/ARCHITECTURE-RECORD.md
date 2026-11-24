@@ -17314,7 +17314,7 @@ Pinned by `tests/commandCenter.test.ts`, and driven in a real browser by
 `node tests/browser/command-center.mjs`: a throwaway Brain, every page on a
 desktop and a phone viewport, and the writes a person makes through it.
 
-## 121. Operator rights follow the access policy, a market statistic is not an opening, and obsolete research leaves scheduling with its row kept.
+## 121. Operator rights follow the access policy, a market statistic is not an opening, obsolete research leaves scheduling, and stranded Factory work is resolved by its cause.
 
 The owner's first production inspection of the Command Center (2026-11-24)
 found three defects behind one page each. The rules they settled:
@@ -17356,5 +17356,20 @@ found three defects behind one page each. The rules they settled:
   page. The 31 research slots are the sum of the research grants'
   `max_concurrent`, a controller's output (§78, §86), not hardware.
 
-Pinned by `tests/commandCenter.test.ts` and `tests/marketLevelOpening.test.ts`.
+- **A stranded Factory bin is resolved by why it is stranded.** The Factory
+  pool read "executable work beside free surfaces: a fault" for days over the
+  review bin of `fcp_03a8a0ad`: its implementer went unrecorded, so
+  `reviewLineage` refused every reviewer on the connectors that held its
+  leases — all of Brain's repository surfaces — and the dispatcher re-armed
+  the intent until the ceiling. Earlier repairs answered "the intent gave up"
+  with more re-arms; none answered "no surface can ever take this".
+  `factory/stranded.ts`, from the dispatch tick: a review whose arrivals were
+  all refused for independence is cancelled with its cause and the campaign
+  BLOCKED as `NO_ELIGIBLE_REVIEWER`; any other stranded intent is renewed at
+  most once a day so the router places it on a surface healthy now. The
+  Command Center's Factory tab reads the line, these corrections and finished
+  campaigns (`GET /api/command/factory`).
+
+Pinned by `tests/commandCenter.test.ts`, `tests/marketLevelOpening.test.ts` and
+`tests/factoryStrandedResolve.test.ts`.
 

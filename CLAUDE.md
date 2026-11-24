@@ -426,7 +426,7 @@ resolves. Read the section for the area you are changing before you change it
 - §118. Twelve idle routines beside the owner's plan is a defect, not a policy.
 - §119. A goal's execution window starts when commercial execution is authorized, and an owner's rule lives in a row.
 - §120. The Command Center is a window over Brain's own routes, and a read door is never a write door.
-- §121. Operator rights follow the access policy, a market statistic is not an opening, and obsolete research leaves scheduling with its row kept.
+- §121. Operator rights follow the access policy, a market statistic is not an opening, obsolete research leaves scheduling, and stranded Factory work is resolved by its cause.
 
 ## Conventions
 

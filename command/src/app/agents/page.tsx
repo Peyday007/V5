@@ -8,6 +8,7 @@ import { useHomeProject } from '@/hooks/use-homes';
 import { enc } from '@/lib/brain';
 import type { FactoryFleet, FleetView, GoalBriefing, GoalView, WorkEntry, WorkEntryFull, WorkResponse } from '@/lib/types';
 import { TaskCard } from '@/components/brain/task-card';
+import { FactoryPanel } from '@/components/brain/factory-panel';
 
 const GROUPS: { key: WorkEntry['group']; label: string }[] = [
   { key: 'WORKING_NOW', label: 'Working now' },
@@ -34,7 +35,7 @@ export default function AgentsPage() {
         <TabsList>
           <TabsTrigger value='tasks'>Tasks</TabsTrigger>
           <TabsTrigger value='routines'>Routines</TabsTrigger>
-          <TabsTrigger value='factory'>Factory workers</TabsTrigger>
+          <TabsTrigger value='factory'>Factory</TabsTrigger>
         </TabsList>
 
         <TabsContent value='tasks' className='mt-4'>
@@ -127,7 +128,8 @@ export default function AgentsPage() {
           </QueryView>
         </TabsContent>
 
-        <TabsContent value='factory' className='mt-4'>
+        <TabsContent value='factory' className='mt-4 flex flex-col gap-4'>
+          <FactoryPanel />
           <QueryView query={factory} rows={4}>
             {(f) => (
               <div className='flex flex-col gap-4'>
