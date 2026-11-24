@@ -317,3 +317,68 @@ async function evidence(path: ConstructedArrangementRecord, claimId: string, val
     decidedBy: 'BRAIN',
   });
 }
+
+/**
+ * How often the standing pass composes one project's library when no goal
+ * asked: the hourly rotation window (`ROTATION_WINDOW_MS`) moves which
+ * candidates beyond the cap are composed, so a pass every few hours reaches
+ * candidates a single goal's passes never would.
+ */
+export const STANDING_LIBRARY_EVERY_MS = 3 * 60 * 60_000;
+const standingLibraryAt = new Map<string, number>();
+/** For tests: forget when each project's library last grew in the background. */
+export function resetStandingLibrary(): void {
+  standingLibraryAt.clear();
+}
+
+export interface StandingLibraryPass {
+  composed: number;
+  created: number;
+  updated: number;
+  skipped: string | null;
+}
+
+/**
+ * Grow a project's arrangement library from its map with no goal behind it
+ * (owner, 2026-11-24: "continuing systematic background expansion").
+ *
+ * Until now an arrangement was composed — and so stored — only while a cash
+ * goal with days left read its plan, so a project whose map grew under the
+ * standing research grant held buyers, needs and supply that no mechanism was
+ * ever built from, and the candidates past the construction cap were never
+ * composed at all. This is the same constructor and the same library write the
+ * goal pass uses (`constructArrangements`, `rememberArrangements`), with no
+ * goal: no target properties, no exclusions a goal owns, a neutral horizon.
+ * Only arrangements over a buyer population are kept, as on the goal path.
+ *
+ * Optional work: it yields to database pressure (§63), runs at most once per
+ * `STANDING_LIBRARY_EVERY_MS` per project, and a failure never stops the
+ * kernel pass that calls it.
+ */
+export async function standingLibraryPass(projectId: string, now: Date = new Date()): Promise<StandingLibraryPass> {
+  const last = standingLibraryAt.get(projectId);
+  if (last !== undefined && now.getTime() - last < STANDING_LIBRARY_EVERY_MS) return { composed: 0, created: 0, updated: 0, skipped: 'composed recently' };
+  const { databasePressure } = await import('../../db/pressure.ts');
+  if (databasePressure().state === 'SHEDDING') return { composed: 0, created: 0, updated: 0, skipped: 'database shedding optional work (§63)' };
+  const buyers = await getDb().get<{ n: number | string }>(
+    "SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ? AND kind = 'BUYER_TYPE' AND retired_at IS NULL",
+    [projectId],
+  );
+  const priced = await getDb().get<{ n: number | string }>(
+    'SELECT COUNT(*) AS n FROM cash_opportunities WHERE project_id = ? AND payer IS NOT NULL AND duplicate_of_id IS NULL',
+    [projectId],
+  );
+  standingLibraryAt.set(projectId, now.getTime());
+  if (Number(buyers?.n ?? 0) === 0 && Number(priced?.n ?? 0) === 0) return { composed: 0, created: 0, updated: 0, skipped: 'no buyer population on the map and no opening with a payer' };
+  const [{ constructArrangements }, { namesABuyerPopulation }, { executionFrame }] = await Promise.all([
+    import('./construct.ts'),
+    import('../../domain/industry.ts'),
+    import('./discovery.ts'),
+  ]);
+  const frame = await executionFrame(projectId, 'USD');
+  const composed = (
+    await constructArrangements({ projectId, currency: 'USD', delivers: frame?.delivers ?? [], capitalCeilingCents: null, daysLeft: 90, now })
+  ).filter((one) => namesABuyerPopulation(one.demand.name));
+  const stored = await rememberArrangements(projectId, null, composed, now.toISOString());
+  return { composed: composed.length, created: stored.created, updated: stored.updated, skipped: null };
+}
