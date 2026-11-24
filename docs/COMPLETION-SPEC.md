@@ -159,6 +159,21 @@ same denominator as `accuracy`, `e2e.passedBarFieldGaps`, and
 `e2e.failures.<CLASS>`. Each case result carries `e2e: { pass, failures, gaps }`
 (and its reason, for a public case only).
 
+## 3b. The owner-usable level
+
+The owner's measure (2026-11-24): on a feasible request, does Brain return a plan he could
+start without supplying the strategy or repairing it? The verdict level reads the
+planner's own stance, which calls a plan executable only once a close rate is measured or
+buyers have agreed — never true of a fresh request — so a startable plan was scored a
+refusal. `gradeUsable` (`bench/planningReliability/grade.ts`) grades it beside the other
+two levels and never into them: on an `EXECUTABLE_PLAN` case a reading passes when no
+critical class fires, nothing is infeasible or broken, some opening has every chain link
+established but CONVERSION (or the stance is executable), and the end-to-end chain holds
+(absent fields and contradicting estimators aside). A `NO_PLAN` case passes it exactly as
+it passes the verdict level. Metrics `usable.passed`, `usable.accuracy`,
+`usable.wilsonLow/High`; each case carries `usable: { pass }`; the diff report prints its
+recovered, regressed and net percentage points, and rejects a case that loses it.
+
 ## 4. The metric
 
 ```

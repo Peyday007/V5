@@ -230,7 +230,6 @@ export function summarise(rows: PlanningRow[], timing?: Record<string, number>):
   const summary = [
     `planningReliability: ${passed}/${rows.length} correct · accuracy ${pct(metrics['accuracy']!)} (Wilson 95% ${pct(metrics['wilsonLow']!)}–${pct(metrics['wilsonHigh']!)}) · critical ${metrics['criticalFailures']} · errors ${metrics['errors']}` +
       (timing?.['totalMs'] !== undefined ? ` · ${(timing['totalMs'] / 1000).toFixed(1)} s on ${timing['workers'] ?? 1} worker(s)` : ''),
-    `planningReliability owner-usable: ${usablePassed}/${rows.length} startable plans · ${pct(metrics['usable.accuracy']!)} (Wilson 95% ${pct(metrics['usable.wilsonLow']!)}–${pct(metrics['usable.wilsonHigh']!)})`,
     `planningReliability end-to-end: ${e2ePassed}/${rows.length} complete · ${pct(metrics['e2e.accuracy']!)} (Wilson 95% ${pct(metrics['e2e.wilsonLow']!)}–${pct(metrics['e2e.wilsonHigh']!)}) · ${metrics['e2e.passedBarFieldGaps']} pass bar absent fields` +
       (e2eClasses.length ? ` · ${e2eClasses.join(', ')}` : '') +
       (gaps.length ? ` · fields absent: ${gaps.join(', ')}` : ''),
@@ -240,6 +239,8 @@ export function summarise(rows: PlanningRow[], timing?: Record<string, number>):
       .filter((r) => r.pass && !e2eOf(r).pass)
       .map((r) => `  E2E ${r.id} [${e2eOf(r).failures.join(', ')}]${r.hidden ? '' : ` — ${e2eOf(r).detail}`}`),
   ];
+  // The owner-usable level's line follows the verdict and end-to-end lines, so their positions are unchanged.
+  summary.push(`planningReliability owner-usable: ${usablePassed}/${rows.length} startable plans · ${pct(metrics['usable.accuracy']!)} (Wilson 95% ${pct(metrics['usable.wilsonLow']!)}–${pct(metrics['usable.wilsonHigh']!)})`);
   return { cases, metrics, summary, rows, ...(timing ? { timing } : {}) };
 }
 
