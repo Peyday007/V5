@@ -585,15 +585,13 @@ function decodeNumericEntities(value: string): string {
 }
 
 /**
- * Where an Algolia HN response carries its hits: `{ hits: [...] }` from a single
- * query, `{ results: [{ hits: [...] }] }` from a multi-query, or a bare array.
+ * Where the configured endpoint (`/api/v1/search_by_date?tags=comment`) carries
+ * its hits: `{ hits: [...] }`. That is the only shape it returns, so it is the
+ * only shape read; anything else is a strange body and reads as nothing.
  */
 function hnHits(body: unknown): Record<string, unknown>[] {
-  if (Array.isArray(body)) return records(body);
-  if (!body || typeof body !== 'object') return [];
-  const object = body as Record<string, unknown>;
-  if (Array.isArray(object['hits'])) return records(object['hits']);
-  return records(object['results']).flatMap((one) => records(one['hits']));
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
+  return records((body as Record<string, unknown>)['hits']);
 }
 
 /**
@@ -615,7 +613,7 @@ export function parseHnFreelance(side: HnFreelanceSide): (body: unknown) => Feed
     const out: FeedItem[] = [];
     for (const row of hnHits(body)) {
       const id = text(row['objectID']) ?? (typeof row['objectID'] === 'number' ? String(row['objectID']) : null);
-      const source = text(row['comment_text']) ?? text(row['text']) ?? text(row['story_text']);
+      const source = text(row['comment_text']);
       const raw = source ? decodeNumericEntities(source) : null;
       const comment = plain(raw);
       // HN separates paragraphs with <p> (sometimes closed, sometimes <br>), which plain text loses.

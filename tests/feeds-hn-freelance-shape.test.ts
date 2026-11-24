@@ -9,7 +9,8 @@
  * brain_fetch_source refused it under a factory-unit lease ("No such resource,
  * or it is not available to you."). The bodies below therefore follow the
  * documented Algolia HN Search API hit fields (objectID, comment_text, author,
- * created_at, created_at_i; multi-query `results[n].hits`) and HN's comment HTML
+ * created_at, created_at_i, under the single-query `hits` array that
+ * search_by_date returns) and HN's comment HTML
  * (paragraphs as `<p>`, numeric entities such as `&#x2F;`). They are not a
  * captured production body; the shape that reproduces the failure is a
  * comment whose first paragraph is itself wrapped in `<p>…</p>`, which the old
@@ -74,11 +75,22 @@ describe('parseHnFreelance reads the current Algolia HN comment shape', () => {
     });
   });
 
-  it('still reads the earlier unwrapped shape, and hits from a multi-query response', () => {
+  it('still reads the earlier unwrapped shape', () => {
     const unwrapped = { hits: [{ objectID: '1', author: 'a', created_at: '2026-10-01T00:00:00Z', comment_text: 'SEEKING FREELANCER | React Native app<p>Details here.' }] };
     expect(buyers(unwrapped).map((one) => one.title)).toEqual(['React Native app']);
-    const multi = { results: [{ hits: unwrapped.hits }, { hits: wrapped.hits }] };
-    expect(buyers(multi)).toHaveLength(3);
+  });
+
+  it('reads only the shape search_by_date returns: hits[].comment_text', () => {
+    // The configured endpoint is /api/v1/search_by_date?tags=comment, which answers
+    // { hits: [...] } with each comment's HTML in comment_text. A multi-query
+    // envelope, a bare array, or a story's text/story_text is not what it returns,
+    // so none of them is parsed into a record.
+    expect(buyers({ results: [{ hits: wrapped.hits }] })).toEqual([]);
+    expect(buyers(wrapped.hits)).toEqual([]);
+    const story = { objectID: '8', author: 's', created_at: '2026-11-01T00:00:00Z' };
+    expect(buyers({ hits: [{ ...story, story_text: '<p>SEEKING FREELANCER | Logo design</p>' }] })).toEqual([]);
+    expect(buyers({ hits: [{ ...story, text: '<p>SEEKING FREELANCER | Logo design</p>' }] })).toEqual([]);
+    expect(buyers({ hits: [{ ...story, comment_text: '<p>SEEKING FREELANCER | Logo design</p>' }] })).toHaveLength(1);
   });
 
   it('preserves the SEEKING WORK side through the same parser', () => {
