@@ -1660,7 +1660,16 @@ const S = (f: PathFact) => (f.status === 'PROVEN' ? 'P' : f.status === 'ESTIMATE
 const V = (f: PathFact) => (f.value === null ? (f.low !== null && f.high !== null ? `${money(f.low)}–${money(f.high)}` : '—') : typeof f.value === 'number' ? money(f.value) : String(f.value).slice(0, 60));
 
 /** The reading as lines. Pure. P = proven, E = estimated, ? = unknown. */
-export function renderPathways(reading: PathwayReading, limit = 12): string[] {
+export function renderPathways(
+  reading: PathwayReading,
+  limit = 12,
+  /**
+   * The simulation's run of exactly the leading combination's members (`simulatedCombination`),
+   * null when it made none, undefined when the caller did not look: the only percentiles the
+   * leading line may quote beside its bounds (§77).
+   */
+  leadingRun?: { reach: number; settledP10: number; settledP50: number; settledP90: number } | null,
+): string[] {
   const out: string[] = [];
   const s = reading.structures;
   const m = reading.measures;
@@ -1681,7 +1690,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   const lead = reading.portfolio.leading;
   out.push(`    portfolio ${reading.portfolio.note}`);
   if (lead) {
-    out.push(`      leading ${lead.members.join(' + ')} · net bounds low/mid/high ${money(lead.net.p10)}/${money(lead.net.p50)}/${money(lead.net.p90)}, capped at the gap (gross mid ${money(lead.gross.p50)}) · ${Math.round(lead.coverage * 1000) / 10}% of the gap at mid · bounds, not percentiles: the plan's p10/p50/p90 are the simulation's · if its largest group fails ${money(lead.ifLeadGroupFails)} · capital ${lead.capital === null ? 'not established' : money(lead.capital)} · groups ${lead.groups.join(' / ')}`);
+    out.push(`      leading ${lead.members.join(' + ')} · net bounds low/mid/high ${money(lead.net.p10)}/${money(lead.net.p50)}/${money(lead.net.p90)}, capped at the gap (gross mid ${money(lead.gross.p50)}) · ${Math.round(lead.coverage * 1000) / 10}% of the gap at mid · bounds, not percentiles: ${leadingRun ? `the simulation of exactly these legs settles p10/p50/p90 ${money(leadingRun.settledP10)}/${money(leadingRun.settledP50)}/${money(leadingRun.settledP90)} and reaches the target in ${Math.round(leadingRun.reach * 1000) / 10}% of worlds` : leadingRun === null ? 'the simulation did not run exactly these legs, so no p10/p50/p90 exists for them and no simulated figure elsewhere is theirs' : 'percentiles come only from the simulation'} · if its largest group fails ${money(lead.ifLeadGroupFails)} · capital ${lead.capital === null ? 'not established' : money(lead.capital)} · groups ${lead.groups.join(' / ')}`);
   } else out.push('      leading none: no pathway has a positive contribution yet');
   const fb = reading.portfolio.fallback;
   if (fb) out.push(`      fallback ${fb.members.join(' + ')} · net p50 ${money(fb.net.p50)} · without the leader's group`);

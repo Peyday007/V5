@@ -42,6 +42,7 @@
  */
 import { planningReport, planningReportLines } from '../server/services/goals/planningReport.ts';
 import { committeeLines } from '../server/services/goals/committee.ts';
+import { bestLabel, candidateLine, outcomeLines, planHeaderLines, reconcileFigures } from '../server/services/goals/figures.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { finishesWithin } from './boundedChild.ts';
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
@@ -546,21 +547,20 @@ async function printPlan(reading: PlanReading): Promise<void> {
   const acc = reading.acceptance;
   console.log(`  acceptance  ${acc.status} (requires a defensible ${Math.round(acc.required * 100)}% chance of collecting the target before the deadline) · ${acc.sentence}`);
   if (acc.probability) console.log(`    basis     ${acc.probability.basis} ${Math.round(acc.probability.value * 1000) / 10}% (lower bound ${Math.round(acc.probability.lowerBound * 1000) / 10}%, n=${acc.probability.sample}) · ${acc.probability.note}`);
-  if (acc.candidate) console.log(`    candidate ${acc.candidate.source} ${acc.candidate.opportunityIds.join(' + ')} · settled p50 ${acc.candidate.settledP50 === null ? '—' : Math.round(acc.candidate.settledP50)} · ${acc.candidate.reach === null ? 'reach not computed' : `reach ${Math.round(acc.candidate.reach * 1000) / 10}% (${acc.candidate.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage, not a probability'})`}`);
+  // Which printed figures are the held plan's and which another combination's (§77): one reconciliation, read by every line below.
+  const figures = reconcileFigures(reading);
+  const candidate = candidateLine(reading, figures);
+  if (candidate) console.log(candidate);
   for (const why of acc.shortfalls) console.log(`    short     ${why}`);
   if (acc.blocker) console.log(`    blocker   ${acc.blocker}`);
   for (const leg of acc.legs ?? []) if (!leg.supported) console.log(`    leg       ${leg.opportunityId} not executable · lacks ${leg.lacks.join(', ')}${leg.permissions.length ? ` · waits on ${leg.permissions.join(', ')}` : ''}`);
   // The plan's outcome from the one source (the simulated worlds), split by what supports it.
-  const outcome = reading.objective?.outcome;
-  const support = reading.objective?.support;
-  if (outcome) console.log(`  outcome     ${support?.basis === 'ASSUMPTION_ONLY' ? 'ASSUMPTION-ONLY ' : ''}expected ${Math.round(outcome.expected)} · upper ${Math.round(outcome.upper)} · adverse (q${outcome.adverseQuantile}) ${Math.round(outcome.adverse)} · ${reading.objective!.basis}`);
-  else if (reading.objective) console.log(`  outcome     none · ${reading.objective.basis}`);
-  if (support) console.log(`    support   ${support.basis} · ${support.sentence}`);
+  for (const line of outcomeLines(reading, figures)) console.log(line);
   for (const v of reading.integrity ?? []) console.log(`  integrity   ${v.rule}: ${v.detail}`);
   // The investment committee (§117): each role's verdict and the defects it cites.
   if (reading.committee) for (const line of committeeLines(reading.committee)) console.log(line);
   // One plan (C-6): which plan this is, and whether the reconstruction below is only hypothetical.
-  if (reading.adoption) console.log(`  plan        ${reading.adoption.source}${reading.adoption.hypothetical ? ' (the reconstruction is hypothetical)' : ''} · ${reading.adoption.reason}`);
+  for (const line of planHeaderLines(reading, figures)) console.log(line);
   if (reading.infeasible) {
     console.log(`  infeasible  ${reading.infeasible.reason}`);
     for (const r of reading.infeasible.relax) console.log(`    relax     ${r.constraint}: ${r.suggestion}`);
@@ -597,7 +597,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   for (const d of reading.degraded ?? []) console.log(`  DEGRADED    ${d}`);
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
   if (reading.pathways) {
-    for (const line of renderPathways(reading.pathways)) console.log(line);
+    for (const line of renderPathways(reading.pathways, 12, figures.leading ? figures.leading.simulated : undefined)) console.log(line);
     // What the next pass would do with the pathways' constructed moves, and why (§93). Opens nothing.
     const goal = await getWorkstream(reading.goalId);
     if (goal) {
@@ -610,7 +610,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   for (const one of reading.considered.slice(0, 8)) {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
   }
-  printPortfolio(reading.portfolio);
+  printPortfolio(reading.portfolio, bestLabel(figures));
   // Why the plan falls short, what was changed, and the strongest reconstruction (§99).
   if (reading.reconstruction) for (const line of renderReconstruction(reading.reconstruction)) console.log(line);
   // Which ways of reasoning have worked, across every goal, and this goal's recent explorations (§101).
@@ -1026,7 +1026,7 @@ export function run(): Promise<void> {
 }
 
 /** The quant engine's combined plan and each opening's estimated demand (§79). */
-function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts').GoalPortfolio | null): void {
+function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts').GoalPortfolio | null, bestIs = ''): void {
   if (!portfolio) return;
   const r = (x: number) => (Math.abs(x) < 10 ? x.toFixed(x < 1 ? 3 : 1) : String(Math.round(x)));
   const l = portfolio.limits;
@@ -1041,7 +1041,7 @@ function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts
   }
   const b = portfolio.best;
   if (b) {
-    console.log(`    best      reaches the target in ${(b.reach * 100).toFixed(1)}% of worlds · settled p10 ${Math.round(b.settledP10)} p50 ${Math.round(b.settledP50)} p90 ${Math.round(b.settledP90)} · capital short ${(b.capitalShort * 100).toFixed(0)}% · over spend ${(b.overSpend * 100).toFixed(0)}%`);
+    console.log(`    best      ${bestIs}reaches the target in ${(b.reach * 100).toFixed(1)}% of worlds · settled p10 ${Math.round(b.settledP10)} p50 ${Math.round(b.settledP50)} p90 ${Math.round(b.settledP90)} · capital short ${(b.capitalShort * 100).toFixed(0)}% · over spend ${(b.overSpend * 100).toFixed(0)}%`);
     for (const m of b.members) console.log(`      member  ${m.opportunityId} ${m.share === null ? 'one-off' : `${m.share * 100}% of outreach`} · ${m.title.slice(0, 70)}`);
   } else {
     console.log('    best      none: no combination can run inside the limits');
@@ -1053,7 +1053,7 @@ function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts
   const shown = [...portfolio.demand].sort((x, y) => y.revenue.p50 - x.revenue.p50 || y.revenue.p90 - x.revenue.p90).slice(0, 16);
   for (const d of shown) {
     console.log(
-      `    demand    ${d.opportunityId} ${d.repeatable ? 'repeatable' : 'one-off'} · contacted p50 ${r(d.contacted.p50)} · interested ${r(d.interested.p10)}/${r(d.interested.p50)}/${r(d.interested.p90)} · deals ${r(d.deals.p10)}/${r(d.deals.p50)}/${r(d.deals.p90)} · revenue ${r(d.revenue.p10)}/${r(d.revenue.p50)}/${r(d.revenue.p90)} · reply ${r(d.respond.p50)} close ${r(d.close.p50)} price ${r(d.price.p50)} days ${r(d.days.p50)} · ${d.noContactBecause ? `${d.noContactBecause} · ` : ''}${d.refused ? `REFUSED ${d.refused}` : d.justified ? 'evidenced' : `not established: ${d.unestablished.join(', ')}`} · ${d.title.slice(0, 50)}`,
+      `    demand    ${d.opportunityId} ${d.repeatable ? 'repeatable' : 'one-off'} · contacted p50 ${r(d.contacted.p50)} · interested ${r(d.interested.p10)}/${r(d.interested.p50)}/${r(d.interested.p90)} · deals ${r(d.deals.p10)}/${r(d.deals.p50)}/${r(d.deals.p90)} · revenue ${r(d.revenue.p10)}/${r(d.revenue.p50)}/${r(d.revenue.p90)} · reply ${r(d.respond.p50)} close ${r(d.close.p50)} price ${r(d.price.p50)}${d.unestablished.includes('price') ? ' (assumed: drawn within the range its pathway prints, never above it)' : ''} days ${r(d.days.p50)} · ${d.noContactBecause ? `${d.noContactBecause} · ` : ''}${d.refused ? `REFUSED ${d.refused}` : d.justified ? 'evidenced' : `not established: ${d.unestablished.join(', ')}`} · ${d.title.slice(0, 50)}`,
     );
   }
   for (const m of portfolio.missing.slice(0, 8)) console.log(`    missing   ${m}`);

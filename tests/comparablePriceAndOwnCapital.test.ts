@@ -115,7 +115,8 @@ describe('F4: an unpriced arrangement is admitted only on comparable prices, swe
     const sector: ComparablePrice[] = [100, 200].map((value) => ({ value, industry: 'pet care services' }));
     const admitted = selectEstimatedArrangements([arrangement()], { ...input, otherPrices: sector }).openings[0]!;
     const uniform = (low: number, high: number): ModelInput => ({ value: null, low, high, provenance: 'UNKNOWN', source: null, note: '' });
-    const old = { ...admitted, price: { ...admitted.price, low: 15, high: 325_000, distribution: undefined }, directCost: uniform(0, 195_000), capital: uniform(0, 325_000) };
+    // Nothing reconstructed it then, so no evidenced range bounded the sweep (`heldCentreOf`).
+    const old = { ...admitted, price: { ...admitted.price, low: 15, high: 325_000, distribution: undefined, inferred: undefined }, directCost: uniform(0, 195_000), capital: uniform(0, 325_000) };
     const inflated = run([...GOAL_10K_OPENINGS, old]);
     expect(inflated.demand.find((d) => d.opportunityId === 'arr_groomer')!.price.p50).toBeGreaterThan(100_000);
   });
