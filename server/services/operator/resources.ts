@@ -10,10 +10,7 @@
  * (`cash/researchRoom.ts`) — and every sentence is built from those figures.
  * A figure nobody measured is null and says so (invariant 33).
  */
-import { getDb } from '../../db/database.ts';
 import { utilizationWithin } from '../engineering/watchdog.ts';
-import { readPodBudget } from '../cheap/runpodPod.ts';
-import { runpodConfig, runpodPaused } from '../cheap/runpod.ts';
 
 export interface ResourceReading {
   key: 'ROUTINES' | 'FREE_LANE' | 'GPU' | 'RESEARCH_SLOTS' | 'FACTORY';
@@ -34,72 +31,40 @@ export interface ResourceReading {
   costPerHour: number | null;
 }
 
-interface PodRow { outcome: string; reason: string | null; measures: unknown; at: string }
-
-function measuresOf(raw: unknown): Record<string, unknown> {
-  if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
-  if (typeof raw === 'string') {
-    try {
-      return JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      return {};
-    }
-  }
-  return {};
-}
-
-async function gpuReading(laneWaiting: number | null): Promise<ResourceReading> {
-  const config = runpodConfig();
-  const mode = (process.env['BRAIN_RUNPOD_MODE'] ?? '').trim().toLowerCase() || 'unset';
-  const rows = await getDb()
-    .all<PodRow>(
-      `SELECT outcome, reason, measures, at FROM bin_events WHERE event_type = 'RUNPOD_POD' ORDER BY at DESC LIMIT 60`,
-      [],
-    )
-    .catch(() => [] as PodRow[]);
-  const sample = rows.find((r) => r.outcome.startsWith('SAMPLE_'));
-  const decision = rows.find((r) => !r.outcome.startsWith('SAMPLE_'));
-  const status = sample ? sample.outcome.replace('SAMPLE_', '') : null;
-  const cost = sample ? measuresOf(sample.measures)['costPerHr'] : null;
-  const costPerHour = typeof cost === 'number' && cost > 0 ? cost : null;
-  const budget = await readPodBudget().catch(() => null);
-  const paused = runpodPaused();
-  const running = status === 'RUNNING' && !paused;
-
-  const budgetLine = budget
-    ? `Budget $${budget.budget.toFixed(0)} per ${budget.windowHours} h; ${budget.spent === null ? 'spend unreadable' : `$${budget.spent.toFixed(2)} spent`}${budget.remaining !== null ? `, $${budget.remaining.toFixed(2)} left` : ''}.`
-    : 'No GPU budget applies.';
-  const why = !config
-    ? 'No GPU is configured, so its slot is answered by the free fallback model.'
-    : mode !== 'primary'
-      ? `The GPU is out of the lane (mode ${mode}); every GPU-slot call is answered by the free fallback.`
-      : running
-        ? 'The pod is running and answering research.'
-        : `The pod is ${(status ?? 'in an unknown state').toLowerCase()}${paused ? ` (${paused})` : ''}; until it serves, GPU-slot calls are answered by the free fallback. ${decision?.reason ? `Supervisor's last decision: ${decision.reason}.` : ''}`;
-  const exhausted = !!budget?.exhausted;
+/**
+ * The GPU, from its own reader (`cheap/gpuStatus.ts`, §121): the pod, the
+ * standing authorization, spend, waiting work, accepted results and every
+ * active restriction. Only the seven-question wording is composed here.
+ */
+async function gpuReading(): Promise<ResourceReading> {
+  const { readGpuStatus } = await import('../cheap/gpuStatus.ts');
+  const g = await readGpuStatus();
+  const running = g.pod.status === 'RUNNING' && g.pod.ready;
+  const idleWithWork = g.work.state === 'IDLE_WITH_WORK' || g.work.state === 'STOPPED_WITH_WORK';
+  const productive =
+    g.work.accepted24h > 0
+      ? ` In the last 24 h it ran ${g.work.runningHours24h.toFixed(1)} h and ${g.work.accepted24h} of its results were accepted (${g.work.acceptedLastHour} in the last hour${g.work.acceptedPerDollar24h !== null ? `, ${g.work.acceptedPerDollar24h.toFixed(1)} per dollar` : ''}).`
+      : ` No GPU result was accepted in the last 24 h (${g.work.runningHours24h.toFixed(1)} h running).`;
+  const restrictions = g.restrictions.length > 0 ? g.restrictions.join(' ') : 'No restriction is active.';
+  const authorized = g.authorization;
   return {
     key: 'GPU',
-    name: 'Dedicated GPU (RunPod)',
-    accomplishing: running ? 'Answering research jobs on the dedicated model.' : 'Nothing right now: the pod is not serving.',
-    waiting: laneWaiting,
-    running: running ? 1 : 0,
-    capacity: config ? 1 : 0,
-    atLimit: config ? running : null,
-    idleBesideWork: !!config && mode === 'primary' && !running && (laneWaiting ?? 0) > 0,
-    why: `${why} ${budgetLine}`.trim(),
-    brainDoing:
-      config && mode === 'primary'
-        ? 'The pod supervisor checks every minute: it starts a stopped pod while research waits and the budget allows, and stops it after 15 idle minutes or when the budget is spent.'
-        : 'Nothing automatic: the GPU is not in the lane.',
-    spendingHelps: exhausted ? 'YES' : config && mode === 'primary' && !running && (laneWaiting ?? 0) > 0 ? 'UNKNOWN' : 'NO',
-    spending: exhausted
-      ? `Yes: the budget is spent, so the pod cannot start until the window turns or the budget is raised.${costPerHour ? ` Each extra hour costs about $${costPerHour.toFixed(2)}.` : ''}`
-      : running
-        ? 'No: it is already running within its budget.'
-        : budget && budget.remaining !== null && budget.remaining > 0
-          ? 'Not more money: budget remains, so what holds it is the pod state above, not spending.'
-          : 'Not known from the rows.',
-    costPerHour,
+    name: `Dedicated GPU${g.pod.card ? ` (${g.pod.card})` : ''}`,
+    accomplishing: (running ? 'Answering research jobs on the dedicated model.' : `Not serving: the pod is ${g.pod.status.toLowerCase()}.`) + productive,
+    waiting: g.work.waiting,
+    running: g.work.inFlight,
+    capacity: g.work.slotTarget,
+    atLimit: g.work.slotTarget !== null && g.work.inFlight !== null ? g.work.inFlight >= g.work.slotTarget : null,
+    idleBesideWork: idleWithWork,
+    why: `${restrictions}${g.work.slotReason ? ` Concurrency is held at ${g.work.slotTarget ?? '?'}: ${g.work.slotReason}.` : ''}`,
+    brainDoing: g.configured
+      ? 'The pod supervisor starts the pod whenever useful work waits and stops it when none does, within the standing authorization; the lane controller sizes the GPU slot from what the GPU itself answered.'
+      : 'Nothing automatic: the GPU is not in the lane.',
+    spendingHelps: idleWithWork && authorized ? 'UNKNOWN' : 'NO',
+    spending: authorized
+      ? `The owner authorized up to $${authorized.usdPerHour.toFixed(2)}/h on one card; spend today ${g.spend.todayUsd === null ? 'not read' : `$${g.spend.todayUsd.toFixed(2)}`}, RunPod balance ${g.balanceUsd === null ? 'not read' : `$${g.balanceUsd.toFixed(2)}`}. More money helps only if a restriction above is a price or balance limit.`
+      : 'No standing GPU authorization is recorded, so Brain does not spend on it.',
+    costPerHour: g.pod.costPerHr,
   };
 }
 
@@ -136,7 +101,6 @@ const POOL_TEXT: Record<string, { name: string; accomplishing: string; brainDoin
 export async function readResources(): Promise<{ readAt: string | null; source: string; resources: ResourceReading[] }> {
   const reading = await utilizationWithin();
   const pools = reading.pools ?? [];
-  const lane = pools.find((p) => p.pool === 'FREE_LANE');
   const resources: ResourceReading[] = pools.map((p) => {
     const text = POOL_TEXT[p.pool] ?? {
       name: p.pool,
@@ -161,6 +125,6 @@ export async function readResources(): Promise<{ readAt: string | null; source: 
       costPerHour: null,
     };
   });
-  resources.splice(2, 0, await gpuReading(lane ? lane.waiting : null));
+  resources.splice(2, 0, await gpuReading().catch(() => ({ key: 'GPU' as const, name: 'Dedicated GPU', accomplishing: 'Not read.', waiting: null, running: null, capacity: null, atLimit: null, idleBesideWork: false, why: 'The GPU reading failed this time; it is read again on the next refresh.', brainDoing: '', spendingHelps: 'UNKNOWN' as const, spending: 'Not known.', costPerHour: null })));
   return { readAt: reading.readAt, source: reading.source, resources };
 }

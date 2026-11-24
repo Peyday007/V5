@@ -297,6 +297,57 @@ export const RECIPES: Record<string, PodRecipe> = {
     clouds: ['SECURE', 'COMMUNITY'],
     note: 'gpt-oss-120b on one B200/H200: 128K, 128 parallel sequences behind one address',
   },
+  /**
+   * The continuous GPU (§121, owner's standing order 2026-11-24): the same gpt-oss-120b recipe on
+   * the cheapest 80 GB card, SECURE cloud only — an on-demand card in a datacentre, never an
+   * interruptible community one. Measured demand, not peak speed, chose it: while the H200 ran,
+   * Brain kept 5.5–8.9 requests in flight of its 128 slots (PR #1270), ~34.5 accepted jobs per
+   * running hour, so per-request decode speed was never the limit and $5.29/h bought idle
+   * sequences. The A100 holds the ~61 GB of MXFP4 weights with ~12 GB of KV cache beside them —
+   * at Brain's 8–16K-token lane prompts, 20–40 sequences, several times what Brain keeps in
+   * flight — and vLLM serves gpt-oss on Ampere by default (Marlin MXFP4 MoE, Triton attention;
+   * vLLM's GPT-OSS recipe: "gpt-oss-120b fits on a single 80GB A100"). runpod-survey 45346063896:
+   * A100-SXM4-80GB secure $2.19/h, A100 80GB PCIe secure $2.09/h.
+   */
+  'gpt-oss-120b-a100': {
+    key: 'gpt-oss-120b-a100',
+    model: 'openai/gpt-oss-120b',
+    served: 'openai/gpt-oss-120b',
+    gpus: ['NVIDIA A100-SXM4-80GB', 'NVIDIA A100 80GB PCIe'],
+    image: IMAGE_2026,
+    cuda: CUDA_129,
+    maxModelLen: 131072,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '48',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
+    ],
+    containerDiskInGb: 250,
+    minGpuGb: 80,
+    clouds: ['SECURE'],
+    note: 'gpt-oss-120b on one 80 GB A100, SECURE cloud: the continuous GPU at ~$2.1-2.2/h (§121)',
+  },
+  /**
+   * The continuous GPU's fallback when an A100 cannot serve the recipe: the same model on an H100
+   * 80 GB, SECURE only (survey 45346063896: $4.39/h). Twice the A100's rate — materially more
+   * expensive, so only a dispatch with the owner's approval of that rate selects it (§121).
+   */
+  'gpt-oss-120b-h100': {
+    key: 'gpt-oss-120b-h100',
+    model: 'openai/gpt-oss-120b',
+    served: 'openai/gpt-oss-120b',
+    gpus: ['NVIDIA H100 80GB HBM3', 'NVIDIA H100 PCIe', 'NVIDIA H100 NVL'],
+    image: IMAGE_2026,
+    cuda: CUDA_129,
+    maxModelLen: 131072,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '48',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
+    ],
+    containerDiskInGb: 250,
+    minGpuGb: 80,
+    clouds: ['SECURE'],
+    note: 'gpt-oss-120b on one H100 80 GB, SECURE cloud: the continuous GPU\'s fallback (~$4.39/h, needs the owner\'s approval of that rate)',
+  },
   'gpt-oss-120b-2x80': dataParallel120b(2),
   'gpt-oss-120b-4x80': dataParallel120b(4),
   /**
@@ -704,6 +755,29 @@ export async function createPod(input: {
 }
 
 /**
+ * Brain's pod — the one the old address names, else one named `POD_NAME` — or
+ * null; never creates one. Under the owner's standing authorization (§121) the
+ * Brain's supervisor recreates a lost pod from the authorized recipe, so the
+ * hourly workflow only finds: a second pod from its own default recipe beside
+ * the supervisor's would be a GPU nobody authorized.
+ */
+export async function findPod(input: { apiKey: string; oldUrl?: string | null; fetchImpl?: Fetch }): Promise<EnsureResult | null> {
+  const live = (pod: Pod | undefined) => !!pod && pod.desiredStatus !== 'TERMINATED';
+  const oldId = /^https?:\/\/([a-z0-9]+)-\d+\.proxy\.runpod\.net/i.exec(input.oldUrl?.trim() ?? '')?.[1]?.toLowerCase();
+  const pods = await listPods(input.apiKey, input.fetchImpl);
+  const found = pods.find((p) => p.id === oldId && live(p)) ?? pods.find((p) => p.name === POD_NAME && live(p));
+  if (!found) return null;
+  return {
+    podId: found.id,
+    url: podUrl(found.id),
+    status: found.desiredStatus ?? 'UNKNOWN',
+    costPerHr: price(found),
+    created: false,
+    log: [`found pod ${found.id} (${found.desiredStatus ?? 'unknown'}) serving ${podServedModel(found) ?? 'unknown'}`],
+  };
+}
+
+/**
  * Brain's pod: the one the old address names, else one named `POD_NAME`, else
  * a new one from the recipe. Throws, with RunPod's words, when none can be had
  * within the ceiling.
@@ -718,20 +792,9 @@ export async function ensurePod(input: {
   fetchImpl?: Fetch;
 }): Promise<EnsureResult> {
   const ceiling = input.maxUsdPerHour ?? DEFAULT_MAX_USD_PER_HOUR;
-  const live = (pod: Pod | undefined) => !!pod && pod.desiredStatus !== 'TERMINATED';
+  const found = await findPod(input);
+  if (found) return found;
   const oldId = /^https?:\/\/([a-z0-9]+)-\d+\.proxy\.runpod\.net/i.exec(input.oldUrl?.trim() ?? '')?.[1]?.toLowerCase();
-  const pods = await listPods(input.apiKey, input.fetchImpl);
-  const found = pods.find((p) => p.id === oldId && live(p)) ?? pods.find((p) => p.name === POD_NAME && live(p));
-  if (found) {
-    return {
-      podId: found.id,
-      url: podUrl(found.id),
-      status: found.desiredStatus ?? 'UNKNOWN',
-      costPerHr: price(found),
-      created: false,
-      log: [`found pod ${found.id} (${found.desiredStatus ?? 'unknown'}) serving ${podServedModel(found) ?? 'unknown'}`],
-    };
-  }
   const made = await createPod({
     apiKey: input.apiKey,
     vllmKey: input.vllmKey,

@@ -93,6 +93,8 @@ export interface KernelPass {
   backfilled?: number;
   /** Buyer populations put on the map this pass from priced openings' payers (`mapPricedPayers`). */
   payersMapped?: number;
+  /** Arrangements the standing library pass stored or refreshed this pass, with no goal behind them. */
+  libraryStored?: number;
 }
 
 export type KernelBasis = 'SPRINT' | 'STANDING';
@@ -279,6 +281,20 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     }
   }
 
+  /*
+   * Grow the arrangement library from the map with no goal behind it (owner,
+   * 2026-11-24): composition, not discovery, so it runs under either authority
+   * or none, yields to pressure inside, and never stops the pass.
+   */
+  let libraryStored = 0;
+  try {
+    const { standingLibraryPass } = await import('../cash/arrangementLibrary.ts');
+    const library = await standingLibraryPass(projectId);
+    libraryStored = library.created + library.updated;
+  } catch (error) {
+    failures.push(`library: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   const snapshot = await graphSnapshot(projectId);
   const counts = {
     nodes: snapshot.nodes.filter((one) => one.retiredAt === null).length,
@@ -295,11 +311,12 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
       failures,
       backfilled,
       payersMapped,
+      libraryStored,
     };
   }
   if (authority.basis === 'STANDING') {
     if (!mode && counts.nodes === 0 && !(await holdsMoneyGoal(projectId))) {
-      return { ...EMPTY, absorbed, ...counts, failures, backfilled, payersMapped };
+      return { ...EMPTY, absorbed, ...counts, failures, backfilled, payersMapped, libraryStored };
     }
     if (databasePressure().state === 'SHEDDING') {
       return {
@@ -318,6 +335,7 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
         failures,
         backfilled,
         payersMapped,
+      libraryStored,
       };
     }
   }
@@ -370,6 +388,7 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     failures,
     backfilled,
     payersMapped,
+    libraryStored,
   };
 }
 
