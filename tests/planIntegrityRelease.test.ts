@@ -109,6 +109,10 @@ describe('the release checks the plans it released', () => {
     expect(run).toMatch(/timeout 90 flyctl ssh console --app "\$app" -C "cat \$log"/);
     expect(run).toContain("grep -q '^GOALS: ' goals.txt && break");
     expect(run).toContain('ended=124');
+    // The listing after a plan describes the read: its failure is a line, never the verdict (check 45300351663).
+    const cli = read('scripts/goalsCli.ts');
+    expect(cli).toMatch(/listSearching\(read, readGoal\)\.catch\(/);
+    expect(cli).toContain('the search listing stopped:');
   });
 
   it('waits for the app to mark its boot derived-state rebuild finished before reading plans beside it', () => {
