@@ -14,7 +14,6 @@
  */
 import type {
   AuditVerdict,
-  Dependency,
   DependencyCheckItem,
   Document,
   ExtractionStatus,
@@ -43,13 +42,13 @@ import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../rep
 import { getProject, updateProject } from '../repos/projects.ts';
 import { listRunSummariesByLayer, listRunSummariesInStatus, updateRun } from '../repos/runs.ts';
 import type { ResearchRunSummary } from '../repos/runs.ts';
-import { listRunDependenciesForRuns, RUN_DEPENDENCY_CHUNK } from '../repos/dependencies.ts';
+import { RUN_DEPENDENCY_CHUNK } from '../repos/dependencies.ts';
 import {
   checkCanonicalNames,
   checkDocumentDependencies,
   checkRunDependencies,
-  checkRunDependencyRows,
   documentPresence,
+  missingRunRequirements,
   refreshProjectDependencies,
   withNameLookups,
 } from './dependencies.ts';
@@ -479,10 +478,10 @@ async function deriveLayerUnmemoized(layerId: string): Promise<LayerDerivation> 
       missingDependencyItems.push(item);
     }
   };
-  // This layer's checked runs only, a bounded group at a time (`eachRunWithDependencies`).
-  await eachRunWithDependencies(
+  // This layer's checked runs only, a bounded group at a time (`eachRunGroup`).
+  await eachRunGroup(
     activeRuns.filter((run) => !run.dependencyOverride),
-    async (_run, dependencies) => collect((await checkRunDependencyRows(layer.projectId, dependencies)).items),
+    async (_group, ids) => collect((await missingRunRequirements(layer.projectId, ids)).missing),
   );
   for (const document of documents) {
     if (document.status === 'COMPLETE' || document.status === 'FROZEN' || document.status === 'SUPERSEDED') {
@@ -744,49 +743,52 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
   // Only runs that have not started yet; a finished run's status is history.
   // Filtered in the statement, and without the text columns: this ran on every
   // recompute and used to read every run of the project, prompts included.
-  // Their dependencies are read a bounded group of runs at a time (`eachRunWithDependencies`).
+  // Their dependencies are read a bounded group of runs at a time (`eachRunGroup`).
   const waiting = await listRunSummariesInStatus(projectId, ['BLOCKED', 'READY', 'PLANNED']);
-  await eachRunWithDependencies(waiting, async (run, dependencies) => {
-    const ready = run.dependencyOverride || (await checkRunDependencyRows(projectId, dependencies)).ready;
+  await eachRunGroup(waiting, async (group, ids) => {
+    const { blockedRunIds } = ids.length > 0 ? await missingRunRequirements(projectId, ids) : { blockedRunIds: new Set<string>() };
+    for (const run of group) {
+      const ready = run.dependencyOverride || !blockedRunIds.has(run.id);
 
-    // The status and its event commit together; the dependency reads above
-    // do not need to be inside that transaction (INF-5).
-    if (!ready && run.status !== 'BLOCKED') {
-      await getDb().transaction(async () => {
-        await updateRun(run.id, { status: 'BLOCKED' });
-        await recordEvent({
-          projectId,
-          layerId: run.layerId,
-          entityType: 'RUN',
-          entityId: run.id,
-          eventType: 'DEPENDENCY_MISSING',
-          payload: { runId: run.id, targetVersion: run.targetVersion },
+      // The status and its event commit together; the dependency reads above
+      // do not need to be inside that transaction (INF-5).
+      if (!ready && run.status !== 'BLOCKED') {
+        await getDb().transaction(async () => {
+          await updateRun(run.id, { status: 'BLOCKED' });
+          await recordEvent({
+            projectId,
+            layerId: run.layerId,
+            entityType: 'RUN',
+            entityId: run.id,
+            eventType: 'DEPENDENCY_MISSING',
+            payload: { runId: run.id, targetVersion: run.targetVersion },
+          });
         });
-      });
-      blocked.push(run.id);
-    } else if (ready && run.status === 'BLOCKED') {
-      await getDb().transaction(async () => {
-        await updateRun(run.id, { status: 'READY' });
-        await recordEvent({
-          projectId,
-          layerId: run.layerId,
-          entityType: 'RUN',
-          entityId: run.id,
-          eventType: 'DEPENDENCY_RESOLVED',
-          payload: { runId: run.id, targetVersion: run.targetVersion },
+        blocked.push(run.id);
+      } else if (ready && run.status === 'BLOCKED') {
+        await getDb().transaction(async () => {
+          await updateRun(run.id, { status: 'READY' });
+          await recordEvent({
+            projectId,
+            layerId: run.layerId,
+            entityType: 'RUN',
+            entityId: run.id,
+            eventType: 'DEPENDENCY_RESOLVED',
+            payload: { runId: run.id, targetVersion: run.targetVersion },
+          });
         });
-      });
-      unblocked.push(run.id);
+        unblocked.push(run.id);
+      }
     }
   });
   return { unblocked, blocked };
 }
 
 /**
- * Hand each run its dependency rows, reading them for `RUN_DEPENDENCY_CHUNK`
- * runs at a time, so what a recompute holds is bounded by a group of runs and
- * never grows with the project (2026-11-24). A run with a dependency override
- * is handed none: nothing reads them.
+ * Visit runs `RUN_DEPENDENCY_CHUNK` at a time with the ids of those whose
+ * dependencies count (a run with a dependency override has none that do), so
+ * what a recompute reads is bounded by a group of runs and never grows with
+ * the project (2026-11-24).
  *
  * Production's largest project held 216,844 run dependencies: 110 automatic
  * redos waiting BLOCKED, each carrying its layer's ~2,190 documents as its
@@ -794,17 +796,18 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
  * readiness and again for every layer with an open run (and `buildPlan`
  * derives every layer at once): ~230 MB of heap per read, measured on that
  * shape, several at a time. The process reached its 2.5 GB heap ceiling every
- * 15–22 minutes and restarted (130 restarts in 72 h).
+ * 15–22 minutes and restarted (130 restarts in 72 h). Grouped, it still read
+ * every row of every packet (3.97 M rows in eight minutes); a group now reads
+ * its distinct requirements and only the rows naming a missing document
+ * (`missingRunRequirements`).
  */
-async function eachRunWithDependencies<R extends { id: string; dependencyOverride: boolean }>(
+async function eachRunGroup<R extends { id: string; dependencyOverride: boolean }>(
   runs: readonly R[],
-  visit: (run: R, dependencies: Dependency[]) => Promise<void>,
+  visit: (group: readonly R[], checkedIds: string[]) => Promise<void>,
 ): Promise<void> {
   for (let i = 0; i < runs.length; i += RUN_DEPENDENCY_CHUNK) {
     const group = runs.slice(i, i + RUN_DEPENDENCY_CHUNK);
-    const read = group.filter((run) => !run.dependencyOverride).map((run) => run.id);
-    const byRun = read.length > 0 ? await listRunDependenciesForRuns(read) : new Map<string, Dependency[]>();
-    for (const run of group) await visit(run, byRun.get(run.id) ?? []);
+    await visit(group, group.filter((run) => !run.dependencyOverride).map((run) => run.id));
   }
 }
 

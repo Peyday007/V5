@@ -114,6 +114,65 @@ describe('a project with many waiting runs carrying wide packets', () => {
     expect(result.layers.some((one) => one.layerId === layer.id)).toBe(true);
   });
 
+  /*
+   * Production, 2026-11-24 after the bound above: the grouped read still
+   * returned every row of every waiting run's packet on every recompute —
+   * 3,967,986 rows in eight minutes, ten times any other statement (run
+   * 45427328790) — for redos that all carry the same packet. A group's
+   * distinct requirements are read and evaluated once, and only rows naming a
+   * missing document are read per run.
+   */
+  it('reads a shared packet once per group, not once per run, with the same readiness and layer state', async () => {
+    const layer = (await listLayers(ctx.project.id))[0]!;
+    // Linked as a recompute leaves them, so the one-off relink pass has nothing to do.
+    const linked = new Map<string, string | null>();
+    for (let v = 1; v < PACKET; v++) {
+      const document = await addDocument(ctx, layer.name, `v${v}`);
+      linked.set(document.canonicalName, document.id);
+    }
+    const present = [...linked.keys()];
+    const absent = `${layer.name} — the one source nobody produced`;
+    const db = getDb();
+    const insert = async (runId: string, names: string[]) => {
+      for (const [i, name] of names.entries()) {
+        await db.run(
+          `INSERT INTO dependencies (id, project_id, dependent_run_id, required_document_id, required_canonical_name, required_layer_id, dependency_type, required, notes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'SOURCE_PACKET', 1, NULL, ?)`,
+          [`dep_s_${runId}_${i}`, ctx.project.id, runId, linked.get(name) ?? null, name, layer.id, nowIso()],
+        );
+      }
+    };
+    // Every waiting redo carries the same packet, one document of which is missing.
+    const blocked: string[] = [];
+    for (let r = 0; r < WAITING; r++) {
+      const run = await createRun({ projectId: ctx.project.id, layerId: layer.id, runType: 'REDO', status: 'READY', prompt: 'p', targetVersion: `v1S${r}` });
+      await insert(run.id, [...present, absent]);
+      blocked.push(run.id);
+    }
+    // Two whose packet is the present part only: blocked now, released by the recompute.
+    const releasable: string[] = [];
+    for (let r = 0; r < 2; r++) {
+      const run = await createRun({ projectId: ctx.project.id, layerId: layer.id, runType: 'REDO', status: 'BLOCKED', prompt: 'p', targetVersion: `v1T${r}` });
+      await insert(run.id, present);
+      releasable.push(run.id);
+    }
+
+    let layers: Awaited<ReturnType<typeof recomputeProject>> = [];
+    const recompute = await statements(async () => {
+      layers = await recomputeProject(ctx.project.id);
+    });
+    const rows = recompute
+      .filter((one) => /\bFROM\s+dependencies\b/i.test(one.sql))
+      .reduce((sum, one) => sum + one.rows, 0);
+    // Readiness alone used to read every run's whole packet; now the whole recompute reads less.
+    expect(rows).toBeLessThan((WAITING + releasable.length) * PACKET);
+
+    for (const id of blocked) expect((await getRun(id))!.status).toBe('BLOCKED');
+    for (const id of releasable) expect((await getRun(id))!.status).toBe('READY');
+    const state = layers.find((one) => one.layerId === layer.id)!;
+    expect(state.missingDependencies).toEqual([absent]);
+  });
+
   it('asks whether any link drifted with one row at most, and still sees a drift', async () => {
     const layer = (await listLayers(ctx.project.id))[0]!;
     const run = await createRun({ projectId: ctx.project.id, layerId: layer.id, runType: 'REDO', status: 'BLOCKED', prompt: 'p', targetVersion: 'v1R' });

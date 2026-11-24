@@ -28,6 +28,8 @@ import {
   linkDependencyToDocument,
   listDependenciesForDocument,
   listDependenciesForRun,
+  listRunRequirements,
+  listRunsRequiring,
   dependenciesDrifted,
   resolveProjectDependencies,
 } from '../repos/dependencies.ts';
@@ -222,9 +224,46 @@ async function checkDependencyRowsWithin(
   );
 }
 
-/** A run's status against dependency rows already read. Used by the recompute. */
-export async function checkRunDependencyRows(projectId: string, rows: Dependency[]): Promise<DependencyCheckResult> {
-  return checkDependencyRows(projectId, rows);
+/**
+ * For a group of runs, the required documents that are not present and which
+ * runs need one of them — what the recompute asks, without reading every row
+ * of every packet (`listRunRequirements`).
+ *
+ * Each distinct requirement of the group is evaluated once, exactly as
+ * `checkRunDependencies` evaluates a row; then, only when something is
+ * missing, the rows naming a missing document say which runs it holds back.
+ * `missing` is in first-named order; a run outside `blockedRunIds` would read
+ * READY from `checkRunDependencies`.
+ */
+export async function missingRunRequirements(
+  projectId: string,
+  runIds: readonly string[],
+): Promise<{ missing: DependencyCheckItem[]; blockedRunIds: Set<string> }> {
+  const blockedRunIds = new Set<string>();
+  const requirements = await listRunRequirements(runIds);
+  if (requirements.length === 0) return { missing: [], blockedRunIds };
+  const missing: DependencyCheckItem[] = [];
+  const missingKeys = new Set<string>();
+  const key = (name: string, documentId: string | null) => `${name}\n${documentId ?? ''}`;
+  await withNameLookups(async () => {
+    prefetchNames(projectId, requirements.map((one) => one.requiredCanonicalName));
+    const items = await Promise.all(
+      requirements.map((one) =>
+        evaluate(projectId, one.requiredCanonicalName, one.required, one.dependencyType, one.requiredDocumentId),
+      ),
+    );
+    for (const [i, item] of items.entries()) {
+      if (!item.required || item.present) continue;
+      missing.push(item);
+      missingKeys.add(key(requirements[i]!.requiredCanonicalName, requirements[i]!.requiredDocumentId));
+    }
+  });
+  if (missing.length === 0) return { missing, blockedRunIds };
+  const names = [...new Set(missing.map((item) => item.canonicalName))];
+  for (const row of await listRunsRequiring(runIds, names)) {
+    if (missingKeys.has(key(row.requiredCanonicalName, row.requiredDocumentId))) blockedRunIds.add(row.runId);
+  }
+  return { missing, blockedRunIds };
 }
 
 /** Source-packet status for a run, e.g. before letting a synthesis start. */

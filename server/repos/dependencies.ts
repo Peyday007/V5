@@ -58,44 +58,89 @@ export async function listDependenciesForRun(runId: string): Promise<Dependency[
 }
 
 /**
- * Runs whose dependencies one statement reads, and so the most runs' rows a
- * recompute holds at once (`eachRunWithDependencies` in stateEngine.ts). At
- * production's widest packet (~2,200 documents a run) that is ~22,000 rows.
+ * Runs whose dependencies one statement reads (`missingRunRequirements` in
+ * services/dependencies.ts). Bounds the IN list and, at most, the rows one
+ * statement can return: at production's widest packet (~2,200 documents a run)
+ * ~22,000.
  */
 export const RUN_DEPENDENCY_CHUNK = 10;
 
+/** What a dependency row asks for, as the checker evaluates it: nothing about the run that holds it. */
+export interface RunRequirement {
+  requiredCanonicalName: string;
+  requiredDocumentId: string | null;
+  dependencyType: DependencyType;
+  required: boolean;
+}
+
 /**
- * The dependencies of the named runs, grouped by run, `RUN_DEPENDENCY_CHUNK`
- * runs per statement. Same rows, same order within a run as
- * `listDependenciesForRun`.
+ * The distinct requirements of a group of runs, first-named first.
  *
  * Readiness used to ask per run (`listDependenciesForRun`, plus a re-read of
  * the run itself): 2,800 of each in twelve minutes of production on
- * 2026-10-12, inside the recompute transaction, for runs that mostly have no
- * dependencies at all. It then read every run dependency of the project in one
- * statement — and on 2026-11-24 production's largest project held 216,844 of
- * them (110 automatic redos waiting BLOCKED, each carrying ~2,190 documents),
- * read whole on every recompute and for every layer with an open run. A
- * caller that hands this a bounded group of runs holds a bounded amount.
+ * 2026-10-12. It then read every run dependency of the project in one
+ * statement, and on 2026-11-24 production's largest project held 216,844 of
+ * them (110 automatic redos waiting BLOCKED, each carrying ~2,190 documents).
+ * Read ten runs at a time it no longer ran out of heap, but it still read every
+ * row of every waiting run on every recompute and for every layer with an open
+ * run — 3,967,986 rows in eight minutes, 5,316 statements, ten times the next
+ * statement's rows and most of what the heap was churning through (production
+ * `heap-sources`, run 45427328790). Those redos carry the same packet, and what
+ * a row says about readiness depends only on what it names, so a group's
+ * distinct requirements are read and each is evaluated once.
  */
-export async function listRunDependenciesForRuns(runIds: readonly string[]): Promise<Map<string, Dependency[]>> {
-  const byRun = new Map<string, Dependency[]>();
+export async function listRunRequirements(runIds: readonly string[]): Promise<RunRequirement[]> {
   const unique = [...new Set(runIds)];
-  for (let i = 0; i < unique.length; i += RUN_DEPENDENCY_CHUNK) {
-    const slice = unique.slice(i, i + RUN_DEPENDENCY_CHUNK);
-    const rows = await getDb().all<DependencyRow>(
-      `SELECT * FROM dependencies WHERE dependent_run_id IN (${slice.map(() => '?').join(', ')}) ORDER BY created_at`,
-      slice,
+  if (unique.length === 0) return [];
+  const rows = await getDb().all<{
+    required_canonical_name: string;
+    required_document_id: string | null;
+    dependency_type: string;
+    required: number;
+    first_at: string;
+  }>(
+    `SELECT required_canonical_name, required_document_id, dependency_type, required, MIN(created_at) AS first_at
+       FROM dependencies WHERE dependent_run_id IN (${unique.map(() => '?').join(', ')})
+      GROUP BY required_canonical_name, required_document_id, dependency_type, required
+      ORDER BY first_at, required_canonical_name`,
+    unique,
+  );
+  return rows.map((row) => ({
+    requiredCanonicalName: row.required_canonical_name,
+    requiredDocumentId: row.required_document_id,
+    dependencyType: row.dependency_type as DependencyType,
+    required: toBool(row.required),
+  }));
+}
+
+/** Names per statement in `listRunsRequiring`'s IN list. */
+const REQUIRED_NAME_BATCH = 200;
+
+/**
+ * Which of the runs hold a required row naming one of these documents, as
+ * (run, name, linked document) — the three columns that decide it, once each.
+ */
+export async function listRunsRequiring(
+  runIds: readonly string[],
+  names: readonly string[],
+): Promise<Array<{ runId: string; requiredCanonicalName: string; requiredDocumentId: string | null }>> {
+  const runs = [...new Set(runIds)];
+  const wanted = [...new Set(names)];
+  const out: Array<{ runId: string; requiredCanonicalName: string; requiredDocumentId: string | null }> = [];
+  if (runs.length === 0) return out;
+  for (let i = 0; i < wanted.length; i += REQUIRED_NAME_BATCH) {
+    const chunk = wanted.slice(i, i + REQUIRED_NAME_BATCH);
+    const rows = await getDb().all<{ dependent_run_id: string; required_canonical_name: string; required_document_id: string | null }>(
+      `SELECT DISTINCT dependent_run_id, required_canonical_name, required_document_id FROM dependencies
+        WHERE dependent_run_id IN (${runs.map(() => '?').join(', ')}) AND required = ?
+          AND required_canonical_name IN (${chunk.map(() => '?').join(', ')})`,
+      [...runs, fromBool(true), ...chunk],
     );
     for (const row of rows) {
-      const dependency = mapDependency(row);
-      if (!dependency.dependentRunId) continue;
-      const held = byRun.get(dependency.dependentRunId);
-      if (held) held.push(dependency);
-      else byRun.set(dependency.dependentRunId, [dependency]);
+      out.push({ runId: row.dependent_run_id, requiredCanonicalName: row.required_canonical_name, requiredDocumentId: row.required_document_id });
     }
   }
-  return byRun;
+  return out;
 }
 
 export async function listDependenciesForDocument(documentId: string): Promise<Dependency[]> {
