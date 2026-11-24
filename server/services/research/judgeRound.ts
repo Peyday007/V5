@@ -46,7 +46,7 @@ import {
   transitionMission,
   withdrawRequest,
 } from '../../repos/russellMissions.ts';
-import { binForOrchestration, regrantBinAttempts, reopenNeedsHumanBin } from '../../repos/bins.ts';
+import { binForOrchestration, ownerDirectedPacketIdsSql, regrantBinAttempts, reopenNeedsHumanBin } from '../../repos/bins.ts';
 import { parseJson } from '../../repos/util.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { AuditGap, ResearchOrchestration } from '../../domain/types.ts';
@@ -436,7 +436,23 @@ export async function liveJudgeRoundCap(): Promise<number> {
 }
 
 /**
- * The tick's pass: resume what may be resumed, oldest park first, a few at a time.
+ * The packets parked on a judge's PATCH or MORE_RESEARCH, in the order the resume pass takes them:
+ * the owner's directed goal first, then oldest park first. Without the first key a goal's packet
+ * parked today waited behind every older park for one of the few live slots (92 parked, ~10 live
+ * on 2026-11-24) while it was the critical path of the only goal the owner set.
+ */
+export async function judgeParkedPacketIds(): Promise<string[]> {
+  const rows = await getDb().all<{ id: string; owned: number }>(
+    `SELECT id, CASE WHEN id IN (${ownerDirectedPacketIdsSql()}) THEN 0 ELSE 1 END AS owned
+       FROM research_orchestrations
+      WHERE status = 'NEEDS_HUMAN' AND verdict IN ('PATCH', 'MORE_RESEARCH') AND audit_id IS NOT NULL
+      ORDER BY owned ASC, updated_at ASC LIMIT 200`,
+  );
+  return rows.map((row) => row.id);
+}
+
+/**
+ * The tick's pass: resume what may be resumed, the owner's goal first and then oldest park first, a few at a time.
  *
  * Derived from rows, so it reaches the packets already parked and every new
  * one, and bounded by `MAX_LIVE_JUDGE_ROUNDS` so a backlog drains beside fresh
@@ -448,16 +464,11 @@ export async function resumeJudgeParkedPackets(
   const cap = input.cap ?? (await liveJudgeRoundCap());
   const room = Math.min(input.limit ?? cap, cap - (await liveJudgeRounds()));
   if (room <= 0) return [];
-  const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM research_orchestrations
-      WHERE status = 'NEEDS_HUMAN' AND verdict IN ('PATCH', 'MORE_RESEARCH') AND audit_id IS NOT NULL
-      ORDER BY updated_at ASC LIMIT 200`,
-  );
   const results: JudgeRoundResult[] = [];
   let resumed = 0;
-  for (const row of rows) {
+  for (const id of await judgeParkedPacketIds()) {
     if (resumed >= room) break;
-    const result = await resumeJudgeRound(row.id);
+    const result = await resumeJudgeRound(id);
     if (result.outcome === 'SKIPPED') continue;
     results.push(result);
     if (result.outcome === 'RESUMED') resumed += 1;
