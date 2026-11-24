@@ -13891,6 +13891,25 @@ gate judges them like any other.
   `construction cap` line in the reading's degraded list. `listPaths` leaves
   constructed rows out, so the ledger's ranking never reads a hypothesis, and
   an `arr_` estimate is never linked to a goal as an opening.
+- **The library grows with no goal, and the money tree is read from it
+  (owner, 2026-11-24; requirement of August, reiterated 2026-11-14).** Until
+  then an arrangement was composed — and so stored — only while a cash goal
+  with days left read its plan: a map grown under the standing grant held
+  buyers, needs and supply no mechanism was built from, and the candidates
+  past the cap were never composed. `standingLibraryPass`
+  (`arrangementLibrary.ts`) runs from the industry kernel's tick, at most
+  every three hours per project, yields to database pressure, and is the same
+  `constructArrangements` → `rememberArrangements` the goal pass uses, with no
+  goal. `services/cash/moneyTree.ts` is the reading, not a second world model:
+  each stored mechanism placed by its buyer's map path (industry →
+  sub-industry → activity), its §49 method and design, and the owner's eleven
+  questions (paying customers, exchange, roles and contracts, prices costs and
+  margins, acquisition, conversion and frequency, capital and cash timing,
+  supply, AI automation, constraints and risks, evidence) each ESTABLISHED on
+  a gated claim or observed estimate, HYPOTHESIS from the design, or UNKNOWN.
+  "Meaningful economics" is an observed price (with its cost side where supply
+  is paid) and observed demand or conversion. The census prints it (`TREE`
+  lines).
 
 ## 83. Focus keeps one search: an approved cash goal's constructed arrangements.
 
