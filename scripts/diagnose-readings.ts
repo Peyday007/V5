@@ -427,6 +427,57 @@ async function liveness(): Promise<void> {
   }
 }
 
+/**
+ * Where a process's heap could come from (read-only): the statements that return
+ * the most rows per call (pg_stat_statements), and the largest relations.
+ */
+async function heapSources(): Promise<void> {
+  console.log('DIAGNOSE: heap-sources');
+  const show = async (label: string, sql: string): Promise<void> => {
+    const started = Date.now();
+    try {
+      const rows = await getDb().all<Record<string, unknown>>(sql);
+      console.log(`  ${label} (${Date.now() - started} ms)`);
+      for (const row of rows) console.log(`    ${JSON.stringify(row).slice(0, 900)}`);
+    } catch (error) {
+      console.log(`  ${label} FAILED ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  };
+  const where = await getDb()
+    .get<{ schema: string | null }>(
+      `SELECT n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_stat_statements'`,
+    )
+    .catch(() => null);
+  const schema = where?.schema ?? null;
+  if (schema) {
+    await show('statements window', `SELECT stats_reset::text AS stats_reset FROM ${schema}.pg_stat_statements_info`);
+    const dbFilter = `dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`;
+    await show(
+      'most rows per call (calls >= 2)',
+      `SELECT calls, rows, (rows / NULLIF(calls, 0))::bigint AS rows_per_call, round(mean_exec_time::numeric, 1) AS mean_ms,
+              SUBSTR(query, 1, 700) AS query
+         FROM ${schema}.pg_stat_statements WHERE ${dbFilter} AND calls >= 2
+        ORDER BY rows / NULLIF(calls, 0) DESC NULLS LAST LIMIT 25`,
+    );
+    await show(
+      'most rows in total',
+      `SELECT calls, rows, (rows / NULLIF(calls, 0))::bigint AS rows_per_call, round(mean_exec_time::numeric, 1) AS mean_ms,
+              SUBSTR(query, 1, 500) AS query
+         FROM ${schema}.pg_stat_statements WHERE ${dbFilter}
+        ORDER BY rows DESC LIMIT 20`,
+    );
+  } else {
+    console.log('  pg_stat_statements is not installed');
+  }
+  await show(
+    'largest relations (MB, ~rows)',
+    `SELECT c.relname AS name, (pg_total_relation_size(c.oid) / 1048576)::int AS mb, c.reltuples::bigint AS rows
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r'
+      ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 30`,
+  );
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
@@ -438,6 +489,7 @@ async function main(): Promise<void> {
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
     else if (command === 'gpu-answers') await gpuAnswers();
+    else if (command === 'heap-sources') await heapSources();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
     else throw new Error('usage: diagnose-readings.ts query-times|fragment-failures|operator-runs|free-lane-yield|bin-gates <bin>');
   } finally {
