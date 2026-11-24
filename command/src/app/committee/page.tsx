@@ -72,6 +72,37 @@ export default function CommitteePage() {
                           ))}
                         </ul>
                       )}
+                      {role.settled && role.settled.length > 0 && (
+                        <div className='mt-3 border-t pt-3'>
+                          <p className='text-muted-foreground mb-1 text-xs font-medium uppercase'>Settled by research</p>
+                          <ul className='flex flex-col gap-2'>
+                            {role.settled.map((st, i) => (
+                              <li key={i} className='text-xs'>
+                                <div className='flex items-start gap-2'>
+                                  <StatusPill status={st.outcome} />
+                                  <span className='font-medium text-pretty'>{st.subject}</span>
+                                </div>
+                                <p className='text-muted-foreground mt-0.5 text-pretty'>{st.why}</p>
+                                {st.sourceUrls.slice(0, 2).map((u) => (
+                                  <a key={u} href={u} target='_blank' rel='noreferrer' className='block truncate underline'>
+                                    {u}
+                                  </a>
+                                ))}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {role.specialist && (
+                        <div className='mt-3 border-t pt-3 text-xs'>
+                          <div className='flex items-center gap-2'>
+                            <span className='text-muted-foreground font-medium uppercase'>Model specialist</span>
+                            <StatusPill status={role.specialist.verdict} />
+                            <span className='text-muted-foreground truncate'>{role.specialist.model}</span>
+                          </div>
+                          <p className='mt-1 text-pretty'>{role.specialist.reason}</p>
+                        </div>
+                      )}
                       {role.open.length > 0 && (
                         <p className='text-muted-foreground mt-3 text-xs'>Open questions: {role.open.join('; ')}</p>
                       )}

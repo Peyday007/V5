@@ -63,7 +63,11 @@ export interface PlanStrategy { key: string; label: string; verdict: string; con
 export interface CommitteeDefect { claim: string; evidenceRef: string; why: string; critical: boolean; opportunityId: string | null; fact: string }
 export interface CommitteeView {
   tier: string; verdict: string; blocks: boolean; blocker: string | null; criticalDefects: number; reviewMs: number | null;
-  roles: { role: string; verdict: string; critical: boolean; defects: CommitteeDefect[]; open: string[]; citations: string[] }[];
+  roles: {
+    role: string; verdict: string; critical: boolean; defects: CommitteeDefect[]; open: string[]; citations: string[];
+    settled?: { subject: string; research: string; outcome: string; why: string; sourceUrls: string[] }[];
+    specialist?: { verdict: string; model: string; reason: string; defects: CommitteeDefect[] } | null;
+  }[];
   investigations: { opportunityId: string; fact: string; established: string[]; broken: string[] }[];
 }
 export interface PlanSummary {
