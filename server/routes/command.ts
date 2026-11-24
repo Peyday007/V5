@@ -44,6 +44,7 @@ export const COMMAND_READ_TOOLS: readonly string[] = [
   'brain_operator_engineering',
   'brain_operator_experiments',
   'brain_operator_allocation',
+  'brain_operator_knowledge',
 ];
 
 /** One argument value from the query string: a string, or a number when it is plainly one. */
