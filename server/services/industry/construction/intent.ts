@@ -355,6 +355,19 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   for (const m of text.matchAll(/\bby\s+(?:tomorrow|tonight|next\s+\w+|this\s+\w+|(?:mon|tues|wednes|thurs|fri|satur|sun)day|the\s+end\s+of\s+(?:the\s+|this\s+|next\s+)?(?:week|quarter|summer|winter|spring|fall))\b/gi)) {
     if (!overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) deadlineSeen(m.index!, m.index! + m[0].length, null, m[0]);
   }
+  // "this week": the seven days from now. "by (the) end of March": the last day of the next March.
+  for (const m of text.matchAll(/\b(?:this|within the|in the next)\s+week\b/gi)) {
+    if (!overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed) && deadline === null) deadlineSeen(m.index!, m.index! + m[0].length, new Date(now.getTime() + 7 * 86_400_000), m[0]);
+  }
+  const endOfMonthName = /\bby\s+(?:the\s+)?end\s+of\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b(?:,?\s+(\d{4}))?/gi;
+  for (const m of text.matchAll(endOfMonthName)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    const month = MONTHS.indexOf(m[1]!.slice(0, 3).toLowerCase());
+    let year = m[2] ? Number(m[2]) : now.getUTCFullYear();
+    let at = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59));
+    if (!m[2] && at.getTime() <= now.getTime()) at = new Date(Date.UTC(++year, month + 1, 0, 23, 59, 59));
+    deadlineSeen(m.index!, m.index! + m[0].length, at, m[0]);
+  }
   if (!deadline) {
     for (const m of text.matchAll(/\b(asap|as soon as possible|quickly|fast|soon|right away|immediately)\b/gi)) unread.push(`"${m[0]}": not a deadline`);
   }
@@ -391,7 +404,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   }
   // "Zero hours of my time", "without spending any of my own hours": a limit of nothing, never no limit (invariant 39).
   if (hoursCeiling === null) {
-    const none = /\b(?:zero|no)\s+(?:hours?|time)\s+(?:of\s+)?(?:my|our|owner)\b|\bwithout\s+(?:spending\s+|using\s+)?any\s+(?:of\s+)?(?:my|our)\s+(?:own\s+)?(?:hours|time)\b/i.exec(text);
+    const none = /\b(?:I'm not|I am not|I won't be|I will not be)\s+doing\s+(?:any\s+(?:of\s+)?)?(?:the\s+)?work\b|\b(?:don't|do not|won't|will not)\s+(?:want to\s+)?(?:put in|spend|give it)\s+any\s+(?:hours|time)\b|\b(?:zero|no)\s+(?:hours?|time)\s+(?:of\s+)?(?:my|our|owner)\b|\bwithout\s+(?:spending\s+|using\s+)?any\s+(?:of\s+)?(?:my|our)\s+(?:own\s+)?(?:hours|time)\b/i.exec(text);
     if (none) {
       hoursCeiling = 0;
       constraintSpans.push({ start: none.index, end: none.index + none[0].length, text: none[0] });
@@ -405,6 +418,13 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
    * With no deadline there is no window to bound, so it stays unread.
    */
   let hoursPerWeek: number | null = null;
+  // "just a few hours a week": a vague rate, read at its low end (2), as every vague count is.
+  const fewHours = /\b(?:a\s+)?(?:few|couple(?:\s+of)?)\s+(?:hours?|hrs?)\s+(?:a|per|each|every)\s+week\b/i.exec(text);
+  if (fewHours && hoursCeiling === null && deadline !== null) {
+    hoursPerWeek = 2;
+    hoursCeiling = Math.round((2 * ((deadline as Date).getTime() - now.getTime())) / (7 * 86_400_000));
+    constraintSpans.push({ start: fewHours.index, end: fewHours.index + fewHours[0].length, text: fewHours[0] });
+  }
   const PER_WEEK: Record<string, number> = { day: 7, week: 1, month: 7 / 30 };
   for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s+(?:of\s+\w+\s+)?(?:per|a|each|every)\s+(day|week|month)\b/gi)) {
     const span = { start: m.index!, end: m.index! + m[0].length, text: m[0] };
@@ -433,6 +453,10 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:budget|capital|investment|funding|bankroll)\s+(?:(?:of|is|is only|at)\s+)?(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b${spend}\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)\s+(?:only\s+)?(?:have|has|got|own|can (?:spend|invest|put in|afford))\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
+    // "I've got 10k to invest", "$1,000 to start", "I can put up to $500 into it", "I'll put in $10k".
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)(?:'ve|'ll| have| will)?\s+(?:only\s+)?(?:got|have|put(?:\s+in)?|invest|spend)\s+(?:${LIMIT}\s+)?${MP}(?=\s+(?:to (?:invest|spend|start|work with|put in)|into (?:it|this)|in(?:to)? (?:the business|it))\b)`, 'gi') },
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:put|invest|spend)\s+(?:${LIMIT}\s+)?${MP}\s+into\s+(?:it|this|the business)\b`, 'gi') },
+    { role: 'CAPITAL', re: new RegExp(String.raw`${MP}\s+to\s+(?:start|invest|spend|work with)\b`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\bwith\s+(?:${LIMIT}\s+)?(?:an?\s+)?${MP}(?!\s*(?:in|of)\s+(?:revenue|sales|profit|income))`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:using|use)\s+(?:${LIMIT}\s+)?(?:an?\s+)?${MP}(?!\s*(?:in|of|a|per)\s+(?:revenue|sales|profit|income|month|week|year))`, 'gi') },
     // "Turn $1,000 into $10,000": the first figure is the stake the plan may use; the second is the amount (step 5).
@@ -456,10 +480,22 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     return list[0]?.value ?? null;
   };
 
+  // 4b. A price the person states for the offer ("at $300/month", "for $150 each", "$1,500/mo retainers")
+  // is what one sale brings in, never the amount or a limit: it is kept as a constraint, read by nothing else.
+  for (const t of tokens) {
+    if (t.role !== null || !t.marked) continue;
+    const before = text.slice(Math.max(0, t.start - 14), t.start);
+    const after = text.slice(t.end, t.end + 40);
+    const priced = /\b(?:at|for|charging|charge|priced at)\s+$/i.test(before) || /^\s*(?:\/\s?(?:mo(?:nth)?|each)\s+)?(?:each\b|retainers?\b|per\s+(?:client|customer|sale|deal|unit|job|order|lead|listing|door)\b)/i.test(after);
+    if (!priced) continue;
+    t.role = 'MADE';
+    constraintSpans.push({ start: t.start, end: t.end, text: `price ${t.raw}` });
+  }
+
   // 5. The amount: a figure the words say is to be brought in.
   // Every person of the verb: "a business that collects $50,000" names the amount as surely as "collect $50,000".
-  const verbBefore = /\b(?:builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
-  const nounAfter = /^\s*(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments)\b/i;
+  const verbBefore = /\b(?:want|wants|need|needs|builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
+  const nounAfter = /^\s*(?:(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments)\b|collected\b|(?:a|per)\s+month\s+recurring\b|\/\s?mo(?:nth)?\s+recurring\b|MRR\b)/i;
   let amountToken: MoneyToken | null = null;
   let recurring: ObjectiveReading['recurring'] = null;
   for (const t of tokens) {
@@ -471,6 +507,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     const turnedInto = constraintSpans.some((s) => new RegExp(String.raw`^${GROW}\s`, 'i').test(s.text) && /^\s+into\s+$/i.test(text.slice(s.end, t.start)));
     // "$5,000 a month in recurring revenue", "$5k MRR", "$5,000 in monthly recurring revenue": a monthly run-rate is the amount.
     const statedRecurring =
+      /^\s*(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?)\s+recurring\b/i.test(after) ||
       /^\s*(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?)\s+(?:(?:in|of)\s+)?(?:(?:new|net|gross|monthly)\s+)*(?:recurring|subscription|retainer)\s+(?:revenue|income|sales|billings?)\b/i.test(after) ||
       /^\s*(?:(?:in|of)\s+)?(?:(?:new|net|gross)\s+)*(?:monthly\s+recurring\s+(?:revenue|income|sales)|MRR)\b/i.test(after);
     /*
@@ -512,7 +549,9 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   }
 
   const kind = amountToken ? 'CASH' : 'OTHER';
-  const currency = amountToken?.currency ?? null;
+  // A bare figure ("collect 12k") takes the currency every other figure in the same words names, when they all name one.
+  const named = [...new Set(tokens.map((t) => t.currency).filter((c): c is string => !!c))];
+  const currency = amountToken?.currency ?? (named.length === 1 ? named[0]! : null);
   if (kind === 'CASH') {
     if (!currency) unread.push(`currency: "${amountToken!.raw}" names no currency`);
     if (!deadline) unread.push('deadline: none stated');
@@ -564,11 +603,17 @@ const LITTLE_CAPITAL = /\b(?:very\s+)?(?:little|minimal|minimum|low|small|modest
  * 2026-11-20: such a goal was planned as if money were unlimited and read
  * 0.898 against 0.434 for the same goal with $1,000).
  */
-const NO_CAPITAL = /\b(?:no|zero|without(?:\s+any)?|nothing\s+in)\s+(?:(?:up-?front|upfront|starting|initial|start-?up|seed|own|working)\s+)*(?:capital|money|cash|investment|funding|outlay)\b/i;
+const NO_CAPITAL = /\b(?:no|zero|without(?:\s+any)?|nothing\s+in)\s+(?:(?:up-?front|upfront|starting|initial|start-?up|seed|own|working)\s+)*(?:capital|money|cash|investment|funding|outlay)\b|\b(?:don't|do not|can't|cannot|won't|will not)\s+(?:have|want to (?:spend|put in|invest)|spend|invest|put in)\s+(?:any(?:thing)?|a (?:dime|cent|penny))(?:\s+(?:money|cash|capital))?\b|\bI've got no money\b/i;
 
 function assumedLittleCapital(text: string, amount: number): ObjectiveReading['capitalAssumed'] {
   const none = NO_CAPITAL.exec(text);
   if (none && amount > 0) return { amount: 0, phrase: none[0], basis: `"${none[0]}": nothing may be tied up before money comes in` };
+  // "a couple hundred bucks", "a few hundred dollars": read at its low end, as every vague count is.
+  const vague = /\b(?:a\s+)?(couple(?:\s+of)?|few)\s+(hundred|thousand)\s+(?:bucks|dollars|usd)\b/i.exec(text);
+  if (vague && amount > 0) {
+    const figure = 2 * (vague[2]!.toLowerCase() === 'hundred' ? 100 : 1000);
+    return { amount: figure, phrase: vague[0], basis: `"${vague[0]}" states no figure; read at its low end, ${figure}` };
+  }
   const m = LITTLE_CAPITAL.exec(text);
   if (!m || !(amount > 0)) return null;
   const figure = Math.max(1, Math.round(amount * LITTLE_CAPITAL_SHARE));

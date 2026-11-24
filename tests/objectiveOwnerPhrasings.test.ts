@@ -54,4 +54,37 @@ describe('readObjective: the owner’s ordinary phrasings', () => {
     expect(o.amount).toBe(3000);
     expect(o.recurring).not.toBe('MONTHLY');
   });
+
+  it('reads the second batch of ordinary phrasings in full (sealed set, 2026-11-24)', () => {
+    const cases: [string, Partial<Record<'amount' | 'capitalCeiling' | 'hoursCeiling', number>>, string | null][] = [
+      ['Earn 4000 dollars of settled cash in 30 days. I can put up to $500 into it.', { amount: 4000, capitalCeiling: 500 }, null],
+      ['I want $10,000 a month recurring within 90 days. Budget is $2,000 and I can give it 10 hours a week.', { amount: 10000, capitalCeiling: 2000 }, 'MONTHLY'],
+      ["I want to make $25k in collected revenue over the next 4 months. I've got 10k to invest and just a few hours a week.", { amount: 25000, capitalCeiling: 10000 }, null],
+      ['Earn $1,000/mo recurring by the end of January. Budget about $300.', { amount: 1000, capitalCeiling: 300 }, 'MONTHLY'],
+      ['Collect 12k in customer payments in 60 days. I can work 20 hrs a week and spend up to $2,000.', { amount: 12000, capitalCeiling: 2000 }, null],
+      ['Use AI to write grant applications for Detroit nonprofits — I want $6k collected within 60 days.', { amount: 6000 }, null],
+      ["Something in real estate. Collect $4,000 within 45 days, I've got $1,000 to start and maybe 5 hours a week.", { amount: 4000, capitalCeiling: 1000 }, null],
+      ['Start a Google Business Profile optimization service for Detroit dentists at $300/month. Get it to $3,000 MRR in 90 days.', { amount: 3000 }, 'MONTHLY'],
+      ["Sell resume rewrites to laid-off auto workers for $150 each. I need $1,200 within 14 days and I've got no money.", { amount: 1200 }, null],
+      ['Run a Facebook ads agency for local gyms at $1,500/mo retainers. I want $4,500 MRR in 60 days. $500 budget, 10 hrs a week.', { amount: 4500, capitalCeiling: 500 }, 'MONTHLY'],
+      ['Run a snow removal brokerage in metro Detroit this winter. $40,000 collected by end of March, $10k capital, I can do 20 hours a week of dispatching.', { amount: 40000, capitalCeiling: 10000 }, null],
+      ['make 500 dollars this week, no capital', { amount: 500 }, null],
+    ];
+    for (const [text, want, recurring] of cases) {
+      const o = read(text);
+      expect(o.unread, text).toEqual([]);
+      expect(o.currency, text).toBe('USD');
+      expect(o.deadline, text).not.toBeNull();
+      expect(o, text).toMatchObject(want);
+      if (recurring) expect(o.recurring, text).toBe(recurring);
+    }
+  });
+  it('reads a plain-spoken refusal to spend or to work as a limit of nothing, never as no limit', () => {
+    expect(read("Collect $1,500 in customer payments within 10 days. I don't have any money to put in.").capitalAssumed?.amount).toBe(0);
+    const o = read("Get me to $2,500/month in recurring revenue in 45 days. I don't want to spend anything and I'm not doing any of the work.");
+    expect(o.capitalAssumed?.amount).toBe(0);
+    expect(o.hoursCeiling).toBe(0);
+    expect(read("Build $7,500 a month in recurring revenue within 5 months using up to $12,000. I don't want to put in any hours.").hoursCeiling).toBe(0);
+    expect(read("What's the fastest way to collect $2,000 in 14 days? I can spend a couple hundred bucks.").capitalAssumed?.amount).toBe(200);
+  });
 });
