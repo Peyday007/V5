@@ -17197,6 +17197,23 @@ Factory surfaces 2 and 3 (about 1,300 fires each) were never the fault.
   goes first. Pinned by `tests/pinnedProbeClaim.test.ts` and
   `tests/freeLane.test.ts`.
 
+**The exception is a set, not a scan (2026-11-24).** Measured on production
+with `dispatch-diagnose` (`reading: query-times`): with 363 claimable bins and
+4,727 missions, counting claimable bins took 15 ms, and the same count under
+`purposeAdmitsSql` ran into the 120 s statement timeout. The first form of
+`ownerDirectedGoalBinSql` was a correlated `EXISTS` per bin that joined the
+goal's links to `russell_missions` on a `CASE` expression no index serves.
+Every statement that composes `claimableStateSql` timed out with it: the
+dispatch tick, the boot re-drive, the assigner, the no-show re-open and the
+capacity reader's ROUTINES pool. The result was 0 fires and 0 assignments in
+24 h beside 12 eligible Routines, and `brain_operator_capacity` with no reading
+to serve. The goal's packets, campaigns and mission bins are now three
+uncorrelated `IN` lists, each joined on an indexed key and built once per
+statement. Each list drops NULLs, so the predicate is TRUE or FALSE and its
+negation in brain-only mode's release pass stays definite. Pinned by
+`tests/brainOnlyMode.test.ts` ("answers the owner-directed question once per
+statement").
+
 ## 119. A goal's execution window starts when commercial execution is authorized, and an owner's rule lives in a row, never in a conversation.
 
 **The defect, recurring.** On 2026-11-19 the owner told Brain that the $10K

@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { createBin, getBin, listBinEvents } from '../server/repos/bins.ts';
+import { binPurposeAdmits, createBin, getBin, listBinEvents, purposeAdmitsSql } from '../server/repos/bins.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createOrchestration } from '../server/repos/research.ts';
@@ -101,6 +101,15 @@ async function bin(projectId: string, title: string, priority = 5): Promise<stri
     priority,
   });
   return created.id;
+}
+
+/** Russell candidates a mission may name (`russell_missions.candidate_id` references them). */
+async function candidates(projectId: string, ids: string[], now: string): Promise<void> {
+  await getDb().run(
+    `INSERT INTO russell_candidates (id, project_id, title, statement, fingerprint, created_at, updated_at)
+     VALUES ${ids.map(() => "(?, ?, 't', 's', ?, ?, ?)").join(', ')}`,
+    ids.flatMap((id) => [id, projectId, `fp_${id}`, now, now]),
+  );
 }
 
 async function tool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -286,6 +295,80 @@ describe('the assignment query enforces it', () => {
     const answer = await checkIn({ principal: routine(), workerId });
     expect(answer.assigned).toBe(true);
     if (answer.assigned) expect(answer.assignment.binId).toBe(goalBin);
+  });
+
+  it('reaches the goal’s bin through a candidate the goal links, by the mission’s bin', async () => {
+    const goalId = OWNER_DIRECTED_GOAL_IDS[0]!;
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [goalId, play.project.id, '$10K', 'Collect 10000 dollars', 'REVENUE_DIRECT', now, now],
+    );
+    const goalBin = await bin(play.project.id, 'Constructed: who pays for this arrangement', 3);
+    await candidates(play.project.id, ['cand_goal'], now);
+    await getDb().run(
+      `INSERT INTO russell_missions (id, project_id, objective, why_now, state, candidate_id, bin_id, idempotency_key, created_at, updated_at)
+       VALUES ('rms_goal_c', ?, 'who pays', 'the plan needs it', 'RUNNING', 'cand_goal', ?, 'key_goal_c', ?, ?)`,
+      [play.project.id, goalBin, now, now],
+    );
+    expect(await binPurposeAdmits(goalBin)).toBe(false);
+    await getDb().run(
+      `INSERT INTO workstream_links (id, workstream_id, kind, ref, relation, recorded_by, created_at)
+       VALUES ('wsl_goal_cand', ?, 'CANDIDATE', 'cand_goal', 'PURSUES', 'BRAIN', ?)`,
+      [goalId, now],
+    );
+    expect(await binPurposeAdmits(goalBin)).toBe(true);
+    // A superseded link no longer admits it, and the negation is a definite answer, never NULL.
+    await getDb().run("UPDATE workstream_links SET superseded_at = ?, superseded_reason = 'test' WHERE id = 'wsl_goal_cand'", [now]);
+    expect(await binPurposeAdmits(goalBin)).toBe(false);
+    const negated = await getDb().get<{ n: number | string }>(
+      `SELECT COUNT(*) AS n FROM bins WHERE id = ? AND NOT ${purposeAdmitsSql('')}`,
+      [goalBin],
+    );
+    expect(Number(negated?.n)).toBe(1);
+  });
+
+  it('answers the owner-directed question once per statement, not once per bin (production 2026-11-24: 120 s timeout)', async () => {
+    // 363 claimable bins and 4,727 missions made every dispatcher statement run
+    // into the statement timeout. A scaled copy: the correlated form visits
+    // bins x links x missions rows; the set form builds the goal's set once.
+    const goalId = OWNER_DIRECTED_GOAL_IDS[0]!;
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [goalId, play.project.id, '$10K', 'Collect 10000 dollars', 'REVENUE_DIRECT', now, now],
+    );
+    const bins: string[] = [];
+    for (let i = 0; i < 150; i += 1) bins.push(await bin(play.project.id, `AI receptionist pricing in Ohio ${i}`, 5));
+    const missions = 3000;
+    for (let start = 0; start < missions; start += 250) {
+      const rows = Array.from({ length: Math.min(250, missions - start) }, (_, k) => start + k);
+      await candidates(play.project.id, rows.map((i) => `cand_v${i}`), now);
+      await getDb().run(
+        `INSERT INTO russell_missions (id, project_id, objective, why_now, state, candidate_id, idempotency_key, created_at, updated_at)
+         VALUES ${rows.map(() => "(?, ?, 'o', 'w', 'FAILED', ?, ?, ?, ?)").join(', ')}`,
+        rows.flatMap((i) => [`rms_v${i}`, play.project.id, `cand_v${i}`, `key_v${i}`, now, now]),
+      );
+    }
+    const links = 150;
+    for (let start = 0; start < links; start += 75) {
+      const rows = Array.from({ length: 75 }, (_, k) => start + k);
+      await getDb().run(
+        `INSERT INTO workstream_links (id, workstream_id, kind, ref, relation, recorded_by, created_at)
+         VALUES ${rows.map(() => "(?, ?, ?, ?, 'PURSUES', 'BRAIN', ?)").join(', ')}`,
+        rows.flatMap((i) => [`wsl_v${i}`, goalId, i % 2 === 0 ? 'CANDIDATE' : 'MISSION', i % 2 === 0 ? `cand_v${i * 7}` : `rms_v${i * 11}`, now]),
+      );
+    }
+    // One of the bins is the goal's, through the last mission a link names.
+    await getDb().run("UPDATE russell_missions SET bin_id = ? WHERE id = 'rms_v1639'", [bins[42]!]);
+    const started = Date.now();
+    const row = await getDb().get<{ n: number | string }>(
+      `SELECT COUNT(*) AS n FROM bins WHERE state = 'READY' AND ${purposeAdmitsSql('bins.')}`,
+      [],
+    );
+    const elapsed = Date.now() - started;
+    expect(Number(row?.n)).toBe(1);
+    expect(elapsed).toBeLessThan(3_000);
   });
 
   it('keeps play bins assignable once the owner turns the mode off', async () => {
