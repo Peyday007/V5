@@ -17153,3 +17153,20 @@ PLAN. FOCUS RESOURCES THERE." is the owner saying otherwise, for that goal.
   character class before it reaches SQL.
 - Pinned by `tests/brainOnlyMode.test.ts` ("hands an idle routine the
   owner-directed goal's research, and still no other play bin").
+
+**No Routine holds work for ever (2026-11-24).** Traced on production: the
+"1 executable item, capacity unexplainedly idle" both pools reported for weeks
+was `bin_a7a6e6a9b2ff42278baa` and `bin_621b1421d4134e09aa25`, surface probes
+pinned since 2026-09-26 to the QUARANTINED Factory surface 1 and refused
+ALL_SURFACES_INELIGIBLE on every tick; and `bin_7e4b9543427d462f9f78`, real
+Brain-improvement research no Routine's worker could reach
+(NO_SURFACE_SERVES_THIS_PROJECT, 86,910 refusals since 2026-10-07). The healthy
+Factory surfaces 2 and 3 (about 1,300 fires each) were never the fault.
+- `reconcileBins` releases a pin to a Routine that is QUARANTINED, RETIRED,
+  UNAVAILABLE or gone after six hours: a probe closes, any other bin is
+  unpinned so routing places it (`strandedPinnedBins`, `unpinBin`).
+- The free lane takes a Brain-improvement bin's research once Claude routing
+  has refused it for six hours with no fire since (`claudeCannotRoute`), and
+  holds membership on its project for it. A Routine that can serve it still
+  goes first. Pinned by `tests/pinnedProbeClaim.test.ts` and
+  `tests/freeLane.test.ts`.
