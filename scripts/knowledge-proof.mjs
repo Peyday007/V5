@@ -64,6 +64,20 @@ const CHECKS = {
   planChanged: () => (applied.PLAN_INPUT_CHANGED ?? 0) > 0,
   visible: () => ['learning', 'understanding', 'mechanisms', 'recent', 'missing', 'plans', 'capacity'].every((key) => key in k),
   capacity: () => k.capacity && typeof k.capacity.idleBesideWork === 'boolean' && k.capacity.readsLast24h > 0,
+  // Economic relationships: ratios derived across programs (receipts per establishment, payroll share, size mix) and the two programs compared.
+  relationships: () => (byClass.STRUCTURE ?? 0) > 0 && (c.knowledgeEstimates ?? 0) > 1000,
+  // Operational requirements: per-industry operations figures and the GPU's named requirements.
+  operations: () => (byClass.OPERATIONS ?? 0) > 0 && (k.understanding?.interpreted ?? []).some((i) => (i.requirements ?? []).length > 0),
+  // Refresh: every source carries its next check, stale figures are counted, and passes keep running on their own clock.
+  refresh: () => sources.length > 0 && sources.every((s) => s.nextDueAt) && typeof k.missing?.staleFacts === 'number' && (k.learning?.passes ?? []).filter((p) => p.status === 'DONE').length >= 2,
+  // Prioritised by active objectives: each pass applies knowledge to the projects with live goals, and some were filed.
+  prioritized: () => (k.learning?.lastPass?.applied ?? []).length > 0 && (applied.CONSTRUCTION_FACT ?? 0) > 0,
+  // Measured as knowledge applied, not bytes: application counts per kind, with before/after.
+  measured: () => Object.values(applied).reduce((t, n) => t + n, 0) > 0 && (k.plans?.recent ?? []).some((a) => a.before && a.after),
+  // Gaps are rows: industries not yet interpreted, withheld cells, unmatched buyers and readerless sources are all counted.
+  gaps: () => (k.missing?.industriesUninterpreted ?? 0) > 0 && (k.missing?.withheldCells ?? 0) > 0 && Array.isArray(k.missing?.buyersUnclassified) && Array.isArray(k.missing?.sourcesWithoutReader),
+  // Research prioritisation: a question the data answered was closed, and the plan's next question moved past the count.
+  research: () => (applied.UNCERTAINTY_RESOLVED ?? 0) > 0 || (k.plans?.recent ?? []).some((a) => /next research round asks for/.test(a.after ?? '')),
 };
 
 if (!CHECKS[check]) {
