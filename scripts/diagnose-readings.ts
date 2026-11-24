@@ -207,6 +207,67 @@ async function freeLaneYield(): Promise<void> {
 }
 
 /**
+ * Who answered the GPU slot, per UTC day over the last 16 days: `FREE_LANE_ITEM`
+ * rows on a `runpod/` slot split by whether `measures.servedBy` was recorded and
+ * what it names, beside the pod's own `RUNPOD_POD` samples (running, and whether
+ * vLLM answered its readiness probe). Read-only.
+ */
+async function gpuAnswers(): Promise<void> {
+  const since = new Date(Date.now() - 16 * 86_400_000).toISOString();
+  const items = await getDb().all<{ at: string; outcome: string | null; reason: string | null; duration_ms: number | string | null; measures: string | null }>(
+    `SELECT at, outcome, reason, duration_ms, measures FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND (reason LIKE 'model runpod/%' OR measures LIKE '%runpod/%')`,
+    [since],
+  );
+  const counts = new Map<string, { n: number; ms: number[] }>();
+  for (const row of items) {
+    let m: Record<string, unknown> = {};
+    try {
+      m = (typeof row.measures === 'string' ? JSON.parse(row.measures) : row.measures ?? {}) as Record<string, unknown>;
+    } catch {
+      /* unreadable measures */
+    }
+    const served = Array.isArray(m['servedBy']) ? (m['servedBy'] as unknown[]).map(String).sort().join('+') : '(no servedBy)';
+    const slot = (row.reason ?? '').replace(/^model\s+/, '').split(':')[0]?.trim() ?? '';
+    const key = `${row.at.slice(0, 10)} ${row.outcome ?? '-'} slot=${slot} servedBy=${served}`;
+    const entry = counts.get(key) ?? { n: 0, ms: [] };
+    entry.n += 1;
+    if (row.duration_ms !== null) entry.ms.push(Number(row.duration_ms));
+    counts.set(key, entry);
+  }
+  console.log(`DIAGNOSE: gpu-answers since ${since} (${items.length} GPU-slot items)`);
+  for (const [key, { n, ms }] of [...counts].sort((x, y) => x[0].localeCompare(y[0]))) {
+    const sorted = ms.sort((a, b) => a - b);
+    console.log(`  ${String(n).padStart(5)}x ${key} · median ${Math.round((sorted[Math.floor(sorted.length / 2)] ?? 0) / 1000)} s`);
+  }
+  const reasons = await getDb().all<{ day: string; reason: string | null; n: number | string }>(
+    `SELECT SUBSTR(at, 1, 10) AS day, SUBSTR(reason, 1, 140) AS reason, COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model runpod/%:%'
+      GROUP BY SUBSTR(at, 1, 10), SUBSTR(reason, 1, 140) ORDER BY day, n DESC`,
+    [since],
+  );
+  console.log('DIAGNOSE: gpu-answers failure reasons on the GPU slot');
+  for (const r of reasons.slice(0, 80)) console.log(`  ${r.day} ${String(Number(r.n)).padStart(5)}x ${r.reason}`);
+  const pod = await getDb().all<{ at: string; outcome: string | null; measures: string | null }>(
+    `SELECT at, outcome, measures FROM bin_events WHERE event_type = 'RUNPOD_POD' AND at >= ? ORDER BY at`,
+    [since],
+  );
+  const podCounts = new Map<string, number>();
+  for (const row of pod) {
+    let m: Record<string, unknown> = {};
+    try {
+      m = (typeof row.measures === 'string' ? JSON.parse(row.measures) : row.measures ?? {}) as Record<string, unknown>;
+    } catch {
+      /* unreadable measures */
+    }
+    const key = `${row.at.slice(0, 10)} ${row.outcome ?? '-'}${row.outcome?.startsWith('SAMPLE_') ? ` ready=${String(m['ready'])} inFlight>0=${Number(m['inFlight'] ?? 0) > 0}` : ''}`;
+    podCounts.set(key, (podCounts.get(key) ?? 0) + 1);
+  }
+  console.log('DIAGNOSE: gpu-answers RUNPOD_POD rows by day');
+  for (const [key, n] of [...podCounts].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
+}
+
+/**
  * How long the dispatcher's and the capacity reader's statements take on the
  * running database, part by part (§88: measured, not read from code). Each is
  * bounded by the session's own statement timeout; a timeout is printed as one.
@@ -321,6 +382,7 @@ async function main(): Promise<void> {
     else if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
+    else if (command === 'gpu-answers') await gpuAnswers();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
     else throw new Error('usage: diagnose-readings.ts query-times|fragment-failures|operator-runs|free-lane-yield|bin-gates <bin>');
   } finally {

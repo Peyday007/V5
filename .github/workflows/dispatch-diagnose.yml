@@ -33,7 +33,7 @@ on:
         required: false
         default: ''
       reading:
-        description: 'Optional: run only this carried reading (query-times | restarts | liveness) and nothing else'
+        description: 'Optional: run only this carried reading (query-times | restarts | liveness | gpu-answers) and nothing else'
         required: false
         default: ''
 
@@ -66,8 +66,8 @@ jobs:
             *) echo "::error::A bin id is bin_ followed by hex."; exit 1 ;;
           esac
           case "$DIAG_READING" in
-            ''|query-times|restarts|liveness) ;;
-            *) echo "::error::A reading is query-times, restarts or liveness."; exit 1 ;;
+            ''|query-times|restarts|liveness|gpu-answers) ;;
+            *) echo "::error::A reading is query-times, restarts, liveness or gpu-answers."; exit 1 ;;
           esac
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           readings_b64=$(base64 -w0 scripts/diagnose-readings.ts)
