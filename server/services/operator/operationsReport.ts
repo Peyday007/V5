@@ -630,6 +630,25 @@ export async function recordHourlyReport(
   return { noticeId, created: recorded.created, partial: report.partial };
 }
 
+/**
+ * The hourly reports already recorded, newest first, for a reader that shows them (the
+ * Command Center's Reports page). Reads the stored notices only — never builds a report.
+ */
+export async function listRecordedReports(limit = 24): Promise<{ noticeId: string; readyAt: string | null; subject: string; text: string }[]> {
+  const rows = await getDb().all<{ entity_id: string }>(
+    `SELECT entity_id FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND payload LIKE '%"status":"READY"%'
+      ORDER BY entity_id DESC LIMIT ?`,
+    [Math.max(1, Math.min(100, limit))],
+  );
+  const { readOwnerNotice } = await import('../ownerNotices.ts');
+  const out: { noticeId: string; readyAt: string | null; subject: string; text: string }[] = [];
+  for (const row of rows) {
+    const notice = await readOwnerNotice(row.entity_id);
+    if (notice) out.push({ noticeId: notice.noticeId, readyAt: notice.readyAt ?? null, subject: notice.subject, text: notice.text });
+  }
+  return out;
+}
+
 /** How far back a missed hour is recovered. Older gaps stay gaps: their snapshots are gone. */
 export const REPORT_RECOVERY_HOURS = 6;
 /** How long after a failed generation the next attempt may start. */

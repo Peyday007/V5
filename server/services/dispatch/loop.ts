@@ -192,6 +192,8 @@ export interface TickResult {
    * cool-off because their bin is still executable (bounded per bin; `rearm.ts`).
    */
   revivedStranded: number;
+  /** Factory bins stranded past the ceiling that were renewed or blocked with their cause (`factory/stranded.ts`). */
+  resolvedStranded: number;
   /** Surfaces taken out of routing this tick for not answering their fires. */
   quarantinedForNoShow: string[];
   /** Surfaces put back after their connector was re-authorized. */
@@ -266,6 +268,7 @@ export async function dispatchTick(
     abandonedNoShows: 0,
     revivedAbandoned: 0,
     revivedStranded: 0,
+    resolvedStranded: 0,
     quarantinedForNoShow: [],
     recoveredAfterReauth: [],
     adoptedIdentities: [],
@@ -469,6 +472,20 @@ export async function dispatchTick(
    * driven: the tick asks of the state it sees, not of the transition it missed.
    */
   result.revivedStranded = (await rearmStrandedIntents(20)).length;
+
+  /*
+   * And a Factory bin still stranded past the re-arm ceiling is resolved by why
+   * it is stranded, not reported for ever (`factory/stranded.ts`, production
+   * 2026-11-24): a review no connector may legally give is cancelled and its
+   * campaign blocked as NO_ELIGIBLE_REVIEWER; anything else is renewed once a
+   * day so the router can place it on a surface that is healthy now.
+   */
+  try {
+    const { resolveStrandedFactoryBins } = await import('../factory/stranded.ts');
+    result.resolvedStranded = (await resolveStrandedFactoryBins()).filter((r) => r.action !== 'WAITING_RENEWAL').length;
+  } catch {
+    /* retried on the next tick */
+  }
 
   /*
    * And a surface that has stopped answering stops being chosen.

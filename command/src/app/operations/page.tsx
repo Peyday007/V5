@@ -2,6 +2,9 @@
 import PageContainer from '@/components/layout/page-container';
 import { Empty, Freshness, Panel, QueryView, Stat, StatusPill, TimeAgo, num } from '@/components/brain/display';
 import { useBrain, useTool } from '@/hooks/use-brain';
+import { ResourcesPanel } from '@/components/brain/resource-cards';
+import { BacklogPanel } from '@/components/brain/backlog-panel';
+import { shortTitle } from '@/components/brain/task-card';
 import { useHomeProject } from '@/hooks/use-homes';
 import { enc } from '@/lib/brain';
 import type { GpuStatus, Utilization, WorkforceView, WorkResponse } from '@/lib/types';
@@ -76,15 +79,15 @@ export default function OperationsPage() {
     projectId ? `/api/russell/projects/${enc(projectId)}/workforce` : null,
     { interval: 15_000 }
   );
+  const capacity = useTool<Utilization>('brain_operator_capacity', {}, { interval: 20_000 });
   const work = useBrain<WorkResponse>(projectId ? `/api/russell/projects/${enc(projectId)}/work?limit=60` : null, {
     interval: 15_000
   });
-  const capacity = useTool<Utilization>('brain_operator_capacity', {}, { interval: 20_000 });
 
   return (
     <PageContainer
       pageTitle='Live operations'
-      pageDescription='What is running right now, who is running it, and what moved in the last hours. Re-read every 15 seconds.'
+      pageDescription='What is running right now, who is running it, what each resource is limited by, and what the research backlog holds. Re-read continuously.'
       pageHeaderAction={<Freshness query={workforce} />}
     >
       {homes.data && !projectId && <Empty>You have no project Brain operates in.</Empty>}
@@ -112,8 +115,8 @@ export default function OperationsPage() {
                         </div>
                         <p className='text-muted-foreground text-xs text-pretty'>{a.statusSentence}</p>
                         {a.current.map((job, i) => (
-                          <p key={i} className='truncate text-xs'>
-                            ▸ {job.title ?? job.routineName ?? 'Untitled work'}{' '}
+                          <p key={i} className='text-xs break-words'>
+                            ▸ {job.title ? shortTitle(job.title) : (job.routineName ?? 'Untitled work')}{' '}
                             {job.since && <span className='text-muted-foreground'>· <TimeAgo at={job.since} /></span>}
                           </p>
                         ))}
@@ -135,7 +138,7 @@ export default function OperationsPage() {
                         <span className='text-muted-foreground w-14 shrink-0'><TimeAgo at={m.at} /></span>
                         <span className='min-w-0 text-pretty'>
                           <b className='font-medium'>{m.accountName ?? 'Brain'}</b> {m.event.toLowerCase().replace(/_/g, ' ')}{' '}
-                          {m.title && <span className='text-muted-foreground'>— {m.title}</span>}
+                          {m.title && <span className='text-muted-foreground'>— {shortTitle(m.title)}</span>}
                         </span>
                       </li>
                     ))}
@@ -157,8 +160,8 @@ export default function OperationsPage() {
                 {live.map((item) => (
                   <li key={item.id} className='flex items-start justify-between gap-3 py-2'>
                     <div className='min-w-0'>
-                      <p className='truncate text-sm font-medium'>{item.title}</p>
-                      <p className='text-muted-foreground line-clamp-1 text-xs'>
+                      <p className='text-sm font-medium break-words'>{shortTitle(item.title)}</p>
+                      <p className='text-muted-foreground text-xs break-words'>
                         {item.waitingOn ?? item.why ?? ''}
                       </p>
                     </div>
@@ -184,33 +187,8 @@ export default function OperationsPage() {
         </QueryView>
       </Panel>
 
-      <Panel title='Capacity pools' action={<Freshness query={capacity} />}>
-        <QueryView query={capacity}>
-          {(c) =>
-            !c.pools ? (
-              <Empty>{c.note ?? 'No capacity reading yet.'}</Empty>
-            ) : (
-              <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-                {c.pools.map((p) => {
-                  const used = p.capacity > 0 ? Math.min(100, Math.round((p.running / p.capacity) * 100)) : 0;
-                  return (
-                    <div key={p.pool} className='rounded-lg border p-3'>
-                      <div className='flex items-center justify-between text-sm font-medium'>
-                        <span>{p.pool.replace(/_/g, ' ').toLowerCase()}</span>
-                        <span className='tabular-nums'>{p.running}/{p.capacity}</span>
-                      </div>
-                      <div className='bg-muted mt-2 h-1.5 overflow-hidden rounded-full'>
-                        <div className='bg-primary h-full' style={{ width: `${used}%` }} />
-                      </div>
-                      <p className='text-muted-foreground mt-2 text-xs'>{p.waiting} waiting{p.idle && p.waiting > 0 ? ' · idle beside work' : ''}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            )
-          }
-        </QueryView>
-      </Panel>
+      <ResourcesPanel />
+      <BacklogPanel />
     </PageContainer>
   );
 }

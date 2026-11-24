@@ -85,6 +85,11 @@ const BASIS_BY_SIGNAL: Readonly<Record<OpportunitySignal, EvidenceBasis>> = Obje
  * a market's size, or only a published asking price, is read as exactly that whatever
  * signal the worker set — neither shows the payer can be reached or will buy.
  */
+/** True when a sentence states a market-level figure (a market's size or worth), the claimBasis reading. */
+export function isMarketLevelFigure(text: string | null | undefined): boolean {
+  return !!text && MARKET_SIZE.test(text);
+}
+
 export function claimBasis(input: { signal: OpportunitySignal | null; claim: string | null }): EvidenceBasis[] {
   const text = input.claim ?? '';
   if (MARKET_SIZE.test(text)) return ['TOTAL_MARKET_SIZE'];

@@ -95,3 +95,91 @@ commandRouter.get(
     return { value: body.structuredContent ?? null };
   }),
 );
+
+/*
+ * Reports, backlog and resources: readings the Command Center shows whole.
+ *
+ * Each is assembled from the existing readers — the inventory, the engineering
+ * outcomes, the deficiencies, the operator's record, the stored hourly reports,
+ * the audits, the backlog classifier, the resource reading — never recomputed
+ * here. Brain-wide readings carry goals, lessons and titles from every project,
+ * so they need operator rights, decided by the same `operatorProjects` the MCP
+ * tools use (policy, not memberships). A section whose reader fails is reported
+ * as failed with a sentence; the others still arrive.
+ */
+async function section<T>(read: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+  try {
+    return { ok: true, value: await read() };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message.slice(0, 300) : 'The reading failed.' };
+  }
+}
+
+async function requireOperatorPerson() {
+  const principal = requirePerson();
+  const { operatorProjects } = await import('../mcp/operatorTools.ts');
+  const projects = await operatorProjects(principal);
+  if (projects.length === 0) throw notFound('No such route.');
+  return { principal, projects };
+}
+
+commandRouter.get(
+  '/command/reports',
+  handler(async () => {
+    const { projects } = await requireOperatorPerson();
+    const [{ listInventory }, { engineeringOutcomes, readDeficiencies }, { recentOperatorRuns, listOperatorLearnings }, { listRecordedReports }, { listRecentAudits }, { interventionMetrics }] =
+      await Promise.all([
+        import('../services/operator/inventory.ts'),
+        import('../services/operator/director.ts'),
+        import('../repos/operator.ts'),
+        import('../services/operator/operationsReport.ts'),
+        import('../repos/audits.ts'),
+        import('../repos/engineering.ts'),
+      ]);
+    const [inventory, engineering, deficiencies, runs, learnings, hourly, audits, interventions] = await Promise.all([
+      section(() => listInventory()),
+      section(() => engineeringOutcomes({ limit: 50, includeClosed: true })),
+      section(() => readDeficiencies()),
+      section(() => recentOperatorRuns(25)),
+      section(() => listOperatorLearnings({ limit: 25 })),
+      section(() => listRecordedReports(24)),
+      section(() => listRecentAudits(projects, 40)),
+      section(() => interventionMetrics()),
+    ]);
+    return { readAt: new Date().toISOString(), inventory, engineering, deficiencies, runs, learnings, hourly, audits, interventions };
+  }),
+);
+
+commandRouter.get(
+  '/command/backlog',
+  handler(async () => {
+    await requireOperatorPerson();
+    const { readResearchBacklog } = await import('../services/research/backlog.ts');
+    return await readResearchBacklog();
+  }),
+);
+
+commandRouter.get(
+  '/command/resources',
+  handler(async () => {
+    const principal = requirePerson();
+    const { listProjects } = await import('../repos/projects.ts');
+    const { decideProjectAccess, visibleProjectIds } = await import('../services/identity/policy.ts');
+    const all = (await listProjects()).map((p) => p.id);
+    if (!visibleProjectIds(principal, all).some((id) => decideProjectAccess(principal, id, 'READ').allowed)) {
+      throw notFound('No such route.');
+    }
+    const { readResources } = await import('../services/operator/resources.ts');
+    return await readResources();
+  }),
+);
+
+/** The Factory's operational state for the Command Center (`factory/stranded.ts readFactoryOperations`). */
+commandRouter.get(
+  '/command/factory',
+  handler(async () => {
+    await requireOperatorPerson();
+    const { readFactoryOperations } = await import('../services/factory/stranded.ts');
+    return await readFactoryOperations();
+  }),
+);

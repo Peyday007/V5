@@ -14,6 +14,10 @@ import { freshProject } from './helpers.ts';
 import { createUser, createWorker } from '../server/repos/identity.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import { COMMAND_READ_TOOLS, commandReadable, commandRouter } from '../server/routes/command.ts';
+import { operatorProjects } from '../server/mcp/operatorTools.ts';
+import { createCandidate } from '../server/repos/russellCandidates.ts';
+import { getDb } from '../server/db/database.ts';
+import { readResearchBacklog, retireObsoleteIdeas } from '../server/services/research/backlog.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import type { Principal } from '../server/domain/types.ts';
 
@@ -154,5 +158,121 @@ describe('the Command Center read door', () => {
     expect(plan.status).toBe(422);
     expect(plan.body.refused).toBe(true);
     expect(plan.body.value).toBeUndefined();
+  });
+});
+
+function owner(): Principal {
+  // The owner's real shape on production (2026-11-24): a Brain administrator with no memberships.
+  return { ...human(), isBrainAdmin: true, memberships: [] } as Principal;
+}
+
+function viewer(): Principal {
+  const p = human();
+  return { ...p, memberships: [{ ...p.memberships[0]!, role: 'VIEWER' }] } as Principal;
+}
+
+describe('operator rights follow the access policy', () => {
+  it('gives a Brain administrator with no memberships every project, as the policy does', async () => {
+    const projects = await operatorProjects(owner());
+    expect(projects).toContain(projectId);
+  });
+
+  it('still refuses a viewer and a worker without operator:act', async () => {
+    expect(await operatorProjects(viewer())).not.toContain(projectId);
+    expect(await operatorProjects(worker())).toEqual([]);
+  });
+
+  it("serves the owner the operator's readings through the read door", async () => {
+    current = owner();
+    const engineering = await get('/api/command/read/brain_operator_engineering');
+    expect(engineering.status).toBe(200);
+    expect(Array.isArray(engineering.body.value.engineering)).toBe(true);
+    const deficiencies = await get('/api/command/read/brain_operator_deficiencies');
+    expect(deficiencies.status).toBe(200);
+  });
+});
+
+describe('reports, backlog and resources', () => {
+  it('serves the owner every stored report section', async () => {
+    current = owner();
+    const reports = await get('/api/command/reports');
+    expect(reports.status).toBe(200);
+    for (const key of ['inventory', 'engineering', 'deficiencies', 'runs', 'learnings', 'hourly', 'audits', 'interventions']) {
+      expect(reports.body[key], key).toBeDefined();
+      expect(reports.body[key].ok, key).toBe(true);
+    }
+  });
+
+  it('refuses reports and the backlog to a viewer and to a worker with the same 404', async () => {
+    for (const who of [viewer(), worker()]) {
+      current = who;
+      expect((await get('/api/command/reports')).status).toBe(404);
+      expect((await get('/api/command/backlog')).status).toBe(404);
+    }
+  });
+
+  it("serves the owner the Factory's operational state, and refuses a viewer", async () => {
+    current = owner();
+    const factory = await get('/api/command/factory');
+    expect(factory.status).toBe(200);
+    expect(typeof factory.body.line.because).toBe('string');
+    expect(Array.isArray(factory.body.corrections)).toBe(true);
+    expect(Array.isArray(factory.body.completed)).toBe(true);
+    current = viewer();
+    expect((await get('/api/command/factory')).status).toBe(404);
+  });
+
+  it('serves resources to anyone who can read a project', async () => {
+    current = viewer();
+    const resources = await get('/api/command/resources');
+    expect(resources.status).toBe(200);
+    expect(resources.body.resources.some((r: { key: string }) => r.key === 'GPU')).toBe(true);
+  });
+});
+
+describe('the research backlog', () => {
+  async function queued(title: string): Promise<string> {
+    const idea = await createCandidate({ title, statement: `${title}.`, projectId });
+    await getDb().run(`UPDATE russell_candidates SET state = 'QUEUED', priority = 'WORTH_DOING' WHERE id = ?`, [idea.id]);
+    return idea.id;
+  }
+
+  it('classifies a withdrawn question and a duplicate as obsolete, retires them, and keeps their rows', async () => {
+    const tag = Math.random().toString(36).slice(2, 8);
+    const moot = await queued(`Causal unknown: reply rate ${tag}`);
+    const first = await queued(`Price of widgets ${tag}`);
+    const twin = await queued(`Price of widgets ${tag}`);
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_needs (id, project_id, opportunity_id, blocked_action, why_it_matters, recommended_path, setup_effort, next_step, state, created_at, updated_at, candidate_id, request_key)
+       VALUES (?, ?, NULL, 'x', 'x', 'x', 'x', 'x', 'WITHDRAWN', ?, ?, ?, ?)`,
+      [`need_${tag}`, projectId, at, at, moot, `causal-${tag}`],
+    );
+
+    const reading = await readResearchBacklog();
+    const reasons = Object.fromEntries(reading.obsoleteReasons.map((r) => [r.reason, r.count]));
+    expect(reasons['QUESTION_WITHDRAWN']).toBeGreaterThanOrEqual(1);
+    expect(reasons['DUPLICATE']).toBeGreaterThanOrEqual(1);
+
+    const out = await retireObsoleteIdeas({ dryRun: false, actor: 'test' });
+    const retired = new Set(out.retired.map((r) => r.id));
+    expect(retired.has(moot)).toBe(true);
+    expect(retired.has(twin)).toBe(true);
+    expect(retired.has(first)).toBe(false);
+
+    const states = await getDb().all<{ id: string; state: string }>(
+      'SELECT id, state FROM russell_candidates WHERE id IN (?, ?, ?)',
+      [moot, first, twin],
+    );
+    const byId = Object.fromEntries(states.map((r) => [r.id, r.state]));
+    expect(byId[moot]).toBe('REJECTED');
+    expect(byId[twin]).toBe('REJECTED');
+    expect(byId[first]).toBe('QUEUED');
+    const events = await getDb().all<{ payload: string }>(
+      `SELECT payload FROM project_events WHERE project_id = ? AND event_type = 'RESEARCH_BACKLOG_RETIRED'`,
+      [projectId],
+    );
+    expect(events.length).toBe(1);
+    expect(events[0]!.payload).toContain(moot);
   });
 });

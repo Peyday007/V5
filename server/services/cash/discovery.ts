@@ -72,7 +72,7 @@ import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researc
 import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
 import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
 import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './intermediationPositions.ts';
-import { owesPositionEvidence, recordPositionEvidence } from './positionEvidence.ts';
+import { claimBasis, owesPositionEvidence, recordPositionEvidence } from './positionEvidence.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -2083,6 +2083,19 @@ export async function harvest(input: {
      * *nobody is asking* into the portfolio as a piece of work.
      */
     if (claim.claimType === 'NEGATIVE_EXISTENCE') continue;
+
+    /*
+     * A market-level figure is context, and it is not an opening.
+     *
+     * "Global eCommerce sales reached $6.3 trillion" names no buyer, no
+     * supplier and no price anybody pays anybody. Production, 2026-11-24: such
+     * claims were filed as openings and each drew its own dives and questions,
+     * so the research backlog spent slots establishing market statistics as if
+     * they were specific commercial transactions. The claim keeps its row and
+     * still informs every reading that cites it (§116); it just does not become
+     * a piece of work. `claimBasis` is the same reading the evidence card uses.
+     */
+    if (claimBasis({ signal, claim: claim.claim }).includes('TOTAL_MARKET_SIZE')) continue;
 
     /*
      * An observation is "now" for a bounded time. A request, a price or a

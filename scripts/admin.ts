@@ -1998,6 +1998,89 @@ async function main(): Promise<void> {
       }
       fail(`"${sub}" is not a research goal command: create, show or list.`);
     }
+    /*
+     * The research backlog, classified (`server/services/research/backlog.ts`):
+     * every queued idea by purpose, goal, priority and whether the rows prove it
+     * obsolete, with how ideas of each kind actually turned out. Reads only.
+     */
+    case 'research backlog': {
+      const { readResearchBacklog } = await import('../server/services/research/backlog.ts');
+      const r = await readResearchBacklog();
+      console.log(`  ${r.total} queued idea(s): ${r.launchable} launchable, ${r.obsolete} obsolete by the rows, ${r.held} held (goal paused or deadline passed).`);
+      console.log('');
+      for (const c of r.categories) {
+        const f = c.finished7d;
+        console.log(`  ${c.category.padEnd(22)} ${String(c.count).padStart(5)} queued  ${String(c.obsolete).padStart(4)} obsolete  tier ${c.tier}  7d: ${f.done} done (${f.useful} useful) ${f.failed} failed ${f.cancelled} cancelled`);
+        console.log(`    ${c.purpose}. ${c.contribution}`);
+        console.log(`    priority: ${Object.entries(c.byPriority).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+      }
+      console.log('');
+      for (const g of r.goals) console.log(`  goal ${String(g.goalId ?? '—').padEnd(24)} ${g.state.padEnd(12)} ${String(g.count).padStart(5)} queued, ${g.obsolete} obsolete, ${g.held} held  ${g.title.slice(0, 90)}`);
+      console.log('');
+      for (const o of r.obsoleteReasons) console.log(`  ${o.reason.padEnd(22)} ${String(o.count).padStart(5)}  ${o.retirable ? 'retirable' : 'kept     '}  ${o.text}`);
+      console.log('');
+      for (const sample of r.samples) console.log(`  e.g. ${sample.category.padEnd(22)} ${sample.obsolete ? `[${sample.obsolete}] ` : ''}${sample.title}`);
+      for (const limit of r.limits) console.log(`  limit: ${limit}`);
+      break;
+    }
+    /*
+     * Retire the queued ideas the rows prove obsolete: QUEUED → REJECTED, rows
+     * kept, one RESEARCH_BACKLOG_RETIRED event per project naming each idea and
+     * why. The tick does the same every 30 minutes; this is the deliberate run.
+     */
+    case 'research retire': {
+      const actor = await administrator();
+      const { retireObsoleteIdeas } = await import('../server/services/research/backlog.ts');
+      const out = await retireObsoleteIdeas({ dryRun: false, actor: `person:${actor.id}` });
+      console.log(`  ${out.considered} queued idea(s) read; ${out.retired.length} retired.`);
+      for (const [reason, count] of Object.entries(out.byReason)) console.log(`  ${reason.padEnd(22)} ${count}`);
+      break;
+    }
+    /*
+     * A short-lived session for verifying the Command Center as the owner sees
+     * it: a SYSTEM account that is a Brain administrator with no memberships —
+     * exactly the owner's shape — signed in for 45 minutes. The session secret
+     * is printed only sealed to the requester's RSA key (as `factory invite
+     * --seal-to` does), never in plaintext. `command verify-end` disables the
+     * account and revokes its sessions; the account is never deleted (§5).
+     */
+    case 'command verify-session': {
+      const actor = await administrator();
+      const sealTo = flag('seal-to') ?? fail('A verification session is printed only sealed: pass --seal-to.');
+      const { randomBytes, publicEncrypt, createPublicKey, constants } = await import('node:crypto');
+      const { createSession, createUser, getUserByEmail, setUserDisabled, setBrainAdmin, setUserPassword } = await import('../server/repos/identity.ts');
+      const { generateSessionToken } = await import('../server/services/identity/secrets.ts');
+      const email = 'command-center-verification@brain.invalid';
+      const password = randomBytes(24).toString('base64url');
+      let user = await getUserByEmail(email);
+      if (!user) {
+        user = await createUser({ email, displayName: 'Command Center verification', password, kind: 'SYSTEM', isBrainAdmin: true, createdByType: 'HUMAN', createdById: actor.id });
+      } else {
+        await setUserPassword(user.id, password);
+        await setUserDisabled(user.id, false);
+        await setBrainAdmin(user.id, true);
+      }
+      const token = generateSessionToken();
+      const session = await createSession({ userId: user.id, secret: token.secret, ttlMs: 45 * 60_000, userAgent: 'command verify-session', ip: null, passkeyId: null });
+      const key = createPublicKey({ key: Buffer.from(sealTo, 'base64'), format: 'der', type: 'spki' });
+      const sealed = publicEncrypt({ key, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, Buffer.from(session.secret, 'utf8'));
+      console.log(`  verification account ${user.id} (Brain administrator, no memberships), session until ${session.expiresAt}`);
+      console.log(`  SEALED ${sealed.toString('base64')}`);
+      break;
+    }
+    case 'command verify-end': {
+      await administrator();
+      const { getUserByEmail, setUserDisabled, revokeSessionsForUser } = await import('../server/repos/identity.ts');
+      const user = await getUserByEmail('command-center-verification@brain.invalid');
+      if (!user) {
+        console.log('  no verification account exists.');
+        break;
+      }
+      const revoked = await revokeSessionsForUser(user.id);
+      await setUserDisabled(user.id, true);
+      console.log(`  verification account ${user.id} disabled; ${revoked} session(s) revoked.`);
+      break;
+    }
     case 'research start': {
       const actor = await administrator();
       const project = await projectFrom(rest[0] ?? fail('Name a project.'));
