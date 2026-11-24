@@ -93,9 +93,26 @@ describe('the release checks the plans it released', () => {
     const run = goals.slice(goals.indexOf('- name: Run'), goals.indexOf('- name: Publish the output as annotations'));
     expect(run).toContain('timeout-minutes: 30');
     expect(run).toContain('session=27m');
-    expect(run.match(/timeout -k 20s "\$session" flyctl ssh console/g)).toHaveLength(2);
+    // The census is one bounded session; a plan or check runs detached on the machine and is polled.
+    expect(run.match(/timeout -k 20s "\$session" flyctl ssh console/g)).toHaveLength(1);
     expect(run).toContain('ended=${PIPESTATUS[0]}');
     expect(run).toMatch(/grep -q '\^GOALS: ' goals\.txt \|\| echo "GOALS: FAILED/);
+  });
+
+  it('survives a dropped SSH session: the read runs detached and the runner polls its log to the verdict', () => {
+    // 2026-11-23 (runs 45177420065, 45287862602): "remote command exited without exit status or
+    // exit signal" mid-read, twice in a day, and each read ended with no verdict.
+    const goals = read('.github/workflows/goals.yml');
+    const run = goals.slice(goals.indexOf('- name: Run'), goals.indexOf('- name: Publish the output as annotations'));
+    expect(run).toMatch(/nohup setsid env BRAIN_DATABASE_POOL_SIZE=1 sh \/app\/scripts\/goals\.sh \$args > \$log/);
+    expect(run).toContain('deadline=$(( $(date +%s) + 27 * 60 ))');
+    expect(run).toMatch(/timeout 90 flyctl ssh console --app "\$app" -C "cat \$log"/);
+    expect(run).toContain("grep -q '^GOALS: ' goals.txt && break");
+    expect(run).toContain('ended=124');
+    // The listing after a plan describes the read: its failure is a line, never the verdict (check 45300351663).
+    const cli = read('scripts/goalsCli.ts');
+    expect(cli).toMatch(/listSearching\(read, readGoal\)\.catch\(/);
+    expect(cli).toContain('the search listing stopped:');
   });
 
   it('waits for the app to mark its boot derived-state rebuild finished before reading plans beside it', () => {

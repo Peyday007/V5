@@ -25,7 +25,7 @@
  * faster plan beat a bigger, slower one.
  */
 import { describesOneBody, namesOneOrganisation } from '../../domain/industry.ts';
-import { evidenceIsAbout, evidencesPurchase, nonCommercialExclusion, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
+import { evidenceIsAbout, evidencesPurchase, nonCommercialExclusion, nonPurchaseSentence, payerPaysOut, paymentNatureOf } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
@@ -2865,7 +2865,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       continue;
     }
     // A reward, prize, contest, grant, rebate or wage is not a sale: it never enters a revenue goal's model unless the goal asks for it (§116).
-    const notASale = IN_FLIGHT.has(opportunity.state) ? null : nonCommercialExclusion([opportunity.title, opportunity.offerScope, opportunity.buyingSignal, opportunity.source].filter(Boolean).join('. '), goalText);
+    const notASale = IN_FLIGHT.has(opportunity.state)
+      ? null
+      : (nonCommercialExclusion([opportunity.title, opportunity.offerScope, opportunity.buyingSignal, opportunity.source, opportunity.payer].filter(Boolean).join('. '), goalText) ??
+        (payerPaysOut(opportunity.payer) && nonCommercialExclusion(`${opportunity.payer} $1`, goalText) !== null ? `not a sale: its payer pays out rather than buys ("${(opportunity.payer ?? '').slice(0, 80)}"); a revenue goal's strategies are commercial purchases` : null));
     if (notASale) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: notASale });
       continue;

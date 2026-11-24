@@ -658,8 +658,9 @@ describe('how the money actually arrives (2026-10-28)', () => {
   it("refuses a plan that only pays in one lump after somebody else decides, when the owner wants it step by step", async () => {
     await oneOff({ title: 'NEH grant: cooperative agreement for archives', priceCents: 2_000_000, days: 10 });
     const reading = (await readGoalPlan({ goalId: await pacedGoalFor(), evaluations: 2_000 }))!;
-    expect(gateVerdict(reading)).toBe('NOT_VIABLE');
-    expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/not little by little/);
+    // §116: a grant programme is not a sale, so a revenue goal leaves it out before any strategy is built on it.
+    expect(reading.excluded.some((one) => /NEH grant/.test(one.title) && /not a sale/.test(one.reason))).toBe(true);
+    expect(reading.strategies.some((one) => one.opportunityIds.length > 0 && reading.excluded.some((x) => one.opportunityIds.includes(x.opportunityId)))).toBe(false);
   });
 
   it('puts a way that pays in steps ahead of an award of the same footing', async () => {

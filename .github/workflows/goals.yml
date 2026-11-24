@@ -198,12 +198,38 @@ jobs:
             timeout -k 20s "$session" flyctl ssh console --app "$app" \
               -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && echo $census_b64 | base64 -d > scripts/.knowledge-census-run.ts && nice -n 19 node --import tsx scripts/.knowledge-census-run.ts --json; rm -f scripts/.knowledge-census-run.ts'" \
               2>&1 | tee goals.txt
+            ended=${PIPESTATUS[0]}
           else
-            timeout -k 20s "$session" flyctl ssh console --app "$app" \
-              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/goals.sh $args" \
-              2>&1 | tee goals.txt
+            # The read runs detached on the machine and the runner polls its
+            # log, so a dropped SSH session costs one poll, not the read.
+            # Production 2026-11-23 (runs 45177420065, 45287862602): the session
+            # ended "remote command exited without exit status or exit signal"
+            # mid-read twice in a day, and each read ended with no verdict.
+            log="/tmp/goals-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.log"
+            started=$(timeout 120 flyctl ssh console --app "$app" \
+              -C "sh -c 'nohup setsid env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/goals.sh $args > $log 2>&1 < /dev/null & echo READ_STARTED'" \
+              2>&1 | tr -d '\r' || true)
+            : > goals.txt
+            if ! printf '%s\n' "$started" | grep -q '^READ_STARTED'; then
+              printf '%s\n' "$started"
+              echo "GOALS: FAILED the read could not be started on the machine" | tee goals.txt
+              ended=1
+            else
+              deadline=$(( $(date +%s) + 27 * 60 ))
+              shown=0
+              ended=0
+              while :; do
+                if timeout 90 flyctl ssh console --app "$app" -C "cat $log" > snapshot.txt 2>/dev/null; then
+                  tr -d '\r' < snapshot.txt > goals.txt
+                  total=$(wc -l < goals.txt)
+                  if [ "$total" -gt "$shown" ]; then tail -n "+$((shown + 1))" goals.txt; shown=$total; fi
+                  grep -q '^GOALS: ' goals.txt && break
+                fi
+                if [ "$(date +%s)" -ge "$deadline" ]; then ended=124; break; fi
+                sleep 20
+              done
+            fi
           fi
-          ended=${PIPESTATUS[0]}
           set -e
           # A session that is still open at its bound is ended here, on the
           # runner, and says so in the one verdict line the run prints.
