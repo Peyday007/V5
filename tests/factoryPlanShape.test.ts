@@ -7,7 +7,9 @@
  * implement-and-integrate round) and handed one session several modules where
  * several sessions could have run at once. `validatePlan` now measures every
  * plan's width and depth and names the chain or the unit the plan gives no
- * reason for. It refuses nothing new: the gate is exactly what it was.
+ * reason for. `validatePlan` itself refuses nothing new; the measurement is
+ * returned to the architect for one revision before install, which
+ * tests/factoryPlanShapeFeedback.test.ts covers.
  */
 import { describe, expect, it } from 'vitest';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';

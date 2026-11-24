@@ -27,7 +27,7 @@ import {
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { PLAN_FENCE, compilePlanAssignment } from './prompts.ts';
-import { MAX_PLAN_UNITS, installPlan, validatePlan, type PlanValidation } from './planner.ts';
+import { MAX_PLAN_UNITS, installPlan, shapeRevisionRequest, validatePlan, type PlanValidation } from './planner.ts';
 import { executorFor } from './executors/index.ts';
 import { REVIEWER_ALLOWED_TOOLS } from './review.ts';
 import { campaignWorkspace, ensureWorktree } from './git.ts';
@@ -147,17 +147,19 @@ export async function planCampaign(input: ArchitectInput): Promise<ArchitectOutc
     text: assignment,
   });
 
-  const result = await executor.execute({
-    campaignId: campaign.id,
-    unitId: null as unknown as string,
-    sessionId: session.id,
-    worktreePath,
-    branch: `factory/${campaign.id}/architect`,
-    model: input.model,
-    assignment,
-    timeoutMs: input.timeoutMs ?? DEFAULT_PLAN_TIMEOUT_MS,
-    allowedTools: REVIEWER_ALLOWED_TOOLS,
-  });
+  const run = (text: string) =>
+    executor.execute({
+      campaignId: campaign.id,
+      unitId: null as unknown as string,
+      sessionId: session.id,
+      worktreePath,
+      branch: `factory/${campaign.id}/architect`,
+      model: input.model,
+      assignment: text,
+      timeoutMs: input.timeoutMs ?? DEFAULT_PLAN_TIMEOUT_MS,
+      allowedTools: REVIEWER_ALLOWED_TOOLS,
+    });
+  let result = await run(assignment);
 
   if (result.rawLog) {
     await putArtifact({
@@ -204,7 +206,37 @@ export async function planCampaign(input: ArchitectInput): Promise<ArchitectOutc
     };
   }
 
-  const validation = validatePlan(proposed, changeRequest, { maxUnits: input.maxUnits });
+  let validation = validatePlan(proposed, changeRequest, { maxUnits: input.maxUnits });
+
+  /*
+   * One shape revision before install. A valid plan the planner measured as a
+   * serial chain or an oversized unit goes back to the architect with that
+   * measurement, as the plan bin's contract does on the remote plane, so the
+   * shape is changed while it still can be rather than logged after install
+   * (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595). A revision that does not
+   * come back as a valid plan leaves the original in force: the round is an
+   * opportunity, never a second gate.
+   */
+  let shapeRevised = false;
+  if (validation.ok && validation.shapeFeedback.length > 0) {
+    const revisionText = `${assignment}\n\n## Shape revision\n\n${shapeRevisionRequest(validation.shapeFeedback)}`;
+    await putArtifact({ campaignId: campaign.id, sessionId: session.id, kind: 'REVIEW_INPUT', text: revisionText });
+    const revision = await run(revisionText);
+    if (revision.rawLog) {
+      await putArtifact({ campaignId: campaign.id, sessionId: session.id, kind: 'WORKER_LOG', text: revision.rawLog });
+    }
+    const revisedPlan = revision.outcome === 'COMPLETED' ? parsePlanBlock(revision.summary) : null;
+    const revised = revisedPlan === null ? null : validatePlan(revisedPlan, changeRequest, { maxUnits: input.maxUnits });
+    if (revised && revised.ok && revised.uncoveredConditions.length <= validation.uncoveredConditions.length) {
+      validation = revised;
+      shapeRevised = true;
+    }
+    result = {
+      ...revision,
+      durationMs: (result.durationMs ?? 0) + (revision.durationMs ?? 0),
+      externalSessionId: revision.externalSessionId ?? result.externalSessionId,
+    };
+  }
 
   await closeSession(session.id, {
     state: validation.ok ? 'FINISHED' : 'FAILED',
@@ -230,6 +262,9 @@ export async function planCampaign(input: ArchitectInput): Promise<ArchitectOutc
       errors: validation.errors.slice(0, 10),
       warnings: validation.warnings.slice(0, 10),
       uncoveredConditions: validation.uncoveredConditions,
+      shape: validation.shape,
+      shapeRevised,
+      shapeReason: validation.shapeReason,
     },
   });
 
