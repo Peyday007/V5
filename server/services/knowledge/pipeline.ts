@@ -11,6 +11,8 @@ import { getDb } from '../../db/database.ts';
 import { sectorOf } from '../../domain/commercialKnowledge.ts';
 import {
   currentFactsFor,
+  finishPassRow,
+  startPassRow,
   getIndustry,
   listDueSources,
   listSources,
@@ -252,33 +254,59 @@ export async function runKnowledgePass(options: { maxReads?: number; gpuCalls?: 
   return report;
 }
 
-/* ------------------------------------------------------------ the tick's door */
+/* ------------------------------------------------------------- its own clock */
 
 const PASS_EVERY_MS = 15 * 60_000;
 let running: Promise<void> | null = null;
 let lastStartedAt = 0;
-let lastReport: (PassReport & { at: string }) | null = null;
-
-/** The last completed pass in this process, for the view. */
-export function lastKnowledgePass(): (PassReport & { at: string }) | null {
-  return lastReport;
-}
 
 /**
  * Start a pass if none is running and the last started long enough ago.
- * Returns at once; the pass runs beside the tick and records its own rows.
+ * Returns at once; the pass runs beside everything else and records itself
+ * in `knowledge_passes` — started, finished, and what it did or why it failed.
  */
 export function startKnowledgePassIfDue(onError: (error: unknown) => void, nowMs = Date.now()): boolean {
   if ((process.env['BRAIN_KNOWLEDGE'] ?? '').trim().toLowerCase() === 'off') return false;
   if (running || nowMs - lastStartedAt < PASS_EVERY_MS) return false;
   lastStartedAt = nowMs;
-  running = runKnowledgePass()
-    .then((report) => {
-      lastReport = { ...report, at: new Date().toISOString() };
-    })
+  running = (async () => {
+    const id = await startPassRow();
+    try {
+      const report = await runKnowledgePass();
+      await finishPassRow(id, 'DONE', report);
+      console.log(
+        `[brain] commercial knowledge pass: ${report.reads.map((r) => `${r.source} ${r.outcome}${r.facts ? ` +${r.facts}` : ''}`).join(', ') || 'nothing due'}; ` +
+          `discovered ${report.discovered.length}, applied ${report.applied.reduce((t, a) => t + a.filed + a.superseded, 0)} fact(s), interpreted ${report.interpreted.length}` +
+          (report.errors.length ? `; ${report.errors.length} error(s): ${report.errors.slice(0, 3).join(' | ')}` : ''),
+      );
+    } catch (error) {
+      await finishPassRow(id, 'FAILED', { error: String((error as Error)?.message ?? error).slice(0, 1000) }).catch(() => undefined);
+      throw error;
+    }
+  })()
     .catch(onError)
     .finally(() => {
       running = null;
     });
   return true;
+}
+
+let timer: NodeJS.Timeout | null = null;
+
+/**
+ * The knowledge pass's own clock (§90: independent work does not wait for
+ * unrelated work). It rode the Russell tick at first, and on production the
+ * tick's length and its shedding kept it from ever starting. Checked every
+ * minute; a pass starts at most every fifteen, never while the database is
+ * shedding optional work (§63).
+ */
+export function startCommercialKnowledgeLoop(isShedding: () => boolean, everyMs = 60_000): void {
+  if (timer) return;
+  const tick = () => {
+    if (isShedding()) return;
+    startKnowledgePassIfDue((error: unknown) => console.warn(`[brain] commercial knowledge pass failed: ${String((error as Error)?.message ?? error).slice(0, 300)}`));
+  };
+  tick();
+  timer = setInterval(tick, everyMs);
+  timer.unref?.();
 }

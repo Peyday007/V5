@@ -17515,9 +17515,16 @@ W-5) and the free lane's GPU (§86), and duplicates none of them.
   plumbing contractors" → NAICS 23822, 98,606–287,691; "Small accounting and
   bookkeeping firms" → 54121, 129,097–534,209; the goal's lead plan step
   stopped asking research how many such firms exist.
-- **Capacity.** The Russell tick starts one pass at most every fifteen
-  minutes and does not wait for it (`startKnowledgePassIfDue`); it defers
-  under database pressure. A pass reads up to three due datasets and makes up
+- **Capacity, on its own clock.** The pass first rode the Russell tick; on
+  production (2026-11-24, revision 0f5df73) the tick's length and its
+  shedding kept it from starting at all for half an hour while the machine
+  reached every publisher (census probe: all 200). Independent work does not
+  wait for unrelated work (§90): `startCommercialKnowledgeLoop` checks every
+  minute after the boot grace and starts one pass at most every fifteen
+  minutes, never while the database is shedding (§63). Every pass is a
+  `knowledge_passes` row — RUNNING, then DONE with its report or FAILED with
+  its error — so "never started" and "every request failed" are told apart
+  from outside, and a one-line summary goes to the log. A pass reads up to three due datasets and makes up
   to four GPU calls — half for buyer words nothing matched, the rest
   interpreting industries, those a live plan reads first. The Command Center's
   Knowledge page (`brain_operator_knowledge`, on the read door) says whether

@@ -22,9 +22,9 @@ import {
   recentContradictions,
   recentFacts,
   recentlyInterpreted,
+  recentPasses,
   staleFactCount,
 } from '../../repos/commercialKnowledge.ts';
-import { lastKnowledgePass } from './pipeline.ts';
 import { modelAvailable } from './interpret.ts';
 import { METRICS } from '../../domain/commercialKnowledge.ts';
 
@@ -76,12 +76,15 @@ export async function knowledgeView(readable: readonly string[], now = new Date(
   const interpretedToday = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM knowledge_industries WHERE interpreted_at >= ?', [dayAgo]);
   const gpu = modelAvailable();
   const uninterpreted = industries.total - industries.interpreted;
-  const pass = lastKnowledgePass();
+  const passes = await recentPasses(5);
+  const last = passes.find((p) => p.status !== 'RUNNING') ?? null;
+  const pass = last ? { at: last.finished_at ?? last.started_at, status: last.status, ...parse<Record<string, unknown>>(last.report, {}) } : null;
 
   return {
     readAt: nowIso,
     learning: {
       lastPass: pass,
+      passes: passes.map((p) => ({ startedAt: p.started_at, finishedAt: p.finished_at, status: p.status })),
       sources: sources
         .filter((s) => s.status !== 'CANDIDATE')
         .map((s) => ({ key: s.source_key, title: s.title, publisher: s.publisher, period: s.period, status: s.status, origin: s.origin, url: s.url, lastSuccessAt: s.last_success_at, nextDueAt: s.next_due_at, failures: s.consecutive_failures, lastError: s.last_error, why: s.value_reason })),

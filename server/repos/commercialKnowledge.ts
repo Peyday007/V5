@@ -388,3 +388,28 @@ export async function applicationCounts(): Promise<Record<string, number>> {
   const rows = await getDb().all<{ kind: string; n: number | string }>('SELECT kind, COUNT(*) AS n FROM knowledge_applications GROUP BY kind');
   return Object.fromEntries(rows.map((r) => [r.kind, Number(r.n)]));
 }
+
+/* ------------------------------------------------------------------- passes */
+
+export interface KnowledgePassRow {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: 'RUNNING' | 'DONE' | 'FAILED';
+  report: string | null;
+}
+
+export async function startPassRow(now = nowIso()): Promise<string> {
+  const id = newId('kps');
+  await getDb().run(`INSERT INTO knowledge_passes (id, started_at, status) VALUES (?, ?, 'RUNNING')`, [id, now]);
+  return id;
+}
+
+/** Close a pass once: only a RUNNING row is finished. */
+export async function finishPassRow(id: string, status: 'DONE' | 'FAILED', report: unknown, now = nowIso()): Promise<void> {
+  await getDb().run(`UPDATE knowledge_passes SET status = ?, finished_at = ?, report = ? WHERE id = ? AND status = 'RUNNING'`, [status, now, JSON.stringify(report).slice(0, 60_000), id]);
+}
+
+export async function recentPasses(limit = 5): Promise<KnowledgePassRow[]> {
+  return getDb().all<KnowledgePassRow>('SELECT * FROM knowledge_passes ORDER BY started_at DESC, id DESC LIMIT ?', [limit]);
+}

@@ -198,7 +198,7 @@ server/
       comprehend.ts     per-industry economics derived as estimates; two programs checked against each other
       apply.ts          buyer nodes classified to NAICS; census counts filed where plans read them
       interpret.ts      the GPU's reading: unfamiliar buyers, an industry's commercial meaning — inference only
-      pipeline.ts       the pass the Russell tick starts: discover, read, derive, apply, interpret
+      pipeline.ts       the pass on its own clock: discover, read, derive, apply, interpret; each pass a row
       view.ts           what Brain learned and where it reached a plan, for the Command Center
     goals/
       model.ts          a goal as Brain can read it: what happened, now, next, needs you
