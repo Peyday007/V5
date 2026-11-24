@@ -214,57 +214,79 @@ async function freeLaneYield(): Promise<void> {
  */
 async function gpuAnswers(): Promise<void> {
   const since = new Date(Date.now() - 16 * 86_400_000).toISOString();
-  const items = await getDb().all<{ at: string; outcome: string | null; reason: string | null; duration_ms: number | string | null; measures: string | null }>(
-    `SELECT at, outcome, reason, duration_ms, measures FROM bin_events
+  const parse = (raw: unknown): Record<string, unknown> => {
+    try {
+      return ((typeof raw === 'string' ? JSON.parse(raw) : raw) ?? {}) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  };
+  const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1);
+  const items = await getDb().all<{ at: string; outcome: string | null; reason: string | null; measures: string | null }>(
+    `SELECT at, outcome, reason, measures FROM bin_events
       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND (reason LIKE 'model runpod/%' OR measures LIKE '%runpod/%')`,
     [since],
   );
-  const counts = new Map<string, { n: number; ms: number[] }>();
+  const byItem = new Map<string, number>();
+  let firstServedBy: string | null = null;
   for (const row of items) {
-    let m: Record<string, unknown> = {};
-    try {
-      m = (typeof row.measures === 'string' ? JSON.parse(row.measures) : row.measures ?? {}) as Record<string, unknown>;
-    } catch {
-      /* unreadable measures */
-    }
-    const served = Array.isArray(m['servedBy']) ? (m['servedBy'] as unknown[]).map(String).sort().join('+') : '(no servedBy)';
+    const served = parse(row.measures)['servedBy'];
+    const who = !Array.isArray(served) ? 'no-servedBy' : served.some((m) => String(m).startsWith('runpod/')) ? 'servedBy-gpu' : 'servedBy-fallback';
+    if (who !== 'no-servedBy' && (firstServedBy === null || row.at < firstServedBy)) firstServedBy = row.at;
     const slot = (row.reason ?? '').replace(/^model\s+/, '').split(':')[0]?.trim() ?? '';
-    const key = `${row.at.slice(0, 10)} ${row.outcome ?? '-'} slot=${slot} servedBy=${served}`;
-    const entry = counts.get(key) ?? { n: 0, ms: [] };
-    entry.n += 1;
-    if (row.duration_ms !== null) entry.ms.push(Number(row.duration_ms));
-    counts.set(key, entry);
+    bump(byItem, `${row.at.slice(0, 10)} ${slot} ${who} ${row.outcome ?? '-'}`);
   }
-  console.log(`DIAGNOSE: gpu-answers since ${since} (${items.length} GPU-slot items)`);
-  for (const [key, { n, ms }] of [...counts].sort((x, y) => x[0].localeCompare(y[0]))) {
-    const sorted = ms.sort((a, b) => a - b);
-    console.log(`  ${String(n).padStart(5)}x ${key} · median ${Math.round((sorted[Math.floor(sorted.length / 2)] ?? 0) / 1000)} s`);
-  }
-  const reasons = await getDb().all<{ day: string; reason: string | null; n: number | string }>(
-    `SELECT SUBSTR(at, 1, 10) AS day, SUBSTR(reason, 1, 140) AS reason, COUNT(*) AS n FROM bin_events
-      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model runpod/%:%'
-      GROUP BY SUBSTR(at, 1, 10), SUBSTR(reason, 1, 140) ORDER BY day, n DESC`,
+  console.log(`DIAGNOSE: gpu-answers items since ${since} (${items.length} GPU-slot items; first servedBy at ${firstServedBy ?? 'never'})`);
+  for (const [key, n] of [...byItem].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
+
+  // The GPU's own call window (runpodCallWindow: ok is a call the GPU itself answered), as the
+  // capacity controller recorded it on each decision for the GPU slot (gpuWindow, 3-minute window).
+  const caps = await getDb().all<{ at: string; measures: string | null }>(
+    `SELECT at, measures FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND workload_class LIKE 'runpod/%' AND at >= ?`,
     [since],
   );
-  console.log('DIAGNOSE: gpu-answers failure reasons on the GPU slot');
-  for (const r of reasons.slice(0, 80)) console.log(`  ${r.day} ${String(Number(r.n)).padStart(5)}x ${r.reason}`);
+  const capDay = new Map<string, { rows: number; withOk: number; maxOk: number; sumOk: number; sumFailed: number }>();
+  for (const row of caps) {
+    const m = parse(row.measures);
+    const ok = Number(m['ok'] ?? 0) || 0;
+    const failed = Number(m['transient'] ?? 0) || 0;
+    const d = capDay.get(row.at.slice(0, 10)) ?? { rows: 0, withOk: 0, maxOk: 0, sumOk: 0, sumFailed: 0 };
+    d.rows += 1;
+    if (ok > 0) d.withOk += 1;
+    d.maxOk = Math.max(d.maxOk, ok);
+    d.sumOk += ok;
+    d.sumFailed += failed;
+    capDay.set(row.at.slice(0, 10), d);
+  }
+  console.log('DIAGNOSE: gpu-answers capacity decisions on the GPU slot by day (ok = calls answered in the 3 min before)');
+  for (const [day, d] of [...capDay].sort((x, y) => x[0].localeCompare(y[0]))) {
+    console.log(`  ${day} decisions ${d.rows} · with ok>0 ${d.withOk} · max ok ${d.maxOk} · mean ok ${(d.sumOk / d.rows).toFixed(1)} · mean failed ${(d.sumFailed / d.rows).toFixed(1)}`);
+  }
+
   const pod = await getDb().all<{ at: string; outcome: string | null; measures: string | null }>(
     `SELECT at, outcome, measures FROM bin_events WHERE event_type = 'RUNPOD_POD' AND at >= ? ORDER BY at`,
     [since],
   );
   const podCounts = new Map<string, number>();
   for (const row of pod) {
-    let m: Record<string, unknown> = {};
-    try {
-      m = (typeof row.measures === 'string' ? JSON.parse(row.measures) : row.measures ?? {}) as Record<string, unknown>;
-    } catch {
-      /* unreadable measures */
-    }
-    const key = `${row.at.slice(0, 10)} ${row.outcome ?? '-'}${row.outcome?.startsWith('SAMPLE_') ? ` ready=${String(m['ready'])} inFlight>0=${Number(m['inFlight'] ?? 0) > 0}` : ''}`;
-    podCounts.set(key, (podCounts.get(key) ?? 0) + 1);
+    bump(podCounts, `${row.at.slice(0, 10)} ${row.outcome ?? '-'}${row.outcome?.startsWith('SAMPLE_') ? ` ready=${String(parse(row.measures)['ready'])}` : ''}`);
   }
   console.log('DIAGNOSE: gpu-answers RUNPOD_POD rows by day');
   for (const [key, n] of [...podCounts].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
+
+  const reasons = await getDb().all<{ day: string; reason: string | null; n: number | string }>(
+    `SELECT SUBSTR(at, 1, 10) AS day, SUBSTR(reason, 1, 110) AS reason, COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model runpod/%:%'
+      GROUP BY SUBSTR(at, 1, 10), SUBSTR(reason, 1, 110) ORDER BY day, n DESC`,
+    [since],
+  );
+  console.log('DIAGNOSE: gpu-answers top failure reasons on the GPU slot, per day');
+  const shown = new Map<string, number>();
+  for (const r of reasons) {
+    if ((shown.get(r.day) ?? 0) >= 3) continue;
+    bump(shown, r.day);
+    console.log(`  ${r.day} ${String(Number(r.n)).padStart(5)}x ${r.reason}`);
+  }
 }
 
 /**
