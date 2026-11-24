@@ -9,6 +9,7 @@
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { DISPATCHABLE_SQL, FIREABLE_SQL, ownerDirectedGoalBinSql, purposeAdmitsSql, workReadySql } from '../server/repos/bins.ts';
+import * as binsRepo from '../server/repos/bins.ts';
 
 async function fragmentFailures(): Promise<void> {
   /*
@@ -144,6 +145,34 @@ async function binGates(binId: string): Promise<void> {
     [binId, bin.orchestration_id ?? '-'],
   );
   console.log(`  work items: ${items.map((one) => `${one.state} ${one.n}`).join(', ') || 'none'}`);
+  const detail = await getDb().all<{ id: string; work_type: string; state: string; worker_id: string | null; attempt_count: number; failure_category: string | null; result_summary: string | null; updated_at: string }>(
+    `SELECT id, work_type, state, worker_id, attempt_count, failure_category, result_summary, updated_at FROM work_items
+      WHERE bin_id = ? OR (bin_id IS NULL AND orchestration_id = ?) ORDER BY updated_at DESC LIMIT 5`,
+    [binId, bin.orchestration_id ?? '-'],
+  );
+  for (const one of detail) {
+    console.log(`    ${one.id} ${one.work_type} ${one.state} worker=${one.worker_id ?? '-'} attempts=${one.attempt_count} ${one.updated_at} ${one.failure_category ?? ''} ${(one.result_summary ?? '').replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
+  // The stranded-pin query reconcile runs (present only once that release is live).
+  const stranded = (binsRepo as Record<string, unknown>)['strandedPinnedBins'];
+  if (typeof stranded === 'function') {
+    const rows = await (stranded as (before: string) => Promise<unknown[]>)(new Date(Date.now() - 6 * 3_600_000).toISOString());
+    console.log(`  stranded pins now: ${JSON.stringify(rows).slice(0, 600)}`);
+  } else console.log('  stranded pins: strandedPinnedBins not in the running image');
+  const pin = await getDb().get<{ pinned_routine_id: string | null; created_at: string }>('SELECT pinned_routine_id, created_at FROM bins WHERE id = ?', [binId]);
+  console.log(`  pin: ${pin?.pinned_routine_id ?? '-'} created ${pin?.created_at ?? '-'}`);
+  if (pin?.pinned_routine_id) {
+    const routine = await getDb().get<{ name: string; state: string; account_id: string; account_state: string | null }>(
+      `SELECT r.name, r.state, r.account_id, a.state AS account_state FROM fleet_routines r LEFT JOIN fleet_accounts a ON a.id = r.account_id WHERE r.id = ?`,
+      [pin.pinned_routine_id],
+    );
+    console.log(`  pinned routine: ${JSON.stringify(routine ?? null)}`);
+  }
+  const recent = await getDb().all<{ event_type: string; at: string; outcome: string | null; reason: string | null }>(
+    `SELECT event_type, at, outcome, reason FROM bin_events WHERE bin_id = ? ORDER BY at DESC LIMIT 6`,
+    [binId],
+  );
+  for (const one of recent) console.log(`    event ${one.at} ${one.event_type} ${one.outcome ?? ''} ${(one.reason ?? '').slice(0, 160)}`);
   const links = await getDb().all<{ workstream_id: string; kind: string; relation: string }>(
     `SELECT workstream_id, kind, relation FROM workstream_links WHERE superseded_at IS NULL AND (ref IN (?, ?, ?)
        OR ref IN (SELECT candidate_id FROM russell_missions WHERE candidate_id IS NOT NULL AND (bin_id = ? OR orchestration_id = ?))
@@ -160,12 +189,30 @@ async function binGates(binId: string): Promise<void> {
   console.log(`  missions: ${missions.map((one) => `${one.id} ${one.state}`).join(', ') || 'none'}`);
 }
 
+/** Free-lane outcomes by work type and model over 24 h, from FREE_LANE_ITEM events. */
+async function freeLaneYield(): Promise<void> {
+  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+  const rows = await getDb().all<{ workload_class: string | null; outcome: string | null; reason: string | null }>(
+    `SELECT workload_class, outcome, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? LIMIT 20000`,
+    [since],
+  );
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const model = (row.reason ?? '').replace(/^model\s+/, '').split(':')[0]?.trim() ?? '';
+    const key = `${row.workload_class ?? '-'} ${row.outcome ?? '-'} ${model}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  console.log(`DIAGNOSE: free-lane-yield since ${since} (${rows.length} events)`);
+  for (const [key, n] of [...counts].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
   try {
     if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
+    else if (command === 'free-lane-yield') await freeLaneYield();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
     else throw new Error('usage: diagnose-readings.ts fragment-failures|operator-runs|bin-gates <bin>');
   } finally {

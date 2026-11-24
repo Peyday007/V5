@@ -100,6 +100,9 @@ jobs:
           echo "=============== operator-runs ==============="
           carried operator-runs | tail -120
 
+          echo "=============== free-lane-yield ==============="
+          carried free-lane-yield | tail -60
+
           if [ -n "$DIAG_BIN" ]; then
             echo "=============== step10 trace $DIAG_BIN ==============="
             flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh trace $DIAG_BIN" 2>&1 | tail -200
