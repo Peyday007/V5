@@ -590,3 +590,68 @@ describe('the bin the defect already stranded', () => {
     expect((await getBin(binId))!.attemptCount).toBe(once);
   });
 });
+
+describe('a bin whose open work is held elsewhere', () => {
+  /**
+   * Production, 2026-11-24: `bin_8db9ec91086843b99067` was assigned again and
+   * again while its packet's audit items were leased to other workers. Each
+   * assignment withheld NOT_CLAIMABLE, was released, and charged an attempt;
+   * the bin parked NEEDS_HUMAN at 5/5 "the packet is AUDITING" while the work
+   * was moving. Neither the assignment nor the park was a decision anybody
+   * needed.
+   */
+  async function leaseOpenItemsElsewhere(expiresAt: string): Promise<void> {
+    const elsewhere = await createWorker({
+      name: `elsewhere-${Math.random().toString(36).slice(2, 8)}`,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await getDb().run(
+      `UPDATE work_items SET state = 'LEASED', worker_id = ?, lease_id = 'wls_elsewhere',
+         leased_at = ?, heartbeat_at = ?, lease_expires_at = ?, attempt_count = 1
+        WHERE orchestration_id = ? AND state = 'QUEUED'`,
+      [elsewhere.id, new Date().toISOString(), new Date().toISOString(), expiresAt, orchestration.id],
+    );
+  }
+
+  it('is not assigned, and is charged nothing, while every open item is under a live lease', async () => {
+    await leaseOpenItemsElsewhere(new Date(Date.now() + 60 * 60_000).toISOString());
+    for (let i = 0; i < 6; i += 1) {
+      const arrival = await checkIn({
+        principal: session(`cred_${i}`),
+        workerId,
+        sessionRef: `cred_${i}`,
+      });
+      expect(arrival.assigned).toBe(false);
+    }
+    const bin = (await getBin(binId))!;
+    expect(bin.attemptCount).toBe(0);
+    expect(bin.state).toBe('READY');
+    expect((await listBinEvents(binId, 200)).filter((event) => event.eventType === 'BIN_ASSIGNED')).toHaveLength(0);
+    // A skip, not a refusal: nothing defers the fire for a session that can take it.
+    expect(await listSessionRefusals(binId)).toHaveLength(0);
+  });
+
+  it('is taken by the next arrival the moment the lease lapses', async () => {
+    await leaseOpenItemsElsewhere(new Date(Date.now() - 1000).toISOString());
+    const arrival = await checkIn({ principal: session('cred_a'), workerId, sessionRef: 'cred_a' });
+    expect(arrival.assigned).toBe(true);
+  });
+
+  it('is not parked for a person while its packet is still being worked', async () => {
+    await leaseOpenItemsElsewhere(new Date(Date.now() + 60 * 60_000).toISOString());
+    await getDb().run('UPDATE bins SET attempt_count = max_attempts WHERE id = ?', [binId]);
+
+    const report = await reconcileBins(fixture.project.id);
+    expect((await getBin(binId))!.state).toBe('READY');
+    expect(report.details.find((detail) => detail.binId === binId)?.disposition).toBe('WORK_IN_PROGRESS_ELSEWHERE');
+
+    // Once nobody holds the work and the budget is still spent, it is a decision again.
+    await getDb().run('UPDATE work_items SET lease_expires_at = ? WHERE orchestration_id = ?', [
+      new Date(Date.now() - 1000).toISOString(),
+      orchestration.id,
+    ]);
+    await reconcileBins(fixture.project.id);
+    expect((await getBin(binId))!.state).toBe('NEEDS_HUMAN');
+  });
+});

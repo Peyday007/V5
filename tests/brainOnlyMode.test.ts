@@ -18,7 +18,8 @@ import { createRun } from '../server/repos/runs.ts';
 import { createOrchestration } from '../server/repos/research.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { findTool } from '../server/mcp/tools.ts';
-import { checkIn } from '../server/services/bins/service.ts';
+import { checkIn, nextItemInBin } from '../server/services/bins/service.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
 import {
   brainOnlyMode,
   enforceBrainOnly,
@@ -369,6 +370,69 @@ describe('the assignment query enforces it', () => {
     const elapsed = Date.now() - started;
     expect(Number(row?.n)).toBe(1);
     expect(elapsed).toBeLessThan(3_000);
+  });
+
+  it('lets the routine claim the owner-directed goal’s items, not only be handed its bin', async () => {
+    /*
+     * Production, 2026-11-24: bin_8db9ec91086843b99067, the $10K goal's research
+     * bin, was assigned to a routine five times — the bin rule admits it under
+     * §118 — and every item in it was refused at the drain, because the
+     * item-level rule still read only BRAIN_IMPROVEMENT. Brain handed the bin
+     * back each time and it parked NEEDS_HUMAN at 5/5 with no research done.
+     */
+    const goalId = OWNER_DIRECTED_GOAL_IDS[0]!;
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [goalId, play.project.id, '$10K', 'Collect 10000 dollars', 'REVENUE_DIRECT', now, now],
+    );
+    const goalBin = await bin(play.project.id, 'What else could reach: Collect 10000 dollars', 3);
+    const layer = await play.layerByName('Discovery Logic');
+    const run = await createRun({ projectId: play.project.id, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const packet = await createOrchestration({ projectId: play.project.id, layerId: layer.id, runId: run.id, title: 'q', assignment: 'q', provider: 'WORKER', autoApprove: false });
+    const otherRun = await createRun({ projectId: play.project.id, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'r' });
+    const otherPacket = await createOrchestration({ projectId: play.project.id, layerId: layer.id, runId: otherRun.id, title: 'r', assignment: 'r', provider: 'WORKER', autoApprove: false });
+    const otherBin = await bin(play.project.id, 'AI receptionist pricing in Ohio', 1);
+    await getDb().run('UPDATE bins SET orchestration_id = ? WHERE id = ?', [packet.id, goalBin]);
+    await getDb().run('UPDATE bins SET orchestration_id = ? WHERE id = ?', [otherPacket.id, otherBin]);
+    await getDb().run(
+      `INSERT INTO workstream_links (id, workstream_id, kind, ref, relation, recorded_by, created_at)
+       VALUES (?, ?, 'PACKET', ?, 'PURSUES', 'BRAIN', ?)`,
+      ['wsl_goal_packet_items', goalId, packet.id, now],
+    );
+    // A packet's item, owned through the packet rather than by bin id — the production shape.
+    const item = await enqueueWork({
+      projectId: play.project.id,
+      workType: 'GOAL_CONSTRUCTION_STEP',
+      orchestrationId: packet.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+
+    // One rule at both entrances: the bin rule admits it, and so does the item rule.
+    expect(await workItemPurposeAdmits({ bin_id: null, orchestration_id: packet.id })).toBe(true);
+    // And still no other play packet's item.
+    expect(await workItemPurposeAdmits({ bin_id: null, orchestration_id: otherPacket.id })).toBe(false);
+
+    const answer = await checkIn({ principal: routine(), workerId, sessionRef: 'cse_goal_items' });
+    expect(answer.assigned).toBe(true);
+    if (!answer.assigned) return;
+    expect(answer.assignment.binId).toBe(goalBin);
+    const next = await nextItemInBin({
+      principal: routine(),
+      workerId,
+      proof: {
+        binId: answer.assignment.binId,
+        leaseId: answer.assignment.leaseId,
+        leaseGeneration: answer.assignment.leaseGeneration,
+        workerId,
+      },
+    });
+    expect(next.held).toBe(true);
+    if (next.held) expect(next.item?.workItemId).toBe(item.id);
+    const handedBack = (await listBinEvents(goalBin)).filter((event) => event.eventType === 'BIN_RELEASED');
+    expect(handedBack).toHaveLength(0);
   });
 
   it('keeps play bins assignable once the owner turns the mode off', async () => {

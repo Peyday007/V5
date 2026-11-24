@@ -86,16 +86,30 @@ export async function workItemPurposeAdmits(
    */
   const owner = item.bin_id ? 'b.id = ?' : 'b.orchestration_id = ?';
   const key = item.bin_id ?? item.orchestration_id ?? null;
+  /*
+   * The owning bin is judged by `purposeAdmitsSql` itself — the predicate the
+   * assigner and the dispatcher compose — and not by a second reading of its
+   * `purpose` column. This used to compare `purpose === 'BRAIN_IMPROVEMENT'`,
+   * which is the bin rule as it stood before §118's owner-directed exception:
+   * production, 2026-11-24, `bin_8db9ec91086843b99067` (the $10K goal's
+   * research) was assigned to a routine five times because the bin rule admits
+   * it, every one of its items was then refused at the drain because this rule
+   * did not, Brain handed the bin back each time, and it parked NEEDS_HUMAN at
+   * 5/5 with no research done. Two readers of one rule disagreeing about the
+   * same worker is the defect, so there is one reader.
+   */
   const row = key
-    ? await getDb().get<{ purpose: string | null; found: number | string; mode: number | string }>(
+    ? await getDb().get<{ purpose: string | null; admits: number | string | null; found: number | string; mode: number | string }>(
         `SELECT
            (SELECT b.purpose FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1) AS purpose,
+           (SELECT CASE WHEN ${purposeAdmitsSql('b.')} THEN 1 ELSE 0 END
+              FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1) AS admits,
            (SELECT COUNT(*) FROM bins b WHERE ${owner}) AS found,
            (SELECT COUNT(*) FROM brain_switches bs WHERE bs.name = 'brain_only_mode' AND bs.enabled = 1) AS mode`,
-        [key, key],
+        [key, key, key],
       )
-    : await getDb().get<{ purpose: string | null; found: number | string; mode: number | string }>(
-        `SELECT NULL AS purpose, 0 AS found,
+    : await getDb().get<{ purpose: string | null; admits: number | string | null; found: number | string; mode: number | string }>(
+        `SELECT NULL AS purpose, NULL AS admits, 0 AS found,
            (SELECT COUNT(*) FROM brain_switches bs WHERE bs.name = 'brain_only_mode' AND bs.enabled = 1) AS mode`,
         [],
       );
@@ -103,7 +117,7 @@ export async function workItemPurposeAdmits(
   if (purpose === 'BLOCKED_LEGAL') return false;
   const modeOn = Number(row?.mode ?? 1) > 0;
   if (!modeOn) return true;
-  if (Number(row?.found ?? 0) > 0) return purpose === 'BRAIN_IMPROVEMENT';
+  if (Number(row?.found ?? 0) > 0) return Number(row?.admits ?? 0) === 1;
   /*
    * No bin owns it: a queue item from before Step 10, or one the hosted
    * verifier enqueues in its own scope. The project is then the deterministic
