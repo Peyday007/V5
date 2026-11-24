@@ -65,6 +65,38 @@ describe('the authority probes', () => {
     expect(under.detail).toMatch(/emergency stop/);
   });
 
+  it('reads the approval requests once per batch, not once per refusal, and still names a dangling one', async () => {
+    const { getDb } = await import('../server/db/database.ts');
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_needs (id, project_id, blocked_action, why_it_matters, recommended_path, setup_effort, next_step, state, created_at, updated_at, request_key)
+       VALUES ('cnd_probe', ?, 'b', 'w', 'r', 's', 'n', 'OPEN', ?, ?, 'raise-ceiling')`,
+      [t.project.id, at, at],
+    );
+    for (let i = 0; i < 30; i += 1) {
+      await decision({ action: 'RUN_PAID_TEST', consequenceClass: 'EXTERNALLY_CONSEQUENTIAL', disposition: 'REFUSED', cause: 'OVER_PER_ACTION_CEILING', neededApproval: 'raise the per-action ceiling', approvalNeedId: 'cnd_probe' });
+    }
+    const db = getDb();
+    const original = db.get.bind(db);
+    let perRow = 0;
+    (db as { get: typeof db.get }).get = (async (sql: string, params?: unknown[]) => {
+      if (/FROM cash_needs/.test(sql)) perRow += 1;
+      return original(sql, params as never);
+    }) as typeof db.get;
+    try {
+      const ok = await getProbe('r01.auth-20-3')!({});
+      expect(ok.ok, ok.detail).toBe(true);
+      expect(ok.detail).toMatch(/30 missing approval\(s\) asked for through 1 remembered request/);
+      expect(perRow).toBe(0);
+    } finally {
+      (db as { get: typeof db.get }).get = original;
+    }
+    await decision({ action: 'RUN_PAID_TEST', consequenceClass: 'EXTERNALLY_CONSEQUENTIAL', disposition: 'REFUSED', cause: 'OVER_PER_ACTION_CEILING', neededApproval: 'x', approvalNeedId: 'cnd_gone' });
+    const dangling = await getProbe('r01.auth-20-3')!({});
+    expect(dangling.ok).toBe(false);
+    expect(dangling.detail).toMatch(/cnd_gone, which does not exist/);
+  });
+
   it('fail AUTH-20-3 when a missing approval was named but never stored as a request', async () => {
     await decision({ action: 'RUN_PAID_TEST', consequenceClass: 'EXTERNALLY_CONSEQUENTIAL', disposition: 'REFUSED', cause: 'OVER_PER_ACTION_CEILING', neededApproval: 'raise the per-action ceiling' });
     const result = await getProbe('r01.auth-20-3')!({});

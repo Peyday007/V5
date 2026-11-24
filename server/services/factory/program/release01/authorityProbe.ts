@@ -98,11 +98,23 @@ export async function graduatedAuthorityHoldsOnRows(): Promise<ProbeResult> {
   const unasked = asked.find((x) => typeof x.d.approvalNeedId !== 'string');
   if (unasked) return { ok: false, detail: `decision ${unasked.id} named a missing approval but stored no request for it` };
   const { getDb } = await import('../../../../db/database.ts');
+  // One read per chunk of distinct requests, never one per decision: thousands of refusals
+  // point at a handful of remembered requests, and the per-row form issued ~60k reads an hour.
+  const ids = [...new Set(asked.map((x) => String(x.d.approvalNeedId)))];
+  const requestKey = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500);
+    const rows = await getDb().all<{ id: string; request_key: string | null }>(
+      `SELECT id, request_key FROM cash_needs WHERE id IN (${chunk.map(() => '?').join(', ')})`,
+      chunk,
+    );
+    for (const row of rows) requestKey.set(row.id, String(row.request_key));
+  }
   const keys = new Map<string, number>();
   for (const x of asked) {
-    const need = await getDb().get<{ request_key: string | null }>('SELECT request_key FROM cash_needs WHERE id = ?', [String(x.d.approvalNeedId)]);
-    if (!need) return { ok: false, detail: `decision ${x.id} points at approval request ${String(x.d.approvalNeedId)}, which does not exist` };
-    keys.set(String(need.request_key), (keys.get(String(need.request_key)) ?? 0) + 1);
+    const key = requestKey.get(String(x.d.approvalNeedId));
+    if (key === undefined) return { ok: false, detail: `decision ${x.id} points at approval request ${String(x.d.approvalNeedId)}, which does not exist` };
+    keys.set(key, (keys.get(key) ?? 0) + 1);
   }
   const classes = new Set(all.map((x) => String(x.d.consequenceClass)));
   return {
