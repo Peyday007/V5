@@ -161,6 +161,13 @@ async function binGates(binId: string): Promise<void> {
   } else console.log('  stranded pins: strandedPinnedBins not in the running image');
   const pin = await getDb().get<{ pinned_routine_id: string | null; created_at: string }>('SELECT pinned_routine_id, created_at FROM bins WHERE id = ?', [binId]);
   console.log(`  pin: ${pin?.pinned_routine_id ?? '-'} created ${pin?.created_at ?? '-'}`);
+  if (pin?.pinned_routine_id) {
+    const routine = await getDb().get<{ name: string; state: string; account_id: string; account_state: string | null }>(
+      `SELECT r.name, r.state, r.account_id, a.state AS account_state FROM fleet_routines r LEFT JOIN fleet_accounts a ON a.id = r.account_id WHERE r.id = ?`,
+      [pin.pinned_routine_id],
+    );
+    console.log(`  pinned routine: ${JSON.stringify(routine ?? null)}`);
+  }
   const recent = await getDb().all<{ event_type: string; at: string; outcome: string | null; reason: string | null }>(
     `SELECT event_type, at, outcome, reason FROM bin_events WHERE bin_id = ? ORDER BY at DESC LIMIT 6`,
     [binId],
