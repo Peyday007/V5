@@ -252,6 +252,15 @@ async function ensureMemberships(worker: FreeWorker): Promise<string[]> {
   // §87: while the activation gate is ACTIVE, also the project holding the improvement loop's own research.
   const { improvementResearchProjects } = await import('../improvement/activation.ts');
   for (const projectId of await improvementResearchProjects()) if (!projects.includes(projectId)) projects.push(projectId);
+  // And the projects of Brain's own bins Claude routing has been refusing past the handoff (`claudeCannotRoute`).
+  const since = new Date(Date.now() - UNROUTABLE_HANDOFF_MS).toISOString();
+  const stranded = await getDb().all<{ project_id: string }>(
+    `SELECT DISTINCT b.project_id FROM bins b
+      WHERE b.purpose = 'BRAIN_IMPROVEMENT' AND b.state = 'READY' AND b.created_at < ?
+        AND EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = b.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at >= ?)`,
+    [since, since],
+  );
+  for (const row of stranded) if (!projects.includes(row.project_id)) projects.push(row.project_id);
   const held = new Set(
     (await listMembershipsForPrincipal('WORKER', worker.workerId)).filter((m) => m.active).map((m) => m.projectId),
   );
@@ -394,7 +403,34 @@ export async function freeLaneAdmits(
   if (purpose === null) return !(await brainProjectItem(item.project_id ?? null));
   if (purpose !== 'BRAIN_IMPROVEMENT') return false;
   const { freeLaneMayTakeImprovement } = await import('../improvement/activation.ts');
-  return freeLaneMayTakeImprovement(item);
+  if (await freeLaneMayTakeImprovement(item)) return true;
+  /*
+   * Brain's own work that no Claude Routine can be routed to is the free lane's
+   * too, so no Routine — or the absence of one — holds it for ever. Production,
+   * 2026-11-23: `bin_7e4b9543427d462f9f78`, a Brain-improvement research packet
+   * with a QUEUED item, was refused NO_SURFACE_SERVES_THIS_PROJECT on every
+   * dispatch tick since 2026-10-07 (86,910 times): no Routine's worker is a
+   * member of its project, and nothing else would take it. Only once routing
+   * has refused it for a while, so a Routine that can serve it still goes first.
+   */
+  const owner = await owningBin(item);
+  return owner !== null && (await claudeCannotRoute(owner.binId));
+}
+
+/** How long Claude routing must have been refusing a bin before the free lane takes its work. */
+export const UNROUTABLE_HANDOFF_MS = 6 * 60 * 60_000;
+
+/** Whether the bin has waited past the handoff while dispatch kept refusing it for want of a surface. */
+async function claudeCannotRoute(binId: string, now = Date.now()): Promise<boolean> {
+  const since = new Date(now - UNROUTABLE_HANDOFF_MS).toISOString();
+  const row = await getDb().get<{ id: string }>(
+    `SELECT b.id FROM bins b
+      WHERE b.id = ? AND b.state IN ('READY', 'LEASED') AND b.created_at < ?
+        AND EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = b.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at >= ?)
+        AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = b.id AND e.event_type = 'DISPATCH_SENT' AND e.at >= ?)`,
+    [binId, since, since, since],
+  );
+  return row !== null && row !== undefined;
 }
 
 /** Whether an item's project is Brain's own (`isBrainProject`). Unknown counts as Brain's, so it is not taken. */

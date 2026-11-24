@@ -45,6 +45,8 @@ import {
   markDispatchSent,
 } from '../server/repos/bins.ts';
 import { createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { getDb } from '../server/db/database.ts';
+import { reconcileBins } from '../server/services/bins/service.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { normalizeSessionRef, sameProviderSession } from '../server/domain/sessionRef.ts';
 import type { BinManifest } from '../server/domain/types.ts';
@@ -276,4 +278,36 @@ describe('two spellings of one session', () => {
     expect(sameProviderSession('some_other_form', 'some_other_form')).toBe(true);
     expect(sameProviderSession('some_other_form', 'form')).toBe(false);
   });
+
+  it('releases a pin to a quarantined surface: a stale probe closes, stale pinned work is unpinned, a fresh probe stays (production, 2026-11-23)', async () => {
+    // bin_a7a6e6a9b2ff42278baa: a probe pinned to the QUARANTINED Factory surface 1 since 2026-09-26,
+    // refused ALL_SURFACES_INELIGIBLE every tick and read as idle capacity beside executable work.
+    const staleProbe = await probeBinFor(routineC, 'stale probe');
+    const freshProbe = await probeBinFor(routineC, 'probe firing now');
+    const work = await createBin({
+      projectId: project.project.id,
+      kind: 'RESEARCH_PACKET',
+      title: 'pinned work',
+      objective: 'pinned work',
+      manifest: { ...MANIFEST, lineage: { ...MANIFEST.lineage, projectId: project.project.id } },
+      completionContract: 'DETERMINISTIC_UNITS_V1',
+      pinnedRoutineId: routineC,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+      maxAttempts: 2,
+    });
+    const old = new Date(Date.now() - 24 * 3_600_000).toISOString();
+    await getDb().run('UPDATE bins SET created_at = ? WHERE id IN (?, ?)', [old, staleProbe, work.id]);
+    await getDb().run(`UPDATE fleet_routines SET state = 'QUARANTINED' WHERE id = ?`, [routineC]);
+    const report = await reconcileBins();
+    expect((await getBin(staleProbe))?.state).toBe('CANCELLED');
+    expect(report.details.find((d) => d.binId === staleProbe)?.disposition).toBe('CLOSED_STRANDED_PIN');
+    expect((await getBin(work.id))?.state).toBe('READY');
+    expect((await getBin(work.id))?.pinnedRoutineId).toBeNull();
+    expect((await listBinEvents(work.id)).some((e) => e.eventType === 'BIN_UNPINNED')).toBe(true);
+    expect((await getBin(freshProbe))?.state).toBe('READY');
+    expect((await getBin(freshProbe))?.pinnedRoutineId).toBe(routineC);
+  });
 });
+

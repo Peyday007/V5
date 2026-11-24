@@ -1856,6 +1856,50 @@ export async function recentFiresForBin(binId: string, nowMs: number = Date.now(
   return Number(row?.n ?? 0);
 }
 
+/**
+ * READY bins pinned to a Routine routing will never fire (production,
+ * 2026-11-23): `bin_a7a6e6a9b2ff42278baa` and `bin_621b1421d4134e09aa25`, two
+ * surface probes pinned to the QUARANTINED Factory surface 1 since 2026-09-26,
+ * were refused ALL_SURFACES_INELIGIBLE on every dispatch tick for two months
+ * and read as "1 executable item, capacity unexplainedly idle" in the Routines
+ * and Factory pools. A pin is a promise that one Routine answers; when that
+ * Routine is quarantined, retired, unavailable or gone, the promise is broken
+ * and the bin must not wait on it. Older than `before` only, so a recovery
+ * probe that is firing at a quarantined Routine right now is left alone.
+ */
+export async function strandedPinnedBins(
+  before: string,
+): Promise<{ id: string; kind: string; leaseGeneration: number; pinnedRoutineId: string; routineState: string | null }[]> {
+  const rows = await getDb().all<{ id: string; kind: string; lease_generation: number; pinned_routine_id: string; routine_state: string | null }>(
+    `SELECT b.id, b.kind, b.lease_generation, b.pinned_routine_id, r.state AS routine_state
+       FROM bins b LEFT JOIN fleet_routines r ON r.id = b.pinned_routine_id
+      WHERE b.state = 'READY' AND b.pinned_routine_id IS NOT NULL AND b.created_at < ?
+        AND (r.id IS NULL OR r.state IN ('QUARANTINED', 'RETIRED', 'UNAVAILABLE'))
+      ORDER BY b.created_at
+      LIMIT 200`,
+    [before],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    leaseGeneration: Number(row.lease_generation),
+    pinnedRoutineId: row.pinned_routine_id,
+    routineState: row.routine_state,
+  }));
+}
+
+/** Release a READY bin's pin, guarded on its generation, so any eligible Routine may take it. */
+export async function unpinBin(binId: string, leaseGeneration: number, reason: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE bins SET pinned_routine_id = NULL, updated_at = ?
+      WHERE id = ? AND lease_generation = ? AND state = 'READY' AND pinned_routine_id IS NOT NULL`,
+    [binNow(), binId, leaseGeneration],
+  );
+  if (result.changes !== 1) return false;
+  await recordBinEvent({ eventType: 'BIN_UNPINNED', binId, leaseGeneration, outcome: 'UNPINNED', reason });
+  return true;
+}
+
 /** `purposeAdmitsSql` for one bin, for a reader holding the row in memory. */
 export async function binPurposeAdmits(binId: string): Promise<boolean> {
   const row = await getDb().get<{ id: string }>(
