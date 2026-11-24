@@ -206,15 +206,74 @@ async function freeLaneYield(): Promise<void> {
   for (const [key, n] of [...counts].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
 }
 
+/**
+ * How long the dispatcher's and the capacity reader's statements take on the
+ * running database, part by part (§88: measured, not read from code). Each is
+ * bounded by the session's own statement timeout; a timeout is printed as one.
+ */
+async function queryTimes(): Promise<void> {
+  const now = new Date().toISOString();
+  const bind = (sql: string): string[] => Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => now);
+  const time = async (label: string, sql: string, params?: unknown[]): Promise<void> => {
+    const started = Date.now();
+    try {
+      const rows = await getDb().all<Record<string, unknown>>(sql, (params ?? bind(sql)) as never[]);
+      const first = rows[0] ? JSON.stringify(rows[0]).slice(0, 160) : '(no rows)';
+      console.log(`  ${String(Date.now() - started).padStart(7)} ms  ${label}  ${rows.length} row(s) ${first}`);
+    } catch (error) {
+      console.log(`  ${String(Date.now() - started).padStart(7)} ms  ${label}  FAILED ${String((error as Error).message ?? error).slice(0, 160)}`);
+    }
+  };
+  console.log(`DIAGNOSE: query-times at ${now}`);
+  await time('bins by state', 'SELECT state, COUNT(*) AS n FROM bins GROUP BY state ORDER BY state', []);
+  await time('russell_missions rows', 'SELECT COUNT(*) AS n FROM russell_missions', []);
+  await time('workstream_links rows', 'SELECT COUNT(*) AS n FROM workstream_links', []);
+  await time('work_items rows', 'SELECT COUNT(*) AS n FROM work_items', []);
+  await time('brain_only_mode', "SELECT name, enabled FROM brain_switches WHERE name = 'brain_only_mode'", []);
+  const claimable = "(bins.state = 'READY' OR (bins.state = 'LEASED' AND bins.lease_expires_at <= ?))";
+  await time('claimable bins (state only)', `SELECT COUNT(*) AS n FROM bins WHERE ${claimable}`);
+  await time('  + purposeAdmitsSql', `SELECT COUNT(*) AS n FROM bins WHERE ${claimable} AND ${purposeAdmitsSql('bins.')}`);
+  await time('  + ownerDirectedGoalBinSql', `SELECT COUNT(*) AS n FROM bins WHERE ${claimable} AND ${ownerDirectedGoalBinSql('bins.')}`);
+  await time('  + workReadySql', `SELECT COUNT(*) AS n FROM bins WHERE ${claimable} AND ${workReadySql('bins.')}`);
+  await time('DISPATCHABLE_SQL', `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL}`);
+  await time(
+    'listDispatchableBinHeads statement',
+    `SELECT id FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')} ORDER BY priority DESC, created_at, rowid LIMIT 200`,
+  );
+  console.log('  EXPLAIN listDispatchableBinHeads:');
+  const plan = await getDb()
+    .all<Record<string, string>>(
+      `EXPLAIN SELECT id FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')} ORDER BY priority DESC, created_at, rowid LIMIT 200`,
+      bind(`${DISPATCHABLE_SQL} ${FIREABLE_SQL} ${workReadySql('bins.')}`) as never[],
+    )
+    .catch(() => []);
+  for (const row of plan) console.log(`    ${Object.values(row)[0]}`);
+  // The capacity reader's pools, one at a time, as `brain_operator_capacity` reads them.
+  const watchdog = await import('../server/services/engineering/watchdog.ts');
+  const step = async (label: string, run: () => Promise<unknown>): Promise<void> => {
+    const started = Date.now();
+    try {
+      const value = await run();
+      console.log(`  ${String(Date.now() - started).padStart(7)} ms  ${label}  ${JSON.stringify(value).slice(0, 300)}`);
+    } catch (error) {
+      console.log(`  ${String(Date.now() - started).padStart(7)} ms  ${label}  FAILED ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  };
+  await step('idleCounts (ROUTINES pool)', () => watchdog.idleCounts());
+  await step('researchSlotsFree (RESEARCH_SLOTS pool)', () => watchdog.researchSlotsFree());
+  await step('brainUtilization (every pool)', () => watchdog.brainUtilization());
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
   try {
-    if (command === 'fragment-failures') await fragmentFailures();
+    if (command === 'query-times') await queryTimes();
+    else if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
-    else throw new Error('usage: diagnose-readings.ts fragment-failures|operator-runs|bin-gates <bin>');
+    else throw new Error('usage: diagnose-readings.ts query-times|fragment-failures|operator-runs|free-lane-yield|bin-gates <bin>');
   } finally {
     await closeDatabase();
   }
