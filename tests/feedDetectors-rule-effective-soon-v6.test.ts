@@ -52,6 +52,7 @@ import {
   RULE_EFFECTIVE_SOON_V4,
   RULE_EFFECTIVE_SOON_V5,
   RULE_EFFECTIVE_SOON_V6,
+  RULE_EFFECTIVE_SOON_V7,
   statedEffectiveDateOf,
   type DetectedSignal,
   type DetectorRecord,
@@ -370,7 +371,9 @@ describe('helpers', () => {
 describe('installation', () => {
   it('v6 stays exported in SHADOW (v7 replaced it in DETECTORS); v1..v5 stay exported unchanged', () => {
     expect(RULE_EFFECTIVE_SOON_V6).toMatchObject({ id: 'RULE_EFFECTIVE_SOON', version: 6, mode: 'SHADOW' });
-    expect(DETECTORS.find((one) => one.id === 'RULE_EFFECTIVE_SOON')!.version).toBeGreaterThanOrEqual(6);
+    expect(DETECTORS).not.toContain(RULE_EFFECTIVE_SOON_V6);
+    expect(DETECTORS).toContain(RULE_EFFECTIVE_SOON_V7);
+    expect(RULE_EFFECTIVE_SOON_V6.couldKeep).toBeUndefined();
     for (const old of [RULE_EFFECTIVE_SOON, RULE_EFFECTIVE_SOON_V2, RULE_EFFECTIVE_SOON_V3, RULE_EFFECTIVE_SOON_V4, RULE_EFFECTIVE_SOON_V5]) {
       expect(DETECTORS).not.toContain(old);
     }
