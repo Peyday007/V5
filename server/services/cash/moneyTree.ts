@@ -128,6 +128,9 @@ export interface MechanismReading {
   meaningful: boolean;
   /** The dimensions nobody has answered: what research about this mechanism should ask first. */
   gaps: MoneyTreeDimension[];
+  verdict: MechanismInput['verdict'];
+  evaluated: boolean;
+  asked: boolean;
 }
 
 /** Proved: Brain's own deliverable, which its capability path names. */
@@ -219,6 +222,9 @@ export function readMechanism(input: MechanismInput): MechanismReading {
       dimensions.PRICES_COSTS_MARGINS === 'ESTABLISHED' &&
       (dimensions.PAYING_CUSTOMERS === 'ESTABLISHED' || dimensions.CONVERSION_AND_FREQUENCY === 'ESTABLISHED'),
     gaps: MONEY_TREE_DIMENSIONS.filter((k) => dimensions[k] === 'UNKNOWN'),
+    verdict: input.verdict,
+    evaluated: input.evaluatedCount > 0,
+    asked: input.askedCount > 0,
   };
 }
 
@@ -243,7 +249,7 @@ export interface MoneyTreeSummary {
   byIndustry: Array<{ industry: string; subIndustries: number; mechanisms: number; meaningful: number; methods: number }>;
 }
 
-export function summarize(readings: readonly MechanismReading[], inputs: readonly MechanismInput[]): MoneyTreeSummary {
+export function summarize(readings: readonly MechanismReading[]): MoneyTreeSummary {
   const byDimension = Object.fromEntries(
     MONEY_TREE_DIMENSIONS.map((k) => [k, { ESTABLISHED: 0, HYPOTHESIS: 0, UNKNOWN: 0 } as Record<DimensionStatus, number>]),
   ) as Record<MoneyTreeDimension, Record<DimensionStatus, number>>;
@@ -267,10 +273,10 @@ export function summarize(readings: readonly MechanismReading[], inputs: readonl
     designs: new Set(readings.map((one) => one.design)).size,
     withAnyEstablished: readings.filter((one) => one.established > 0).length,
     meaningful: readings.filter((one) => one.meaningful).length,
-    confirmed: inputs.filter((one) => one.verdict === 'CONFIRMED').length,
-    refuted: inputs.filter((one) => one.verdict === 'REFUTED').length,
-    evaluated: inputs.filter((one) => one.evaluatedCount > 0).length,
-    asked: inputs.filter((one) => one.askedCount > 0).length,
+    confirmed: readings.filter((one) => one.verdict === 'CONFIRMED').length,
+    refuted: readings.filter((one) => one.verdict === 'REFUTED').length,
+    evaluated: readings.filter((one) => one.evaluated).length,
+    asked: readings.filter((one) => one.asked).length,
     byDimension,
     byIndustry: [...industries.entries()]
       .map(([industry, one]) => ({ industry, subIndustries: one.subs.size, mechanisms: one.mechanisms, meaningful: one.meaningful, methods: one.methods.size }))
@@ -280,11 +286,13 @@ export function summarize(readings: readonly MechanismReading[], inputs: readonl
 
 /**
  * Every stored mechanism, read from the library: `projectId` for one
- * project's tree, omitted for the whole commercial universe. Paged by id so a
- * large library is never one statement's worth of JSON in memory at once.
+ * project's tree, omitted for the whole commercial universe. Paged by id, and
+ * each page is handed to `visit` and let go, so a library of tens of
+ * thousands of designs is never held in memory at once (production held
+ * 15,217 on 2026-11-24).
  */
-export async function loadMechanisms(projectId?: string, pageSize = 500): Promise<MechanismInput[]> {
-  const out: MechanismInput[] = [];
+export async function eachMechanism(visit: (one: MechanismInput) => void, projectId?: string, pageSize = 500): Promise<number> {
+  let seen = 0;
   let after = '';
   for (;;) {
     const rows = await getDb().all<{
@@ -319,7 +327,8 @@ export async function loadMechanisms(projectId?: string, pageSize = 500): Promis
       } catch {
         design = null;
       }
-      out.push({
+      seen += 1;
+      visit({
         pathId: row.id,
         projectId: row.project_id,
         method: row.method,
@@ -334,12 +343,12 @@ export async function loadMechanisms(projectId?: string, pageSize = 500): Promis
     after = rows[rows.length - 1]!.id;
     if (rows.length < pageSize) break;
   }
-  return out;
+  return seen;
 }
 
-/** The tree as one reading: every mechanism's statuses and the counts over them. */
+/** The tree as one reading: every mechanism's statuses (designs let go) and the counts over them. */
 export async function readMoneyTree(projectId?: string): Promise<{ summary: MoneyTreeSummary; mechanisms: MechanismReading[] }> {
-  const inputs = await loadMechanisms(projectId);
-  const mechanisms = inputs.map(readMechanism);
-  return { summary: summarize(mechanisms, inputs), mechanisms };
+  const mechanisms: MechanismReading[] = [];
+  await eachMechanism((one) => mechanisms.push(readMechanism(one)), projectId);
+  return { summary: summarize(mechanisms), mechanisms };
 }
