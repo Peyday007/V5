@@ -51,6 +51,8 @@ const COUNT = '(\\d{1,3}(?:,\\d{3})+|\\d+)';
 // The words between a count and what it counts may carry an ampersand or an apostrophe:
 // "12 B&B owners" and "40 children's clinics" count buyers as "12 inn owners" does (round 13).
 const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`, 'gi');
+/** A count, then in the same sentence "each buys / pays / orders …": the counted units are buyers. */
+const EACH_BUYS = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,5}?[A-Za-z&'’-]+\\b[^.;!?]{0,120}[;,]\\s*(?:and\\s+)?(?:they\\s+)?each(?:\\s+one)?\\s+(?:buys?|pays?|purchases?|orders?|subscribes?|signs?|needs?)\\b`, 'i');
 const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts|renewals|entries|registrations|applications|filings|enrolments|enrollments|leads';
 /** A vague count of a per-unit rate, read at its low end (2); never a count of buyers. */
 const VAGUE = 'several|a few|a couple of|a couple|multiple|a handful of';
@@ -427,7 +429,18 @@ export function readVolume(text: string, windowDays: number, payer: string | nul
     }
   }
 
-  const counts = buyerCounts(text, buyerCount).map((c) => c.n);
+  let counts = buyerCounts(text, buyerCount).map((c) => c.n);
+  /*
+   * A count whose own sentence goes on to say each of them buys ("About 800 active Detroit
+   * investors are listed on BiggerPockets; each buys one") counts buyers whatever its noun:
+   * the text itself names them as buyers. Before, only a noun from the buyer vocabulary or the
+   * payer's own words counted, so an evidenced market of "investors" or "facilities" read as
+   * unsized and left MARKET_VOLUME open (2026-11-24 investigation: 3 of 10 fresh requests).
+   */
+  if (counts.length === 0) {
+    const each = EACH_BUYS.exec(text);
+    if (each) counts = [toInt(each[1]!)];
+  }
   if (counts.length === 0) return null;
   const counted = Math.min(...counts);
   const share = buyingShare(text);

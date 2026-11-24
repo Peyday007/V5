@@ -23,3 +23,17 @@ describe('readSettlementDays', () => {
     expect(readSettlementDays('')).toBeNull();
   });
 });
+
+import { readVolume } from '../server/services/cash/volume.ts';
+
+/** A count whose own sentence says each of them buys counts buyers whatever its noun (2026-11-24 investigation). */
+describe('readVolume: a count named as buyers by its own clause', () => {
+  it('counts investors, facilities and LLCs that the sentence says each buy', () => {
+    expect(readVolume('About 800 active Detroit investors are listed on BiggerPockets and local REIA rosters; each buys one.', 30, 'Detroit real-estate wholesalers, flippers and landlords', 'real estate investing')?.buyers).toBe(800);
+    expect(readVolume('About 2,000 such facilities are listed in Oakland and Wayne counties; each pays monthly.', 30, 'Medical and dental offices, churches and gyms', 'commercial cleaning')?.buyers).toBe(2000);
+  });
+  it('still reads a count nobody says buys as unsized', () => {
+    expect(readVolume('About 800 active Detroit investors are listed on BiggerPockets.', 30, 'Detroit real-estate wholesalers, flippers and landlords', 'real estate investing')).toBeNull();
+    expect(readVolume('3,400 boats are registered; each needs a slip.', 30, null, null)).not.toBeNull();
+  });
+});
