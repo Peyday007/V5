@@ -2370,13 +2370,22 @@ export function planFragmentsOf(raw: Record<string, unknown>): { fragments: Reco
   return null;
 }
 
-/** Why a RESEARCH_PLAN reply that parsed proposed no fragments, naming what it held. Pure. */
+/**
+ * Why a RESEARCH_PLAN reply that parsed proposed no fragments, naming what it
+ * held and quoting what it sent, bounded and with credentials removed. Pure.
+ *
+ * The 2026-11-24 incident recorded only "the model returned no usable JSON":
+ * no row kept a word of the five replies, so a fix could only be aimed at a
+ * guessed shape. The reason is what the incident report quotes as "what the
+ * model sent", so it carries the reply itself, and the next fix is aimed at it.
+ */
 export function planMissReason(raw: Record<string, unknown>): string {
   const fragments = raw['fragments'];
   const held = Array.isArray(fragments)
     ? `a "fragments" list of ${fragments.length} entr${fragments.length === 1 ? 'y' : 'ies'} that are not all objects`
     : `keys ${JSON.stringify(Object.keys(raw).slice(0, 8))}`;
-  return `the reply parsed but proposed no fragments: it held ${held}, and a plan needs a top-level "fragments" list of objects`.slice(0, 400);
+  const sent = redactCredentials(redactSecrets(JSON.stringify(raw).replace(/\s+/g, ' '))).slice(0, 160);
+  return `the reply parsed but proposed no fragments: it held ${held}, and a plan needs a top-level "fragments" list of objects; it sent ${sent}`.slice(0, 400);
 }
 
 async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {

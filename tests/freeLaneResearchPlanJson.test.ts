@@ -51,6 +51,15 @@ describe('reading a RESEARCH_PLAN reply', () => {
     expect(planMissReason({ title: 'x', summary: 'y' })).toMatch(/proposed no fragments: it held keys \["title","summary"\].*top-level "fragments"/);
     expect(planMissReason({ fragments: ['a'] })).toMatch(/"fragments" list of 1 entry that are not all objects/);
   });
+
+  it('quotes what the reply sent, bounded and without a credential, so the next incident is not a guess', () => {
+    // 2026-11-24: the rows kept only "the model returned no usable JSON" — not a word of the reply.
+    const reason = planMissReason({ title: 'Receptionist cost', summary: 'Use BLS.', note: 'key sk-abcdefghijklmnop1234' });
+    expect(reason).toMatch(/it sent \{"title":"Receptionist cost","summary":"Use BLS\."/);
+    expect(reason).not.toMatch(/sk-abcdefghijklmnop1234/);
+    expect(reason).not.toMatch(/no usable JSON/);
+    expect(planMissReason({ essay: 'x'.repeat(5000) }).length).toBeLessThanOrEqual(400);
+  });
 });
 
 let play: TestProject;
@@ -174,6 +183,8 @@ describe('the free lane on a RESEARCH_PLAN item', () => {
     );
     const said = reasons.map((one) => one.reason ?? '').join(' | ');
     expect(said).toMatch(/proposed no fragments: it held keys \["title","summary"\]/);
+    // What the model actually sent is in the row the incident report quotes as "what the model sent".
+    expect(said).toMatch(/it sent \{"title":"Receptionist cost","summary":"Use BLS\."\}/);
     expect(said).not.toMatch(/no usable JSON/);
   });
 });
