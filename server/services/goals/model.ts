@@ -64,6 +64,7 @@ import { listRoutines } from '../../repos/fleet.ts';
 import { sharedFleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { readTarget, type TargetReading } from './target.ts';
+import { deadlineText } from '../../domain/executionWindow.ts';
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -153,6 +154,8 @@ export interface GoalView {
   purposeLabel: string;
   owner: { userId: string; name: string } | null;
   dueAt: string | null;
+  /** The deadline as a person reads it: relative while the commercial execution window has not started (§119). */
+  deadline: string | null;
   overdue: boolean;
   commitment: Workstream['commitment'];
   commitmentLabel: string;
@@ -964,6 +967,7 @@ export async function assembleGoals(options: {
       purposeLabel: PURPOSE_LABELS[goal.purpose],
       owner,
       dueAt: goal.dueAt,
+      deadline: deadlineText({ dueAt: goal.dueAt, executionWindowDays: goal.executionWindowDays ?? null, executionStartedAt: goal.executionStartedAt ?? null }),
       overdue: goal.dueAt !== null && goal.dueAt < now && lifecycle !== 'COMPLETE',
       commitment: goal.commitment,
       commitmentLabel: COMMITMENT_LABELS[goal.commitment],

@@ -14,6 +14,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import type { GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
+import { OPEN_DEADLINE_SQL } from '../../domain/executionWindow.ts';
 
 const TTL_MS = 60_000;
 const cache = new Map<string, { at: number; policy: GoalExecutionPolicy }>();
@@ -24,7 +25,7 @@ export async function executionPolicyForProject(projectId: string, now: Date = n
   const row = await getDb().get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM workstreams
       WHERE target_project_id = ? AND target_metric IS NOT NULL AND target_amount_cents IS NOT NULL
-        AND due_at IS NOT NULL AND due_at > ?
+        AND ${OPEN_DEADLINE_SQL}
         AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL`,
     [projectId, now.toISOString()],
   );

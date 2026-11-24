@@ -23,9 +23,9 @@ export interface GoalBriefing {
   headline: string;
   delivered: { goalId: string; title: string; evidence: string; ref: string }[];
   active: { goalId: string; title: string; waiting: string; next: string; by: string }[];
-  milestones: { goalId: string; title: string; next: string; afterwards: string | null; dueAt: string | null; overdue: boolean }[];
+  milestones: { goalId: string; title: string; next: string; afterwards: string | null; dueAt: string | null; deadline: string | null; overdue: boolean }[];
   agingBlockers: { goalId: string; title: string; blocker: string; remedy: string; by: string; ageHours: number | null }[];
-  commitments: { goalId: string; title: string; commitment: string; dueAt: string | null; overdue: boolean; obligations: string[] }[];
+  commitments: { goalId: string; title: string; commitment: string; dueAt: string | null; deadline: string | null; overdue: boolean; obligations: string[] }[];
   decisions: (GoalDecision & { goalId: string; goalTitle: string })[];
   counts: { active: number; paused: number; cancelled: number; complete: number; needsYou: number; blocked: number };
   /** The research allocation in force and the capacity it was measured at; null when no decision was recorded. */
@@ -202,6 +202,7 @@ export function briefFrom(goals: GoalView[], generatedAt: string, research: Rese
       next: goal.next.action,
       afterwards: goal.next.afterwards,
       dueAt: goal.dueAt,
+      deadline: goal.deadline,
       overdue: goal.overdue,
     })),
     agingBlockers,
@@ -212,6 +213,7 @@ export function briefFrom(goals: GoalView[], generatedAt: string, research: Rese
         title: goal.title,
         commitment: goal.commitmentLabel,
         dueAt: goal.dueAt,
+        deadline: goal.deadline,
         overdue: goal.overdue,
         obligations: goal.obligations,
       })),

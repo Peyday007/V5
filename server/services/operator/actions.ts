@@ -30,6 +30,8 @@ export interface GoalSummary {
   lifecycle: string;
   target: string | null;
   dueAt: string | null;
+  /** The deadline as Hermes states it: relative before commercial execution starts (§119). */
+  deadline?: string | null;
   waiting: string;
   next: string;
   openDecisions: number;
@@ -56,6 +58,7 @@ export function summarizeGoal(goal: GoalView): GoalSummary {
     lifecycle: goal.lifecycle,
     target: targetLine(goal),
     dueAt: goal.dueAt,
+    deadline: goal.deadline,
     waiting: `${goal.waiting.kind}: ${goal.waiting.detail}`.slice(0, 300),
     next: `[${goal.next.by}] ${goal.next.action}`.slice(0, 300),
     openDecisions: goal.decisions.length,

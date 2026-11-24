@@ -23,6 +23,7 @@
 import { getDb } from '../../../../db/database.ts';
 import type { ProbeResult } from '../probes.ts';
 import { executionPolicyForProject, forgetExecutionPolicies } from '../../../goals/policy.ts';
+import { OPEN_DEADLINE_SQL } from '../../../../domain/executionWindow.ts';
 
 export const GOAL_ACCEPTANCE_PROBE = 'r01.goal-09';
 
@@ -77,7 +78,7 @@ export async function goalAcceptanceHoldsOnRows(): Promise<ProbeResult> {
   forgetExecutionPolicies();
   const goals = await db.all<{ id: string; target_project_id: string }>(
     `SELECT id, target_project_id FROM workstreams
-      WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL AND target_project_id IS NOT NULL AND due_at IS NOT NULL AND due_at > ?
+      WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL AND target_project_id IS NOT NULL AND ${OPEN_DEADLINE_SQL}
         AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL ORDER BY id`,
     [new Date().toISOString()],
   );

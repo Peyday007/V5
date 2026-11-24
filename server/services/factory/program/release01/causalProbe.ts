@@ -15,6 +15,7 @@
 import { getDb } from '../../../../db/database.ts';
 import type { ProbeResult } from '../probes.ts';
 import type { GoalPortfolio, OpeningCausal } from '../../../goals/portfolio.ts';
+import { OPEN_DEADLINE_SQL } from '../../../../domain/executionWindow.ts';
 
 export interface PortfolioOf {
   goalId: string;
@@ -26,7 +27,7 @@ export async function livePortfolios(): Promise<PortfolioOf[] | ProbeResult> {
   const { readGoalPlan } = await import('../../../goals/plan.ts');
   const goals = await getDb().all<{ id: string }>(
     `SELECT id FROM workstreams
-      WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL AND due_at IS NOT NULL AND due_at > ?
+      WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL AND ${OPEN_DEADLINE_SQL}
         AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL ORDER BY id`,
     [new Date().toISOString()],
   );

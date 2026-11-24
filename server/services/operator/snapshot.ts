@@ -20,6 +20,7 @@
  */
 import type { GoalView } from '../goals/model.ts';
 import { operatorGoals, readRequests, summarizeGoal, type GoalSummary, type RequestReading } from './actions.ts';
+import { deadlineText } from '../../domain/executionWindow.ts';
 
 export interface OperatorSnapshot {
   takenAt: string;
@@ -77,6 +78,7 @@ async function lightSnapshot(nowMs: number): Promise<OperatorSnapshot> {
       lifecycle: w.pausedAt ? 'PAUSED' : 'ACTIVE',
       target: target?.amountCents ? `${target.metric ?? 'target'} ${(target.amountCents / 100).toFixed(0)} ${target.currency ?? ''}`.trim() : null,
       dueAt: w.dueAt,
+      deadline: deadlineText({ dueAt: w.dueAt, executionWindowDays: w.executionWindowDays ?? null, executionStartedAt: w.executionStartedAt ?? null }),
       waiting: (requests.get(w.projectId!) ?? []).length ? `PERSON: ${(requests.get(w.projectId!) ?? []).length} open request(s) in its project` : 'not derived',
       next: 'not derived',
       openDecisions: (requests.get(w.projectId!) ?? []).length,

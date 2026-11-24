@@ -46,6 +46,7 @@ import { getUser, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { decideProjectAccess } from '../identity/policy.ts';
 import type { Principal } from '../../domain/types.ts';
 import type { Workstream } from '../../domain/register.ts';
+import { daysLeftOf } from '../../domain/executionWindow.ts';
 
 /** The workstream event a goal-derived activation is recorded under. */
 export const GOAL_SPRINT_EVENT = 'GOAL_RESEARCH_SPRINT_ACTIVATED';
@@ -110,7 +111,7 @@ export async function activateGoalSprints(now = new Date()): Promise<GoalSprintO
       continue;
     }
     const currency = goal.target!.currency;
-    const horizonDays = goal.dueAt ? Math.max(1, Math.ceil((Date.parse(goal.dueAt) - now.getTime()) / DAY_MS)) : DEFAULT_HORIZON_DAYS;
+    const horizonDays = goal.dueAt ? Math.max(1, daysLeftOf({ dueAt: goal.dueAt, executionWindowDays: goal.executionWindowDays ?? null, executionStartedAt: goal.executionStartedAt ?? null }, now) ?? 1) : DEFAULT_HORIZON_DAYS;
     const outcome = await activate({
       projectId,
       ownerUserId: goal.ownerUserId ?? actor,
