@@ -17313,3 +17313,98 @@ starter, served by Brain's own process at `/command`. The rules it settled:
 Pinned by `tests/commandCenter.test.ts`, and driven in a real browser by
 `node tests/browser/command-center.mjs`: a throwaway Brain, every page on a
 desktop and a phone viewport, and the writes a person makes through it.
+
+## 121. A standing GPU authorization is bounded by a rate, never by a clock, and the GPU runs whenever useful work waits.
+
+**The defect.** Pod `eaboawshas41wq` (1× H200 SXM, $5.29/h, gpt-oss-120b) sat
+EXITED from 2026-11-19 while ~174 GPU-suitable lane items and 1,622 ideas
+waited, because `runpod-launch` had set a fixed budget window
+(`BRAIN_RUNPOD_BUDGET_FROM`) and the window ended (§86's invariant-38 rule: a
+bounded run is over when its window ends). Every further GPU hour needed a
+person to launch it again. While it ran it answered ~34.5 accepted jobs per
+running hour, yet Brain kept only 5.5–8.9 requests in flight of its 128 vLLM
+sequences (PR #1270): the GPU slot was held at 12 by an even split of the
+lane's database-pool budget and halved again under event-loop pressure.
+
+**The owner's standing order, 2026-11-24.** "Brain is authorized to operate its
+dedicated GPU infrastructure continuously, 24/7. My RunPod account
+automatically replenishes by $100 when its balance reaches $75. Do not impose a
+temporary $60 budget, daily expiration, or recurring manual launch requirement
+… Routine GPU operation and automatic recovery are permanently authorized at
+the selected reasonable hardware rate. Request approval only for materially
+more expensive hardware, additional GPUs, or changes to the existing automatic
+replenishment arrangement."
+
+**The rule.** Under `BRAIN_RUNPOD_AUTHORIZATION=continuous` the dollar budget
+does not exist (`podBudget` returns null) and nothing expires. What binds is:
+
+- **A rate, for one card.** `BRAIN_RUNPOD_AUTHORIZED_USD_PER_HOUR` (default
+  $2.50). A pod RunPod prices above it is refused in the decision itself —
+  stopped if running, never started, replaced by the authorized recipe when
+  work waits — and the refusal's reason says a dearer card or a second GPU
+  needs the owner's approval. Every pod the supervisor creates is created
+  within that rate (`migratePod` → `createPod`'s ceiling), and the recipe is one
+  card. Invariant 38 still holds: the ceiling was set by a person first, and no
+  clock releases a commitment — the authorization is a rate the owner chose,
+  not a window that refills.
+- **The balance, near zero only.** RunPod deletes every pod at a zero balance
+  (2026-11-10). The owner's account replenishes at $75, so between $75 and the
+  stop floor (`BRAIN_RUNPOD_BALANCE_FLOOR_USD`, default $10, about four hours of
+  the A100) the pod keeps working and the reading says replenishment may have
+  failed; under the floor it is stopped and nothing starts. A low-runway
+  warning is never a stop.
+- **Useful work.** The supervisor is the one owner of the pod's power (§98): it
+  keeps the pod running while claimable GPU-suitable lane work waits or is in
+  flight, stops it after 30 idle minutes, and starts it again by itself when
+  work appears. It restarts a pod whose vLLM has not served for 35 minutes with
+  work waiting (twice), then replaces it; it recreates a pod RunPod deleted
+  (404) from the authorized recipe; a host with no free GPU still moves the pod
+  after three refusals (§86). The hourly `runpod-auto` only finds the pod under
+  the authorization (`runpod-restore --find-only`): a second pod from its own
+  default recipe would be a GPU nobody authorized.
+
+**Where the authorization lives.** Fly secrets set once by `cheap-lane.yml
+runpod-authorize` (`BRAIN_RUNPOD_AUTHORIZATION`, `_AUTHORIZED_USD_PER_HOUR`,
+`_AUTHORIZED_AT`, `_RECIPE`), so it survives every deploy, restart and
+replenishment; the action also unsets the bounded run's budget secrets, moves
+the GPU to the authorized recipe with a tool-call probe, and retires the old
+pod. The secrets are staged and applied by the connect, so the supervisor never
+acts on the authorization while the action is still creating that pod. And the
+rule is a row (§119): the supervisor writes one `RUNPOD_POD AUTHORIZED` row per
+distinct authorization, and every sample carries the authorized rate, the
+recipe and the balance it read.
+
+**The card.** Measured demand, not peak speed, chose it. Brain feeds the GPU
+7–12 requests at once; per-request decode speed was never the limit, and
+$5.29/h bought idle sequences. The cheapest 80 GB card that runs the existing
+gpt-oss-120b recipe on SECURE (on-demand, not interruptible community) cloud is
+the A100 80 GB: recipe `gpt-oss-120b-a100` (A100-SXM4-80GB secure $2.19/h,
+A100 80GB PCIe secure $2.09/h, runpod-survey 45346063896). MXFP4 weights (~61
+GB) leave ~12 GB of KV cache — 20–40 sequences of Brain's lane prompts,
+several times what Brain keeps in flight — and vLLM serves gpt-oss on Ampere by
+default (Marlin MXFP4 MoE, Triton attention). If an A100 cannot serve it, the
+fallback is `gpt-oss-120b-h100` (SECURE H100, $4.39/h): twice the rate, so it
+is the owner's approval, not Brain's (dispatch `runpod-authorize` with that
+recipe and `max_usd_per_hour=4.50`). A larger card or a second GPU is chosen
+only when the measured accepted rate is bounded by the card, not by Brain's
+feed.
+
+**Concurrency is still one controller (§86).** The GPU slot's database-pool
+cap is no longer an even split: `poolShare` gives a free model its even share
+and the GPU what the other models do not hold, so the lane's total stays
+`poolMax × SLOTS_PER_DB_CONNECTION` and the database sees no more slots. Growth
+now also holds when the GPU's mean answer time passes twice the lowest of the
+last hour (`decideTarget`'s `latency`), so more sequences are added only while
+they add work rather than time; vLLM's served sequences remain the ceiling.
+Success per dollar is measured: `GPU CAPACITY` prints accepted GPU jobs per
+dollar (`gpuThroughput.acceptedPerDollar`).
+
+**Shown where the owner looks (§57).** `brain_operator_capacity` carries `gpu`
+(`cheap/gpuStatus.ts`, rows only, cached a minute), and the Command Center's
+Live operations page shows it: pod status and card, $/h against the authorized
+rate, spend today and since authorization, the RunPod balance, waiting / in
+flight / concurrency target, jobs per running hour, accepted jobs, accepted per
+dollar, and every active restriction in a sentence ("stopped: no waiting work",
+"refused: card at $5.29/h is above the authorized $2.50/h …").
+
+Pinned by `tests/runpodContinuous.test.ts`.

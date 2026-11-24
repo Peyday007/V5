@@ -81,6 +81,23 @@ export interface PlanSummary {
 export interface Utilization {
   pools: { pool: string; waiting: number; running: number; capacity: number; idle: boolean; because: string }[] | null;
   readAt: string | null; ageSeconds: number | null; source: 'LIVE' | 'CACHED' | 'NONE'; note: string | null;
+  /** server/services/cheap/gpuStatus.ts (§121) */
+  gpu?: GpuStatus | null;
+}
+
+export interface GpuStatus {
+  configured: boolean;
+  authorization: { mode: 'continuous'; usdPerHour: number; since: string | null; recipe: string; balanceFloorUsd: number; replenishAtUsd: number } | null;
+  pod: { id: string | null; status: string; ready: boolean; costPerHr: number | null; card: string | null; recipe: string | null; observedAt: string | null };
+  spend: { todayUsd: number | null; sinceAuthorizationUsd: number | null };
+  balanceUsd: number | null;
+  work: {
+    waiting: number | null; inFlight: number | null; slotTarget: number | null; slotReason: string | null;
+    runningHours24h: number; jobsPerRunningHour24h: number | null; accepted24h: number; acceptedLastHour: number; acceptedPerDollar24h: number | null;
+    state: 'BUSY' | 'IDLE_WITH_WORK' | 'IDLE_NO_WORK' | 'STOPPED_NO_WORK' | 'STOPPED_WITH_WORK' | 'UNKNOWN';
+  };
+  restrictions: string[];
+  readAt: string;
 }
 
 // server/services/fleet/view.ts, workforce.ts

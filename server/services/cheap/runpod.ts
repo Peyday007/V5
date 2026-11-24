@@ -153,10 +153,25 @@ export function runpodPaused(): string | null {
  * failure — the fallback answers it — so the capacity controller reads this to
  * size the GPU's slots by what the GPU itself did.
  */
-const calls: { at: number; ok: boolean }[] = [];
-function noteCall(ok: boolean, now: number): void {
-  calls.push({ at: now, ok });
+const calls: { at: number; ok: boolean; ms: number | null }[] = [];
+function noteCall(ok: boolean, now: number, ms: number | null = null): void {
+  calls.push({ at: now, ok, ms });
   if (calls.length > 2000) calls.splice(0, calls.length - 2000);
+}
+
+/**
+ * The GPU's mean answer time over its successful calls in the window, ms, or null under
+ * `minCalls` of them (§121: the concurrency controller holds growth when this rises).
+ */
+export function runpodLatency(ms: number, now = Date.now(), minCalls = 4): number | null {
+  let sum = 0;
+  let n = 0;
+  for (const call of calls) {
+    if (call.at < now - ms || !call.ok || call.ms === null) continue;
+    sum += call.ms;
+    n += 1;
+  }
+  return n >= minCalls ? sum / n : null;
 }
 export function runpodCallWindow(ms: number, now = Date.now()): { ok: number; failed: number } {
   let ok = 0;
@@ -311,6 +326,7 @@ export async function routeRunpod(
     counts.skipped += 1;
     return fallBack('breaker open after repeated failures');
   }
+  const began = now();
   try {
     // Never wait longer on the GPU than the caller would wait on anyone.
     const text = await runpodChat(runpod, system, prompt, {
@@ -320,7 +336,8 @@ export async function routeRunpod(
     });
     recordSuccess();
     counts.served += 1;
-    noteCall(true, now());
+    const ended = now();
+    noteCall(true, ended, Math.max(0, ended - began));
     // The GPU answered: the slot's own model. A fallback reports itself (`httpCompleter`).
     options.onServed?.(runpod.label);
     return text;

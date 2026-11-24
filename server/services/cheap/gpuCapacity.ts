@@ -186,6 +186,8 @@ export interface GpuThroughput {
   dollars: number;
   /** Dollars per accepted GPU item; null with none. */
   dollarsPerAccepted: number | null;
+  /** Accepted GPU items per dollar the pod billed: the success per dollar the concurrency controller is judged on (§121); null with no spend. */
+  acceptedPerDollar: number | null;
 }
 
 /** Pure: the GPU's measured throughput over the days given. */
@@ -202,6 +204,7 @@ export function gpuThroughput(jobs: GpuJobSummary, days: readonly RunningDay[]):
     acceptedShare: done > 0 ? r2(jobs.gpu.submitted / done) : null,
     dollars: r2(dollars),
     dollarsPerAccepted: jobs.gpu.submitted > 0 ? r2(dollars / jobs.gpu.submitted) : null,
+    acceptedPerDollar: dollars > 0 ? r2(jobs.gpu.submitted / dollars) : null,
   };
 }
 
@@ -242,7 +245,9 @@ export function shrinkCauses(rows: readonly CapacityDecisionRow[]): Map<string, 
               ? 'Brain database saturated'
               : /provider overloaded/.test(why)
                 ? 'GPU calls failing (overloaded)'
-                : /no research waiting/.test(why)
+                : /GPU answer time/.test(why)
+                  ? 'held: GPU answer time over its baseline'
+                  : /no research waiting/.test(why)
                   ? 'nothing waiting'
                   : /useful research waiting/.test(why)
                     ? 'grew: research waiting'

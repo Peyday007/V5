@@ -42,11 +42,18 @@
  * at hour 12.5 had budget freed minute by minute from then on, and the pod was
  * started again and again for as long as the account had money. Once a fixed
  * window has ended the run is over: the pod is stopped and nothing starts it.
+ *
+ * Under the owner's standing authorization (`BRAIN_RUNPOD_AUTHORIZATION=continuous`,
+ * §121) none of the budget applies: the authorized hourly rate for one card and
+ * the account's balance bind instead, the idle stop waits 30 minutes, and the
+ * supervisor also restarts a pod whose vLLM stalled and recreates a deleted or
+ * over-rate pod from the authorized recipe (`gpuAuthorization`, `decidePod`).
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent, type RecordBinEventInput } from '../../repos/bins.ts';
 import { runpodConfig, runpodUrlOverride, setRunpodPaused, setRunpodUrlOverride, type Fetch } from './runpod.ts';
 import { createPod, deletePod, DEFAULT_MAX_USD_PER_HOUR, graphql, POD_NAME, podUrl, RECIPES, recipeFor, type PodRecipe } from './runpodRestore.ts';
+import { accountReading } from './runpodAccount.ts';
 
 const API = 'https://rest.runpod.io/v1';
 export const DEFAULT_IDLE_STOP_MS = 15 * 60_000;
@@ -89,6 +96,9 @@ export function budgetWindowEnded(budget: PodBudget, now: number): boolean {
  * `DEFAULT_PRIMARY_BUDGET_USD` and anything else gets none (nothing runs then).
  */
 export function podBudget(env: NodeJS.ProcessEnv = process.env): PodBudget | null {
+  // Under the owner's standing authorization no dollar window ends the run (§121): the hourly
+  // rate and the account's balance bind instead (`gpuAuthorization`).
+  if (gpuAuthorization(env)) return null;
   const hours = Number(env['BRAIN_RUNPOD_BUDGET_WINDOW_HOURS']);
   const windowMs = (Number.isFinite(hours) && hours > 0 ? hours : DEFAULT_BUDGET_WINDOW_HOURS) * 3_600_000;
   const raw = env['BRAIN_RUNPOD_BUDGET_USD']?.trim();
@@ -97,6 +107,100 @@ export function podBudget(env: NodeJS.ProcessEnv = process.env): PodBudget | nul
   const from = fromRaw ? Date.parse(fromRaw) : Number.NaN;
   if (Number.isFinite(usd) && usd >= 0) return { usd, windowMs, defaulted: false, ...(Number.isFinite(from) ? { from } : {}) };
   if ((env['BRAIN_RUNPOD_MODE'] ?? '').trim().toLowerCase() === 'primary') return { usd: DEFAULT_PRIMARY_BUDGET_USD, windowMs, defaulted: true };
+  return null;
+}
+
+/* ------------------------------------------------------------------------- */
+/* The owner's standing authorization (§121)                                  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Owner's standing order, 2026-11-24: "Brain is authorized to operate its
+ * dedicated GPU infrastructure continuously, 24/7 … Do not impose a temporary
+ * budget, daily expiration, or recurring manual launch requirement … Request
+ * approval only for materially more expensive hardware, additional GPUs, or
+ * changes to the existing automatic replenishment arrangement."
+ *
+ * Set once by `cheap-lane.yml runpod-authorize` as Fly secrets, so it survives
+ * every deploy, restart and replenishment; nothing here expires it. Under it:
+ *
+ *   - no budget window applies (`podBudget` returns null);
+ *   - the binding limit is the authorized hourly rate for ONE card: a pod RunPod
+ *     prices above it is refused — stopped if running, replaced by the
+ *     authorized recipe if stopped — and the refusal says it needs the owner;
+ *   - the account's balance binds only near RunPod's zero (which deletes every
+ *     pod): above the replenishment trigger nothing is said, between it and the
+ *     stop floor the pod keeps running and the reading says replenishment may
+ *     have failed, under the stop floor the pod is stopped and nothing starts;
+ *   - a deleted pod is recreated, and a pod whose vLLM never serves is restarted
+ *     and then replaced, all from the authorized recipe within the rate.
+ */
+export interface GpuAuthorization {
+  mode: 'continuous';
+  /** The most one pod may cost per hour: the selected card's rate with a little room for RunPod's price moves. */
+  usdPerHour: number;
+  /** When the owner's authorization was recorded (ISO); spend "since authorization" counts from it. */
+  since: string | null;
+  /** The recipe a lost or refused pod is recreated from. */
+  recipe: string;
+  /** Under this balance the pod is stopped before RunPod's zero deletes it. */
+  balanceFloorUsd: number;
+  /** The balance at which the owner's account replenishes itself; below it is a warning, not a stop. */
+  replenishAtUsd: number;
+}
+
+export const DEFAULT_CONTINUOUS_RECIPE = 'gpt-oss-120b-a100';
+/** A100-SXM4-80GB secure listed at $2.19/h (survey 45346063896), with ~14% room for price moves; an H100 ($4.39) is refused. */
+export const DEFAULT_CONTINUOUS_USD_PER_HOUR = 2.5;
+/** About four hours of the A100 at its rate: enough to stop cleanly before RunPod's zero. */
+export const DEFAULT_BALANCE_FLOOR_USD = 10;
+/** The owner's automatic replenishment fires at $75 (+$100). */
+export const DEFAULT_REPLENISH_AT_USD = 75;
+/** Continuous operation stops a pod only after this much sustained idleness (no claimable GPU work, nothing in flight). */
+export const CONTINUOUS_IDLE_STOP_MS = 30 * 60_000;
+/** A 120B pod downloads ~65 GB and loads it; a RUNNING pod whose vLLM has not served for this long is restarted. */
+export const VLLM_STALL_MS = 35 * 60_000;
+/** Restarts of a pod whose vLLM never served before it is replaced from the recipe on another host. */
+export const MAX_VLLM_RESTARTS = 2;
+/** How often the supervisor reads the account's balance. */
+export const BALANCE_READ_MS = 10 * 60_000;
+
+const positive = (raw: string | undefined, fallback: number): number => {
+  const n = Number(raw?.trim());
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+/** The owner's standing authorization from the environment, or null when the GPU runs budgeted (or not at all). */
+export function gpuAuthorization(env: NodeJS.ProcessEnv = process.env): GpuAuthorization | null {
+  if ((env['BRAIN_RUNPOD_AUTHORIZATION'] ?? '').trim().toLowerCase() !== 'continuous') return null;
+  const since = env['BRAIN_RUNPOD_AUTHORIZED_AT']?.trim();
+  const recipe = env['BRAIN_RUNPOD_RECIPE']?.trim();
+  return {
+    mode: 'continuous',
+    usdPerHour: positive(env['BRAIN_RUNPOD_AUTHORIZED_USD_PER_HOUR'], DEFAULT_CONTINUOUS_USD_PER_HOUR),
+    since: since && Number.isFinite(Date.parse(since)) ? new Date(Date.parse(since)).toISOString() : null,
+    recipe: recipe && RECIPES[recipe] ? recipe : DEFAULT_CONTINUOUS_RECIPE,
+    balanceFloorUsd: positive(env['BRAIN_RUNPOD_BALANCE_FLOOR_USD'], DEFAULT_BALANCE_FLOOR_USD),
+    replenishAtUsd: positive(env['BRAIN_RUNPOD_REPLENISH_AT_USD'], DEFAULT_REPLENISH_AT_USD),
+  };
+}
+
+/** Pure: why a pod's price is refused under the authorization, or null when it is within it (or unknown). */
+export function rateRefusal(auth: GpuAuthorization | null | undefined, costPerHr: number | null | undefined): string | null {
+  if (!auth || costPerHr === null || costPerHr === undefined || !Number.isFinite(costPerHr)) return null;
+  if (costPerHr <= auth.usdPerHour + 1e-9) return null;
+  return `refused: card at $${costPerHr.toFixed(2)}/h is above the authorized $${auth.usdPerHour.toFixed(2)}/h; a dearer card or a second GPU needs the owner's approval`;
+}
+
+/** Pure: what the balance says under the authorization — stop, warn, or nothing. */
+export function balanceRestriction(auth: GpuAuthorization | null | undefined, balance: number | null | undefined): { stop: boolean; reason: string } | null {
+  if (!auth || balance === null || balance === undefined || !Number.isFinite(balance)) return null;
+  if (balance < auth.balanceFloorUsd) {
+    return { stop: true, reason: `RunPod balance $${balance.toFixed(2)} is under the $${auth.balanceFloorUsd.toFixed(2)} stop floor: stopped before RunPod's zero deletes the pod (replenishment at $${auth.replenishAtUsd} did not arrive)` };
+  }
+  if (balance < auth.replenishAtUsd) {
+    return { stop: false, reason: `RunPod balance $${balance.toFixed(2)} is under the $${auth.replenishAtUsd} replenishment trigger: replenishment may have failed; running on until the $${auth.balanceFloorUsd.toFixed(2)} stop floor` };
+  }
   return null;
 }
 
@@ -185,6 +289,8 @@ export interface PodConfig {
   idleStopMs: number;
   /** The dollar cap the supervisor enforces; absent or null, none. */
   budget?: PodBudget | null;
+  /** The owner's standing authorization (§121); absent or null, the GPU runs under its budget. */
+  authorization?: GpuAuthorization | null;
   /** vLLM's own address and key, to tell a loaded pod from a booting one. */
   vllm: { url: string; key: string | null };
 }
@@ -202,13 +308,19 @@ export function podConfig(env: NodeJS.ProcessEnv = process.env): PodConfig | nul
   const podId = (moved ? podIdFromUrl(moved) : null) || env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(env['BRAIN_RUNPOD_URL'] ?? '');
   if (!podId) return null;
   const minutes = Number(env['BRAIN_RUNPOD_IDLE_STOP_MINUTES']);
-  return { apiKey, podId, idleStopMs: Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : DEFAULT_IDLE_STOP_MS, budget: podBudget(env), vllm: { url: gpu.url, key: gpu.key } };
+  const authorization = gpuAuthorization(env);
+  const idleStopMs = Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : authorization ? CONTINUOUS_IDLE_STOP_MS : DEFAULT_IDLE_STOP_MS;
+  return { apiKey, podId, idleStopMs, budget: podBudget(env), authorization, vllm: { url: gpu.url, key: gpu.key } };
 }
 
 export type PodStatus = 'RUNNING' | 'EXITED' | 'TERMINATED' | 'UNKNOWN';
 
 export interface PodDecision {
-  action: 'STOP' | 'START' | 'NONE';
+  /**
+   * RESTART and REPLACE are taken only under the owner's standing authorization (§121): restart a
+   * pod whose vLLM stopped serving, and recreate a deleted or refused pod from the authorized recipe.
+   */
+  action: 'STOP' | 'START' | 'RESTART' | 'REPLACE' | 'NONE';
   reason: string;
 }
 
@@ -235,9 +347,50 @@ export function decidePod(input: {
    * starts (a cap that cannot be read is not a cap), but nothing is stopped on it.
    */
   budget?: PodBudgetReading | null;
+  /** The owner's standing authorization (§121). Absent, none of the readings below change anything. */
+  authorization?: GpuAuthorization | null;
+  /** RunPod's price for this pod. */
+  costPerHr?: number | null;
+  /** The account's balance, last read. */
+  balance?: number | null;
+  /** The pod's vLLM answered `/models` this step. */
+  ready?: boolean;
+  /** How long a RUNNING pod's vLLM has not served, ms (0 while it serves). */
+  unreadyMs?: number;
+  /** Restarts already made of this pod while its vLLM did not serve. */
+  restarts?: number;
 }): PodDecision {
   const { status, waiting, inFlight, idleSince, lastActionAt, now, idleStopMs, budget } = input;
   const settled = now - lastActionAt >= MIN_ACTION_GAP_MS;
+  const auth = input.authorization ?? null;
+  if (auth) {
+    const refused = rateRefusal(auth, input.costPerHr);
+    const balance = balanceRestriction(auth, input.balance);
+    const recipe = `recipe ${auth.recipe} within $${auth.usdPerHour.toFixed(2)}/h`;
+    if (status === 'TERMINATED') {
+      if (waiting <= 0) return { action: 'NONE', reason: 'pod deleted; recreated from the authorized recipe when GPU work waits' };
+      if (balance?.stop) return { action: 'NONE', reason: `pod deleted, ${waiting} item(s) waiting, not recreating: ${balance.reason}` };
+      if (!settled) return { action: 'NONE', reason: 'pod deleted; just acted, holding' };
+      return { action: 'REPLACE', reason: `pod deleted with ${waiting} item(s) waiting; recreating from ${recipe}` };
+    }
+    if (status === 'UNKNOWN') return { action: 'NONE', reason: 'pod status unknown; changing nothing' };
+    if (balance?.stop) {
+      if (status === 'RUNNING') return settled ? { action: 'STOP', reason: balance.reason } : { action: 'NONE', reason: `${balance.reason}; just acted, holding` };
+      return { action: 'NONE', reason: `stopped; ${balance.reason}` };
+    }
+    if (refused) {
+      // The rate outranks the work: a dearer card is never run on a standing authorization.
+      if (status === 'RUNNING') return settled ? { action: 'STOP', reason: refused } : { action: 'NONE', reason: `${refused}; just acted, holding` };
+      if (waiting > 0 && settled) return { action: 'REPLACE', reason: `${refused}; replacing it with ${recipe} for ${waiting} waiting item(s)` };
+      return { action: 'NONE', reason: `stopped; ${refused}` };
+    }
+    if (status === 'RUNNING' && input.ready === false && (waiting > 0 || inFlight > 0) && (input.unreadyMs ?? 0) >= VLLM_STALL_MS) {
+      const minutes = Math.round((input.unreadyMs ?? 0) / 60_000);
+      if (!settled) return { action: 'NONE', reason: `vLLM not serving for ${minutes} min; just acted, holding` };
+      if ((input.restarts ?? 0) < MAX_VLLM_RESTARTS) return { action: 'RESTART', reason: `vLLM has not served for ${minutes} min with GPU work waiting; restarting the pod (restart ${(input.restarts ?? 0) + 1} of ${MAX_VLLM_RESTARTS})` };
+      return { action: 'REPLACE', reason: `vLLM did not serve after ${input.restarts ?? 0} restart(s); replacing the pod with ${recipe}` };
+    }
+  }
   const overBudget = budget?.ended
     ? `GPU run over: its fixed ${budget.windowHours} h budget window from ${budget.since} has ended ($${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} spent)`
     : budget?.exhausted
@@ -297,7 +450,9 @@ export async function viaGraphql(config: Pick<PodConfig, 'apiKey' | 'podId'>, me
         ? `mutation { podStop(input: { podId: ${id} }) { desiredStatus } }`
         : method === 'POST' && path === '/start'
           ? `mutation { podResume(input: { podId: ${id}, gpuCount: 1 }) { desiredStatus } }`
-          : null;
+          : method === 'POST' && path === '/restart'
+            ? `mutation { podRestart(input: { podId: ${id} }) { desiredStatus } }`
+            : null;
   if (!query) return null;
   const response = await fetchImpl('https://api.runpod.io/graphql', {
     method: 'POST',
@@ -349,6 +504,9 @@ async function billingStartViaGraphql(config: Pick<PodConfig, 'apiKey' | 'podId'
 export async function readPod(config: PodConfig, fetchImpl: Fetch = fetch, now: number = Date.now()): Promise<PodReading> {
   try {
     const response = await api(config, 'GET', '', fetchImpl);
+    // RunPod's own word that the pod does not exist (deleted at a zero balance, 2026-11-10): it is
+    // gone, not unreadable — under the standing authorization it is recreated (§121).
+    if (response.status === 404) return { status: 'TERMINATED', costPerHr: null, startedAt: null };
     if (!response.ok) return { status: 'UNKNOWN', costPerHr: null, startedAt: null };
     const body = (await response.json()) as PodBody;
     const status = (['RUNNING', 'EXITED', 'TERMINATED'] as const).find((s) => s === body.desiredStatus) ?? 'UNKNOWN';
@@ -519,8 +677,12 @@ export interface MigrateDeps {
 export async function migratePod(config: PodConfig, why: string, deps: MigrateDeps = {}): Promise<{ ok: boolean; url: string | null; podId: string | null; detail: string }> {
   const env = deps.env ?? process.env;
   const served = runpodConfig(env)?.model ?? null;
-  const recipe = recipeServing(served);
-  const ceiling = Number(env['BRAIN_RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(env['BRAIN_RUNPOD_MAX_USD_PER_HOUR']) : DEFAULT_MAX_USD_PER_HOUR;
+  // Under the standing authorization the replacement is the authorized recipe within the authorized
+  // rate (§121) — unless it serves another model than the lane asks for, which would break every call.
+  const auth = config.authorization !== undefined ? config.authorization : gpuAuthorization(env);
+  const authorized = auth ? recipeFor(auth.recipe) : null;
+  const recipe = authorized && (!served || authorized.served === served) ? authorized : recipeServing(served);
+  const ceiling = auth ? auth.usdPerHour : Number(env['BRAIN_RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(env['BRAIN_RUNPOD_MAX_USD_PER_HOUR']) : DEFAULT_MAX_USD_PER_HOUR;
   const from = config.podId;
   if (!config.vllm.key) {
     const detail = 'no vLLM key (BRAIN_RUNPOD_KEY) to start a replacement with';
@@ -552,8 +714,9 @@ export async function migratePod(config: PodConfig, why: string, deps: MigrateDe
     await recordBinEvent({
       eventType: 'RUNPOD_POD',
       provider: 'runpod',
-      outcome: gone >= 200 && gone < 300 ? 'OLD_POD_DELETED' : 'OLD_POD_DELETE_FAILED',
-      reason: `stranded pod ${from} (HTTP ${gone})`,
+      // A pod RunPod had already deleted answers 404: it is gone either way.
+      outcome: (gone >= 200 && gone < 300) || gone === 404 ? 'OLD_POD_DELETED' : 'OLD_POD_DELETE_FAILED',
+      reason: `${gone === 404 ? 'already deleted' : 'stranded'} pod ${from} (HTTP ${gone})`,
       measures: { podId: from },
       evidenceClass: 'MEASURED',
     }).catch(() => undefined);
@@ -580,9 +743,30 @@ async function lastStartFailed(now: number): Promise<boolean> {
   }
 }
 
-const state = { idleSince: null as number | null, lastActionAt: 0, lastRun: 0, lastSample: 0, running: false, budgetMark: undefined as BudgetMark | null | undefined };
+const state = {
+  idleSince: null as number | null,
+  lastActionAt: 0,
+  lastRun: 0,
+  lastSample: 0,
+  running: false,
+  budgetMark: undefined as BudgetMark | null | undefined,
+  /** Since when a RUNNING pod's vLLM has not answered (§121). */
+  unreadySince: null as number | null,
+  /** Restarts of the current pod while its vLLM did not serve. */
+  restarts: 0,
+  /** The account's balance, last read, and when. */
+  balance: null as number | null,
+  balanceAt: 0,
+  /** The authorization last recorded as an AUTHORIZED row by this process. */
+  authMark: null as string | null,
+};
 
 export function resetPodSupervisor(): void {
+  state.authMark = null;
+  state.unreadySince = null;
+  state.restarts = 0;
+  state.balance = null;
+  state.balanceAt = 0;
   state.idleSince = null;
   state.lastActionAt = 0;
   state.lastRun = 0;
@@ -629,6 +813,8 @@ export async function superviseRunpodPod(
     budgetOnly?: boolean;
     /** Where the supervisor's own events go (default: `recordBinEvent`). */
     record?: (event: RecordBinEventInput) => Promise<void>;
+    /** The account's balance (default: RunPod's own, every `BALANCE_READ_MS`); read only under the standing authorization. */
+    balance?: () => Promise<number | null>;
   } = {},
 ): Promise<SuperviseResult | null> {
   if (deps.config === undefined) await loadMovedPod();
@@ -693,11 +879,98 @@ export async function superviseRunpodPod(
     const ready = pod.status === 'RUNNING' && (await vllmReady(config, fetchImpl));
     setRunpodPaused(pod.status === 'RUNNING' ? (ready ? null : 'vLLM still loading') : pod.status === 'UNKNOWN' ? null : `pod ${pod.status.toLowerCase()}`);
 
+    const auth = config.authorization ?? null;
+    if (auth && !deps.budgetOnly) {
+      // The owner's rule is a row too (§119): one AUTHORIZED row per distinct authorization, so the
+      // record says when continuous operation was authorized, at what rate and on which recipe.
+      const key = `${auth.since ?? 'unrecorded'} ${auth.usdPerHour} ${auth.recipe}`;
+      if (state.authMark !== key) {
+        state.authMark = key;
+        let seen = true;
+        try {
+          const row = await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome = 'AUTHORIZED' AND reason LIKE ?`, [`%[${key}]%`]);
+          seen = Number(row?.n ?? 0) > 0;
+        } catch {
+          // Unreadable: recorded again, at most once per process — a repeated row costs less than none.
+          seen = false;
+        }
+        if (!seen) {
+          await record({
+            eventType: 'RUNPOD_POD',
+            provider: 'runpod',
+            outcome: 'AUTHORIZED',
+            reason: `continuous GPU operation authorized by the owner's standing order (2026-11-24): up to $${auth.usdPerHour}/h for one card on recipe ${auth.recipe}; no budget window [${key}]`,
+            measures: { ...auth },
+            evidenceClass: 'MEASURED',
+          }).catch(() => undefined);
+        }
+      }
+    }
+    if (auth) {
+      if (pod.status === 'RUNNING' && !ready) state.unreadySince ??= now;
+      else state.unreadySince = null;
+      if (ready) state.restarts = 0;
+      if (now - state.balanceAt >= BALANCE_READ_MS || state.balanceAt === 0) {
+        state.balanceAt = now;
+        const read = deps.balance ?? (async () => (await accountReading(config.apiKey, fetchImpl)).balance);
+        const value = await read().catch(() => null);
+        if (value !== null) state.balance = value;
+      }
+    }
     const startFailedRecently = pod.status === 'RUNNING' && (await (deps.lastStartFailed ?? lastStartFailed)(now));
-    const decided = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently, budget });
-    const decision: PodDecision =
-      deps.budgetOnly && !(decided.action === 'STOP' && budget?.exhausted) ? { action: 'NONE', reason: `budget check only: ${decided.reason}` } : decided;
+    const decided = decidePod({
+      status: pod.status,
+      waiting: input.waiting,
+      inFlight: input.inFlight,
+      idleSince: state.idleSince,
+      lastActionAt: state.lastActionAt,
+      now,
+      idleStopMs: config.idleStopMs,
+      startFailedRecently,
+      budget,
+      ...(auth
+        ? { authorization: auth, costPerHr: pod.costPerHr, balance: state.balance, ready, unreadyMs: state.unreadySince === null ? 0 : now - state.unreadySince, restarts: state.restarts }
+        : {}),
+    });
+    const budgetStop = decided.action === 'STOP' && (budget?.exhausted || (auth && (rateRefusal(auth, pod.costPerHr) || balanceRestriction(auth, state.balance)?.stop)));
+    const decision: PodDecision = deps.budgetOnly && !budgetStop ? { action: 'NONE', reason: `budget check only: ${decided.reason}` } : decided;
     let acted = false;
+    if (decision.action === 'REPLACE') {
+      const moved = await migratePod(config, decision.reason, {
+        ...(deps.migrate ?? {}),
+        ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      });
+      state.lastActionAt = now;
+      state.idleSince = null;
+      state.unreadySince = null;
+      state.restarts = 0;
+      return { status: pod.status, ready: false, decision: { action: 'REPLACE', reason: moved.ok ? `${decision.reason}: now ${moved.podId}` : `${decision.reason}; replacement failed: ${moved.detail}` }, acted: moved.ok, budget };
+    }
+    if (decision.action === 'RESTART') {
+      let outcome = 'RESTART_FAILED';
+      let detail = '';
+      try {
+        const response = await api(config, 'POST', '/restart', fetchImpl);
+        acted = response.ok;
+        outcome = response.ok ? 'RESTARTED' : 'RESTART_FAILED';
+        if (!response.ok) detail = ` (RunPod answered HTTP ${response.status})`;
+      } catch (error) {
+        detail = ` (${(error as Error).name})`;
+      }
+      state.lastActionAt = now;
+      state.restarts += 1;
+      state.unreadySince = now;
+      if (acted) setRunpodPaused('pod restarting');
+      await record({
+        eventType: 'RUNPOD_POD',
+        provider: 'runpod',
+        outcome,
+        reason: `${decision.reason}${detail}`.slice(0, 400),
+        measures: { podId: config.podId, waiting: input.waiting, inFlight: input.inFlight, status: pod.status, costPerHr: pod.costPerHr, restarts: state.restarts, ...billedFrom },
+        evidenceClass: 'MEASURED',
+      }).catch(() => undefined);
+      return { status: pod.status, ready, decision, acted, budget };
+    }
     const refusals = decision.action === 'START' ? await (deps.hostRefusals ?? hostRefusalsSinceStart)(config.podId) : 0;
     if (decision.action === 'START' && shouldMigrate({ status: pod.status, waiting: input.waiting, hostRefusals: refusals })) {
       const moved = await migratePod(config, `${refusals} start(s) refused for a full host with ${input.waiting} research item(s) waiting`, {
@@ -749,7 +1022,15 @@ export async function superviseRunpodPod(
         outcome: `SAMPLE_${pod.status}`,
         reason: decision.reason.slice(0, 400),
         durationMs: SAMPLE_MS,
-        measures: { podId: config.podId, waiting: input.waiting, inFlight: input.inFlight, ready, costPerHr: pod.costPerHr, ...billedFrom },
+        measures: {
+          podId: config.podId,
+          waiting: input.waiting,
+          inFlight: input.inFlight,
+          ready,
+          costPerHr: pod.costPerHr,
+          ...billedFrom,
+          ...(auth ? { authorizedUsdPerHour: auth.usdPerHour, recipe: auth.recipe, ...(state.balance !== null ? { balance: round(state.balance) } : {}) } : {}),
+        },
         evidenceClass: 'MEASURED',
       }).catch(() => undefined);
     }
