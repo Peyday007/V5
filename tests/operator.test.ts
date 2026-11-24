@@ -72,6 +72,13 @@ describe('cadence, models, brief', () => {
     expect(operatorModels({ lane: { url: 'http://x', key: null, models: ['auto'] }, pod: null }).map((m) => m.baseUrl)).toEqual(['http://x/v1']);
     expect(operatorModels({ lane: null, pod: null })).toEqual([]);
   });
+  it('tells the operator to act within its first calls, and to answer a miscalibration REVISE in the same run (production, 2026-11-24)', () => {
+    const brief = operatorBrief({ nowIso: '2026-11-24T00:00:00Z', runId: 'opr_x' });
+    expect(brief).toMatch(/ACT EARLY/);
+    expect(brief).toMatch(/within your first five tool calls/);
+    expect(brief).toMatch(/goal_plan is the slowest read: call it at most once/);
+    expect(brief).toMatch(/call brain_operator_decide again in this run until/);
+  });
   it('the brief names only tools the operator is given', () => {
     const brief = operatorBrief({ nowIso: '2026-11-12T00:00:00Z', runId: 'opr_x' });
     for (const name of brief.match(/brain_operator_[a-z_]+/g) ?? []) {
