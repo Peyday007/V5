@@ -190,7 +190,8 @@ const capacityTool: McpTool = {
   title: 'Operator: capacity',
   description:
     "Brain's four pools of capacity (Claude routines, the free model lane and GPU, research slots, the Factory line): " +
-    'what waits, what runs, the capacity, and whether a pool is idle beside waiting work. Answers within seconds: when a ' +
+    'what waits, what runs, the capacity, and whether a pool is idle beside waiting work; and the GPU (gpu): pod status, ' +
+    'card, $/h, spend, balance, jobs and every active restriction. Answers within seconds: when a ' +
     'live read takes longer, the last complete reading is served with its age (source CACHED, ageSeconds) while the live ' +
     'read finishes for the next call.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -199,7 +200,10 @@ const capacityTool: McpTool = {
     await requireReader(principal);
     const { utilizationWithin } = await import('../services/engineering/watchdog.ts');
     const reading = await utilizationWithin();
-    return { projectId: null, value: { ...reading } };
+    // The GPU's operating status (§121): what the Command Center's GPU panel shows. Rows only, cached.
+    const { readGpuStatus } = await import('../services/cheap/gpuStatus.ts');
+    const gpu = await readGpuStatus().catch(() => null);
+    return { projectId: null, value: { ...reading, gpu } };
   },
 };
 
@@ -210,7 +214,7 @@ const knowledgeTool: McpTool = {
     'What Brain learned from public commercial datasets (Census business counts, payroll and receipts by industry, nonemployer ' +
     'statistics): the sources it reads and their freshness, which industries it measured and interpreted, the monetization ' +
     'mechanisms mapped, recent derived figures, what is still missing, where the knowledge reached your goals\' plans ' +
-    '(buyer counts filed, assumptions replaced, questions answered) and whether the GPU and the pass are kept busy (§121).',
+    '(buyer counts filed, assumptions replaced, questions answered) and whether the GPU and the pass are kept busy (§122).',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Operator: commercial knowledge', ...READ_ONLY },
   run: async (_args, { principal }) => {

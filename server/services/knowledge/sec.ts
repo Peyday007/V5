@@ -1,5 +1,5 @@
 /**
- * SEC XBRL frames read into sector economics (§121): what public companies'
+ * SEC XBRL frames read into sector economics (§122): what public companies'
  * own filings say about margins, the cash cycle and capital intensity — the
  * three things the Census business counts cannot.
  *

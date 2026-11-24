@@ -1,5 +1,5 @@
 /**
- * The commercial knowledge pass (§121), run by the Russell tick: discover the
+ * The commercial knowledge pass (§122), run by the Russell tick: discover the
  * newest public datasets, read what is due, understand it, apply it to the
  * plans that will read it, and let the GPU interpret what is still unread.
  *

@@ -27,7 +27,7 @@
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { runpodConfig, servedByGpu } from '../server/services/cheap/runpod.ts';
-import { podConfig, readPod } from '../server/services/cheap/runpodPod.ts';
+import { gpuAuthorization, podConfig, readPod } from '../server/services/cheap/runpodPod.ts';
 import { BENCH_PREFIX, listPods } from '../server/services/cheap/runpodRestore.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
 import { failureClass, goalPipelineSpeed, goalResearchProgress, percentile, waitsUntilNext } from '../server/services/goals/researchYield.ts';
@@ -707,9 +707,17 @@ async function capacitySection(): Promise<void> {
   console.log(
     `  throughput ${t.runningHours} h running · ${t.jobsPerRunningHour ?? 'n/a'} GPU jobs/h · ${t.acceptedPerRunningHour ?? 'n/a'} accepted/h · ${t.meanInFlight ?? 'n/a'} in flight on average` +
       ` · accepted ${t.acceptedShare === null ? 'n/a' : `${Math.round(t.acceptedShare * 100)}%`} · $${t.dollars} · ${t.dollarsPerAccepted === null ? 'no accepted GPU job' : `$${t.dollarsPerAccepted} per accepted job`}` +
+      `${t.acceptedPerDollar === null ? '' : ` · ${t.acceptedPerDollar} accepted per $`}` +
       `${jobs.gpu.inferred ? ` · ${jobs.gpu.inferred} of ${jobs.gpu.submitted + jobs.gpu.notAccepted} GPU jobs inferred from the pod serving (no servedBy before ${SERVED_BY_SINCE.slice(0, 10)})` : ''}`,
   );
-  console.log(`GPU_THROUGHPUT running_h ${t.runningHours} jobs_per_h ${t.jobsPerRunningHour ?? 'n/a'} accepted_per_h ${t.acceptedPerRunningHour ?? 'n/a'} in_flight ${t.meanInFlight ?? 'n/a'}`);
+  console.log(`GPU_THROUGHPUT running_h ${t.runningHours} jobs_per_h ${t.jobsPerRunningHour ?? 'n/a'} accepted_per_h ${t.acceptedPerRunningHour ?? 'n/a'} in_flight ${t.meanInFlight ?? 'n/a'} accepted_per_usd ${t.acceptedPerDollar ?? 'n/a'}`);
+  // The owner's standing authorization (§121), as the Brain reads it: what binds the GPU instead of a budget.
+  const auth = gpuAuthorization();
+  console.log(
+    auth
+      ? `  authorization continuous since ${auth.since ?? 'unrecorded'} · up to $${auth.usdPerHour}/h for one card · recipe ${auth.recipe} · stops under a $${auth.balanceFloorUsd} balance (replenishes at $${auth.replenishAtUsd})`
+      : '  authorization none: the GPU runs under its dollar budget (runpod-authorize sets the standing authorization)',
+  );
 
   // What moved the GPU slot's count, and the highest it reached.
   const decisions = await db.all<{ outcome: string; reason: string | null }>(

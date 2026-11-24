@@ -1,5 +1,5 @@
 /**
- * Where commercial knowledge reaches planning (§121, through §92's W-5 path).
+ * Where commercial knowledge reaches planning (§122, through §92's W-5 path).
  *
  * A plan reads a buyer population's size from a `construction_facts` row
  * segmented to that population's map node (`constructionObservations`,
@@ -311,7 +311,7 @@ export async function resolveCountQuestions(projectId: string, node: Pick<Indust
       uncertaintyKey: q.uncertainty_key,
       from: ['OPEN', 'INVESTIGATING'],
       to: 'RESOLVED',
-      reason: `Answered by an acquired public dataset (§121), not by research: ${belief}`.slice(0, 500),
+      reason: `Answered by an acquired public dataset (§122), not by research: ${belief}`.slice(0, 500),
       belief,
       beliefBasis: 'EVIDENCE',
       uncertaintyLevel: 10,

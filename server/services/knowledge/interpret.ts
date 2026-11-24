@@ -1,5 +1,5 @@
 /**
- * The GPU's part in commercial knowledge (§121): reading, never counting.
+ * The GPU's part in commercial knowledge (§122): reading, never counting.
  *
  * Two questions go to the free lane's GPU slot (`cheap/lane.ts`, RunPod in
  * primary mode; its fallback answers when the GPU does not, and the row says

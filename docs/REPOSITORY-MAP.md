@@ -193,7 +193,7 @@ server/
       watchdog.ts       executable work beside idle capacity, recorded and continued
     knowledge/
       shared.ts         what crosses between projects, and what may never
-      acquire.ts        public datasets: vintages found, read conditionally, parsed to classified facts (§121)
+      acquire.ts        public datasets: vintages found, read conditionally, parsed to classified facts (§122)
       sec.ts            SEC XBRL frames into sector margins, cash cycle and capital intensity
       comprehend.ts     per-industry economics derived as estimates; two programs checked against each other
       apply.ts          buyer nodes classified to NAICS; census counts filed where plans read them

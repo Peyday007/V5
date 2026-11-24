@@ -4,7 +4,71 @@ import { Empty, Freshness, Panel, QueryView, Stat, StatusPill, TimeAgo, num } fr
 import { useBrain, useTool } from '@/hooks/use-brain';
 import { useHomeProject } from '@/hooks/use-homes';
 import { enc } from '@/lib/brain';
-import type { Utilization, WorkforceView, WorkResponse } from '@/lib/types';
+import type { GpuStatus, Utilization, WorkforceView, WorkResponse } from '@/lib/types';
+
+const usd = (n: number | null | undefined, digits = 2) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : `$${n.toFixed(digits)}`);
+
+const WORK_STATE: Record<GpuStatus['work']['state'], string> = {
+  BUSY: 'Busy',
+  IDLE_WITH_WORK: 'Idle beside waiting work',
+  IDLE_NO_WORK: 'Idle, nothing waiting',
+  STOPPED_NO_WORK: 'Stopped, nothing waiting',
+  STOPPED_WITH_WORK: 'Stopped with work waiting',
+  UNKNOWN: 'Not read yet'
+};
+
+function GpuPanel({ gpu }: { gpu: GpuStatus }) {
+  const running = gpu.pod.status === 'RUNNING';
+  const bad = gpu.work.state === 'IDLE_WITH_WORK' || gpu.work.state === 'STOPPED_WITH_WORK';
+  return (
+    <div className='flex flex-col gap-4'>
+      <div className='grid grid-cols-2 gap-3 lg:grid-cols-4'>
+        <Stat
+          label='Pod'
+          value={<StatusPill status={running ? (gpu.pod.ready ? 'Serving' : 'Loading') : gpu.pod.status} tone={running && gpu.pod.ready ? 'good' : running ? 'warn' : undefined} />}
+          hint={`${gpu.pod.card ?? 'card not recorded'}${gpu.pod.id ? ` · ${gpu.pod.id}` : ''}`}
+        />
+        <Stat
+          label='Rate'
+          value={`${usd(gpu.pod.costPerHr)}/h`}
+          hint={gpu.authorization ? `authorized up to ${usd(gpu.authorization.usdPerHour)}/h, one card` : 'no standing authorization'}
+        />
+        <Stat
+          label='Spend'
+          value={usd(gpu.spend.todayUsd)}
+          hint={`today · ${usd(gpu.spend.sinceAuthorizationUsd)} since authorization${gpu.authorization?.since ? ` (${gpu.authorization.since.slice(0, 10)})` : ''}`}
+        />
+        <Stat
+          label='RunPod balance'
+          value={usd(gpu.balanceUsd)}
+          tone={gpu.balanceUsd !== null && gpu.authorization && gpu.balanceUsd < gpu.authorization.replenishAtUsd ? 'warn' : undefined}
+          hint={gpu.authorization ? `replenishes at ${usd(gpu.authorization.replenishAtUsd, 0)} · stops under ${usd(gpu.authorization.balanceFloorUsd, 0)}` : undefined}
+        />
+        <Stat label='Work' value={WORK_STATE[gpu.work.state]} tone={bad ? 'bad' : gpu.work.state === 'BUSY' ? 'good' : undefined} hint={`${num(gpu.work.waiting)} waiting · ${num(gpu.work.inFlight)} in flight`} />
+        <Stat label='Concurrency' value={num(gpu.work.slotTarget)} hint={gpu.work.slotReason ?? 'the lane controller’s target for the GPU slot'} />
+        <Stat
+          label='Jobs per running hour'
+          value={num(gpu.work.jobsPerRunningHour24h)}
+          hint={`${num(gpu.work.runningHours24h)} h running in 24 h`}
+        />
+        <Stat
+          label='Accepted'
+          value={num(gpu.work.accepted24h)}
+          hint={`24 h · ${num(gpu.work.acceptedLastHour)} in the last hour · ${gpu.work.acceptedPerDollar24h === null ? '—' : num(gpu.work.acceptedPerDollar24h)} per $`}
+        />
+      </div>
+      {gpu.restrictions.length === 0 ? (
+        <p className='text-muted-foreground text-xs'>No restriction is active.</p>
+      ) : (
+        <ul className='flex flex-col gap-1 text-xs'>
+          {gpu.restrictions.map((r) => (
+            <li key={r} className='text-pretty'>▸ {r}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function OperationsPage() {
   const { projectId, homes } = useHomeProject();
@@ -107,6 +171,16 @@ export default function OperationsPage() {
               </ul>
             );
           }}
+        </QueryView>
+      </Panel>
+
+      <Panel
+        title='GPU'
+        description='Brain’s own GPU: what it is, what it costs, what it is doing, and what holds it back.'
+        action={<Freshness query={capacity} />}
+      >
+        <QueryView query={capacity}>
+          {(c) => (c.gpu ? <GpuPanel gpu={c.gpu} /> : <Empty>No GPU reading yet.</Empty>)}
         </QueryView>
       </Panel>
 

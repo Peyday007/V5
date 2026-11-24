@@ -1,5 +1,5 @@
 /**
- * Commercial knowledge read from public datasets (§121): the vocabulary and
+ * Commercial knowledge read from public datasets (§122): the vocabulary and
  * the pure rules. Nothing here touches the network or the database.
  *
  * Every figure is classified on the same dimensions — industry (NAICS, the

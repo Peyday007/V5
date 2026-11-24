@@ -1,5 +1,5 @@
 /**
- * Acquiring public commercial datasets (§121): what Brain reads, how it finds
+ * Acquiring public commercial datasets (§122): what Brain reads, how it finds
  * the newest release itself, and how one read becomes classified facts.
  *
  * Reuses the feeds' conditional-read contract (`feeds/access.ts`: validators,

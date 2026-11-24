@@ -11805,7 +11805,7 @@ export interface DeadlineReviewRow {
   recorded_at: string;
 }
 
-/* ------------------------------------------------ commercial knowledge (§121) */
+/* ------------------------------------------------ commercial knowledge (§122) */
 
 export interface KnowledgeSourceRow {
   id: string;

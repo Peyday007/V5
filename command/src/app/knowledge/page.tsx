@@ -3,7 +3,7 @@ import PageContainer from '@/components/layout/page-container';
 import { Empty, Freshness, Panel, QueryView, Stat, StatusPill, TimeAgo, num } from '@/components/brain/display';
 import { useTool } from '@/hooks/use-brain';
 
-/** `brain_operator_knowledge` (§121): read on the server, narrowed to the projects this person may read. */
+/** `brain_operator_knowledge` (§122): read on the server, narrowed to the projects this person may read. */
 interface KnowledgeReading {
   readAt: string;
   learning: {

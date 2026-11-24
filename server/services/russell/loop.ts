@@ -2090,7 +2090,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * configured. Its own failure domain, and deferred under pressure.
        */
       /*
-       * Commercial knowledge (§121): public datasets read into the world
+       * Commercial knowledge (§122): public datasets read into the world
        * model and filed where plans read them. Started here and run beside
        * the tick, one pass at a time and at most every fifteen minutes.
        */

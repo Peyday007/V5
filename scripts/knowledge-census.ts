@@ -74,7 +74,7 @@ export const POPULATIONS: readonly Population[] = [
   { key: 'commercialPositions', layer: 'STORED', label: 'commercial positions (distinct §92 position_key on stored arrangements)', sql: `SELECT COUNT(DISTINCT position_key) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL` },
   { key: 'arrangementsPositioned', layer: 'STORED', label: 'stored arrangements carrying a §92 position (position_json)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_json IS NOT NULL` },
   { key: 'positionMoneyFlows', layer: 'STORED', label: 'constructed money flows (distinct payer population × position, money timing included)', sql: `SELECT COUNT(*) AS n FROM (SELECT DISTINCT COALESCE(opportunity_id, industry_node_id, design_signature) AS payer, position_key FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL) flows` },
-  // Commercial knowledge read from public datasets (§121, migration 161 / pg 152).
+  // Commercial knowledge read from public datasets (§122, migration 161 / pg 152).
   { key: 'knowledgeSources', layer: 'STORED', label: 'public datasets Brain found and reads (knowledge_sources, not candidates)', sql: `SELECT COUNT(*) AS n FROM knowledge_sources WHERE status <> 'CANDIDATE'` },
   { key: 'knowledgeReads', layer: 'STORED', label: 'dataset reads (knowledge_acquisitions)', sql: `SELECT COUNT(*) AS n FROM knowledge_acquisitions` },
   { key: 'knowledgeFacts', layer: 'EVIDENCED', label: 'published figures held (knowledge_facts FACT, current)', sql: `SELECT COUNT(*) AS n FROM knowledge_facts f WHERE f.epistemic = 'FACT' AND NOT EXISTS (SELECT 1 FROM knowledge_facts s WHERE s.supersedes_id = f.id)` },
@@ -320,6 +320,30 @@ export function diagLines(one: DiagProject): string[] {
   return lines;
 }
 
+/**
+ * The commercial money tree (`services/cash/moneyTree.ts`): per stored
+ * mechanism, which of the owner's eleven questions are established on
+ * evidence, only hypothesised from the design, or unanswered. Imported at run
+ * time, so a census sent to a container built before the module existed says
+ * UNMEASURED rather than failing.
+ */
+async function moneyTreeLines(): Promise<string[]> {
+  try {
+    const { readMoneyTree, MONEY_TREE_DIMENSIONS, DIMENSION_LABEL } = await import('../server/services/cash/moneyTree.ts');
+    const { summary: s } = await readMoneyTree();
+    const out = [
+      `TREE mechanisms ${s.mechanisms} (unique structures ${s.uniqueMechanisms}) over industries ${s.industries}, sub-industries ${s.subIndustries}, activities ${s.activities}; methods ${s.methods}, designs ${s.designs}`,
+      `TREE evidence: any dimension established ${s.withAnyEstablished}; meaningful economics (price + demand or conversion) ${s.meaningful}; confirmed ${s.confirmed}, refuted ${s.refuted}; asked ${s.asked}; evaluated by a plan ${s.evaluated}`,
+      ...MONEY_TREE_DIMENSIONS.map((k) => `TREE dim ${k.padEnd(26)} established ${String(s.byDimension[k].ESTABLISHED).padStart(6)}  hypothesis ${String(s.byDimension[k].HYPOTHESIS).padStart(6)}  unknown ${String(s.byDimension[k].UNKNOWN).padStart(6)}  ${DIMENSION_LABEL[k]}`),
+      ...s.byIndustry.slice(0, 40).map((one) => `TREE industry ${one.industry.slice(0, 60).padEnd(60)} sub ${String(one.subIndustries).padStart(4)}  mechanisms ${String(one.mechanisms).padStart(5)}  meaningful ${String(one.meaningful).padStart(4)}  methods ${one.methods}`),
+    ];
+    if (process.argv.includes('--json')) out.push(`TREE_JSON ${JSON.stringify(s)}`);
+    return out;
+  } catch (error) {
+    return [`TREE UNMEASURED — ${message(error)}`];
+  }
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   try {
@@ -327,6 +351,7 @@ async function main(): Promise<void> {
     console.log(`CENSUS at ${new Date().toISOString()} revision ${process.env.BRAIN_REVISION ?? '<unstamped>'}`);
     for (const one of lines) console.log(`CENSUS ${one.layer.padEnd(9)} ${one.key.padEnd(28)} ${one.value === null ? '-' : String(one.value).padStart(8)}  ${one.label}${one.note ? ` — ${one.note}` : ''}`);
     if (process.argv.includes('--json')) console.log(`CENSUS_JSON ${JSON.stringify(lines)}`);
+    for (const line of await moneyTreeLines()) console.log(line);
     try {
       const diag = await diagnose();
       for (const one of diag) for (const line of diagLines(one)) console.log(line);
@@ -339,7 +364,7 @@ async function main(): Promise<void> {
       console.log(`DIAG UNMEASURED — ${message(error)}`);
     }
     try {
-      // What the commercial knowledge pass learned and where it reached a plan (§121), across every project.
+      // What the commercial knowledge pass learned and where it reached a plan (§122), across every project.
       const { knowledgeView } = await import('../server/services/knowledge/view.ts');
       const projects = (await getDb().all<{ id: string }>('SELECT id FROM projects')).map((one) => one.id);
       const view = await knowledgeView(projects);

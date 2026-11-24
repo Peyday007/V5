@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Production proof for commercial knowledge (§121): reads the newest successful
+ * Production proof for commercial knowledge (§122): reads the newest successful
  * `Goals` workflow run of the `census` command (which runs
  * scripts/knowledge-census.ts on the production machine) and checks one named
  * property of what production holds. Exits non-zero when it does not hold.

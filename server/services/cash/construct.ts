@@ -2606,7 +2606,7 @@ function compose(args: {
        * How many of these buyers exist is a fact about the population, not about
        * the arrangement sold to it: a count filed on the buyer's map node (a
        * census count, a research claim) is this population's own figure, never a
-       * comparable from another arrangement (§121). With the arrangement in its
+       * comparable from another arrangement (§122). With the arrangement in its
        * context the one count filed was read as a single comparable population
        * and never justified a distribution, so the plan kept sweeping buyers.
        */

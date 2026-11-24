@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- COMMERCIAL KNOWLEDGE: PUBLIC DATASETS READ INTO THE WORLD MODEL (§121)
+-- COMMERCIAL KNOWLEDGE: PUBLIC DATASETS READ INTO THE WORLD MODEL (§122)
 -- ---------------------------------------------------------------------------
 --
 -- Brain acquires public commercial datasets itself (Census County Business

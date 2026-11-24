@@ -99,8 +99,9 @@ describe('the lane reading with a GPU configured', () => {
     // Before: 3 + 2 slots of room, the most a reading opened was one surface.
     expect(await freeLaneProvenSlots({ poolMax: null })).toBeGreaterThanOrEqual(32);
     expect(await freeLaneSpareSurfaces(Date.now(), { poolMax: null })).toBe(8);
-    // And against a production-sized pool (20 connections: 30 slots per model), still well past the decayed target.
-    expect(await freeLaneProvenSlots({ poolMax: 20 })).toBe(30 + 2);
+    // And against a production-sized pool (20 connections: 60 slots), still well past the decayed target:
+    // the GPU's share is what the free model does not hold (§121), so its served 48 sequences fit.
+    expect(await freeLaneProvenSlots({ poolMax: 20 })).toBe(48 + 2);
     expect(await freeLaneSpareSurfaces(Date.now(), { poolMax: 20 })).toBe(8);
   });
 
@@ -110,9 +111,10 @@ describe('the lane reading with a GPU configured', () => {
       "INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('runpod/openai/gpt-oss-120b', 3, 1, '2026-11-17T08:28:00Z', 'no research waiting'), ('auto/best-coding', 2, 1, '2026-11-17T08:28:00Z', 'no research waiting')",
       [],
     );
-    // Two connections carry 6 slots, 3 per model: the GPU's room is its 3, the free model's its target 2.
+    // Two connections carry 6 slots: the free model's room is its target 2, and the GPU's is the
+    // 4 the free model does not hold (§121) — together never more than the pool carries.
     expect(slotShare(2, 2)).toBe(3);
-    expect(await freeLaneProvenSlots({ poolMax: 2 })).toBe(3 + 2);
+    expect(await freeLaneProvenSlots({ poolMax: 2 })).toBe(4 + 2);
     expect(await freeLaneSpareSurfaces(Date.now(), { poolMax: 2 })).toBe(1);
   });
 

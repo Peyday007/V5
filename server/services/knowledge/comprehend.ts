@@ -1,5 +1,5 @@
 /**
- * Commercial comprehension of acquired datasets (§121): published figures
+ * Commercial comprehension of acquired datasets (§122): published figures
  * become the reusable economics of each industry, and two programs that
  * measured the same thing are checked against each other.
  *

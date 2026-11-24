@@ -1,5 +1,5 @@
 /**
- * The rows behind commercial knowledge (§121). Facts are append-only: a
+ * The rows behind commercial knowledge (§122). Facts are append-only: a
  * changed figure is a new row naming the one it supersedes, and the old row
  * stays as history (invariant 17). Acquisitions and applications are
  * append-only. A source's retry position is guarded by its attempt count in

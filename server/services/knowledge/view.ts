@@ -1,6 +1,6 @@
 /**
  * What Brain has learned from public commercial data, and what it did with it
- * (§121) — derived on the read path from the knowledge rows, stored nowhere.
+ * (§122) — derived on the read path from the knowledge rows, stored nowhere.
  *
  * Public data is Brain's (§31); what it was applied to is a project's, so the
  * applications, links and project-scoped contradictions are narrowed to the

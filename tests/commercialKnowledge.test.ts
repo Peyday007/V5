@@ -1,5 +1,5 @@
 /**
- * Commercial knowledge (§121): public datasets acquired, understood and
+ * Commercial knowledge (§122): public datasets acquired, understood and
  * applied without a person. No network: the publisher's listings and files
  * are served by injected transports in the publishers' own formats.
  */
