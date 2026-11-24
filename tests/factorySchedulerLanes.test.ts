@@ -11,6 +11,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   decide,
+  orderCandidates,
+  startableSet,
   tuneLaneTarget,
   INITIAL_LANE_TARGET,
   MAX_LANE_TARGET,
@@ -62,7 +64,7 @@ describe('lane target catch-up (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595)',
   it('rises to the waiting independent demand in one step', () => {
     const tuned = tuneLaneTarget(3, clean, 6, 6);
     expect(tuned.target).toBe(6);
-    expect(tuned.reason).toMatch(/6 independent unit\(s\) waiting/);
+    expect(tuned.reason).toMatch(/6 mutually independent lane\(s\)/);
   });
 
   it('accepts first-pass success at the 0.6 bar', () => {
@@ -139,5 +141,49 @@ describe('lane target catch-up (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595)',
     });
     expect(decision.assignments.map((a) => a.unitId).sort()).toEqual(['a', 'c', 'd', 'e']);
     expect(decision.refusals.find((r) => r.unitId === 'b')?.reason).toMatch(/overlaps/);
+  });
+
+  it('bounds the rise by the pairwise-disjoint set decide() could start, not the candidate count (repair-F2)', () => {
+    // Six ready units, but b, c and d all write src/shared: only a, b, e, f can run together.
+    const candidates = [
+      unit('a', ['src/a/**']),
+      unit('b', ['src/shared/**']),
+      unit('c', ['src/shared/x.ts']),
+      unit('d', ['src/shared/y.ts']),
+      unit('e', ['src/e/**']),
+      unit('f', ['src/f/**']),
+    ];
+    expect(startableSet(orderCandidates(candidates), []).length).toBe(4);
+    const decision = decide({
+      at: '2026-11-24T00:00:00.000Z',
+      campaignId: 'c1',
+      laneTarget: INITIAL_LANE_TARGET,
+      candidates,
+      live: [],
+      slots: [slot({ freeSlots: 8 })],
+      evidence: clean,
+      implementedBy: {},
+    });
+    expect(decision.laneTarget).toBe(4);
+    expect(decision.assignments.length).toBe(4);
+    expect(decision.laneTargetReason).toMatch(/^4 mutually independent lane\(s\)/);
+    expect(decision.refusals.filter((r) => /lane target/.test(r.reason))).toEqual([]);
+  });
+
+  it('counts running lanes and excludes exhausted or live-overlapping units from demand', () => {
+    const exhausted = { ...unit('x', ['src/x/**']), attempt: 3, maxAttempts: 3 };
+    const decision = decide({
+      at: '2026-11-24T00:00:00.000Z',
+      campaignId: 'c1',
+      laneTarget: INITIAL_LANE_TARGET,
+      candidates: [unit('a', ['src/a/**']), unit('b', ['src/live/**']), unit('c', ['src/c/**']), unit('d', ['src/d/**']), exhausted],
+      live: [{ unitId: 'z', workerId: 'w9', ownedPaths: ['src/live/thing.ts'] }],
+      slots: [slot({ freeSlots: 8 })],
+      evidence: clean,
+      implementedBy: {},
+    });
+    // one running + a, c, d startable = 4; b overlaps the live lane and x is exhausted.
+    expect(decision.laneTarget).toBe(4);
+    expect(decision.assignments.map((a) => a.unitId).sort()).toEqual(['a', 'c', 'd']);
   });
 });

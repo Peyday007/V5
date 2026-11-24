@@ -175,13 +175,15 @@ export function tuneLaneTarget(
     // refusal; rising answers independent work already waiting, and rising by
     // one lane per tick left a wide plan's units queued behind
     // INITIAL_LANE_TARGET for several ticks (OPERATOR:RESOURCE_ALLOCATION:
-    // 591a21ff74213595). decide() still refuses overlapping ownership, so the
-    // graph, not this number, bounds how wide the work actually runs.
+    // 591a21ff74213595). `demand` is decide()'s startableSet plus the lanes
+    // already running, so the rise is exact: overlapping units are not
+    // counted, and no lane is raised only to be walked back next tick.
     const target = clamp(Math.min(demand, availableSlots));
     return {
       target,
       reason:
-        `${demand} independent unit(s) waiting on ${availableSlots} free slot(s) with no ` +
+        `${demand} mutually independent lane(s) of work (running plus startable) on ` +
+        `${availableSlots} free slot(s) with no ` +
         `refusals: ${target - current} more lane(s), ${current} → ${target}.`,
     };
   }
@@ -316,6 +318,31 @@ export function chooseWorker(
 }
 
 /**
+ * The units decide() could actually start together: walked in the same order
+ * and refused for the same reasons it refuses them — attempts exhausted, or a
+ * mutation surface overlapping a running lane or a unit already taken. The
+ * lane tuner's rise is bounded by this set, not by the count of ready
+ * candidates: overlapping units were counted as demand, the target jumped to
+ * the full candidate count, decide() refused the overlaps, and the target came
+ * back down one lane per tick through the overlap branch (repair-F2 of
+ * OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595).
+ */
+export function startableSet(
+  ordered: SchedulableUnit[],
+  live: LiveLane[],
+): SchedulableUnit[] {
+  const held = live.map((lane) => lane.ownedPaths);
+  const startable: SchedulableUnit[] = [];
+  for (const unit of ordered) {
+    if (unit.attempt >= unit.maxAttempts) continue;
+    if (held.some((paths) => pathsOverlap(paths, unit.ownedPaths))) continue;
+    startable.push(unit);
+    held.push(unit.ownedPaths);
+  }
+  return startable;
+}
+
+/**
  * The decision.
  *
  * Never launches extra lanes onto work that is inherently sequential: a unit
@@ -333,7 +360,7 @@ export function decide(snapshot: SchedulerSnapshot): SchedulerDecision {
   const tuned = tuneLaneTarget(
     snapshot.laneTarget,
     snapshot.evidence,
-    ordered.length,
+    snapshot.live.length + startableSet(ordered, snapshot.live).length,
     availableSlots,
   );
 
