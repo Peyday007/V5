@@ -471,7 +471,7 @@ async function heapSources(): Promise<void> {
      * running process reads now is the difference over a window: snapshot,
      * watch the newest process's heap each minute, snapshot again.
      */
-    const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '14');
+    const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '8');
     type Snap = Map<string, { calls: number; rows: number; total: number; blocks: number }>;
     const snap = async (): Promise<Snap> => {
       const rows = await getDb().all<{ queryid: string; calls: number | string; rows: number | string; total: number | string; blocks: number | string }>(
