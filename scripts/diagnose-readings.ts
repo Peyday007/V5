@@ -274,6 +274,39 @@ async function gpuAnswers(): Promise<void> {
   console.log('DIAGNOSE: gpu-answers RUNPOD_POD rows by day');
   for (const [key, n] of [...podCounts].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
 
+  // The same attribution as `gpuCapacity.ts` `servingAt`, written out here because this
+  // reading runs against the released code: a row with no servedBy is the GPU's when the
+  // latest pod sample within two periods said RUNNING and ready.
+  const points = pod
+    .filter((r) => r.outcome?.startsWith('SAMPLE_'))
+    .map((r) => ({ t: Date.parse(r.at), serving: r.outcome === 'SAMPLE_RUNNING' && parse(r.measures)['ready'] === true }));
+  const servingAt = (at: string): boolean => {
+    const t = Date.parse(at);
+    let latest: { t: number; serving: boolean } | null = null;
+    for (const p of points) if (p.t <= t && (!latest || p.t > latest.t)) latest = p;
+    return !!latest && latest.serving && t - latest.t <= 10 * 60_000;
+  };
+  const attributed = new Map<string, number>();
+  let gpuItems = 0;
+  let gpuSubmitted = 0;
+  for (const row of items) {
+    if (Array.isArray(parse(row.measures)['servedBy']) || row.at >= '2026-11-20T21:13:15.213Z') continue;
+    if (!(row.reason ?? '').startsWith('model runpod/')) continue;
+    const gpu = servingAt(row.at);
+    // The throughput line reads the same 14 days runpod-report's GPU CAPACITY reads.
+    if (gpu && Date.parse(row.at) >= Date.now() - 14 * 86_400_000) {
+      gpuItems += 1;
+      if (row.outcome === 'SUBMITTED') gpuSubmitted += 1;
+    }
+    bump(attributed, `${row.at.slice(0, 10)} ${gpu ? 'pod-serving' : 'pod-not-serving'} ${row.outcome ?? '-'}`);
+  }
+  const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const runningH = pod.filter((r) => r.outcome === 'SAMPLE_RUNNING' && r.at >= since14).length * 5 / 60;
+  const servingH = points.filter((p) => p.serving && p.t >= Date.parse(since14)).length * 5 / 60;
+  console.log(`DIAGNOSE: gpu-answers rows without servedBy, by the pod's serving state (running ${runningH.toFixed(1)} h, serving ${servingH.toFixed(1)} h)`);
+  for (const [key, n] of [...attributed].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
+  console.log(`GPU_INFERRED items ${gpuItems} submitted ${gpuSubmitted} per_running_h ${(gpuItems / runningH).toFixed(1)} submitted_per_running_h ${(gpuSubmitted / runningH).toFixed(1)} submitted_per_serving_h ${(gpuSubmitted / servingH).toFixed(1)}`);
+
   const reasons = await getDb().all<{ day: string; reason: string | null; n: number | string }>(
     `SELECT SUBSTR(at, 1, 10) AS day, SUBSTR(reason, 1, 110) AS reason, COUNT(*) AS n FROM bin_events
       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model runpod/%:%'

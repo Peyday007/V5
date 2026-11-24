@@ -34,7 +34,7 @@ import { failureClass, goalPipelineSpeed, goalResearchProgress, percentile, wait
 import { FREE_LANE_PURPOSES, resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
 import { claimQualityByModel } from '../server/repos/research.ts';
 import { accountReading } from '../server/services/cheap/runpodAccount.ts';
-import { gpuThroughput, hoursToClear, runningByDay, shrinkCauses, summarizeGpuJobs, type LaneJobRow } from '../server/services/cheap/gpuCapacity.ts';
+import { gpuThroughput, hoursToClear, runningByDay, servingAt, SERVED_BY_SINCE, shrinkCauses, summarizeGpuJobs, type LaneJobRow } from '../server/services/cheap/gpuCapacity.ts';
 import { launchableByProject } from '../server/services/russell/loop.ts';
 
 const argv = process.argv.slice(2);
@@ -686,24 +686,28 @@ async function capacitySection(): Promise<void> {
     `SELECT at, outcome, duration_ms, measures FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome LIKE 'SAMPLE_%' AND at >= ? ORDER BY at`,
     [since],
   );
-  const days = runningByDay(
-    samples.map((s) => {
-      const cost = Number(parseJson(s.measures)['costPerHr']);
-      return { at: s.at, outcome: s.outcome, durationMs: s.duration_ms === null ? null : Number(s.duration_ms), costPerHr: Number.isFinite(cost) ? cost : null };
-    }),
-  );
-  const jobs = summarizeGpuJobs(await readGpuLaneRows(since));
+  const podSamples = samples.map((s) => {
+    const m = parseJson(s.measures);
+    const cost = Number(m['costPerHr']);
+    return { at: s.at, outcome: s.outcome, durationMs: s.duration_ms === null ? null : Number(s.duration_ms), costPerHr: Number.isFinite(cost) ? cost : null, ready: m['ready'] === true };
+  });
+  const days = runningByDay(podSamples);
+  // Rows from before servedBy was recorded (SERVED_BY_SINCE) are attributed by whether the pod was serving.
+  const jobs = summarizeGpuJobs(await readGpuLaneRows(since), servingAt(podSamples));
+  const inferredNote = (t: { inferred: number }) => (t.inferred ? ` (${t.inferred} inferred: pod serving, before servedBy)` : '');
   for (const d of days) {
     const j = jobs.byDay.get(d.day);
     console.log(
       `  day ${d.day} running ${d.runningHours.toFixed(1)} h · stopped ${d.stoppedHours.toFixed(1)} h · $${d.dollars.toFixed(2)}${d.costPerHr !== null ? ` at $${d.costPerHr}/h` : ''}` +
-        ` · GPU answered: submitted ${j?.gpu.submitted ?? 0}, not accepted ${j?.gpu.notAccepted ?? 0} · slot on fallback: submitted ${j?.slotFallback.submitted ?? 0}, not accepted ${j?.slotFallback.notAccepted ?? 0}`,
+        ` · GPU answered: submitted ${j?.gpu.submitted ?? 0}, not accepted ${j?.gpu.notAccepted ?? 0}${j ? inferredNote(j.gpu) : ''}` +
+        ` · slot on fallback: submitted ${j?.slotFallback.submitted ?? 0}, not accepted ${j?.slotFallback.notAccepted ?? 0}${j ? inferredNote(j.slotFallback) : ''}`,
     );
   }
   const t = gpuThroughput(jobs, days);
   console.log(
     `  throughput ${t.runningHours} h running · ${t.jobsPerRunningHour ?? 'n/a'} GPU jobs/h · ${t.acceptedPerRunningHour ?? 'n/a'} accepted/h · ${t.meanInFlight ?? 'n/a'} in flight on average` +
-      ` · accepted ${t.acceptedShare === null ? 'n/a' : `${Math.round(t.acceptedShare * 100)}%`} · $${t.dollars} · ${t.dollarsPerAccepted === null ? 'no accepted GPU job' : `$${t.dollarsPerAccepted} per accepted job`}`,
+      ` · accepted ${t.acceptedShare === null ? 'n/a' : `${Math.round(t.acceptedShare * 100)}%`} · $${t.dollars} · ${t.dollarsPerAccepted === null ? 'no accepted GPU job' : `$${t.dollarsPerAccepted} per accepted job`}` +
+      `${jobs.gpu.inferred ? ` · ${jobs.gpu.inferred} of ${jobs.gpu.submitted + jobs.gpu.notAccepted} GPU jobs inferred from the pod serving (no servedBy before ${SERVED_BY_SINCE.slice(0, 10)})` : ''}`,
   );
   console.log(`GPU_THROUGHPUT running_h ${t.runningHours} jobs_per_h ${t.jobsPerRunningHour ?? 'n/a'} accepted_per_h ${t.acceptedPerRunningHour ?? 'n/a'} in_flight ${t.meanInFlight ?? 'n/a'}`);
 
