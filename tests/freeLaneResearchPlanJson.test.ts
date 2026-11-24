@@ -16,7 +16,8 @@ import { createOrchestration } from '../server/repos/research.ts';
 import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
-import { firstJson, freeLaneTick, planFragmentsOf, planMissReason, resetFreeLaneFitness } from '../server/services/freeLane/worker.ts';
+import { endFreeLaneCooldowns, firstJson, freeLaneTick, planFragmentsOf, planMissReason, resetFreeLaneFitness } from '../server/services/freeLane/worker.ts';
+import { readModelOutput } from '../server/services/freeLane/coverage.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 
@@ -198,5 +199,49 @@ describe('the free lane on a RESEARCH_PLAN item', () => {
     expect((await getWorkItem(itemId))?.state).not.toBe('SUCCEEDED');
     const reasons = await getDb().all<{ reason: string | null }>("SELECT reason FROM bin_events WHERE event_type LIKE 'FREE_LANE%'");
     expect(reasons.map((one) => one.reason ?? '').join(' | ')).toMatch(/proposed no fragments: it held keys \["title","summary"\]/);
+  });
+});
+
+/*
+ * The acceptance "RESEARCH_PLAN answers from auto/best-coding are accepted
+ * again" was only readable after a deploy, from production's own incident
+ * reader. The same reader runs here over the rows this lane writes, on the
+ * route and the reply shape production recorded, so the claim is checked
+ * before release: the incident the operator commissioned this repair from
+ * (`auto/best-coding|RESEARCH_PLAN`, 5 of 5 refused) does not open again. The
+ * control proves the reader is not blind: a route that never proposes
+ * fragments opens exactly that incident. The 12 h AUTO_RECOVERY_RATE reading
+ * after deployment still judges the real effect; this is what can be known now.
+ */
+describe('the incident production opened, replayed before release', () => {
+  const ROUTE = 'auto/best-coding';
+  const ONE_ROUTE: LaneConfig = { ...CONFIG, models: [ROUTE] };
+  const RECORDED = 5;
+
+  async function replay(reply: string): Promise<{ succeeded: number; incident: string | null }> {
+    const items: string[] = [];
+    for (let i = 0; i < RECORDED; i += 1) items.push(await planItem());
+    const { completer } = model([reply]);
+    for (let tick = 0; tick < RECORDED * 2; tick += 1) {
+      await freeLaneTick({ config: ONE_ROUTE, completer, fetchSource, search: async () => [] });
+      const states = await Promise.all(items.map(async (id) => (await getWorkItem(id))?.state));
+      if (states.every((state) => state !== 'QUEUED' && state !== 'LEASED')) break;
+      endFreeLaneCooldowns();
+    }
+    const states = await Promise.all(items.map(async (id) => (await getWorkItem(id))?.state));
+    const incidents = await readModelOutput({ models: [ROUTE] });
+    const open = incidents.find((one) => one.key === `${ROUTE}|RESEARCH_PLAN`);
+    return { succeeded: states.filter((state) => state === 'SUCCEEDED').length, incident: open ? `${open.rejected} of ${open.accepted + open.rejected}` : null };
+  }
+
+  it('opens no auto/best-coding|RESEARCH_PLAN incident on the reply shape that opened it in production', async () => {
+    const outcome = await replay(JSON.stringify({ plan: { fragments: [FRAGMENT], rationale: 'one question answers it' } }));
+    expect(outcome).toEqual({ succeeded: RECORDED, incident: null });
+  });
+
+  it('opens that incident for a route that never proposes fragments, so the reading above is not blind', async () => {
+    const outcome = await replay(JSON.stringify({ title: 'Receptionist cost', summary: 'Use BLS.' }));
+    expect(outcome.succeeded).toBe(0);
+    expect(outcome.incident).toBe(`${RECORDED} of ${RECORDED}`);
   });
 });
