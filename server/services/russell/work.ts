@@ -40,6 +40,7 @@ import { groupOf, listMissions } from '../../repos/russellMissions.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listCandidates } from '../../repos/russellCandidates.ts';
 import { listWorkers } from '../../repos/identity.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 // The one mapping for the five classes. It already exists in the domain; a
 // second copy here is how two screens come to disagree about one enum.
 import { CANDIDATE_PRIORITY_LABELS } from '../../domain/types.ts';
@@ -285,7 +286,7 @@ export async function workForProject(input: {
    * missions and unusable with four hundred.
    */
   const workerNames = new Map<string, string>();
-  for (const worker of await listWorkers({ includeArchived: true })) workerNames.set(worker.id, worker.displayName || worker.name);
+  for (const worker of await listWorkers({ includeArchived: true })) workerNames.set(worker.id, workerIdentity(worker));
 
   const candidates = new Map<string, RussellCandidate>();
   for (const candidate of await listCandidates({ projectId: input.projectId, limit: 500 })) {
