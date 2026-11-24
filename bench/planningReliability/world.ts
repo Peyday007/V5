@@ -181,7 +181,12 @@ export async function applyChange(change: WorldChange, ctx: ChangeContext): Prom
     }
     case 'DEADLINE': {
       const { setTerms } = await import('../../server/services/goals/decide.ts');
-      const moved = await setTerms(ctx.goalId, { dueAt: new Date(ctx.now.getTime() + change.days * 86_400_000).toISOString() }, actorRef);
+      const { goal: current } = await goal();
+      // A goal stated as a span carries a commercial execution window (§119): moving its deadline moves the window,
+      // and a date sent for it is refused. A goal with a fixed date moves its date.
+      const moved = current.executionWindowDays !== null && !current.executionStartedAt
+        ? await setTerms(ctx.goalId, { executionWindowDays: change.days }, actorRef)
+        : await setTerms(ctx.goalId, { dueAt: new Date(ctx.now.getTime() + change.days * 86_400_000).toISOString(), executionWindowDays: null }, actorRef);
       if (!moved.ok) throw new Error(`the deadline did not change: ${moved.reason}`);
       return;
     }
