@@ -309,7 +309,9 @@ export function scalingDecisions(now: OpsWindow, plan: PlanReadingFacts | null):
   const idlePools = (now.pools ?? []).filter((one) => one.idle);
   const idleNote = idlePools.length > 0
     ? `existing capacity is idle beside waiting work (${idlePools.map((one) => `${one.pool} ${one.running}/${one.capacity}, ${one.waiting} waiting`).join('; ')}): account for it and make it usable before buying more.`
-    : null;
+    : !now.pools || now.pools.length === 0
+      ? 'the capacity pools were not read this hour, so existing capacity is not accounted for; no purchase is proposed until it is.'
+      : null;
   const agents: ScalingCall =
     idleNote
       ? { call: 'NO', why: `No purchase: ${idleNote}` }
