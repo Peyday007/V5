@@ -108,6 +108,15 @@ suppressSqliteExperimentalWarning();
 
 const CLIENT_DIST = path.join(REPO_ROOT, 'client', 'dist');
 const CLIENT_INDEX = path.join(CLIENT_DIST, 'index.html');
+/**
+ * The Command Center (`command/`), a static export served at `/command`.
+ *
+ * Static, so it is still one process and one origin (the Dockerfile's reason):
+ * every page is an HTML shell holding no data, and every row it shows is read
+ * from `/api` with the person's own session, behind the same gate as the
+ * console. Nothing about it is authoritative and nothing in it decides access.
+ */
+const COMMAND_DIST = path.join(REPO_ROOT, 'command', 'out');
 
 /** True for any path the SPA fallback must not swallow. */
 function isServerPath(requestPath: string): boolean {
@@ -246,6 +255,28 @@ function buildApp(gate: AccessGateConfig): Express {
   // disk or in a bucket — and so the bucket is never addressed by the client.
   // Writes only ever happen through the import endpoints.
   app.use('/files', withRequestContext(serveStoredObject));
+
+  if (fs.existsSync(path.join(COMMAND_DIST, 'index.html'))) {
+    app.use(
+      '/command',
+      express.static(COMMAND_DIST, {
+        index: 'index.html',
+        redirect: true,
+        setHeaders: (res, filePath) => {
+          // Hashed assets are immutable; a page shell is re-read so a release shows at once.
+          res.setHeader(
+            'Cache-Control',
+            filePath.includes(`${path.sep}_next${path.sep}static${path.sep}`)
+              ? 'public, max-age=31536000, immutable'
+              : 'no-cache',
+          );
+        },
+      }),
+    );
+    app.use('/command', (_req: Request, res: Response) => {
+      res.status(404).sendFile(path.join(COMMAND_DIST, '404.html'));
+    });
+  }
 
   if (IS_PRODUCTION) {
     const hasBuild = fs.existsSync(CLIENT_INDEX);
