@@ -257,3 +257,22 @@ export function readDays(text: string): number | null {
   if (unit === 'month') return count * 30;
   return count;
 }
+
+/**
+ * The days until a sale's money is usable, as a settlement term states it, or null.
+ *
+ * `readDays` refuses a zero count, which is right for a duration and wrong for a
+ * payment term: "0 days", "same day" and "paid at checkout" are stated terms,
+ * and reading them as unknown failed every pay-at-the-sale route on the
+ * SETTLES_IN_TIME link (2026-11-24 investigation: 5 of 10 fresh requests whose
+ * route was otherwise supplied whole). Only an explicit statement reads as zero —
+ * "up front" or "in advance" says nothing about when a payout lands, so it stays
+ * unknown (invariant 39).
+ */
+export function readSettlementDays(text: string): number | null {
+  const stated = readDays(text);
+  if (stated !== null) return stated;
+  if (/(?:^|[^\d.])0\s*(?:business\s*)?days?\b/i.test(text)) return 0;
+  if (/\b(?:same[- ]day|paid (?:at|on) checkout|at (?:the )?checkout|on the day of (?:the )?sale)\b/i.test(text)) return 0;
+  return null;
+}

@@ -32,8 +32,7 @@ import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactMap } from '../../repos/cashCardFacts.ts';
 import { agreementsFor } from '../../repos/cashJourney.ts';
-import { readMoneyFigures } from './figures.ts';
-import { readDays } from './monetization/commissionPass.ts';
+import { readMoneyFigures, readSettlementDays } from './figures.ts';
 import { cashOutcomeLessons, INBOUND_MIN_VISITORS, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { readTrialVolume, readVolume } from './volume.ts';
@@ -2460,7 +2459,7 @@ export async function modelOpportunity(
       : foundOwnerHours(opportunity, delivers, ref, delivery) ?? unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal');
 
   const ttc = fact('timeToFirstCash');
-  const ttcDays = ttc ? readDays(ttc.value) : null;
+  const ttcDays = ttc ? readSettlementDays(ttc.value) : null;
   const daysToCash =
     ttcDays !== null
       ? known(ttcDays, kindToProvenance(ttc).provenance, kindToProvenance(ttc).source, 'days from start to usable cash')
@@ -2900,7 +2899,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   for (const opportunity of live) {
     const fact = await cardFactMap(opportunity.id, opportunity.projectId ?? undefined);
     const ttc = fact('timeToFirstCash')?.value;
-    scoped.set(opportunity.id, { industry: opportunity.industry ?? null, title: opportunity.title, recurring: recurringRevenue(fact('price')?.value ?? null, opportunity.title), days: ttc ? readDays(ttc) : null, capital: opportunity.peakFundingCents !== null ? opportunity.peakFundingCents / 100 : null });
+    scoped.set(opportunity.id, { industry: opportunity.industry ?? null, title: opportunity.title, recurring: recurringRevenue(fact('price')?.value ?? null, opportunity.title), days: ttc ? readSettlementDays(ttc) : null, capital: opportunity.peakFundingCents !== null ? opportunity.peakFundingCents / 100 : null });
   }
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
