@@ -1044,6 +1044,7 @@ export const DEFERRABLE_UNDER_PRESSURE: ReadonlySet<string> = new Set([
   'feeds',
   'improvement-loop',
   'historical-memory',
+  'commercial-knowledge',
 ]);
 
 /** True, and recorded on the report, when optional work should wait. */
@@ -2088,6 +2089,15 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * shortlist round (`services/feeds/run.ts`). Off until the cheap lane is
        * configured. Its own failure domain, and deferred under pressure.
        */
+      /*
+       * Commercial knowledge (§122): public datasets read into the world
+       * model and filed where plans read them. Started here and run beside
+       * the tick, one pass at a time and at most every fifteen minutes.
+       */
+      await runPass(report, 'commercial-knowledge', async () => {
+        const { startKnowledgePassIfDue } = await import('../knowledge/pipeline.ts');
+        startKnowledgePassIfDue((error: unknown) => console.warn(`commercial knowledge pass failed: ${String((error as Error)?.message ?? error).slice(0, 300)}`));
+      });
       await runPass(report, 'feeds', async () => {
         if (!laneConfig()) return;
         const pulled = await pullDueFeeds();

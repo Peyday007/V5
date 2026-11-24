@@ -1,6 +1,6 @@
 import type { NavGroup } from '@/types';
 
-/** The ten Command Center pages. Visibility is not access: Brain's server decides every read. */
+/** The eleven Command Center pages. Visibility is not access: Brain's server decides every read. */
 export const navGroups: NavGroup[] = [
   {
     label: 'Command',
@@ -15,6 +15,7 @@ export const navGroups: NavGroup[] = [
       { title: 'Financial objectives', url: '/objectives/', icon: 'target', shortcut: ['g', 'f'] },
       { title: 'Commercial plans', url: '/plans/', icon: 'route', shortcut: ['g', 'p'] },
       { title: 'Investment committee', url: '/committee/', icon: 'scale', shortcut: ['g', 'i'] },
+      { title: 'Commercial knowledge', url: '/knowledge/', icon: 'brain', shortcut: ['g', 'k'] },
       { title: 'Budgets & approvals', url: '/approvals/', icon: 'wallet', shortcut: ['g', 'b'] }
     ]
   },

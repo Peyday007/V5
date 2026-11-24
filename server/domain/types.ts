@@ -11804,3 +11804,138 @@ export interface DeadlineReviewRow {
   recorded_by: string;
   recorded_at: string;
 }
+
+/* ------------------------------------------------ commercial knowledge (§122) */
+
+export interface KnowledgeSourceRow {
+  id: string;
+  source_key: string;
+  family: string;
+  title: string;
+  publisher: string;
+  url: string;
+  period: string;
+  format: string;
+  origin: 'CATALOG' | 'DISCOVERED';
+  discovered_from: string | null;
+  value_reason: string;
+  status: 'ACTIVE' | 'SUPERSEDED' | 'FAILING' | 'CANDIDATE';
+  etag: string | null;
+  last_modified: string | null;
+  content_hash: string | null;
+  attempts: number;
+  consecutive_failures: number;
+  last_error: string | null;
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  next_due_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeAcquisitionRow {
+  id: string;
+  source_id: string;
+  started_at: string;
+  finished_at: string;
+  outcome: 'MODIFIED' | 'NOT_MODIFIED' | 'FAILED';
+  http_status: number | null;
+  content_hash: string | null;
+  bytes: number;
+  rows_read: number;
+  facts_written: number;
+  facts_unchanged: number;
+  error: string | null;
+}
+
+export interface KnowledgeFactRow {
+  id: string;
+  subject_key: string;
+  metric: string;
+  value: number;
+  unit: string;
+  metric_class: string;
+  epistemic: 'FACT' | 'ESTIMATE' | 'INFERENCE' | 'UNKNOWN';
+  naics: string;
+  naics_level: number;
+  industry_label: string | null;
+  geo_code: string;
+  geo_label: string;
+  size_class: string;
+  period: string;
+  basis: string;
+  inputs: string | null;
+  source_id: string | null;
+  acquisition_id: string | null;
+  source_title: string;
+  source_url: string | null;
+  quality: 'PRIMARY' | 'DERIVED' | 'MODEL';
+  observed_at: string;
+  valid_until: string;
+  supersedes_id: string | null;
+  created_at: string;
+}
+
+export interface KnowledgeIndustryRow {
+  naics: string;
+  label: string;
+  naics_level: number;
+  sector: string;
+  activity: string;
+  customer_category: string;
+  /** JSON: revenue bases (`REVENUE_BASES`) and mechanisms (`MECHANISMS`). */
+  mechanisms: string;
+  classified_by: 'DETERMINISTIC' | 'MODEL';
+  interpretation: string | null;
+  principles: string | null;
+  requirements: string | null;
+  unknowns: string | null;
+  interpreted_model: string | null;
+  interpreted_served_by: string | null;
+  interpreted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeLinkRow {
+  id: string;
+  project_id: string;
+  node_id: string;
+  node_name: string;
+  /** JSON list of NAICS codes; empty when nothing matched (method NONE). */
+  naics: string;
+  method: 'LEXICAL' | 'MODEL' | 'NONE';
+  score: number;
+  size_class: string;
+  geo_code: string;
+  rationale: string;
+  served_by: string | null;
+  created_at: string;
+}
+
+export interface KnowledgeContradictionRow {
+  id: string;
+  subject: string;
+  fact_a_ref: string;
+  fact_b_ref: string;
+  a_value: number;
+  b_value: number;
+  relative_gap: number;
+  resolution: 'PREFER_A' | 'PREFER_B' | 'RECONCILED' | 'UNRESOLVED';
+  reason: string;
+  project_id: string | null;
+  created_at: string;
+}
+
+export interface KnowledgeApplicationRow {
+  id: string;
+  kind: 'CONSTRUCTION_FACT' | 'ROUND_ANSWERED' | 'UNCERTAINTY_RESOLVED' | 'ASSUMPTION_REPLACED' | 'PLAN_INPUT_CHANGED';
+  project_id: string;
+  node_id: string | null;
+  knowledge_fact_id: string;
+  target_ref: string;
+  detail: string;
+  before_text: string | null;
+  after_text: string | null;
+  created_at: string;
+}
