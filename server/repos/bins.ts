@@ -1641,20 +1641,44 @@ export function purposeAdmitsSql(prefix: string): string {
  *
  * With no prefix the outer table is `bins` itself, qualified, because a bare
  * `id` inside these subqueries would resolve to the inner table's own.
+ *
+ * **Uncorrelated, so it is evaluated once per statement, not once per bin.**
+ * The first form was one correlated `EXISTS` per bin, joining the goal's links
+ * to `russell_missions` on `CASE WHEN gl.kind = 'MISSION' THEN gm.id ELSE
+ * gm.candidate_id END = gl.ref` — an expression no index serves — and then on
+ * `gm.bin_id = bin OR gm.orchestration_id = packet`. Production, 2026-11-24
+ * 03:55Z (dispatch-diagnose `query-times`): 363 claimable bins, 4,727 missions,
+ * and `COUNT(*)` of claimable bins under this predicate ran into the 120 s
+ * statement timeout, while the same count without it took 15 ms. Every
+ * statement that composes `claimableStateSql` timed out with it: the dispatch
+ * tick and boot re-drive (`listDispatchableBinHeads`), the assigner, and the
+ * capacity reader's ROUTINES pool — 0 fires and 0 assignments in 24 h beside
+ * 12 eligible Routines, and `brain_operator_capacity` serving no reading. So
+ * the goal's bins and packets are named by three uncorrelated `IN` lists (each
+ * a hashed set the database builds once), each join on an indexed key, and the
+ * bin is only looked up in them. Every list drops NULLs, so the predicate is
+ * TRUE or FALSE and never NULL: `NOT purposeAdmitsSql(…)` (brain-only mode's
+ * release pass) depends on that.
  */
 export function ownerDirectedGoalBinSql(prefix: string): string {
   const outer = prefix === '' ? 'bins.' : prefix;
   const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
   if (ids.length === 0) return '(1 = 0)';
   const list = ids.map((id) => `'${id}'`).join(', ');
+  const live = `gl.workstream_id IN (${list}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
+  // A mission the goal links directly (by its id) or through its candidate (by `candidate_id`), as `goals/model.ts` reads them.
+  const missions = (column: 'bin_id' | 'orchestration_id'): string =>
+    `SELECT gm.${column} FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
+    ` WHERE ${live} AND gl.kind = 'MISSION' AND gm.${column} IS NOT NULL` +
+    ` UNION SELECT gm.${column} FROM workstream_links gl JOIN russell_missions gm ON gm.candidate_id = gl.ref` +
+    ` WHERE ${live} AND gl.kind = 'CANDIDATE' AND gm.${column} IS NOT NULL`;
   return (
-    `EXISTS (SELECT 1 FROM workstream_links gl WHERE gl.workstream_id IN (${list})` +
-    ` AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')` +
-    ` AND ((gl.kind = 'PACKET' AND gl.ref = ${outer}orchestration_id)` +
-    ` OR (gl.kind = 'CAMPAIGN' AND gl.ref = ${outer}factory_campaign_id)` +
-    ` OR (gl.kind IN ('MISSION', 'CANDIDATE') AND EXISTS (SELECT 1 FROM russell_missions gm` +
-    ` WHERE (CASE WHEN gl.kind = 'MISSION' THEN gm.id ELSE gm.candidate_id END) = gl.ref` +
-    ` AND (gm.bin_id = ${outer}id OR gm.orchestration_id = ${outer}orchestration_id)))))`
+    `((${outer}orchestration_id IS NOT NULL AND ${outer}orchestration_id IN (` +
+    `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'PACKET' AND gl.ref IS NOT NULL` +
+    ` UNION ${missions('orchestration_id')}))` +
+    ` OR (${outer}factory_campaign_id IS NOT NULL AND ${outer}factory_campaign_id IN (` +
+    `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'CAMPAIGN' AND gl.ref IS NOT NULL))` +
+    ` OR ${outer}id IN (${missions('bin_id')}))`
   );
 }
 
