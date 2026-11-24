@@ -55,6 +55,7 @@ export interface PlanningRow {
   detail: string;
   /** The end-to-end level (§3a), beside the verdict level above; absent on a row that never reached the grader. */
   e2e?: { pass: boolean; failures: E2EFailureClass[]; gaps: string[]; detail: string };
+  usable?: { pass: boolean; detail: string };
 }
 
 export interface PlanningOutcome extends SuiteOutcome {
@@ -95,7 +96,7 @@ export async function runCase(job: CaseJob, template: Template | null, templateE
       const world = await runWorld(c, template, dir, index);
       // Every graded reading of the world: before and after each change (adaptation.ts); a case with no changes grades its one reading.
       const g = gradeAdaptation(c, world.readings, world.keyOf);
-      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: g.final.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail, e2e: g.e2e };
+      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: g.final.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail, e2e: g.e2e, ...(g.usable ? { usable: g.usable } : {}) };
     } catch (error) {
       row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: `error: ${String((error as Error)?.message ?? error).slice(0, 300)}` };
     }
@@ -185,6 +186,8 @@ export function summarise(rows: PlanningRow[], timing?: Record<string, number>):
     ...(r.hidden ? {} : { reason: r.detail }),
     // The end-to-end level, by class only for a hidden case (its detail names the rubric's links).
     e2e: r.e2e ? { pass: r.e2e.pass, failures: r.e2e.failures, gaps: r.e2e.gaps, ...(r.hidden ? {} : { reason: r.e2e.detail }) } : { pass: false, failures: ['NOT_OBSERVED'], gaps: [] },
+    // The owner-usable level; its detail only for a public case.
+    usable: { pass: !!r.usable?.pass, ...(r.hidden || !r.usable ? {} : { reason: r.usable.detail }) },
   }));
   const passed = rows.filter((r) => r.pass).length;
   const interval = wilson(passed, rows.length);
@@ -211,6 +214,13 @@ export function summarise(rows: PlanningRow[], timing?: Record<string, number>):
   metrics['e2e.accuracy'] = rows.length ? e2ePassed / rows.length : 0;
   metrics['e2e.wilsonLow'] = rows.length ? e2eInterval.low : 0;
   metrics['e2e.wilsonHigh'] = rows.length ? e2eInterval.high : 0;
+  // The owner-usable level (gradeUsable): a plan the owner could start, whatever the planner labels it.
+  const usablePassed = rows.filter((r) => r.usable?.pass).length;
+  const usableInterval = wilson(usablePassed, rows.length);
+  metrics['usable.passed'] = usablePassed;
+  metrics['usable.accuracy'] = rows.length ? usablePassed / rows.length : 0;
+  metrics['usable.wilsonLow'] = rows.length ? usableInterval.low : 0;
+  metrics['usable.wilsonHigh'] = rows.length ? usableInterval.high : 0;
   metrics['e2e.passedBarFieldGaps'] = rows.filter((r) => r.pass && e2eOf(r).failures.every((f) => f === 'STEP_FIELD_ABSENT')).length;
   for (const klass of E2E_FAILURE_CLASSES) metrics[`e2e.failures.${klass}`] = rows.filter((r) => e2eOf(r).failures.includes(klass)).length;
   const gaps = [...new Set(rows.flatMap((r) => e2eOf(r).gaps))].sort();
@@ -220,6 +230,7 @@ export function summarise(rows: PlanningRow[], timing?: Record<string, number>):
   const summary = [
     `planningReliability: ${passed}/${rows.length} correct · accuracy ${pct(metrics['accuracy']!)} (Wilson 95% ${pct(metrics['wilsonLow']!)}–${pct(metrics['wilsonHigh']!)}) · critical ${metrics['criticalFailures']} · errors ${metrics['errors']}` +
       (timing?.['totalMs'] !== undefined ? ` · ${(timing['totalMs'] / 1000).toFixed(1)} s on ${timing['workers'] ?? 1} worker(s)` : ''),
+    `planningReliability owner-usable: ${usablePassed}/${rows.length} startable plans · ${pct(metrics['usable.accuracy']!)} (Wilson 95% ${pct(metrics['usable.wilsonLow']!)}–${pct(metrics['usable.wilsonHigh']!)})`,
     `planningReliability end-to-end: ${e2ePassed}/${rows.length} complete · ${pct(metrics['e2e.accuracy']!)} (Wilson 95% ${pct(metrics['e2e.wilsonLow']!)}–${pct(metrics['e2e.wilsonHigh']!)}) · ${metrics['e2e.passedBarFieldGaps']} pass bar absent fields` +
       (e2eClasses.length ? ` · ${e2eClasses.join(', ')}` : '') +
       (gaps.length ? ` · fields absent: ${gaps.join(', ')}` : ''),

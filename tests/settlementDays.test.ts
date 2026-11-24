@@ -33,7 +33,21 @@ describe('readVolume: a count named as buyers by its own clause', () => {
     expect(readVolume('About 2,000 such facilities are listed in Oakland and Wayne counties; each pays monthly.', 30, 'Medical and dental offices, churches and gyms', 'commercial cleaning')?.buyers).toBe(2000);
   });
   it('still reads a count nobody says buys as unsized', () => {
-    expect(readVolume('About 800 active Detroit investors are listed on BiggerPockets.', 30, 'Detroit real-estate wholesalers, flippers and landlords', 'real estate investing')).toBeNull();
+    expect(readVolume('About 800 deal listings are posted on BiggerPockets.', 30, 'Detroit real-estate wholesalers, flippers and landlords', 'real estate investing')).toBeNull();
     expect(readVolume('3,400 boats are registered; each needs a slip.', 30, null, null)).not.toBeNull();
+  });
+});
+
+describe('readVolume: published market sizes', () => {
+  it('counts a compound buyer noun whose kinds are listed with commas', () => {
+    expect(readVolume('Google Maps lists roughly 6,800 roofing, landscaping and plumbing businesses across Wayne, Oakland and Macomb counties.', 30, 'Metro-Detroit roofers, landscapers and plumbers', 'home services')?.buyers).toBe(6800);
+    expect(readVolume('Michigan licensing records show roughly 2,400 dental, chiropractic and physical-therapy practices in the Detroit area.', 30, 'Detroit dentists and chiropractors', 'healthcare')?.buyers).toBe(2400);
+  });
+  it('reads millions as millions, never as the digit before the word', () => {
+    expect(readVolume('Etsy reports more than 5 million active sellers.', 30, 'Etsy sellers', 'e-commerce')?.buyers).toBe(5_000_000);
+  });
+  it('is not cut short by "U.S." or "501(c)(3)"', () => {
+    expect(readVolume('Crunchbase lists some 5,200 U.S. SaaS, solar-installation and managed-IT companies with 10 to 200 employees.', 30, 'B2B firms', 'B2B services')?.buyers).toBe(5200);
+    expect(readVolume('The IRS Business Master File lists over 7,000 registered 501(c)(3) organizations with Detroit addresses.', 30, 'Detroit nonprofits', 'nonprofits')?.buyers).toBe(7000);
   });
 });

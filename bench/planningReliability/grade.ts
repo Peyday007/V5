@@ -145,6 +145,8 @@ export interface Grade {
    * history stays comparable.
    */
   e2e: E2EGrade;
+  /** The owner-usable level (`gradeUsable`), beside the other two and never into them. */
+  usable?: { pass: boolean; detail: string };
 }
 
 /* ------------------------------------------------------------------ */
@@ -691,7 +693,39 @@ export function ownerHours(c: PlanningCase, members: ObservedMember[]): number {
 /** Grade one observed planning result against the case's rubric. */
 export function grade(c: PlanningCase, o: ObservedPlan): Grade {
   const v = gradeVerdict(c, o);
-  return { ...v, e2e: gradeE2E(c, o, v) };
+  return { ...v, e2e: gradeE2E(c, o, v), usable: gradeUsable(c, o, v) };
+}
+
+/** Verdict-level failures that make a plan unusable however it is labelled: it would execute something wrong. */
+const UNUSABLE: ReadonlySet<FailureClass> = new Set(['CONSTRAINT_VIOLATED', 'UNSOUND_ECONOMICS', 'OWNER_LABOR_EXCEEDED', 'OBJECTIVE_CHANGE_IGNORED', 'NON_PURCHASE_PRICE', 'PAYER_POPULATION_INFLATED', 'ACCEPTANCE_UNFEASIBLE']);
+
+/**
+ * The owner-usable level (2026-11-24 investigation), graded beside the verdict and the
+ * end-to-end levels and never into them: on a request where a plan exists, would the owner
+ * get one he could start without supplying the strategy or repairing it?
+ *
+ * The verdict level reads the planner's own stance, which calls a plan executable only once
+ * a close rate is measured or buyers have agreed — never true of a fresh request. So a plan
+ * whose every link but CONVERSION is established, inside every limit, with a complete
+ * reach → deliver → collect chain, was scored a refusal although it is what the owner starts:
+ * selling is how a close rate is measured. That is a grader correction, not a planner one.
+ * A plan carrying a critical class (`UNUSABLE`) never passes it.
+ */
+export function gradeUsable(c: PlanningCase, o: ObservedPlan, v: Pick<Grade, 'pass' | 'failures'>): { pass: boolean; detail: string } {
+  if (c.expect.verdict !== 'EXECUTABLE_PLAN') return { pass: v.pass, detail: 'no plan expected: the verdict level decides' };
+  const wrong = v.failures.filter((f) => UNUSABLE.has(f));
+  if (wrong.length) return { pass: false, detail: `unusable: ${wrong.join(', ')}` };
+  if (o.infeasible !== null) return { pass: false, detail: `concluded infeasible (${o.infeasible.join(', ') || 'no constraint named'})` };
+  if (o.broken.length) return { pass: false, detail: `breaks ${o.broken.join(', ')}` };
+  const startable = Object.entries(o.missing).filter(([, links]) => links.every((l) => l === 'CONVERSION'));
+  if (o.stance !== 'EXECUTABLE' && startable.length === 0) {
+    const open = [...new Set(Object.values(o.missing).flat())].filter((l) => l !== 'CONVERSION');
+    return { pass: false, detail: open.length ? `no opening is startable: ${open.join(', ')} not established` : 'no opening was planned' };
+  }
+  const e2e = gradeE2E(c, o, { pass: true });
+  const blocking = e2e.failures.filter((f) => f !== 'STEP_FIELD_ABSENT');
+  if (blocking.length) return { pass: false, detail: `the plan cannot be carried out: ${blocking.join(', ')}` };
+  return { pass: true, detail: o.stance === 'EXECUTABLE' ? 'usable: the planner calls it executable' : `usable: ${startable.map(([k]) => k).join(', ')} established but for the close rate selling measures` };
 }
 
 /** The verdict level, unchanged by the end-to-end level beside it. */
