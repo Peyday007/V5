@@ -2617,6 +2617,15 @@ async function main(): Promise<void> {
           : ''),
     );
     if (bin.terminalReason) console.log(`  terminal   ${bin.terminalReason}`);
+    if (bin.orchestrationId) {
+      // A bin is terminal when its packet is, so the packet's own reason is the answer to "why".
+      const packet = await getOrchestration(bin.orchestrationId);
+      console.log(
+        `  packet     ${bin.orchestrationId} ${packet?.status ?? 'missing'} verdict=${packet?.verdict ?? '—'} ` +
+          `updated=${packet?.updatedAt ?? '—'}`,
+      );
+      if (packet?.failureReason) console.log(`  packet why ${packet.failureReason.slice(0, 600)}`);
+    }
     if (bin.checkpoint) {
       console.log(`  checkpoint ${JSON.stringify(bin.checkpoint).slice(0, 240)}`);
     }
