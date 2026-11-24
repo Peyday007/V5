@@ -571,24 +571,56 @@ const WHERE_ONLY = /^(?:location\s*:?.*|remote(?:\s+only|\s+ok)?|on-?site|hybrid
 /** A segment that is a place as people write one, `Austin, TX` (case matters: `React, Go` is work). */
 const PLACE_ONLY = /^[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}(?:,\s*[A-Za-z .'-]+)?$/;
 
+/** Decode the numeric entities Algolia's HN text carries (`&#x2F;`, `&#x27;`, `&#39;`); never throws. */
+function decodeNumericEntities(value: string): string {
+  return value.replace(/&#(x[0-9a-f]+|\d+);/gi, (whole, code: string) => {
+    const point = code[0] === 'x' || code[0] === 'X' ? parseInt(code.slice(1), 16) : parseInt(code, 10);
+    if (!Number.isFinite(point) || point <= 0 || point > 0x10ffff) return whole;
+    // Markup characters stay entities, so a decoded `<` can never be read as a tag.
+    if (point === 60) return '&lt;';
+    if (point === 62) return '&gt;';
+    if (point === 38) return '&amp;';
+    return String.fromCodePoint(point);
+  });
+}
+
+/**
+ * Where an Algolia HN response carries its hits: `{ hits: [...] }` from a single
+ * query, `{ results: [{ hits: [...] }] }` from a multi-query, or a bare array.
+ */
+function hnHits(body: unknown): Record<string, unknown>[] {
+  if (Array.isArray(body)) return records(body);
+  if (!body || typeof body !== 'object') return [];
+  const object = body as Record<string, unknown>;
+  if (Array.isArray(object['hits'])) return records(object['hits']);
+  return records(object['results']).flatMap((one) => records(one['hits']));
+}
+
 /**
  * Algolia's HN search hits: `{ hits: [{ objectID, comment_text, author, created_at, ... }] }`.
  * Only a comment that itself opens with the side's tag is kept (a reply quoting
  * it is not a request or an offer). Its title is the first segment that names
  * the work; the whole comment is the body, so place, rate and dates are read
  * from the author's own words.
+ *
+ * The heading is the comment's first non-empty paragraph, however HN delimits
+ * it: a comment whose first paragraph is itself wrapped (`<p>SEEKING FREELANCER
+ * | …</p><p>…`) used to leave an empty heading and every hit was dropped while
+ * the pull still "succeeded" — the SCHEMA_CHANGED reading of
+ * FEED_CONNECTOR_REPAIR:hn-seeking-freelancer (2026-11-24).
  */
 export function parseHnFreelance(side: HnFreelanceSide): (body: unknown) => FeedItem[] {
   const tag = new RegExp(`^\\s*${side.replace(' ', '\\s+')}\\b[\\s:|\\-–—]*`, 'i');
   return (body: unknown): FeedItem[] => {
-    const hits = body && typeof body === 'object' ? (body as Record<string, unknown>)['hits'] : null;
     const out: FeedItem[] = [];
-    for (const row of records(hits)) {
-      const id = text(row['objectID']);
-      const raw = text(row['comment_text']);
+    for (const row of hnHits(body)) {
+      const id = text(row['objectID']) ?? (typeof row['objectID'] === 'number' ? String(row['objectID']) : null);
+      const source = text(row['comment_text']) ?? text(row['text']) ?? text(row['story_text']);
+      const raw = source ? decodeNumericEntities(source) : null;
       const comment = plain(raw);
-      // The heading is the comment's first paragraph: HN separates paragraphs with <p>, which plain text loses.
-      const heading = plain(raw?.split(/<p>|\n/i)[0]);
+      // HN separates paragraphs with <p> (sometimes closed, sometimes <br>), which plain text loses.
+      const paragraphs = raw ? raw.split(/<\/?p\b[^>]*>|<br\s*\/?>|\n/i) : [];
+      const heading = paragraphs.map((one) => plain(one)).find((one): one is string => !!one) ?? null;
       if (!id || !comment || !heading || !tag.test(heading)) continue;
       const rest = heading.replace(tag, '');
       const segments = rest.split(/\s*\|\s*/).map((one) => one.trim()).filter(Boolean);
