@@ -26,13 +26,16 @@
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
-import { runpodConfig } from '../server/services/cheap/runpod.ts';
+import { runpodConfig, servedByGpu } from '../server/services/cheap/runpod.ts';
 import { podConfig, readPod } from '../server/services/cheap/runpodPod.ts';
 import { BENCH_PREFIX, listPods } from '../server/services/cheap/runpodRestore.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
 import { failureClass, goalPipelineSpeed, goalResearchProgress, percentile, waitsUntilNext } from '../server/services/goals/researchYield.ts';
-import { resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
+import { FREE_LANE_PURPOSES, resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
 import { claimQualityByModel } from '../server/repos/research.ts';
+import { accountReading } from '../server/services/cheap/runpodAccount.ts';
+import { gpuThroughput, hoursToClear, runningByDay, shrinkCauses, summarizeGpuJobs, type LaneJobRow } from '../server/services/cheap/gpuCapacity.ts';
+import { launchableByProject } from '../server/services/russell/loop.ts';
 
 const argv = process.argv.slice(2);
 const at = argv.indexOf('--hours');
@@ -110,6 +113,12 @@ async function main(): Promise<void> {
   }
   const gpuRow = [...table].find(([m]) => m.startsWith('runpod/'));
   const gpuJobs = gpuRow ? gpuRow[1].submitted : 0;
+  const gpuRows = await readGpuLaneRows(since);
+  const gpuServed = summarizeGpuJobs(gpuRows);
+  console.log(
+    `GPU SERVED, last ${hours}h (who answered, from servedBy) · the GPU itself: submitted ${gpuServed.gpu.submitted} · not accepted ${gpuServed.gpu.notAccepted}` +
+      ` · its slot answered only by the free fallback: submitted ${gpuServed.slotFallback.submitted} · not accepted ${gpuServed.slotFallback.notAccepted}`,
+  );
   // The pod's own power history: what Brain stopped and started, and RunPod's
   // price sampled while it ran (runpodPod.ts), so running time is measured.
   const pod = await getDb().all<{ outcome: string; n: number | string; ms: number | string | null; measures: string | null }>(
@@ -147,7 +156,7 @@ async function main(): Promise<void> {
   const livePrice = sampledCost === null || runningMs === 0 ? await liveRunpodPrice() : null;
   const price = Number.isFinite(configured) && configured > 0 ? configured : NaN;
   const perClaim = (spend: number) =>
-    ` · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}` +
+    ` · ${gpuServed.gpu.submitted ? `$${(spend / gpuServed.gpu.submitted).toFixed(4)} per research job the GPU answered` : 'no job answered by the GPU'}` +
     ` · ${gpuClaims.accepted ? `$${(spend / gpuClaims.accepted).toFixed(4)} per accepted claim (${gpuClaims.accepted})` : 'no accepted GPU claims'}` +
     ` · ${gpuClaims.surviving > 0 ? `$${(spend / gpuClaims.surviving).toFixed(4)} per surviving claim (${gpuClaims.surviving}, accepted minus refuted)` : 'no surviving GPU claims'}`;
   if (sampledCost && runningMs > 0) {
@@ -161,11 +170,10 @@ async function main(): Promise<void> {
      * it was stopped. Running time is the larger of Brain's own STARTED→STOPPED
      * events and the span of GPU jobs; a pod running now runs to now.
      */
-    const span = await getDb().get<{ first: string | null; last: string | null }>(
-      `SELECT MIN(at) AS first, MAX(at) AS last FROM bin_events
-        WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model runpod/%'`,
-      [since],
-    );
+    // The span of jobs the GPU itself answered: its slot's label is no evidence the pod ran
+    // (2026-11-23: $31.09 priced over the span of fallback-answered jobs on a pod EXITED for four days).
+    const answered = gpuRows.filter((r) => servedByGpu(r.measures)).map((r) => r.at).sort();
+    const span = { first: answered[0] ?? null, last: answered[answered.length - 1] ?? null };
     const power = await getDb().all<{ at: string; outcome: string }>(
       `SELECT at, outcome FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome IN ('STARTED', 'STOPPED') AND at >= ? ORDER BY at`,
       [since],
@@ -192,7 +200,10 @@ async function main(): Promise<void> {
     console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h from BRAIN_RUNPOD_USD_PER_HOUR${perClaim(spend)}`);
   } else console.log(`GPU COST unknown (${livePrice === null && !(process.env['BRAIN_RUNPOD_API_KEY'] ?? '').trim() ? 'no BRAIN_RUNPOD_API_KEY to ask RunPod, and BRAIN_RUNPOD_USD_PER_HOUR unset' : `RunPod returned no price for the pod${liveFailure ? `: ${liveFailure}` : ''}, and BRAIN_RUNPOD_USD_PER_HOUR unset`})`);
   console.log(`RUNPOD_ACCEPTED_CLAIMS ${gpuClaims.accepted} surviving ${gpuClaims.surviving}`);
-  console.log(`RUNPOD_SUBMITTED ${gpuJobs}`);
+  // What the GPU itself answered, not its slot: the slot keeps its label while the fallback answers it.
+  console.log(`RUNPOD_SUBMITTED ${gpuServed.gpu.submitted}`);
+  console.log(`RUNPOD_SLOT_SUBMITTED ${gpuJobs} (on the GPU slot; ${gpuServed.slotFallback.submitted} of them answered only by the free fallback)`);
+  await capacitySection();
   await queueSection(since, hours);
   await pressureSection(since, hours);
   await goalSection(since, hours);
@@ -611,6 +622,139 @@ async function planInputsSection(goalId: string, projectId: string, reading: Non
   }
   if (inputs.length > 80) console.log(`    … ${inputs.length - 80} more input(s)`);
   console.log(`PLAN_DERIVED_${goalId} ${run.started_at} inputs ${inputs.length} research_fed ${inputs.filter((v) => fedBy(v).length).length} claims_cited ${claimRefs.length} newer_claims ${num(newer?.n)}`);
+}
+
+/** The free-lane rows that touched the GPU slot or were answered by the GPU, since an instant. */
+async function readGpuLaneRows(since: string): Promise<LaneJobRow[]> {
+  const rows = await getDb().all<{ at: string; outcome: string; reason: string | null; duration_ms: number | string | null; measures: string | null }>(
+    `SELECT at, outcome, reason, duration_ms, measures FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND (reason LIKE 'model runpod/%' OR measures LIKE '%runpod/%')`,
+    [since],
+  );
+  return rows.map((r) => ({
+    at: r.at,
+    outcome: r.outcome,
+    slot: String(r.reason ?? '').replace(/^model /, '').split(':')[0] ?? '',
+    durationMs: r.duration_ms === null ? null : Number(r.duration_ms),
+    measures: r.measures,
+  }));
+}
+
+/** The days `GPU CAPACITY` reads back: long enough to hold the last bounded GPU run. */
+const CAPACITY_DAYS = 14;
+
+/**
+ * `GPU CAPACITY` (§86, §98): what the GPU is, what it costs, when it ran, what it
+ * answered per running hour, what moved its slot count, and what research waits
+ * for it — from RunPod and Brain's own rows. Read-only.
+ */
+async function capacitySection(): Promise<void> {
+  const db = getDb();
+  const since = new Date(Date.now() - CAPACITY_DAYS * 86_400_000).toISOString();
+  console.log(`GPU CAPACITY, last ${CAPACITY_DAYS} days`);
+  const apiKey = process.env['BRAIN_RUNPOD_API_KEY']?.trim();
+  if (apiKey) {
+    const account = await accountReading(apiKey);
+    console.log(`  account   balance ${account.balance === null ? 'unknown' : `$${account.balance.toFixed(2)}`} · spending ${account.spendPerHour === null ? 'unknown' : `$${account.spendPerHour.toFixed(3)}/h`} · runway ${account.runwayHours === null ? 'n/a (nothing billing)' : `${Math.round(account.runwayHours)} h`}${account.error ? ` · ${account.error.slice(0, 120)}` : ''}`);
+    try {
+      const res = await fetch('https://api.runpod.io/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          query:
+            '{ myself { pods { id name desiredStatus costPerHr gpuCount vcpuCount memoryInGb containerDiskInGb lastStatusChange machine { gpuDisplayName } runtime { uptimeInSeconds gpus { id gpuUtilPercent memoryUtilPercent } } } } gpuTypes { displayName memoryInGb } }',
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const body = (await res.json()) as { data?: { myself?: { pods?: Record<string, unknown>[] }; gpuTypes?: { displayName?: string; memoryInGb?: number }[] } };
+      const vram = new Map((body.data?.gpuTypes ?? []).map((g) => [String(g.displayName ?? ''), Number(g.memoryInGb ?? 0)]));
+      for (const p of body.data?.myself?.pods ?? []) {
+        const gpu = String((p['machine'] as Record<string, unknown> | null)?.['gpuDisplayName'] ?? '?');
+        const runtime = p['runtime'] as { uptimeInSeconds?: number; gpus?: { gpuUtilPercent?: number; memoryUtilPercent?: number }[] } | null;
+        const util = runtime?.gpus?.map((g) => `util ${g.gpuUtilPercent ?? '?'}% vram ${g.memoryUtilPercent ?? '?'}%`).join(', ');
+        console.log(
+          `  pod       ${p['id']} ${p['name']} ${p['desiredStatus']} · ${p['gpuCount'] ?? '?'} x ${gpu} (${vram.get(gpu) ?? '?'} GB each) · ${p['vcpuCount'] ?? '?'} vCPU · ${p['memoryInGb'] ?? '?'} GB RAM · $${p['costPerHr'] ?? '?'}/h` +
+            ` · ${runtime ? `up ${Math.round((runtime.uptimeInSeconds ?? 0) / 60)} min${util ? ` · ${util}` : ''}` : 'not running (no GPU telemetry)'} · last change ${String(p['lastStatusChange'] ?? '-').slice(0, 90)}`,
+        );
+      }
+    } catch (error) {
+      console.log(`  pod       RunPod's pod list unreadable: ${String((error as Error).message).slice(0, 120)}`);
+    }
+  } else console.log('  account   no BRAIN_RUNPOD_API_KEY: balance and pod hardware unreadable from here');
+
+  const samples = await db.all<{ at: string; outcome: string; duration_ms: number | string | null; measures: string | null }>(
+    `SELECT at, outcome, duration_ms, measures FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome LIKE 'SAMPLE_%' AND at >= ? ORDER BY at`,
+    [since],
+  );
+  const days = runningByDay(
+    samples.map((s) => {
+      const cost = Number(parseJson(s.measures)['costPerHr']);
+      return { at: s.at, outcome: s.outcome, durationMs: s.duration_ms === null ? null : Number(s.duration_ms), costPerHr: Number.isFinite(cost) ? cost : null };
+    }),
+  );
+  const jobs = summarizeGpuJobs(await readGpuLaneRows(since));
+  for (const d of days) {
+    const j = jobs.byDay.get(d.day);
+    console.log(
+      `  day ${d.day} running ${d.runningHours.toFixed(1)} h · stopped ${d.stoppedHours.toFixed(1)} h · $${d.dollars.toFixed(2)}${d.costPerHr !== null ? ` at $${d.costPerHr}/h` : ''}` +
+        ` · GPU answered: submitted ${j?.gpu.submitted ?? 0}, not accepted ${j?.gpu.notAccepted ?? 0} · slot on fallback: submitted ${j?.slotFallback.submitted ?? 0}, not accepted ${j?.slotFallback.notAccepted ?? 0}`,
+    );
+  }
+  const t = gpuThroughput(jobs, days);
+  console.log(
+    `  throughput ${t.runningHours} h running · ${t.jobsPerRunningHour ?? 'n/a'} GPU jobs/h · ${t.acceptedPerRunningHour ?? 'n/a'} accepted/h · ${t.meanInFlight ?? 'n/a'} in flight on average` +
+      ` · accepted ${t.acceptedShare === null ? 'n/a' : `${Math.round(t.acceptedShare * 100)}%`} · $${t.dollars} · ${t.dollarsPerAccepted === null ? 'no accepted GPU job' : `$${t.dollarsPerAccepted} per accepted job`}`,
+  );
+  console.log(`GPU_THROUGHPUT running_h ${t.runningHours} jobs_per_h ${t.jobsPerRunningHour ?? 'n/a'} accepted_per_h ${t.acceptedPerRunningHour ?? 'n/a'} in_flight ${t.meanInFlight ?? 'n/a'}`);
+
+  // What moved the GPU slot's count, and the highest it reached.
+  const decisions = await db.all<{ outcome: string; reason: string | null }>(
+    `SELECT outcome, reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND workload_class LIKE 'runpod/%' AND at >= ?`,
+    [since],
+  );
+  const peak = decisions.reduce((m, d) => Math.max(m, ...[...String(d.reason ?? '').matchAll(/(\d+) -> (\d+)/g)].flatMap((x) => [Number(x[1]), Number(x[2])])), 0);
+  console.log(`  slots     highest GPU target ${peak || 'n/a'} over ${decisions.length} decision(s)`);
+  for (const [cause, n] of [...shrinkCauses(decisions.map((d) => ({ outcome: d.outcome, reason: String(d.reason ?? '') })))].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+    console.log(`    ${String(n).padStart(5)} × ${cause}`);
+  }
+
+  // What waits, and whether the lane may take it (§84/§85: FREE_LANE_PURPOSES, plus improvement research while active).
+  const bins = await db.all<{ purpose: string | null; kind: string; state: string; n: number | string; oldest: string | null; launched: number | string | null }>(
+    `SELECT purpose, kind, state, COUNT(*) AS n, MIN(created_at) AS oldest,
+            SUM(CASE WHEN orchestration_id IS NOT NULL THEN 1 ELSE 0 END) AS launched
+       FROM bins WHERE state IN ('READY', 'LEASED', 'NEEDS_HUMAN') GROUP BY purpose, kind, state`,
+  );
+  const lanePurposes = new Set<string>(FREE_LANE_PURPOSES);
+  for (const b of bins.sort((a, c) => num(c.n) - num(a.n))) {
+    console.log(`  bins      ${b.state.padEnd(11)} ${String(b.purpose ?? '(none)').padEnd(18)} ${b.kind.padEnd(22)} ${String(num(b.n)).padStart(5)} · with a mission ${num(b.launched)} · oldest ${ageMin(b.oldest)} · ${lanePurposes.has(String(b.purpose)) ? 'lane may take its research' : 'not the lane\'s purpose'}`);
+  }
+  const nowIso = new Date().toISOString();
+  const items = await db.all<{ work_type: string; purpose: string | null; n: number | string; claimable: number | string | null }>(
+    `SELECT work_type, purpose, COUNT(*) AS n, SUM(claimable) AS claimable FROM (
+       SELECT w.work_type,
+              (SELECT MIN(b.purpose) FROM bins b
+                WHERE b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id)) AS purpose,
+              CASE WHEN w.available_at <= ? AND w.attempt_count < w.max_attempts THEN 1 ELSE 0 END AS claimable
+         FROM work_items w WHERE w.state = 'QUEUED'
+     ) q GROUP BY work_type, purpose`,
+    [nowIso],
+  );
+  let admissible = 0;
+  for (const i of items.sort((a, c) => num(c.n) - num(a.n))) {
+    const research = /^RESEARCH_/.test(i.work_type);
+    const lane = research && lanePurposes.has(String(i.purpose));
+    if (lane) admissible += num(i.claimable);
+    console.log(`  queued    ${i.work_type.padEnd(22)} ${String(i.purpose ?? '(no bin)').padEnd(18)} ${String(num(i.n)).padStart(5)} · claimable ${num(i.claimable)} · ${lane ? 'GPU-suitable (lane research)' : research ? 'research the lane may not take (purpose)' : 'not a research job'}`);
+  }
+  const launch = await launchableByProject().catch(() => []);
+  const ideas = launch.reduce((s, p) => s + p.waiting, 0);
+  const cap = launch.reduce((s, p) => s + (p.slots?.cap ?? 0), 0);
+  const live = launch.reduce((s, p) => s + (p.slots?.live ?? 0), 0);
+  console.log(`  ideas     ${ideas} launchable research idea(s) in ${launch.length} project(s) · research grants hold ${live} live of ${cap} at-once slots · ${launch.filter((p) => p.slots === null).length} project(s) with no grant`);
+  for (const p of launch.sort((a, c) => c.waiting - a.waiting).slice(0, 8)) {
+    console.log(`    project ${p.projectId} ideas ${p.waiting} · grant ${p.slots ? `${p.slots.live}/${p.slots.cap} live` : 'none'} · free ${p.free}`);
+  }
+  console.log(`GPU_BACKLOG lane_claimable ${admissible} ideas ${ideas} grant_live ${live} grant_cap ${cap} clear_h ${hoursToClear(admissible, t.acceptedPerRunningHour) ?? 'n/a'}`);
 }
 
 /** RunPod's price for Brain's pod, asked live with the Brain's own key; null when there is no key, no pod id or no price. */

@@ -47,8 +47,20 @@ async function main(): Promise<void> {
   const m = (me?.['myself'] ?? {}) as Record<string, unknown>;
   console.log(`ACCOUNT balance $${m['clientBalance'] ?? '?'} · spending $${m['currentSpendPerHr'] ?? '?'}/h · limit ${m['spendLimit'] ?? '?'} · under balance ${m['underBalance'] ?? '?'}`);
 
-  const pods = await fetch('https://rest.runpod.io/v1/pods', { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(60_000) });
-  const podList = (await pods.json().catch(() => [])) as Record<string, unknown>[];
+  /*
+   * RunPod's REST host can be unreachable while GraphQL answers (production 2026-11-16 23:36Z, and
+   * every survey from 11-17 to 11-19: "FAIL survey: fetch failed" before a single GPU price was
+   * printed). The pod list is read through GraphQL then, so the price table below still prints.
+   */
+  let podList: Record<string, unknown>[] = [];
+  try {
+    const pods = await fetch('https://rest.runpod.io/v1/pods', { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(60_000) });
+    podList = (await pods.json().catch(() => [])) as Record<string, unknown>[];
+  } catch (error) {
+    console.log(`pods: RunPod's REST host refused (${(error as Error).message}); reading them through GraphQL`);
+    const viaGraphql = await first(['{ myself { pods { id name desiredStatus costPerHr adjustedCostPerHr imageName gpuCount machine { gpuDisplayName } } } }']);
+    podList = (((viaGraphql?.['myself'] ?? {}) as Record<string, unknown>)['pods'] ?? []) as Record<string, unknown>[];
+  }
   for (const p of Array.isArray(podList) ? podList : []) {
     const gpu = (p['gpu'] as Record<string, unknown> | undefined)?.['displayName'] ?? (p['machine'] as Record<string, unknown> | undefined)?.['gpuDisplayName'] ?? '?';
     const cmd = Array.isArray(p['dockerStartCmd']) ? (p['dockerStartCmd'] as string[]).map((a, i, all) => (all[i - 1] === '--api-key' ? '<key>' : a)).join(' ') : '';
