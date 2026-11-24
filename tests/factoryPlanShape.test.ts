@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
 import { measurePlanShape, validatePlan, type UnitSpec } from '../server/services/factory/planner.ts';
+import { splitDirectiveAcceptance } from '../server/services/improvement/loop.ts';
 
 const changeRequest = {
   repository: 'example/subject',
@@ -166,5 +167,58 @@ describe('plan shape (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595)', () => {
     expect(cyclic.ok).toBe(false);
     expect(cyclic.shape.unitCount).toBe(2);
     expect(cyclic.shape.maxDepth).toBeLessThanOrEqual(2);
+  });
+});
+
+/*
+ * repair-F3 (campaign fcp_34a9e4b0…): the operator's acceptance "The next ENGINEERING_CYCLE reading
+ * after release shows DEVELOPMENT's median lower …" was handed to Factory as condition A03 "checked
+ * by: npm run test:impacted". No commit can meet a post-release reading, so review left it
+ * unverified. A condition a unit receives must be one a commit can satisfy; the reading stays
+ * Brain's own measurement, carried in the expected outcome.
+ */
+describe('an operator acceptance only a post-release reading can establish is not a commit condition', () => {
+  const RECORDED =
+    "The next ENGINEERING_CYCLE reading after release shows DEVELOPMENT's median lower and ENGINEERING_CYCLE_HOURS_MEDIAN " +
+    'not higher than the baseline, with failed releases not increased.';
+
+  const candidate = (acceptance: string) => ({
+    id: 'imp_1', weaknessKey: 'OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595', kind: 'OPERATOR', title: 't', problem: 'p',
+    metric: 'ENGINEERING_CYCLE_HOURS_MEDIAN', downstreamMetric: null, ownerComponent: 'server/services/factory/planner.ts',
+    frequency: 10, denominator: 10, scope: 'GENERAL', severity: 'LOW',
+    evidence: { samples: [], directive: { origin: 'OPERATOR', runId: 'opr_1', goalId: null, goalTitle: null, deficiency: 'RESOURCE_ALLOCATION', intervention: 'ENGINEERING', expectedBenefit: 'b.', acceptance, priority: 2, urgency: 'LOW', priorityWhy: 'w', complexity: 'c', minimumModelClass: 'STRONGEST', routeWhy: 'r', evaluation: 'e.' } },
+    proposal: null, dependencyCheck: null, researchGoalId: null, changeRequestId: null, campaignId: null, deliveredAt: null, deliveredRef: null,
+    baseline: null, result: null, decision: null, decisionReason: null, combinedIntoId: null, heldOn: null, attempt: 1, parentId: null, createdAt: 'x', updatedAt: 'x',
+  });
+  const baseline = { key: 'ENGINEERING_CYCLE_HOURS_MEDIAN', from: 'a', to: 'b', value: 1.892, numerator: 64, denominator: 64, status: 'MEASURED', context: {} };
+
+  it('the recorded acceptance is a post-release clause, with nothing for a commit', () => {
+    const split = splitDirectiveAcceptance(RECORDED);
+    expect(split.commit).toBeNull();
+    expect(split.afterRelease).toHaveLength(1);
+  });
+
+  it('the composed objective hands no unit the post-release reading, and Brain still measures it', async () => {
+    const { composeObjective } = await import('../server/services/improvement/loop.ts');
+    const spec = composeObjective(candidate(RECORDED) as never, { research: null, factory: null, archive: [] }, [], baseline as never);
+    for (const condition of spec.acceptanceConditions) {
+      expect(condition.statement).not.toMatch(/after release|next ENGINEERING_CYCLE reading/i);
+    }
+    // The bar is not lowered: the reading is in the expected outcome Brain measures against.
+    expect(spec.expectedOutcome).toContain("DEVELOPMENT's median lower");
+    expect(spec.acceptanceConditions).toHaveLength(2);
+  });
+
+  it('a test clause stays a commit condition, and only its production clause moves', () => {
+    const split = splitDirectiveAcceptance(
+      'A test feeds the lane the reply x sent and shows an accepted answer; production shows WORK submitted again.',
+    );
+    expect(split.commit).toBe('A test feeds the lane the reply x sent and shows an accepted answer.');
+    expect(split.afterRelease).toEqual(['production shows WORK submitted again']);
+  });
+
+  it('a statement not recognisably post-release stays a commit condition', () => {
+    const statement = 'Operator runs reach Brain and call at least one brain_operator_ tool successfully in most runs.';
+    expect(splitDirectiveAcceptance(statement).commit).toBe(statement);
   });
 });
