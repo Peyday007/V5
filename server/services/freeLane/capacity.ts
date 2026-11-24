@@ -542,12 +542,14 @@ export function slotShare(models: number, poolMax: number | null = databasePoolR
  * the H200 at 12 of its 128 sequences (5.5–8.9 in flight, PR #1270). Each step bounds a model
  * by the total less the others' current targets, so their sum never passes the budget.
  */
-export function poolShare(input: { gpu: boolean; models: number; othersTarget: number; poolMax?: number | null }): number | null {
+export function poolShare(input: { gpu: boolean; models: number; othersTarget: number; poolMax?: number | null; gpuBeside?: boolean }): number | null {
   const poolMax = input.poolMax === undefined ? (databasePoolReadings()?.workload.max ?? null) : input.poolMax;
   const even = slotShare(input.models, poolMax);
   if (even === null || !poolMax) return null;
   const left = Math.max(MIN_TARGET, poolMax * SLOTS_PER_DB_CONNECTION - input.othersTarget);
-  return input.gpu ? Math.max(MIN_TARGET, left) : Math.min(even, left);
+  if (input.gpu) return Math.max(MIN_TARGET, left);
+  // A free model keeps its even share unless a GPU beside it may hold the rest of the budget.
+  return input.gpuBeside ? Math.min(even, left) : even;
 }
 
 /** GPU mean answer times per control step, for the latency baseline (`decideTarget`'s `latency`). */
@@ -653,7 +655,8 @@ export async function controlStep(): Promise<ControlReading | null> {
     // models' slots left 593 callers waiting on 8 connections, and audits threw. The
     // lane's slots together stay within a multiple of the pool's own ceiling.
     const othersTarget = [...pools.values()].reduce((sum, p) => (p === pool ? sum : sum + p.target), 0);
-    const share = poolShare({ gpu: !!gpu, models: pools.size, othersTarget });
+    const gpuBeside = !!config.runpod && [...pools.values()].some((p) => p !== pool && isRunpodSlot(p.worker.model));
+    const share = poolShare({ gpu: !!gpu, models: pools.size, othersTarget, gpuBeside });
     if (share !== null && decision.target > share) {
       // The cap bounds the step; it does not erase why the step was taken (the gate's
       // measured constraint stays on the record beside it).
@@ -856,7 +859,8 @@ export async function freeLaneProvenSlots(seam: PoolSeam = {}): Promise<number> 
       const gpu = !!config.runpod && isRunpodSlot(r.model);
       const served = gpu ? servedSequences(r.model) : null;
       // The same share the controller applies (`poolShare`): the GPU's is what the other models do not hold.
-      const share = poolShare({ gpu, models, othersTarget: total - r.target, ...('poolMax' in seam ? { poolMax: seam.poolMax ?? null } : {}) });
+      const gpuBeside = !!config.runpod && rows.some((o) => o !== r && isRunpodSlot(o.model));
+      const share = poolShare({ gpu, models, othersTarget: total - r.target, gpuBeside, ...('poolMax' in seam ? { poolMax: seam.poolMax ?? null } : {}) });
       return sum + provenSlots({ target: r.target, stableHigh: r.stableHigh, served, share, ceiling: gpuCeiling(process.env, served) });
     }, 0) || START_TARGET * 2
   );

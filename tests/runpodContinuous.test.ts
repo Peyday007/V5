@@ -23,7 +23,7 @@ import {
   type PodConfig,
 } from '../server/services/cheap/runpodPod.ts';
 import { creationPlan, RECIPES } from '../server/services/cheap/runpodRestore.ts';
-import { decideTarget, latencyBaseline, poolShare, SLOTS_PER_DB_CONNECTION } from '../server/services/freeLane/capacity.ts';
+import { decideTarget, latencyBaseline, poolShare, slotShare, SLOTS_PER_DB_CONNECTION } from '../server/services/freeLane/capacity.ts';
 import { gpuRestrictions, workState } from '../server/services/cheap/gpuStatus.ts';
 import { gpuThroughput, summarizeGpuJobs } from '../server/services/cheap/gpuCapacity.ts';
 import type { RecordBinEventInput } from '../server/repos/bins.ts';
@@ -265,8 +265,10 @@ describe('the GPU slot\'s concurrency rises under waiting work (§86, §121)', (
     // Production: an 8-connection pool, two models — the even split held the H200 at 12.
     const total = 8 * SLOTS_PER_DB_CONNECTION;
     expect(poolShare({ gpu: true, models: 2, othersTarget: 4, poolMax: 8 })).toBe(total - 4);
-    expect(poolShare({ gpu: false, models: 2, othersTarget: 20, poolMax: 8 })).toBe(4);
-    expect(poolShare({ gpu: false, models: 2, othersTarget: 2, poolMax: 8 })).toBe(12);
+    expect(poolShare({ gpu: false, models: 2, othersTarget: 20, poolMax: 8, gpuBeside: true })).toBe(4);
+    // With no GPU beside it, a free model keeps its even share whatever the others hold.
+    expect(poolShare({ gpu: false, models: 2, othersTarget: 20, poolMax: 8 })).toBe(slotShare(2, 8));
+    expect(poolShare({ gpu: false, models: 2, othersTarget: 2, poolMax: 8, gpuBeside: true })).toBe(12);
     expect(poolShare({ gpu: true, models: 2, othersTarget: 4, poolMax: null })).toBeNull();
   });
 
