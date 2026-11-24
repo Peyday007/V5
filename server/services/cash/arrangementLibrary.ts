@@ -182,14 +182,14 @@ async function carryLegacyVerdicts(projectId: string, arrangements: readonly Con
  * row's old signature, so two passes cannot move one row twice. Returns the
  * moved rows' new signatures by path id.
  */
-export async function resignArrangements(
+export async function resignArrangements<R extends Pick<ConstructedArrangementRecord, 'pathId' | 'signature' | 'verdict' | 'evaluatedCount' | 'updatedAt'>>(
   projectId: string,
-  rows: readonly ConstructedArrangementRecord[],
-  target: (one: ConstructedArrangementRecord) => string,
+  rows: readonly R[],
+  target: (one: R) => string,
   at: string = new Date().toISOString(),
 ): Promise<Map<string, string>> {
   const held = new Set(rows.map((one) => one.signature));
-  const groups = new Map<string, ConstructedArrangementRecord[]>();
+  const groups = new Map<string, R[]>();
   for (const one of rows) {
     const to = target(one);
     if (to === one.signature || held.has(to)) continue;
