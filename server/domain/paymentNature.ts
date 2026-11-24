@@ -137,6 +137,11 @@ export function requestedNonCommercial(goalText: string | null | undefined): Rea
 
 /** Why an opening is left out of an ordinary revenue goal, or null when it is a sale or the goal asked for its kind. Pure. */
 export function nonCommercialExclusion(openingText: string, goalText: string | null | undefined): string | null {
+  // A funding programme (a notice of funding, a cooperative agreement) is a grant whatever figure it states, unless the text shows a supplier being paid.
+  const funding = FUNDING_PROGRAM.exec(openingText)?.[0] ?? null;
+  if (funding && !requestedNonCommercial(goalText).has('GRANT') && !evidencesSupplierPayment(openingText)) {
+    return `not a sale: ${nonPurchaseSentence({ nature: 'GRANT', cue: funding })}; a revenue goal's strategies are commercial purchases unless the goal asks for this kind of payout`;
+  }
   // A topic is not a payment: "sweepstakes rules review" names what a brand buys. Only money the text states is read.
   if (!/(?:\$|usd\s?)\s?\d/i.test(openingText)) return null;
   const reading = paymentNatureOf(openingText);
@@ -191,4 +196,25 @@ export function evidencesPurchase(text: string | null | undefined): boolean {
   const words = t.replace(/(?:\$|usd)\s?[\d,.]+[km]?/gi, ' ').match(/[a-z]{4,}/gi) ?? [];
   if (words.length < 3) return true;
   return PURCHASE.test(t) || PAYS_SUPPLIER.test(t) || PAY_PER.test(t) || PROCUREMENT.test(t);
+}
+
+/** A public funding programme: what an applicant wins, never what a buyer pays a supplier. */
+const FUNDING_PROGRAM = /\b(?:notices? of funding(?: opportunity)?|nofos?|funding opportunit(?:y|ies)|cooperative agreements?|grant programs?|grant programmes?|federal grants?|planning grants?|matching funds?)\b/i;
+
+/** Whether the text itself shows someone paying a supplier for work (a fee, a rate card, pay per deliverable, a procurement). Pure. */
+export function evidencesSupplierPayment(text: string): boolean {
+  const t = text.replace(/\s+/g, ' ');
+  return SUPPLIER_PRICE_FRAME.test(t) || PAYS_SUPPLIER.test(t) || /\bpa(?:y|ys|id)\b[^.;]{0,50}?\bper\b/i.test(t);
+}
+
+/**
+ * Whether an opening's payer, as its source describes them, is paying out a
+ * reward, grant, rebate, settlement or wage ("GitHub, Inc. operates the bug
+ * bounty program and pays rewards"; "the Farm Vitality Planning Grant
+ * reimburses …"). Read on the payer's own description, never a topic. Pure.
+ */
+export function payerPaysOut(payer: string | null | undefined): boolean {
+  if (!payer) return false;
+  const nature = paymentNatureOf(payer).nature;
+  return nature !== 'PURCHASE' || FUNDING_PROGRAM.test(payer) || /\b(?:operates|runs) (?:the |a |its )?[\w-]*\s*(?:bug[- ]?)?bounty\b|\bpays? rewards?\b/i.test(payer);
 }

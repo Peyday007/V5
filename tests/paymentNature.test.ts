@@ -145,3 +145,16 @@ describe('structural reading of payments and buyers (holdout, 2026-11-23)', () =
     expect(describesOneBody('Licensed local moving companies')).toBe(false);
   });
 });
+
+describe('funding programmes and paying-out payers stay out of revenue goals (fresh-plan audit, 2026-11-24)', () => {
+  const goal = 'Collect 10000 dollars of settled cash within 30 days using little up-front capital';
+  it('reads production payers that pay out, and keeps a fee for preparing a grant application', async () => {
+    const { nonCommercialExclusion, payerPaysOut } = await import('../server/domain/paymentNature.ts');
+    expect(payerPaysOut('GitHub, Inc. operates the bug bounty program and pays rewards to researchers')).toBe(true);
+    expect(nonCommercialExclusion('Pennsylvania: the Farm Vitality Planning Grant reimburses the cost of business planning', goal)).toMatch(/not a sale/);
+    expect(nonCommercialExclusion('Market: US federal grants (NEH cooperative agreements), not a buyer', goal)).toMatch(/not a sale/);
+    expect(nonCommercialExclusion('Farm grant application preparation. The PA Department of Agriculture pays $2,500 per farm grant application prepared.', goal)).toBeNull();
+    expect(nonCommercialExclusion('Market: US federal grants (NEH cooperative agreements)', 'Win $50,000 of federal grant funding for the museum')).toBeNull();
+    expect(payerPaysOut('Dental practices')).toBe(false);
+  });
+});
