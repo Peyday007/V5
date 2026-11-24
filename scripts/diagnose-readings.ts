@@ -285,12 +285,39 @@ async function restarts(): Promise<void> {
   console.log(`  incidents by kind: ${kinds.map((one) => `${one.kind} ${one.n}`).join(', ')}`);
 }
 
+/**
+ * The last readings each recent process wrote into `runtime_liveness` (every
+ * thirty seconds), so a process that died is read at its last half-minute:
+ * its heap, its pools, its costliest statements and longest connection holds.
+ */
+async function liveness(): Promise<void> {
+  const rows = await getDb().all<{ instance_id: string; started_at: string; alive_at: string; readings: string | null }>(
+    'SELECT instance_id, started_at, alive_at, readings FROM runtime_liveness ORDER BY alive_at DESC LIMIT 6',
+    [],
+  );
+  console.log(`DIAGNOSE: liveness ${rows.length} process(es)`);
+  for (const row of rows) {
+    const lived = Math.round((Date.parse(row.alive_at) - Date.parse(row.started_at)) / 60_000);
+    console.log(`  ${row.instance_id} started ${row.started_at} last alive ${row.alive_at} (${lived} min)`);
+    let readings: Record<string, unknown> = {};
+    try {
+      readings = JSON.parse(row.readings ?? '{}') as Record<string, unknown>;
+    } catch {
+      console.log('    readings unreadable');
+    }
+    for (const key of ['memory', 'pools', 'eventLoop', 'stalls', 'pressure', 'statements', 'holds']) {
+      if (readings[key] !== undefined) console.log(`    ${key}: ${JSON.stringify(readings[key]).slice(0, 1500)}`);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
   try {
     if (command === 'query-times') await queryTimes();
     else if (command === 'restarts') await restarts();
+    else if (command === 'liveness') await liveness();
     else if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
