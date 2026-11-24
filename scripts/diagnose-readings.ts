@@ -345,7 +345,36 @@ async function heapSources(): Promise<void> {
     `SELECT dependent_run_id AS run, COUNT(*) AS deps, COUNT(DISTINCT LOWER(required_canonical_name)) AS names, MIN(created_at) AS first, MAX(created_at) AS last
        FROM dependencies WHERE dependent_run_id IS NOT NULL GROUP BY dependent_run_id ORDER BY COUNT(*) DESC LIMIT 8`,
   );
-  await time('documents by project', 'SELECT project_id, COUNT(*) AS n FROM documents GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 5');
+  await time(
+    'runs holding run dependencies: shape',
+    `SELECT r.run_type AS type, r.status AS status, l.name AS layer, r.provider AS provider, COUNT(*) AS runs,
+            MIN(r.created_at) AS first, MAX(r.created_at) AS last, MAX(r.attempt_number) AS max_attempt,
+            SUM(CASE WHEN r.parent_run_id IS NULL THEN 0 ELSE 1 END) AS redos,
+            MAX(LENGTH(r.prompt)) AS max_prompt, MAX(LENGTH(r.required_attachments)) AS max_attachments,
+            SUM(LENGTH(r.prompt)) AS sum_prompt, SUM(LENGTH(r.required_attachments)) AS sum_attachments
+       FROM research_runs r LEFT JOIN layers l ON l.id = r.layer_id
+      WHERE r.id IN (SELECT DISTINCT dependent_run_id FROM dependencies WHERE dependent_run_id IS NOT NULL)
+      GROUP BY r.run_type, r.status, l.name, r.provider ORDER BY COUNT(*) DESC LIMIT 20`,
+  );
+  await time(
+    'active runs by project, type and status',
+    `SELECT project_id, run_type, status, COUNT(*) AS n, SUM(LENGTH(prompt)) AS prompt_bytes, SUM(LENGTH(required_attachments)) AS attachment_bytes
+       FROM research_runs WHERE status IN ('PLANNED','READY','RUNNING','BLOCKED','AUDIT_REQUIRED','REDO_REQUIRED')
+      GROUP BY project_id, run_type, status ORDER BY COUNT(*) DESC LIMIT 20`,
+  );
+  await time(
+    'runs created per day, largest project, by type',
+    `SELECT SUBSTR(created_at, 1, 10) AS day, run_type, status, COUNT(*) AS n FROM research_runs
+      WHERE project_id = 'prj_22fb4fec295f403a8a22' AND created_at >= '2026-11-15'
+      GROUP BY SUBSTR(created_at, 1, 10), run_type, status ORDER BY SUBSTR(created_at, 1, 10), COUNT(*) DESC LIMIT 40`,
+  );
+  await time(
+    'events naming one of those runs (first 3 run ids)',
+    `SELECT event_type, entity_type, SUBSTR(payload, 1, 220) AS payload, created_at FROM project_events
+      WHERE entity_id IN (SELECT DISTINCT dependent_run_id FROM dependencies WHERE dependent_run_id IS NOT NULL ORDER BY dependent_run_id LIMIT 3)
+      ORDER BY created_at LIMIT 20`,
+  );
+  await time('documents by project','SELECT project_id, COUNT(*) AS n FROM documents GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 5');
   await time(
     'recompute-shaped reads per hour (DEPENDENCY_* and LAYER_STATUS_CHANGED events, last 6h)',
     `SELECT event_type, COUNT(*) AS n FROM project_events WHERE created_at >= ? AND (event_type LIKE 'DEPENDENCY_%' OR event_type = 'LAYER_STATUS_CHANGED') GROUP BY event_type`,
