@@ -139,7 +139,7 @@ export async function knowledgeView(readable: readonly string[], now = new Date(
       idleBesideWork:
         (due.length > 0 && (!pass || Date.parse(pass.at) < now.getTime() - 30 * 60_000)) ||
         (gpu && uninterpreted > 0 && Number(interpretedToday?.n ?? 0) === 0),
-      note: 'A pass runs at most every fifteen minutes beside the Russell tick: up to three dataset reads and four GPU calls, more only when the lane has spare capacity.',
+      note: 'A pass runs on its own clock at most every fifteen minutes: up to three dataset reads and four GPU calls, more only when the lane has spare capacity; other Census programs are walked a window an hour for new datasets.',
     },
   };
 }
