@@ -333,6 +333,24 @@ async function heapSources(): Promise<void> {
   );
   await time('cash_events by kind', 'SELECT kind, COUNT(*) AS n, SUM(LENGTH(detail)) AS bytes FROM cash_events GROUP BY kind ORDER BY SUM(LENGTH(detail)) DESC LIMIT 25');
   await time('dependencies by project', 'SELECT project_id, COUNT(*) AS n, COUNT(dependent_run_id) AS runs, COUNT(DISTINCT dependent_run_id) AS distinct_runs FROM dependencies GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 10');
+  await time(
+    'dependencies by run status and type (largest project)',
+    `SELECT r.status AS status, d.dependency_type AS type, COUNT(DISTINCT r.id) AS runs, COUNT(*) AS deps
+       FROM dependencies d JOIN research_runs r ON r.id = d.dependent_run_id
+      WHERE d.project_id = (SELECT project_id FROM dependencies GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 1)
+      GROUP BY r.status, d.dependency_type ORDER BY COUNT(*) DESC`,
+  );
+  await time(
+    'largest runs by dependencies (distinct names)',
+    `SELECT dependent_run_id AS run, COUNT(*) AS deps, COUNT(DISTINCT LOWER(required_canonical_name)) AS names, MIN(created_at) AS first, MAX(created_at) AS last
+       FROM dependencies WHERE dependent_run_id IS NOT NULL GROUP BY dependent_run_id ORDER BY COUNT(*) DESC LIMIT 8`,
+  );
+  await time('documents by project', 'SELECT project_id, COUNT(*) AS n FROM documents GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 5');
+  await time(
+    'recompute-shaped reads per hour (DEPENDENCY_* and LAYER_STATUS_CHANGED events, last 6h)',
+    `SELECT event_type, COUNT(*) AS n FROM project_events WHERE created_at >= ? AND (event_type LIKE 'DEPENDENCY_%' OR event_type = 'LAYER_STATUS_CHANGED') GROUP BY event_type`,
+    [new Date(Date.now() - 6 * 3_600_000).toISOString()],
+  );
   await time('projects', 'SELECT COUNT(*) AS n FROM projects');
   await time('goals with targets', 'SELECT COUNT(*) AS n FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL');
   const rows = await getDb().all<{ instance_id: string; started_at: string; alive_at: string; readings: string | null }>(
