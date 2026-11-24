@@ -50,7 +50,7 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { namesOnlyAPlace, statesNamedIn } from '../../domain/jurisdiction.ts';
 import { buyerNameKey, namesABuyerPopulation } from '../../domain/industry.ts';
-import { isNonPurchasePayment } from '../../domain/paymentNature.ts';
+import { isNonPurchasePayment, wrongWayPrice } from '../../domain/paymentNature.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
@@ -1112,6 +1112,8 @@ export async function constructionObservations(
     if (kind === 'priced' && statesMeasuredRate(fact.sourceClaimId ? priceClaims.get(fact.sourceClaimId) : undefined, low, high)) continue;
     // A reward, grant, rebate or wage is not what anyone pays for a deliverable (audit 2026-11-23: GitHub's $10,000 bug-bounty reward was read as the price GitHub pays).
     if (kind === 'priced' && isNonPurchasePayment(fact.sourceClaimId ? (priceClaims.get(fact.sourceClaimId) ?? fact.measures) : fact.measures)) continue;
+    // A fee the selling side pays, or a supplier's own input cost, runs the other way: it is never what this population pays (Task E, 2026-11-24).
+    if (kind === 'priced' && wrongWayPrice(fact.sourceClaimId ? (priceClaims.get(fact.sourceClaimId) ?? fact.measures) : fact.measures, node.name)) continue;
     // What the figure is a price of, in its source's words: what these buyers are shown paying for (`paidForParts`).
     if (kind === 'priced' && fact.measures?.trim()) out.paysFor.push({ payer: node.name, name: fact.measures, claimId: fact.sourceClaimId ?? null, ref: `fact:${fact.id}` });
     out[kind].push({
