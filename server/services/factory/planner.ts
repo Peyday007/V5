@@ -47,6 +47,7 @@ import {
   getCampaign,
   getChangeRequest,
   getUnitByKey,
+  pathsOverlap,
   promoteReadyUnits,
   refreshDownstreamCounts,
 } from '../../repos/factory.ts';
@@ -55,6 +56,8 @@ import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { forbiddenPathsFor } from './forbidden.ts';
 import { FactoryError } from './errors.ts';
 import {
+  isConcrete,
+  isTestPath,
   rewritePlanGraph,
   validateUnitGraph,
   type OwnershipIssue,
@@ -116,7 +119,79 @@ export interface PlanValidation {
   issues: OwnershipIssue[];
   /** What the factory changed about the proposed graph to make it completable, in order. */
   rewrites: PlanRewrite[];
+  /** How wide and how deep the plan is — the shape that decides how long DEVELOPMENT takes. */
+  shape: PlanShape;
+  /**
+   * The shape warnings the architect has not yet answered. Non-empty means the
+   * plan goes back to its architect once, before install, to be reshaped or to
+   * say in `shapeReason` why the shape stands. Empty when the plan has no shape
+   * warning or already carries a reason.
+   */
+  shapeFeedback: string[];
+  /** The architect's stated reason the shape stands, when it gave one. */
+  shapeReason: string | null;
 }
+
+/** The top-level plan field an architect answers shape feedback with when it keeps the shape. */
+export const SHAPE_REASON_FIELD = 'shapeReason';
+/** A reason shorter than this is not a reason. */
+export const MIN_SHAPE_REASON_LENGTH = 24;
+
+/**
+ * The words that send a plan back to its architect for its one shape revision.
+ *
+ * The warnings were measured and then only logged on an already-installed plan,
+ * so the serial chain and the oversized unit that held DEVELOPMENT at 44% of the
+ * critical path (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595) reached nobody
+ * who could change them. This is what reaches the architect while it can.
+ */
+export function shapeRevisionRequest(feedback: string[]): string {
+  return [
+    'The plan is valid, but its shape makes DEVELOPMENT longer than the plan itself justifies:',
+    ...feedback.map((line) => `- ${line}`),
+    'Revise it once before it is installed: drop the dependency edges nothing reads, and split ' +
+      'oversized units by file ownership into independent units that run in parallel sessions. ' +
+      `If the shape is right as it is, resubmit the same plan with a top-level \`${SHAPE_REASON_FIELD}\` ` +
+      `string (at least ${MIN_SHAPE_REASON_LENGTH} characters) saying why. Every other rule still applies.`,
+  ].join('\n');
+}
+
+/**
+ * The shape of a plan, measured rather than judged.
+ *
+ * DEVELOPMENT was the largest share of the measured engineering critical path
+ * (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595): every dependency edge costs a
+ * whole implement-and-integrate round before the dependent unit can start, and a
+ * unit that owns several modules is one long session where several short ones
+ * could have run at once. Nothing here refuses a plan — a deep plan is sometimes
+ * the honest one — but every validation reports the shape, and a chain or a unit
+ * the plan itself gives no reason for comes back as a warning the architect reads.
+ */
+export interface PlanShape {
+  unitCount: number;
+  /** Units on the longest `dependsOn` chain; 1 when nothing waits for anything. */
+  maxDepth: number;
+  /** The most units that sit at one depth, i.e. that can be ready at once. */
+  maxWidth: number;
+  /** Concrete owned paths of the unit that owns the most. */
+  largestUnitPaths: number;
+  /** Distinct directories holding the non-test source files of the widest unit. */
+  largestUnitModules: number;
+  /** The longest chain, root first. */
+  longestChain: string[];
+}
+
+const EMPTY_SHAPE: PlanShape = {
+  unitCount: 0,
+  maxDepth: 0,
+  maxWidth: 0,
+  largestUnitPaths: 0,
+  largestUnitModules: 0,
+  longestChain: [],
+};
+
+/** A unit owning at least this many non-test source files across two or more directories is one to split. */
+export const OVERSIZED_UNIT_SOURCE_FILES = 3;
 
 export const MAX_PLAN_UNITS = 24;
 
@@ -148,14 +223,14 @@ export function validatePlan(
   const forbiddenHere = forbiddenPathsFor(changeRequest.repository);
 
   if (typeof proposed !== 'object' || proposed === null || Array.isArray(proposed)) {
-    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
+    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE, shapeFeedback: [], shapeReason: null };
   }
   const raw = (proposed as { units?: unknown }).units;
   if (!Array.isArray(raw)) {
-    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
+    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE, shapeFeedback: [], shapeReason: null };
   }
   if (raw.length === 0) {
-    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
+    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE, shapeFeedback: [], shapeReason: null };
   }
   if (raw.length > maxUnits) {
     errors.push(`The plan has ${raw.length} units; the ceiling is ${maxUnits}.`);
@@ -271,6 +346,15 @@ export function validatePlan(
   }
   for (const rewrite of rewrites) warnings.push(`Rewritten: ${rewrite.detail}`);
 
+  const shaped = measurePlanShape(finalUnits);
+  warnings.push(...shaped.warnings);
+  const rawReason = (proposed as Record<string, unknown>)[SHAPE_REASON_FIELD];
+  const reasonText = typeof rawReason === 'string' ? rawReason.trim() : '';
+  const shapeReason = reasonText.length >= MIN_SHAPE_REASON_LENGTH ? reasonText : null;
+  if (reasonText.length > 0 && shapeReason === null) {
+    warnings.push(`\`${SHAPE_REASON_FIELD}\` is too short to be a reason; it was ignored.`);
+  }
+
   const served = new Set(finalUnits.flatMap((unit) => unit.serves));
   const uncoveredConditions = changeRequest.acceptanceConditions
     .filter((condition) => condition.mandatory && !served.has(condition.id))
@@ -284,6 +368,111 @@ export function validatePlan(
     uncoveredConditions,
     issues: verdict.issues,
     rewrites,
+    shape: shaped.shape,
+    shapeFeedback: shapeReason === null ? shaped.warnings : [],
+    shapeReason,
+  };
+}
+
+function directoryOf(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+}
+
+/**
+ * Measure a plan's width and depth, and name what makes it deeper or longer than
+ * the plan itself justifies.
+ *
+ * An edge is *unexplained* when the dependent owns none of the dependency's
+ * paths and names none of them in its required context or objective: nothing in
+ * the plan says the dependent reads what the dependency writes, so the edge only
+ * delays it. That is reported, never removed — the architect may know of an
+ * import the plan does not spell out, and a plan is still a proposal.
+ */
+export function measurePlanShape(units: UnitSpec[]): { shape: PlanShape; warnings: string[] } {
+  if (units.length === 0) return { shape: EMPTY_SHAPE, warnings: [] };
+  const warnings: string[] = [];
+  const byKey = new Map(units.map((unit) => [unit.key, unit]));
+
+  // Longest chain ending at each unit, cycle-safe: a cycle is refused elsewhere,
+  // so here it only stops the walk.
+  const depth = new Map<string, { depth: number; chain: string[] }>();
+  const visiting = new Set<string>();
+  const walk = (key: string): { depth: number; chain: string[] } => {
+    const known = depth.get(key);
+    if (known) return known;
+    if (visiting.has(key)) return { depth: 0, chain: [] };
+    visiting.add(key);
+    let best: { depth: number; chain: string[] } = { depth: 0, chain: [] };
+    for (const dependency of byKey.get(key)?.dependsOn ?? []) {
+      if (!byKey.has(dependency) || dependency === key) continue;
+      const candidate = walk(dependency);
+      if (candidate.depth > best.depth) best = candidate;
+    }
+    visiting.delete(key);
+    const result = { depth: best.depth + 1, chain: [...best.chain, key] };
+    depth.set(key, result);
+    return result;
+  };
+  for (const unit of units) walk(unit.key);
+
+  let longest: { depth: number; chain: string[] } = { depth: 0, chain: [] };
+  const atDepth = new Map<number, number>();
+  for (const unit of units) {
+    const entry = depth.get(unit.key) ?? { depth: 1, chain: [unit.key] };
+    if (entry.depth > longest.depth) longest = entry;
+    atDepth.set(entry.depth, (atDepth.get(entry.depth) ?? 0) + 1);
+  }
+
+  let largestUnitPaths = 0;
+  let largestUnitModules = 0;
+  for (const unit of units) {
+    const concrete = unit.ownedPaths.filter(isConcrete);
+    largestUnitPaths = Math.max(largestUnitPaths, concrete.length);
+    const sources = concrete.filter((path) => !isTestPath(path));
+    const modules = new Set(sources.map(directoryOf));
+    largestUnitModules = Math.max(largestUnitModules, modules.size);
+    if (sources.length >= OVERSIZED_UNIT_SOURCE_FILES && modules.size >= 2) {
+      warnings.push(
+        `Shape: \`${unit.key}\` owns ${sources.length} source files across ${modules.size} directories ` +
+          `(${[...modules].map((m) => m || '.').join(', ')}); split it by file ownership into ` +
+          'independent units so they run in parallel sessions rather than one long one.',
+      );
+    }
+  }
+
+  const unexplained: string[] = [];
+  for (const unit of units) {
+    const named = [...unit.requiredContext, ...unit.ownedPaths];
+    for (const dependencyKey of unit.dependsOn) {
+      const dependency = byKey.get(dependencyKey);
+      if (!dependency || dependencyKey === unit.key) continue;
+      const read =
+        pathsOverlap(named, dependency.ownedPaths) ||
+        dependency.ownedPaths.some((path) => path.length > 0 && unit.objective.includes(path));
+      if (!read) unexplained.push(`${unit.key} -> ${dependencyKey}`);
+    }
+  }
+  if (unexplained.length > 0) {
+    warnings.push(
+      `Shape: ${unexplained.length} dependency edge(s) the plan gives no reason for ` +
+        `(${unexplained.join('; ')}): the dependent owns none of the dependency's paths and names ` +
+        'none of them in its required context or objective. Each edge costs a whole implement-and-' +
+        'integrate round; drop it unless the dependent really reads code the dependency creates. ' +
+        `Longest chain: ${longest.chain.join(' -> ')} (depth ${longest.depth}).`,
+    );
+  }
+
+  return {
+    shape: {
+      unitCount: units.length,
+      maxDepth: longest.depth,
+      maxWidth: Math.max(0, ...atDepth.values()),
+      largestUnitPaths,
+      largestUnitModules,
+      longestChain: longest.chain,
+    },
+    warnings,
   };
 }
 

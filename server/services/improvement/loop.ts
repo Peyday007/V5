@@ -573,7 +573,8 @@ export function composeObjective(
       `${metric.label} rises after deployment against the recorded baseline` +
       (downstream ? `, and ${downstream.label} does not fall` : '') +
       `; Brain's improvement loop measures both over the ${MEASURE_WINDOW_HOURS} h after deployment against the ` +
-      'baseline and keeps, corrects or reverts the change. That measurement is Brain\'s, not a unit\'s: no unit should wait for it.',
+      'baseline and keeps, corrects or reverts the change. That measurement is Brain\'s, not a unit\'s: no unit should wait for it.' +
+      directiveAfterReleaseSentence(candidate),
     nonGoals: [
       'Lowering, bypassing or reconfiguring the evidence gate, verification, audit or any permission.',
       'Any migration, dependency, secret, identity or deployment-configuration change.',
@@ -701,9 +702,48 @@ function directiveSentence(candidate: ImprovementCandidate): string {
   );
 }
 
+/**
+ * A clause that only a reading taken after release can establish: "the next ENGINEERING_CYCLE
+ * reading after release shows …", "production shows …", "the next attempt names …". A commit
+ * cannot satisfy it and no test command can check it.
+ */
+const AFTER_RELEASE_CLAUSE =
+  /\b(after (release|deploy(ment)?)|in production|production shows|on production|the next [\w .-]{0,60}?\b(reading|readings|rounds?|attempts?|runs?|plan reading)\b)/i;
+
+/**
+ * The operator's acceptance statement divided into what a commit can satisfy and what only Brain's
+ * own post-release measurement can (repair-F3, campaign fcp_34a9e4b0…: an operator acceptance "The
+ * next ENGINEERING_CYCLE reading after release shows DEVELOPMENT's median lower …" became condition
+ * A03 "checked by: npm run test:impacted", which no commit can meet, so the review left it
+ * unverified). Clauses are the statement's `;`-separated parts. A clause naming a test is always a
+ * commit's, whatever it says about production; anything not recognised as post-release stays a
+ * commit condition, so nothing is dropped from what a unit must meet. Pure.
+ */
+export function splitDirectiveAcceptance(statement: string): { commit: string | null; afterRelease: string[] } {
+  const clauses = statement
+    .split(/;\s+/)
+    .map((c) => c.trim().replace(/[.;]+$/, ''))
+    .filter(Boolean);
+  const commit: string[] = [];
+  const afterRelease: string[] = [];
+  for (const clause of clauses) {
+    const namesTest = /\b(a|the) test\b|\btests?\b (show|shows|reproduce|reproduces|feeds|prove|proves)/i.test(clause);
+    (namesTest || !AFTER_RELEASE_CLAUSE.test(clause) ? commit : afterRelease).push(clause);
+  }
+  return { commit: commit.length ? `${commit.join('; ')}.` : null, afterRelease };
+}
+
 function directiveAcceptance(candidate: ImprovementCandidate): { statement: string; verification: string }[] {
   const d = directiveOf(candidate);
-  return d ? [{ statement: d.acceptance.slice(0, 600), verification: 'npm run test:impacted' }] : [];
+  const commit = d ? splitDirectiveAcceptance(d.acceptance).commit : null;
+  return commit ? [{ statement: commit.slice(0, 600), verification: 'npm run test:impacted' }] : [];
+}
+
+/** The operator's post-release acceptance, as Brain's own measurement in the expected outcome; '' when none. */
+function directiveAfterReleaseSentence(candidate: ImprovementCandidate): string {
+  const d = directiveOf(candidate);
+  const after = d ? splitDirectiveAcceptance(d.acceptance).afterRelease : [];
+  return after.length ? ` Brain also reads after release, as its own measurement and not a unit's: ${after.join('; ')}.` : '';
 }
 
 /**
