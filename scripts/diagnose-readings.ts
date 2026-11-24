@@ -568,7 +568,7 @@ async function heapProfile(): Promise<void> {
       waiting.set(seq, resolve);
       ws.send(JSON.stringify({ id: seq, method, params }));
     });
-  const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '12');
+  const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '15');
   try {
     await call('HeapProfiler.enable');
     console.log(`  start ${JSON.stringify(await call('HeapProfiler.startSampling', { samplingInterval: 131072 }))}`);
