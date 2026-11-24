@@ -3470,7 +3470,20 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
    * without recording anything". Treated as a provider outage: refunded, cooled.
    */
   const brainUnavailable = !ok && BRAIN_UNAVAILABLE.test(ctx.why);
-  const providerFailure = !ok && ((/^model call failed/.test(ctx.why) && PROVIDER_BUSY.test(ctx.why)) || brainUnavailable);
+  /*
+   * Any classified route failure is the route's, not the work's: a refused
+   * credential, a model the provider does not route, a broken GPU — none of
+   * them reached a model that read the item. ORIGINATED:IDLE_CAPACITY:
+   * free-lane-coverage#2: "the free lane failed every item it took in the last
+   * hour" beside a stage-capacity reading naming "model route … failing" —
+   * only a busy provider was refunded, so every other route cause spent each
+   * item's attempt on its third strike, and displaced research was failed
+   * through a route the breaker had already named. An unclassified failure
+   * (an HTTP 400 for this prompt, say) can be the item's own fault and keeps
+   * the three-strike limit.
+   */
+  const routeFailure = /^model call failed \[(?!unclassified\])[^\]]+\]/.test(ctx.why);
+  const providerFailure = !ok && ((/^model call failed/.test(ctx.why) && (PROVIDER_BUSY.test(ctx.why) || routeFailure)) || brainUnavailable);
   /*
    * Nor does a fragment that found no readable source while web search was
    * refusing. Production 0ba2eb30, 2026-11-18 01:00–01:45Z: DuckDuckGo refused
