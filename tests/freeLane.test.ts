@@ -14,7 +14,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { freeLaneAdmits, resetPurposeCache, asksByPriority, citedWithinLimit, claimAsks, droppedReason, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, noneBecause, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { freeLaneAdmits, resetFailedBy, resetPurposeCache, asksByPriority, citedWithinLimit, claimAsks, droppedReason, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, noneBecause, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
 import { MAX_LIST_ITEMS } from '../server/mcp/researchTools.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
@@ -399,6 +399,30 @@ describe('the free research lane', () => {
     expect(tick.byType['RESEARCH_VERIFY']).toBe(1);
     expect(second.calls.every((name) => name === 'brain-a')).toBe(true);
     expect((await getWorkItem(verifyId))?.state).toBe('SUCCEEDED');
+  });
+
+  it('gives an item one model failed to the other model next, instead of the same model again (production, 2026-11-24)', async () => {
+    // wki_f067d73e3418427a8a3e: a RESEARCH_PLAN went to gpt-oss-120b three times ("no usable JSON") and exhausted.
+    resetFailedBy();
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(CONFIG);
+    const base = model();
+    // An answer Brain refuses (a citation to a sentence the page does not have), every time it is asked.
+    const broken: Completer = async (config, name, system, prompt) =>
+      prompt.includes('Extract the material claims')
+        ? JSON.stringify({ claims: [{ claim: 'The median wage was $17.39.', source: 1, sentences: [999], evidence_lane: 'wage' }] })
+        : base.completer(config, name, system, prompt);
+    const first = await takeOne({ workers, worker: workers[0]!, index: 0, spillover: true, completer: broken, fetchSource, search: async () => [], config: CONFIG });
+    expect(first.claimed?.workItemId).toBe(itemId);
+    expect(first.ok).toBe(false);
+    await getDb().run(`UPDATE work_items SET state = 'QUEUED', available_at = ? WHERE id = ? AND state <> 'SUCCEEDED'`, [new Date(0).toISOString(), itemId]);
+    const again = await takeOne({ workers, worker: workers[0]!, index: 0, spillover: true, completer: base.completer, fetchSource, search: async () => [], config: CONFIG });
+    expect(again.claimed).toBeNull();
+    const other = await takeOne({ workers, worker: workers[1]!, index: 1, spillover: true, completer: base.completer, fetchSource, search: async () => [], config: CONFIG });
+    expect(other.claimed?.workItemId).toBe(itemId);
+    expect(other.ok).toBe(true);
   });
 
   it('records a claim on a page Brain read as retrieved, and drops fields the tool does not define (production, 2026-11-07)', async () => {

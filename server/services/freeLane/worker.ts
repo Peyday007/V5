@@ -2596,6 +2596,7 @@ export function resetFreeLaneFitness(): void {
   pairProbes.clear();
   resetRouteHealth();
   resetProvenance();
+  failedBy.clear();
 }
 export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
   if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
@@ -3212,6 +3213,26 @@ export function heldBackFor(
   return models.some((other) => other !== model && !unfit.has(`${other}|${workType}`) && hold(other) === null);
 }
 
+/**
+ * Work items a model failed in this process: item id → the models that failed it. Kept in
+ * memory (bounded) rather than read from `bin_events`, which has no index on the item and
+ * would be asked on every admission. A restart forgets, which costs at most one more try.
+ */
+const failedBy = new Map<string, Set<string>>();
+function noteFailedBy(workItemId: string, model: string): void {
+  if (failedBy.size > 5000) failedBy.clear();
+  const set = failedBy.get(workItemId) ?? new Set<string>();
+  set.add(model);
+  failedBy.set(workItemId, set);
+}
+async function failedHereBefore(workItemId: string, model: string): Promise<boolean> {
+  return failedBy.get(workItemId)?.has(model) ?? false;
+}
+/** Tests: forget which models failed which items. */
+export function resetFailedBy(): void {
+  failedBy.clear();
+}
+
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   // Shutting down: a lease taken now would only be stranded (`returnInFlightLeases`).
@@ -3247,6 +3268,18 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     const pairProbe = heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, otherHold);
     if (pairProbe && !pairProbeDue(worker.model, item.work_type)) {
       return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
+    }
+    /*
+     * An item this model already failed goes to another model next, when one
+     * can take it now. Production, 2026-11-24: wki_f067d73e3418427a8a3e, the
+     * RESEARCH_PLAN of a Brain-improvement packet, went to gpt-oss-120b three
+     * times running ("the model returned no usable JSON") and exhausted its
+     * attempts, while gpt-oss had submitted no plan in 24 hours and the other
+     * model was free. A retry on the model that just failed is not a repair (§15).
+     */
+    if (await failedHereBefore(item.id, worker.model)) {
+      const other = workers.some((w) => w.model !== worker.model && otherHold(w.model) === null);
+      if (other) return { ok: false, reason: 'this model already failed this item; another model takes the next attempt' };
     }
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
     // A check is answered by a model that did not produce what it checks — the model that answers, not the slot's label.
@@ -3471,6 +3504,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     }
   } else {
     transientStrikes.delete(one.workItemId);
+    // The model answered and its answer was refused, not its provider: the next attempt goes elsewhere.
+    if (!transient && !/^model call failed/.test(ctx.why)) noteFailedBy(one.workItemId, worker.model);
     try {
       await call(ctx, 'brain_fail_work', {
         ...proof(ctx),
