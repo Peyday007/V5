@@ -74,7 +74,10 @@ describe('scaling calls are made only as far as the rows support them', () => {
   it('says NO to more agents when work waits beside free workers, YES only when every capable worker is saturated for an hour', () => {
     const waiting = { ...win().queues, factoryUnits: q({ queued: 3, oldestWaitMin: 90 }) };
     expect(scalingDecisions(win({ queues: waiting, factory: { ...win().factory, workers: [{ name: 'w', modelClass: 'FAST', availability: 'AVAILABLE', maxConcurrency: 2, leased: 1, rateLimited: false }] } }), null).agents.call).toBe('NO');
-    expect(scalingDecisions(win({ queues: waiting, factory: { ...win().factory, waitingByClass: { STRONGEST: 3 } } }), null).agents.call).toBe('YES');
+    // YES only once the pools were read and none is idle beside work (owner, 2026-11-23).
+    const pools = [{ pool: 'FACTORY', waiting: 3, running: 2, capacity: 2, idle: false }];
+    expect(scalingDecisions(win({ queues: waiting, pools, factory: { ...win().factory, waitingByClass: { STRONGEST: 3 } } }), null).agents.call).toBe('YES');
+    expect(scalingDecisions(win({ queues: waiting, factory: { ...win().factory, waitingByClass: { STRONGEST: 3 } } }), null).agents.call).toBe('NO');
     expect(scalingDecisions(win(), null).agents.call).toBe('NO');
   });
 
@@ -180,6 +183,8 @@ describe('built from production rows, recorded once an hour, and read by the own
   };
 
   beforeEach(async () => {
+    // The pools are the watchdog's reading, not this report's statements (its own suite pins it).
+    (await import('../server/services/operator/operationsReport.ts')).setPoolReaderForTests(async () => [{ pool: 'ROUTINES', waiting: 0, running: 0, capacity: 12, idle: false }]);
     ({ project: { id: projectId } } = await freshProject());
     goalId = (await createWorkstream({ projectId, title: 'Collect $10,000 in 30 days', intent: 'Collect cash.', purpose: 'REVENUE_DIRECT', createdByUserId: null })).id;
     await getDb().run('UPDATE workstreams SET target_metric = ?, target_amount_cents = ?, capital_ceiling_cents = ?, target_project_id = ? WHERE id = ?', ['SETTLED_CASH', 1_000_000, 300_000, projectId, goalId]);

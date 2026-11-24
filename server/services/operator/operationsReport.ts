@@ -520,6 +520,17 @@ export interface BuiltReport {
  * before, the baseline, the plan history and the persistence of each bottleneck come from the
  * reports already recorded. Every read is bounded by the report's read budget.
  */
+/** The live pool reading, bounded; replaceable in tests, whose statement budgets do not include the pools. */
+let readPoolsLive = async (budgetMs: number): Promise<OpsWindow['pools']> => {
+  const { utilizationWithin } = await import('../engineering/watchdog.ts');
+  const read = await utilizationWithin(Math.max(1_000, Math.min(15_000, budgetMs)));
+  return read.pools ? read.pools.map((one) => ({ pool: one.pool, waiting: one.waiting, running: one.running, capacity: one.capacity, idle: one.idle })) : null;
+};
+/** Tests: replace the live pool reading. */
+export function setPoolReaderForTests(reader: (budgetMs: number) => Promise<OpsWindow['pools']>): void {
+  readPoolsLive = reader;
+}
+
 export async function buildOperationsReport(
   nowMs = Date.now(),
   goalId = REPORT_GOAL_ID,
@@ -532,6 +543,8 @@ export async function buildOperationsReport(
     const start = new Date(Date.parse(end) - 3_600_000).toISOString();
     const stored = await storedReports(end, missing);
     const now = await readWindow(start, end, nowMs, missing);
+    // No reading held in this process (a restart): read the pools live, inside the report's budget.
+    if (!now.pools && Date.now() < readDeadline) now.pools = await safe(null, () => readPoolsLive(readDeadline - Date.now()), missing, 'capacity pools');
     const before = stored.find((x) => x.hourEnding === start) ?? null;
     // The hour before comes from its own report; read only when no report recorded it.
     const prev = before?.window ?? (Date.now() < readDeadline ? await readWindow(new Date(Date.parse(start) - 3_600_000).toISOString(), start, nowMs, []) : null);
