@@ -140,6 +140,9 @@ describe('the report', () => {
     expect(r.text).toContain('Capacity pools (brain_operator_capacity): ROUTINES 0 running/12, 1 waiting, IDLE beside waiting work; FREE_LANE 32 running/42, 153 waiting; FACTORY 0 running/2');
     expect(r.text).toContain('Cheap screening lane (GPU calls outside the free lane)');
     expect(r.text).toContain('Factory workers (registered-worker table; Factory surfaces are counted in the pools above)');
+    // Owner, 2026-11-23: no subscription is proposed while existing capacity sits idle beside work.
+    expect(r.text).toMatch(/MORE AGENTS: NO — No purchase: existing capacity is idle beside waiting work/);
+    expect(r.text).not.toMatch(/MORE RESEARCH CAPACITY: YES/);
   });
 
   it('publishes a partial report that names what it could not read and shows those figures as n/a, never as zero', () => {
