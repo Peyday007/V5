@@ -264,11 +264,33 @@ async function queryTimes(): Promise<void> {
   await step('brainUtilization (every pool)', () => watchdog.brainUtilization());
 }
 
+/** Every process restart in the last 72 h (`infra_incidents` PROCESS_RESTART), and how long each process lived. */
+async function restarts(): Promise<void> {
+  const since = new Date(Date.now() - 72 * 3_600_000).toISOString();
+  const rows = await getDb().all<{ started_at: string; ended_at: string }>(
+    "SELECT started_at, ended_at FROM infra_incidents WHERE kind = 'PROCESS_RESTART' AND ended_at >= ? ORDER BY ended_at",
+    [since],
+  );
+  console.log(`DIAGNOSE: restarts since ${since}: ${rows.length}`);
+  let previousListen: string | null = null;
+  for (const row of rows) {
+    const lived = previousListen ? Math.round((Date.parse(row.started_at) - Date.parse(previousListen)) / 60_000) : null;
+    console.log(`  down ${row.started_at} -> up ${row.ended_at}  previous process lived ${lived === null ? '?' : `${lived} min`}`);
+    previousListen = row.ended_at;
+  }
+  const kinds = await getDb().all<{ kind: string; n: number | string }>(
+    'SELECT kind, COUNT(*) AS n FROM infra_incidents WHERE ended_at >= ? GROUP BY kind ORDER BY kind',
+    [since],
+  );
+  console.log(`  incidents by kind: ${kinds.map((one) => `${one.kind} ${one.n}`).join(', ')}`);
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
   try {
     if (command === 'query-times') await queryTimes();
+    else if (command === 'restarts') await restarts();
     else if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
