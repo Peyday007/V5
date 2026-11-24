@@ -1575,7 +1575,12 @@ describe('a bin holder handed nothing says why, in Brain\'s own ledger', () => {
       (event) => event.eventType === 'BIN_ITEM_WITHHELD',
     );
     expect(withheld?.outcome).toBe('REFUSED_BY_ADMISSION');
-    expect(withheld?.reason).toMatch(/JUDGE may not begin/);
+    // Classified by the holder's own rule — workload scope first, then audit
+    // independence — which is the rule the claim that returned nothing used.
+    // This worker serves GENERAL only, so scope is what refused the packet's
+    // research items; before, a scope refusal was written NOT_CLAIMABLE and
+    // the attempt it cost was never credited back.
+    expect(withheld?.reason).toMatch(/RESEARCH_AUDIT: (this worker serves \[GENERAL\]|.*JUDGE may not begin)/);
     // Never the credential, and never anything the caller sent.
     expect(withheld?.reason ?? '').not.toContain(`cred-${workerOne}`);
   });
