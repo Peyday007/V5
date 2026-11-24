@@ -990,9 +990,9 @@ export async function creditRefusedAssignments(binId: string): Promise<number> {
       binId,
       key: `admission-refusal:${row.lease_generation}`,
       reason:
-        'An assignment Brain refused itself is not an attempt the bin spent. The session that ' +
-        'arrived had already performed a role in this audit round, so the independence guard ' +
-        'withheld the work — correctly, and at no cost to the bin.',
+        'An assignment Brain refused itself is not an attempt the bin spent. Brain\'s own ' +
+        'admission rule (audit independence or workload scope) withheld every open item from ' +
+        'the session that arrived — correctly, and at no cost to the bin.',
     });
     if (ok) credited += 1;
   }

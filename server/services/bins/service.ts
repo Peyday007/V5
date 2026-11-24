@@ -554,18 +554,66 @@ export async function binAdmission(input: {
 
     const now = new Date().toISOString();
     const items = await listWorkItemsForBin(confinementFor(bin));
+    /*
+     * Claimable by the claim's own reading (`CLAIMABLE_SQL`): available now,
+     * or a lapsed lease, and under the item's own attempt ceiling. This used to
+     * count every QUEUED item, whatever its backoff or ceiling, so a bin whose
+     * items the claim would never hand out read as admissible here.
+     */
     const claimable = items.filter(
       (item) =>
-        item.state === 'QUEUED' ||
-        (item.state === 'LEASED' && item.leaseExpiresAt !== null && item.leaseExpiresAt <= now),
+        item.attemptCount < item.maxAttempts &&
+        ((item.state === 'QUEUED' && item.availableAt <= now) ||
+          (item.state === 'LEASED' && item.leaseExpiresAt !== null && item.leaseExpiresAt <= now)),
     );
-    if (claimable.length === 0) return { ok: true };
+    if (claimable.length === 0) {
+      /*
+       * A research packet's bin is a container and its work is its queue items
+       * (`workReadySql`). When it has open items and none of them can be
+       * claimed by anybody right now — every one held by another live lease,
+       * on a backoff, or past its ceiling — an assignment hands the session
+       * nothing and charges the bin an attempt for it. Production, 2026-11-24:
+       * `bin_8db9ec91086843b99067` was assigned while the packet's audit items
+       * were leased elsewhere, each assignment withheld NOT_CLAIMABLE and was
+       * released, and the bin parked at 5/5 while its packet was still
+       * AUDITING. Skipped quietly, as losing the race is: no attempt, no
+       * refusal row, no fire deferral — the dispatcher already does not fire
+       * at it, and the next check-in after an item frees takes it. A bin with
+       * no open items at all is unchanged (a filed packet still needs one
+       * session to close its bin, and a packet between stages is advanced by
+       * the drain).
+       */
+      const open = items.some((item) => item.state === 'QUEUED' || item.state === 'LEASED');
+      if (bin.completionContract === 'RESEARCH_PACKET_V1' && open) {
+        return {
+          ok: false,
+          quiet: true,
+          reason: 'Every open item in this bin is held by another lease, waiting on a backoff, or past its ceiling.',
+        };
+      }
+      return { ok: true };
+    }
 
+    /*
+     * The same rule the drain claims by (`holderAdmission`): workload scope —
+     * which carries brain-only mode at the item level — then audit
+     * independence. This asked audit independence alone, so an item the drain
+     * refuses for its workload was admitted here, the bin was assigned and
+     * charged, and Brain handed it straight back.
+     */
+    const scope = workloadAdmission(routing);
     const reasons: string[] = [];
     let sessionBlocked = false;
+    let independenceAsked = false;
     for (const item of claimable) {
       const row = await getWorkItemRow(item.id);
       if (!row) return { ok: true }; // Unreadable is not ineligible.
+      const scoped = await scope(row);
+      if (!scoped.ok) {
+        if (scoped.reason) reasons.push(`${item.workType}: ${scoped.reason}`);
+        continue;
+      }
+      independenceAsked = true;
       const verdict = await admit(row);
       if (verdict.ok) return { ok: true };
       if (verdict.reason) reasons.push(`${item.workType}: ${verdict.reason}`);
@@ -587,6 +635,16 @@ export async function binAdmission(input: {
      * refresh in seconds, and that would let one model context come back under a
      * second session id and take the role it was just refused.
      */
+    if (!independenceAsked) {
+      // Refused on this worker's workload scope alone: a fact about the worker,
+      // not the bin, so skipped quietly like the capability skip above — no
+      // refusal row and no fire deferral to hold back a worker that serves it.
+      return {
+        ok: false,
+        quiet: true,
+        reason: reasons.length > 0 ? reasons.join(' ') : 'Out of this worker\'s workload scope.',
+      };
+    }
     const retryNotLaterThan = sessionBlocked
       ? await distinctSessionPossibleAt(input.principal.credentialId)
       : null;
@@ -1244,7 +1302,7 @@ export async function nextItemInBin(input: {
 
   const items = await listWorkItemsForBin(confinementFor(bin));
   const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
-  if (open.length > 0) await recordWithheld(bin, input, open);
+  if (open.length > 0) await recordWithheld(bin, input, open, admit);
   if (open.length === 0) return { held: true, item: null, binHasOpenWork: false };
 
   const view = await openWorkForSession(bin, input, admit);
@@ -1332,14 +1390,18 @@ async function recordWithheld(
   bin: Bin,
   input: { workerId: string; principal: Principal; proof: BinProof },
   open: WorkItem[],
+  /*
+   * The holder's own rule — workload scope, then audit independence — which is
+   * the rule the claim that just returned nothing used. This classified by
+   * audit independence alone, so a workload refusal (brain-only mode at the
+   * item level) was written NOT_CLAIMABLE, and `creditRefusedAssignments`,
+   * which gives back exactly the assignments Brain's admission refused, never
+   * saw it: production's `bin_8db9ec91086843b99067` spent all five attempts
+   * that way.
+   */
+  admit: (row: WorkItemRow) => Promise<{ ok: boolean; reason?: string }>,
 ): Promise<void> {
   try {
-    const admit = auditAdmission(
-      await lineageForWorker({
-        workerId: input.workerId,
-        credentialId: input.principal.credentialId,
-      }),
-    );
     const reasons: string[] = [];
     for (const item of open.slice(0, 5)) {
       const row = await getWorkItemRow(item.id);
@@ -1982,6 +2044,39 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     // The one bin this pass acts on is read whole; the page was read as heads.
     const full = await getBin(bin.id);
     if (!full) continue;
+    /*
+     * Unless its packet is still being worked. A research bin whose packet has
+     * not ended and whose items are held by live leases elsewhere is
+     * progressing: each item that completes credits the bin an attempt
+     * (`creditBinAttempt`), which makes it assignable again. Production,
+     * 2026-11-24: `bin_8db9ec91086843b99067` was parked NEEDS_HUMAN "the packet
+     * is AUDITING" while its audit items were leased to other workers — a
+     * person asked to decide about work that was moving. Left as it is and
+     * named; if the leases lapse with nothing completed, the next pass
+     * escalates it exactly as before.
+     */
+    if (full.completionContract === 'RESEARCH_PACKET_V1' && full.orchestrationId) {
+      const packet = await getOrchestration(full.orchestrationId);
+      const ended =
+        !packet || ['COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'CANCELLED'].includes(packet.status);
+      const nowIso = new Date().toISOString();
+      const held = ended
+        ? false
+        : (await listWorkItemsForBin(confinementFor(full))).some(
+            (item) => item.state === 'LEASED' && item.leaseExpiresAt !== null && item.leaseExpiresAt > nowIso,
+          );
+      if (held) {
+        report.healthy += 1;
+        report.details.push({
+          binId: bin.id,
+          disposition: 'WORK_IN_PROGRESS_ELSEWHERE',
+          reason:
+            `Its packet ${full.orchestrationId} is ${packet!.status} and has items under live leases, so it is ` +
+            'progressing; each completed item gives this bin an attempt back. Not a decision for a person.',
+        });
+        continue;
+      }
+    }
     const verdict = await evaluateContract(full);
     /*
      * Not a decision for a person when the only thing outstanding is the
