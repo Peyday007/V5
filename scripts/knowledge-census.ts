@@ -74,6 +74,15 @@ export const POPULATIONS: readonly Population[] = [
   { key: 'commercialPositions', layer: 'STORED', label: 'commercial positions (distinct §92 position_key on stored arrangements)', sql: `SELECT COUNT(DISTINCT position_key) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL` },
   { key: 'arrangementsPositioned', layer: 'STORED', label: 'stored arrangements carrying a §92 position (position_json)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_json IS NOT NULL` },
   { key: 'positionMoneyFlows', layer: 'STORED', label: 'constructed money flows (distinct payer population × position, money timing included)', sql: `SELECT COUNT(*) AS n FROM (SELECT DISTINCT COALESCE(opportunity_id, industry_node_id, design_signature) AS payer, position_key FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL) flows` },
+  // Commercial knowledge read from public datasets (§121, migration 161 / pg 152).
+  { key: 'knowledgeSources', layer: 'STORED', label: 'public datasets Brain found and reads (knowledge_sources, not candidates)', sql: `SELECT COUNT(*) AS n FROM knowledge_sources WHERE status <> 'CANDIDATE'` },
+  { key: 'knowledgeReads', layer: 'STORED', label: 'dataset reads (knowledge_acquisitions)', sql: `SELECT COUNT(*) AS n FROM knowledge_acquisitions` },
+  { key: 'knowledgeFacts', layer: 'EVIDENCED', label: 'published figures held (knowledge_facts FACT, current)', sql: `SELECT COUNT(*) AS n FROM knowledge_facts f WHERE f.epistemic = 'FACT' AND NOT EXISTS (SELECT 1 FROM knowledge_facts s WHERE s.supersedes_id = f.id)` },
+  { key: 'knowledgeEstimates', layer: 'EVIDENCED', label: 'derived economics (knowledge_facts ESTIMATE, current)', sql: `SELECT COUNT(*) AS n FROM knowledge_facts f WHERE f.epistemic = 'ESTIMATE' AND NOT EXISTS (SELECT 1 FROM knowledge_facts s WHERE s.supersedes_id = f.id)` },
+  { key: 'knowledgeIndustries', layer: 'STORED', label: 'NAICS industries classified (knowledge_industries)', sql: `SELECT COUNT(*) AS n FROM knowledge_industries` },
+  { key: 'knowledgeInterpreted', layer: 'EVALUATED', label: 'industries the GPU interpreted (knowledge_industries MODEL)', sql: `SELECT COUNT(*) AS n FROM knowledge_industries WHERE interpreted_at IS NOT NULL` },
+  { key: 'knowledgeLinkedBuyers', layer: 'EVALUATED', label: 'buyer nodes classified to NAICS (knowledge_links)', sql: `SELECT COUNT(*) AS n FROM knowledge_links WHERE method <> 'NONE'` },
+  { key: 'knowledgeApplied', layer: 'VALIDATED', label: 'places knowledge reached a plan (knowledge_applications)', sql: `SELECT COUNT(*) AS n FROM knowledge_applications` },
 ];
 
 export interface CensusLine { key: string; layer: Population['layer']; label: string; value: number | null; note?: string }
@@ -328,6 +337,15 @@ async function main(): Promise<void> {
       if (process.argv.includes('--json')) console.log(`DIAG_JSON ${JSON.stringify(diag)}`);
     } catch (error) {
       console.log(`DIAG UNMEASURED — ${message(error)}`);
+    }
+    try {
+      // What the commercial knowledge pass learned and where it reached a plan (§121), across every project.
+      const { knowledgeView } = await import('../server/services/knowledge/view.ts');
+      const projects = (await getDb().all<{ id: string }>('SELECT id FROM projects')).map((one) => one.id);
+      const view = await knowledgeView(projects);
+      console.log(`KNOWLEDGE_JSON ${JSON.stringify(view)}`);
+    } catch (error) {
+      console.log(`KNOWLEDGE UNMEASURED — ${message(error)}`);
     }
     console.log('GOALS: OK');
   } finally {
