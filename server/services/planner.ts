@@ -24,13 +24,12 @@ import type {
   PlannerItem,
   PlannerResult,
   Project,
-  ResearchRun,
   VersionPolicy,
 } from '../domain/types.ts';
 import { listDocuments } from '../repos/documents.ts';
 import { listLayers } from '../repos/layers.ts';
 import { getProject } from '../repos/projects.ts';
-import { listActiveRuns } from '../repos/runs.ts';
+import { listRunSummariesInStatus, type ResearchRunSummary } from '../repos/runs.ts';
 import { nowIso } from '../repos/util.ts';
 import { computeLayerState, recomputeLayer } from './stateEngine.ts';
 import { insideExistenceMemo, objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
@@ -119,7 +118,12 @@ async function planWithin(projectId: string): Promise<PlannerResult> {
   const project = await requireProject(projectId);
   const layers = await listLayers(projectId);
   const documentsByLayer = groupByLayer(await listDocuments(projectId));
-  const runsByLayer = groupByLayer(await listActiveRuns(projectId));
+  // Open runs without their text: the plan reads a run's status and layer, and
+  // production's 110 waiting redos carried ~1 MB of prompt and a 2,190-name
+  // attachment list each (2026-11-24), all of it read on every plan.
+  const runsByLayer = groupByLayer(
+    await listRunSummariesInStatus(projectId, ['PLANNED', 'READY', 'RUNNING', 'BLOCKED', 'AUDIT_REQUIRED', 'REDO_REQUIRED']),
+  );
 
   const planned: PlannedLayer[] = await Promise.all(layers.map(async (layer) => {
     const snapshot = await computeLayerState(layer.id);
@@ -237,7 +241,7 @@ async function classify(input: {
   snapshot: LayerStateSnapshot;
   policy: VersionPolicy;
   documents: Document[];
-  runs: ResearchRun[];
+  runs: ResearchRunSummary[];
 }): Promise<Classification> {
   const { layer, snapshot, policy, documents, runs } = input;
   const name = snapshot.layerName || layer.name;
@@ -495,7 +499,7 @@ function continueExpansion(
   name: string,
   snapshot: LayerStateSnapshot,
   policy: VersionPolicy,
-  running: ResearchRun[],
+  running: ResearchRunSummary[],
   facts: string[],
 ): Classification {
   const outstanding = sortVersions(snapshot.missingVersions).at(0) ?? null;
@@ -597,7 +601,7 @@ function buildDetail(
   layer: Layer,
   snapshot: LayerStateSnapshot,
   classification: Classification,
-  runs: ResearchRun[],
+  runs: ResearchRunSummary[],
 ): string {
   const parts: string[] = [];
   const reason = snapshot.reason.trim();
