@@ -40,7 +40,7 @@ Detroit), plausible 40–150 h; the central figure rests on two unmeasured durat
 | stage | what has to happen | measured |
 |---|---|---|
 | A. intake | the objective's words become amount, deadline, capital, hours | base: 12/40 and 15/30 phrasings refused or misread; now 70/70 |
-| B. route selection | Brain picks a concrete offer, buyer, channel, fulfiller for *this* objective | 0/46 — objective-only readings are a generic "buyers to be found" research list, identical across objectives; production openings are marketplace scraps shared by every goal in a project |
+| B. route selection | Brain picks a concrete offer, buyer, channel, fulfiller for *this* objective | 0/46 — locally (no research) a generic "buyers to be found" list, identical across objectives; in production goal discovery asks open "what else could reach" questions from 12 fixed and up to 100+ industry/origin lenses, and its answers come back as marketplace scraps ("Buyer request: buyer not yet named — Upwork", reach $35) and as arrangements assembled from claim-sentence fragments (204 candidates, 15 distinct, signatures like "fulfilment=ad agency broadcaster committee company…") |
 | C. facts | price, market size, dated demand, settlement, cost established for the route | production: 0 of 6 goals has an evidenced buyer and price; 5 goals created 11-19 have 13–15 research items READY with 0 attempts; research slots: 938 ideas waiting, 937 at the grant's at-once ceiling |
 | D. planner | supplied route → startable plan inside the limits | after repairs: dev 9/10, unseen 24/30 (corrected comparator) |
 
@@ -80,12 +80,15 @@ notary service), a consumer marketplace read as unsized (r38).
 
 ## 4. What closes the gap, in order
 
-1. **Route selection from the objective** (stage B, critical path): discovery's questions
-   are a fixed set per deliverable kind (`PLAY_BUCKETS`, `QUICK_PLAY_BUCKETS`); nothing in an
-   objective — the business named, the industry hinted, the deadline or capital — becomes a
-   research question. Extend `discovery.ts`'s buckets with objective-derived ones (the named
-   offer and buyer; for open requests, Brain's proved deliverables × the objective's limits),
-   each asking for price, market size, a dated demand sign, fulfiller and settlement.
+1. **Route-shaped discovery** (stage B, critical path). Goal discovery exists
+   (`openGoalDiscovery`, `GOAL_LENSES`) but asks open questions across many lenses, and its
+   harvest assembles routes from claim fragments, so no answer arrives as one coherent route.
+   Extend it so a goal's round asks for, and harvests as one opening card, a whole route —
+   buyer segment, offer, published price, channel, fulfiller, cost, settlement, market size
+   and a dated demand sign — for the named business on a specific request, the hinted
+   industry on a hinted one, and Brain's proved deliverables within the objective's limits on
+   an open one, with fewer lenses so throughput reaches each. That is the shape the planner
+   now turns into a startable plan 80–90% of the time (§3).
 2. **Research for evaluation goals** (stage C): the 5 newest goals got no attempts in 5 days.
    Brain's own allocation must give planning-evaluation goals research capacity.
 3. Planner residuals (stage D), above.
