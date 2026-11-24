@@ -176,6 +176,13 @@ export interface ObjectiveReading {
   /** ISO-8601 UTC, or null when the words name none it can read. */
   deadline: string | null;
   deadlineHours: number | null;
+  /**
+   * Whole days when the deadline was stated as a span ("within 30 days", "in
+   * 4 weeks") rather than a date: for a cash goal that span is a commercial
+   * execution window that starts when execution is authorized (§119), never a
+   * date computed from the moment the words were read. Null for a date.
+   */
+  windowDays?: number | null;
   /** Major units: the most the plan may tie up. */
   capitalCeiling: number | null;
   hoursCeiling: number | null;
@@ -301,6 +308,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
 
   // 1. The deadline. The first phrase that names one decides it; a second is named, never merged.
   let deadline: Date | null = null;
+  let windowDays: number | null = null;
   const deadlineSeen = (start: number, end: number, at: Date | null, phrase: string) => {
     consumed.push({ start, end, text: phrase });
     for (const t of tokensIn({ start, end })) t.role = 'DEADLINE';
@@ -318,7 +326,9 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     else if (unit === 'day') at = new Date(now.getTime() + n * 86_400_000);
     else if (unit === 'week') at = new Date(now.getTime() + n * 7 * 86_400_000);
     else if (Number.isInteger(n)) at = addCalendar(now, unit as 'month' | 'year', n);
+    const first = deadline === null;
     deadlineSeen(m.index!, m.index! + m[0].length, at, m[0]);
+    if (first && deadline !== null && unit !== 'hour' && unit !== 'hr') windowDays = Math.max(1, Math.round(((deadline as Date).getTime() - now.getTime()) / 86_400_000));
   }
   for (const m of text.matchAll(/\bby\s+(\d{4})-(\d{2})-(\d{2})\b/gi)) {
     deadlineSeen(m.index!, m.index! + m[0].length, endOfDay(Number(m[1]), Number(m[2]) - 1, Number(m[3])), m[0]);
@@ -498,6 +508,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       currency,
       deadline: at ? at.toISOString() : null,
       deadlineHours: at ? Math.round((at.getTime() - now.getTime()) / 3_600_000) : null,
+      windowDays,
       capitalCeiling,
       hoursCeiling,
       beforeProof: single(figures.BEFORE_PROOF, 'before-proof limit'),

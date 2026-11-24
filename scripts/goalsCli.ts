@@ -22,7 +22,7 @@
  *   npm run goals -- depends <wst_…> <wst_…> --admin a@b
  *   npm run goals -- objective <wst_…> [--intent "…"] [--outcome "…"] --admin a@b
  *   npm run goals -- undepend <wst_…> <wst_other…> --reason "…" --admin a@b
- *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
+ *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01 --window none] [--window 30] [--commitment CUSTOMER] --admin a@b
  *   npm run goals -- create --objective "Generate $10,000 within 30 days using at most $3,000 in starting capital" --project prj_… --admin a@b
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
@@ -132,7 +132,7 @@ function printGoal(goal: GoalView): void {
   console.log('');
   console.log(`GOAL ${goal.id}  ${goal.lifecycle}  ${goal.title}`);
   console.log(`  project     ${goal.projectName ?? 'Brain-wide'} (${goal.projectId ?? '—'})`);
-  console.log(`  owner       ${goal.owner?.name ?? '—'}   purpose ${goal.purposeLabel}   ${goal.commitmentLabel}${goal.dueAt ? `   due ${goal.dueAt.slice(0, 10)}${goal.overdue ? ' OVERDUE' : ''}` : ''}`);
+  console.log(`  owner       ${goal.owner?.name ?? '—'}   purpose ${goal.purposeLabel}   ${goal.commitmentLabel}${goal.deadline ? `   due ${goal.deadline}${goal.overdue ? ' OVERDUE' : ''}` : ''}`);
   console.log(`  intent      ${goal.intent.slice(0, 240)}`);
   console.log(`  outcome     ${goal.outcome ?? 'nobody has said what counts as finished'}`);
   if (goal.target) console.log(`  target      ${goal.target.targetCents / 100} ${goal.target.currency} ${goal.target.metricLabel}: ledger shows ${goal.target.achievedCents / 100}, ${goal.target.remainingCents / 100} to go${goal.target.daysLeft !== null ? `, ${goal.target.daysLeft} day(s) left` : ''}${goal.target.notCounted.length ? ` (not counted: ${goal.target.notCounted.map((one) => `${one.label} ${one.cents / 100}`).join('; ')})` : ''}`);
@@ -288,6 +288,8 @@ async function decide(command: string): Promise<void> {
           outcome: flag('outcome'),
           dueAt: due ? new Date(due).toISOString() : undefined,
           commitment,
+          // --window 30 sets a 30-day commercial execution window; --window none makes the deadline a fixed date (§119).
+          ...(flag('window') === undefined ? {} : { executionWindowDays: flag('window') === 'none' ? null : Number(flag('window')) }),
         },
         actorRef,
       );
@@ -537,7 +539,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   // The owner's permanent planning report first (2026-11-23): never a coverage figure in place of a real-world probability.
   const due = t.daysLeft === null ? null : new Date(Date.now() + t.daysLeft * 86_400_000).toISOString();
   for (const line of planningReportLines(planningReport(reading, due))) console.log(line);
-  console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left`);
+  console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left${t.execution ? (t.execution.startedAt ? ` of the ${t.execution.windowDays}-day execution window that started ${t.execution.startedAt.slice(0, 10)}` : ` (the full ${t.execution.windowDays}-day execution window: commercial execution has not started)`) : ''}`);
   for (const one of t.notCounted) console.log(`  not counted ${one.label}: ${one.cents / 100} ${t.currency}`);
   console.log(`  limits      capital ${t.capitalCeilingCents === null ? 'not stated (the owner has not said how much may be committed)' : t.capitalCeilingCents / 100} · hours ${t.hoursCeiling ?? 'not stated'}`);
   console.log(`  resources   ${t.resources ?? 'not stated'}`);

@@ -23,6 +23,7 @@ const goal: GoalView = {
   purposeLabel: 'Pursuing money directly',
   owner: { userId: 'usr_1', name: 'Pat' },
   dueAt: null,
+  deadline: null,
   overdue: false,
   commitment: 'NONE',
   commitmentLabel: 'No outside commitment',

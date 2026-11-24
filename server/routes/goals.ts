@@ -190,6 +190,7 @@ goalsRouter.patch(
         ownerUserId,
         dueAt: dueAt ? new Date(dueAt).toISOString() : dueAt,
         commitment: optionalEnum<GoalCommitment>(body.commitment, GOAL_COMMITMENTS as readonly GoalCommitment[], 'commitment'),
+        ...(body.executionWindowDays === undefined ? {} : { executionWindowDays: executionWindowDaysOf(body.executionWindowDays) }),
       },
       actor(principal),
     );
@@ -340,3 +341,10 @@ goalsRouter.post(
     return { fact, construction: read?.construction ?? null };
   }),
 );
+
+/** A commercial execution window in whole days, or null to clear it (§119). */
+function executionWindowDaysOf(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 3650) return value;
+  throw badRequest('"executionWindowDays" must be a whole number of days, or null to make the deadline a fixed date.');
+}

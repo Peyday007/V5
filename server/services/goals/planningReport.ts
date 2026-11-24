@@ -23,10 +23,14 @@
 import type { PlanReading } from './plan.ts';
 import { LEG_LABEL } from './pathways.ts';
 import type { CommitteeReading } from './committee.ts';
+import { deadlineText } from '../../domain/executionWindow.ts';
 
 export interface PlanningReport {
   goal: string;
+  /** The calendar deadline, or null while a commercial execution window has not started (§119). */
   deadline: string | null;
+  /** The deadline as the report states it: relative before commercial execution starts (§119). */
+  deadlineText: string | null;
   probability: { value: number; lowerBound: number } | 'UNKNOWN';
   evidence: string;
   commerciallyValidated: boolean;
@@ -78,13 +82,17 @@ export function planningReport(
             : 'not validated: the commercial reality check did not run on this reading'
           : `not validated: the plan is ${a.status.replace('_', ' ').toLowerCase()}`;
   const blocker = commerciallyValidated ? null : (gate && !gate.validated ? gate.failing[0] : null) ?? (committee && committee.verdict !== 'PASS' ? committee.blocker : null) ?? a.shortfalls?.[0] ?? reading.summary ?? null;
-  return { goal, deadline: dueAt, probability, evidence, commerciallyValidated, validation, blocker };
+  // Before commercial execution starts the deadline is relative and the full window remains (§119): no calendar date is reported.
+  const execution = t.execution ?? null;
+  const window = execution ? { dueAt, executionWindowDays: execution.windowDays, executionStartedAt: execution.startedAt } : { dueAt, executionWindowDays: null, executionStartedAt: null };
+  const deadline = execution && !execution.startedAt ? null : dueAt;
+  return { goal, deadline, deadlineText: deadlineText(window), probability, evidence, commerciallyValidated, validation, blocker };
 }
 
 /** The report as the lines a terminal or a message prints. Pure. */
 export function planningReportLines(r: PlanningReport): string[] {
   return [
-    `  report      1. goal: ${r.goal}${r.deadline ? ` by ${r.deadline.slice(0, 10)}` : ''}`,
+    `  report      1. goal: ${r.goal}${r.deadlineText ? ` ${r.deadlineText}` : r.deadline ? ` by ${r.deadline.slice(0, 10)}` : ''}`,
     `  report      2. real-world probability: ${r.probability === 'UNKNOWN' ? 'UNKNOWN' : `${Math.round(r.probability.value * 100)}% (lower bound ${Math.round(r.probability.lowerBound * 100)}%)`}`,
     `  report      3. evidence: ${r.evidence}`,
     `  report      4. commercially validated: ${r.commerciallyValidated ? 'YES' : 'NO'} — ${r.validation}`,

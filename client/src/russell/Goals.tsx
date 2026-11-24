@@ -80,7 +80,7 @@ export function GoalsBrief({ briefing }: { briefing: GoalBriefing }): JSX.Elemen
             {briefing.commitments.map((item) => (
               <li key={item.goalId} className="rs-item-meta">
                 <strong>{item.title}</strong> — {item.commitment}
-                {item.dueAt ? `, due ${item.dueAt.slice(0, 10)}${item.overdue ? ' (overdue)' : ''}` : ''}
+                {item.deadline ? `, due ${item.deadline}${item.overdue ? ' (overdue)' : ''}` : ''}
                 {item.obligations.length ? ` · ${item.obligations.join('; ')}` : ''}
               </li>
             ))}
@@ -147,7 +147,7 @@ function GoalCard({ goal, onChanged }: { goal: GoalView; onChanged: () => void }
         <span className="rs-quiet">
           {goal.lifecycle.toLowerCase()} · {goal.projectName ?? 'Brain-wide'}
           {goal.owner ? ` · ${goal.owner.name}` : ''}
-          {goal.dueAt ? ` · due ${goal.dueAt.slice(0, 10)}${goal.overdue ? ' (overdue)' : ''}` : ''}
+          {goal.deadline ? ` · due ${goal.deadline}${goal.overdue ? ' (overdue)' : ''}` : ''}
         </span>
       </button>
       <p className="rs-item-meta">
@@ -315,7 +315,7 @@ export function GoalsHome(): JSX.Element | null {
         {briefing.milestones.slice(0, 5).map((item) => (
           <li key={item.goalId} className="rs-item-meta">
             <strong>{item.title}</strong>: {item.next}
-            {item.dueAt ? ` (due ${item.dueAt.slice(0, 10)}${item.overdue ? ', overdue' : ''})` : ''}
+            {item.deadline ? ` (due ${item.deadline}${item.overdue ? ', overdue' : ''})` : ''}
           </li>
         ))}
       </ul>

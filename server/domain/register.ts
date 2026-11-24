@@ -141,6 +141,8 @@ export interface WorkstreamRow {
   outcome?: string | null;
   owner_user_id?: string | null;
   due_at?: string | null;
+  execution_window_days?: number | null;
+  execution_started_at?: string | null;
   commitment?: string | null;
   paused_at?: string | null;
   paused_reason?: string | null;
@@ -196,7 +198,15 @@ export interface Workstream {
   /** What counts as finished, in the words of whoever set the goal. */
   outcome: string | null;
   ownerUserId: string | null;
+  /**
+   * The deadline every reader uses (`effectiveDueAt`, §119): for a goal with a
+   * commercial execution window that has not started, a full window from now.
+   */
   dueAt: string | null;
+  /** The commercial execution window in days; null for a fixed calendar deadline (§119). */
+  executionWindowDays: number | null;
+  /** When authorized commercial execution started; null while it has not (§119). */
+  executionStartedAt: string | null;
   commitment: 'NONE' | 'INTERNAL' | 'CUSTOMER';
   pausedAt: string | null;
   pausedReason: string | null;

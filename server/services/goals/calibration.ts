@@ -64,6 +64,7 @@ import {
   type OutcomeRow,
   type PredictionRow,
 } from '../quant/forecast.ts';
+import { effectiveDueAtOfRow } from '../../domain/executionWindow.ts';
 
 /** The owner's six classes, plus UNKNOWN for a miss no measurement explains. */
 export const MISS_CLASSES = [
@@ -482,8 +483,8 @@ export async function productionCalibrationPorts(): Promise<CalibrationPorts> {
     },
     ledger: (projectId) => readLedger(projectId),
     async goalRows(projectId) {
-      const readings = await getDb().all<{ id: string; workstream_id: string; forecast: string | null; created_at: string; due_at: string | null }>(
-        `SELECT r.id, r.workstream_id, r.forecast, r.created_at, w.due_at
+      const readings = await getDb().all<{ id: string; workstream_id: string; forecast: string | null; created_at: string; due_at: string | null; execution_window_days: number | null; execution_started_at: string | null }>(
+        `SELECT r.id, r.workstream_id, r.forecast, r.created_at, w.due_at, w.execution_window_days, w.execution_started_at
            FROM goal_plan_readings r JOIN workstreams w ON w.id = r.workstream_id
           WHERE w.target_project_id = ?
           ORDER BY r.created_at, r.id`,
@@ -497,7 +498,7 @@ export async function productionCalibrationPorts(): Promise<CalibrationPorts> {
         [projectId],
       );
       return {
-        readings: readings.map((r) => ({ id: r.id, goalId: r.workstream_id, projectId, createdAt: r.created_at, forecast: parse(r.forecast), dueAt: r.due_at })),
+        readings: readings.map((r) => ({ id: r.id, goalId: r.workstream_id, projectId, createdAt: r.created_at, forecast: parse(r.forecast), dueAt: effectiveDueAtOfRow(r) })),
         outcomes: outcomes
           .filter((o) => o.kind === 'ACHIEVED' || o.kind === 'MISSED')
           .map((o) => ({ id: o.id, readingId: o.reading_id, kind: o.kind as 'ACHIEVED' | 'MISSED', observedAt: o.observed_at })),

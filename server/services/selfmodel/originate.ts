@@ -43,6 +43,7 @@ import { CAPABILITY_MAPS, type CapabilityRequirement } from '../../domain/capabi
 import type { Weakness } from '../../domain/improvement.ts';
 import { ownerExists } from './capabilities.ts';
 import { needExecutionOwner } from '../cash/needs.ts';
+import { daysLeftOf, effectiveDueAtOfRow } from '../../domain/executionWindow.ts';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -191,7 +192,7 @@ export function goalConstraintWeaknesses(
     if (latest && latest.decision === null) continue; // an open repair owns it
     const oldest = held.map((g) => Date.parse(g.blockedSince)).reduce((a, b) => Math.min(a, b), now.getTime());
     const days = Math.floor((now.getTime() - oldest) / DAY);
-    const dueSoon = held.filter((g) => g.dueAt && Date.parse(g.dueAt) - now.getTime() <= GOAL_DUE_SOON_DAYS * DAY);
+    const dueSoon = held.filter((g) => g.dueAt && (daysLeftOf({ dueAt: g.dueAt, executionWindowDays: null, executionStartedAt: null }, now) ?? Infinity) <= GOAL_DUE_SOON_DAYS);
     const methodInadequate = latest
       ? `A repair of ${capabilityKey} was decided ${latest.decision} at attempt ${latest.attempt}, and the gap still blocks ${held.length} live goal(s) ${days} day(s) later: that method did not unblock the objective.`
       : undefined;
@@ -496,8 +497,8 @@ export function unmetNeedWeaknesses(needs: readonly NeedRow[]): OriginatedWeakne
 
 async function readGoalConstraints(now: Date): Promise<GoalConstraintObservation[]> {
   const db = getDb();
-  const goals = await db.all<{ id: string; intent: string; due_at: string | null }>(
-    `SELECT id, intent, due_at FROM workstreams
+  const goals = await db.all<{ id: string; intent: string; due_at: string | null; execution_window_days: number | null; execution_started_at: string | null }>(
+    `SELECT id, intent, due_at, execution_window_days, execution_started_at FROM workstreams
       WHERE archived_at IS NULL AND cancelled_at IS NULL AND project_id IS NOT NULL
       ORDER BY created_at DESC LIMIT 20`,
     [],
@@ -527,7 +528,7 @@ async function readGoalConstraints(now: Date): Promise<GoalConstraintObservation
       if (one.blocking !== latest.blocking) break;
       blockedSince = one.at;
     }
-    out.push({ goalId: goal.id, intent: goal.intent, dueAt: goal.due_at, blocking: latest.gaps, blockedSince });
+    out.push({ goalId: goal.id, intent: goal.intent, dueAt: effectiveDueAtOfRow(goal, now), blocking: latest.gaps, blockedSince });
   }
   return out;
 }

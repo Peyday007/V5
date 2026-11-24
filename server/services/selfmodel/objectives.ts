@@ -18,6 +18,7 @@ import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { assessObjective, type ObjectiveAssessment } from '../../domain/capabilityMap.ts';
 import { assessAll, type MapAssessment } from './capabilities.ts';
+import { effectiveDueAtOfRow } from '../../domain/executionWindow.ts';
 
 const DAY = 86_400_000;
 
@@ -38,9 +39,11 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
     intent: string;
     outcome: string | null;
     due_at: string | null;
+    execution_window_days: number | null;
+    execution_started_at: string | null;
     capital_ceiling_cents: number | string | null;
   }>(
-    `SELECT id, project_id, intent, outcome, due_at, capital_ceiling_cents FROM workstreams
+    `SELECT id, project_id, intent, outcome, due_at, execution_window_days, execution_started_at, capital_ceiling_cents FROM workstreams
       WHERE archived_at IS NULL AND cancelled_at IS NULL AND project_id IS NOT NULL
       ORDER BY created_at DESC LIMIT ?`,
     [Math.max(1, input.limit ?? 20)],
@@ -50,7 +53,8 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
   const out: ObjectiveCheck[] = [];
   for (const goal of goals) {
     const text = [goal.intent, goal.outcome].filter(Boolean).join('\n');
-    const due = goal.due_at ? Date.parse(goal.due_at) : NaN;
+    const dueAt = effectiveDueAtOfRow(goal, now);
+    const due = dueAt ? Date.parse(dueAt) : NaN;
     const shape = {
       text,
       budget: goal.capital_ceiling_cents == null ? null : Number(goal.capital_ceiling_cents) / 100,
