@@ -116,7 +116,8 @@ import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
 import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
 import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrityInput.ts';
-import { committeeOf, type CommitteeReading } from './committee.ts';
+import { committeeOf, type CommitteeContext, type CommitteeReading } from './committee.ts';
+import { armSpecialistReview, committeeContextOf } from './committeeSpecialists.ts';
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
@@ -2521,11 +2522,19 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       continuation: refusedContinuation,
     };
     // The plan's integrity (`planIntegrity`): a reading that breaks a rule is never ACCEPTED.
-    const reading = gateIntegrity(built, (acceptance) => ({
-      ...composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance, arrangementModels: refusedModels }),
-      continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: acceptance.status, instantOnly: refusedInfeasible?.instantOnly, surplus: refusedContinuation.surplusForSuccessors }),
-    }));
+    const committeeContext = await committeeContextOf(goal.id, target.projectId, now);
+    degraded.push(...committeeContext.degraded);
+    const reading = gateIntegrity(
+      built,
+      (acceptance) => ({
+        ...composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance, arrangementModels: refusedModels }),
+        continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: acceptance.status, instantOnly: refusedInfeasible?.instantOnly, surplus: refusedContinuation.surplusForSuccessors }),
+      }),
+      committeeContext,
+    );
     if (input.persist) {
+      // The committee's specialists are asked in the background when due; the next read binds their recorded answer.
+      armSpecialistReview(goal.id, built, reading.committee, committeeContext, now);
       await recordDegraded(goal.id, target.projectId, degraded);
       await persistReading(goal, reading, null);
     }
@@ -3033,11 +3042,19 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     continuation,
   };
   // The plan's integrity (`planIntegrity`), checked on the steps, the lead and every text a person reads: a reading that breaks a rule is never ACCEPTED.
-  const reading = gateIntegrity(built, (refused) => {
-    const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models, supported });
-    return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets, surplus: continuation.surplusForSuccessors }) };
-  });
+  const committeeContext = await committeeContextOf(goal.id, target.projectId, now);
+  degraded.push(...committeeContext.degraded);
+  const reading = gateIntegrity(
+    built,
+    (refused) => {
+      const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models, supported });
+      return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets, surplus: continuation.surplusForSuccessors }) };
+    },
+    committeeContext,
+  );
   if (input.persist) {
+    // The committee's specialists are asked in the background when due; the next read binds their recorded answer.
+    armSpecialistReview(goal.id, built, reading.committee, committeeContext, now);
     await recordDegraded(goal.id, target.projectId, degraded);
     await persistReading(goal, reading, chosen);
     await pursueSales(goal, reading);
@@ -5112,10 +5129,12 @@ export function refuseForCommittee(acceptance: PlanAcceptance, committee: Pick<C
 export function gateIntegrity(
   reading: PlanReading,
   recompose: (refused: PlanAcceptance) => Pick<PlanReading, 'timelines' | 'objective' | 'planSet' | 'continuation'>,
+  committeeContext: CommitteeContext = {},
 ): PlanReading {
   const { violations } = planIntegrity(integrityInput(reading));
-  // The investment committee (§117) reads the same reading; it can only take an acceptance away.
-  const committee = committeeOf(reading);
+  // The investment committee (§117) reads the same reading, with the research answers to its own questions and its
+  // specialists' recorded review (`committeeContextOf`); it can only take an acceptance away.
+  const committee = committeeOf(reading, committeeContext);
   const committeeRefuses = reading.acceptance.status === 'ACCEPTED' && reading.acceptance.probability?.basis !== 'TARGET_MET' && committee.blocks;
   if (reading.acceptance.status !== 'ACCEPTED' || (violations.length === 0 && !committeeRefuses)) return { ...reading, integrity: violations, committee };
   const acceptance = violations.length > 0 ? refuseForIntegrity(reading.acceptance, violations) : refuseForCommittee(reading.acceptance, committee);
@@ -5190,7 +5209,21 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
           blocker: reading.committee.blocker,
           criticalDefects: reading.committee.criticalDefects,
           reviewMs: reading.committee.reviewMs ?? null,
-          roles: reading.committee.roles.map((r) => ({ role: r.role, verdict: r.verdict, critical: r.critical, defects: r.defects.slice(0, 6), open: r.open.map((q) => q.subject).slice(0, 4), citations: r.citations.slice(0, 6) })),
+          fingerprint: reading.committee.fingerprint,
+          specialists: reading.committee.specialists,
+          answered: reading.committee.answered,
+          roles: reading.committee.roles.map((r) => ({
+            role: r.role,
+            verdict: r.verdict,
+            critical: r.critical,
+            defects: r.defects.slice(0, 6),
+            open: r.open.map((q) => q.subject).slice(0, 4),
+            // Each UNKNOWN for want of evidence names the research need it waits on, and the answers read that did not settle it.
+            asked: r.open.slice(0, 4).map((q) => ({ subject: q.subject, research: q.research, answeredBy: q.answeredBy ?? [] })),
+            settled: (r.settled ?? []).slice(0, 4),
+            specialist: r.specialist ? { verdict: r.specialist.verdict, model: r.specialist.model, reason: r.specialist.reason, defects: r.specialist.defects.slice(0, 4) } : null,
+            citations: r.citations.slice(0, 6),
+          })),
           investigations: reading.committee.investigations.map((i) => ({ opportunityId: i.opportunityId, fact: i.fact, established: i.established, broken: i.broken })),
         }
       : null,

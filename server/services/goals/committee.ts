@@ -30,9 +30,19 @@
  *     evidence — never the planner's verdict, reach or recommendation. That is
  *     how "independent before seeing the planner's conclusions" is held: the
  *     question a worker receives has no conclusion in it to agree with.
+ *   * a question research has answered is read back (`committeeAnswersOf`,
+ *     the accepted sourced claims under the idea the question opened): the role
+ *     that asked it settles it from the answer — the fact established, or broken
+ *     with a RESEARCH defect (money that is not a purchase, cash after the
+ *     window) — on the next reading, so an UNKNOWN for want of evidence names its
+ *     research need and ends when the evidence arrives (`settleByAnswers`).
  *   * SKEPTIC's specialist layer is the existing independent model challenge
  *     (`quant/modelChallenge.ts`, read off the portfolio's assurance): a REVISE
  *     fails the role, an unanswered required challenge leaves it UNKNOWN.
+ *   * on a FULL review with a model configured, every role is also read by an
+ *     independent specialist model (`committeeSpecialists.ts`), combined by
+ *     `withSpecialist`: a model adds a FAIL or holds a PASS as UNKNOWN, never
+ *     turns a FAIL or UNKNOWN into a PASS, and an unanswered model is UNKNOWN.
  *   * two roles reading the same fact of the same leg the opposite way (one
  *     finds it established, another finds it broken) is a dispute: it becomes
  *     a targeted investigation naming the fact, and the FAIL still stands —
@@ -44,6 +54,7 @@
  * thing they challenge. No role reads the acceptance's status, verdict or
  * sentence. Pure.
  */
+import { createHash } from 'node:crypto';
 import { namesOneOrganisation } from '../../domain/industry.ts';
 import { evidenceIsAbout, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
 import type { Need } from '../quant/needs.ts';
@@ -68,6 +79,77 @@ export interface CommitteeDefect {
   critical: boolean;
   opportunityId: string | null;
   fact: CommitteeFact;
+  /**
+   * Who found it: the role's own code (RULE, the default when absent), a sourced
+   * research answer to the role's own question (RESEARCH), or the role's
+   * independent specialist model (MODEL). A MODEL defect is never critical.
+   */
+  source?: CommitteeSource;
+}
+
+/** Who found a defect or settled a question. */
+export type CommitteeSource = 'RULE' | 'RESEARCH' | 'MODEL';
+
+/**
+ * A sourced research answer read back to the committee: an accepted claim with
+ * its source, under the research idea the committee's question opened
+ * (`committeeAnswersOf`, portfolioNeeds.ts). Matched to its question by the
+ * idea's title, which `sendNeeds` builds from the question's research subject.
+ */
+export interface CommitteeAnswer {
+  /** The research idea's title (`Causal unknown: committee <ROLE>: …`, `needIdeaTitle`). */
+  ideaTitle: string;
+  claimId: string;
+  text: string;
+  sourceUrl: string;
+}
+
+/** A question research answered, and what the answer did to the role's verdict. */
+export interface CommitteeSettled {
+  subject: string;
+  /** The research need it was asked as. */
+  research: string;
+  opportunityId: string | null;
+  fact: CommitteeFact;
+  /** PASS: the answer establishes the fact; FAIL: it breaks it (a RESEARCH defect is recorded); UNKNOWN: read, still unsettled. */
+  outcome: CommitteeVerdict;
+  why: string;
+  claimIds: string[];
+  sourceUrls: string[];
+}
+
+/**
+ * One role's independent specialist reading (a model call, `committeeSpecialists.ts`).
+ * UNKNOWN when the model did not answer, timed out, or answered FAIL without
+ * citing a defect: never a pass.
+ */
+export interface SpecialistFinding {
+  role: CommitteeRole;
+  verdict: CommitteeVerdict;
+  /** Its cited defects (source MODEL, never critical). */
+  defects: CommitteeDefect[];
+  citations: string[];
+  /** The model that answered (its label), null when none did. */
+  model: string | null;
+  /** Why it is UNKNOWN, when it is. */
+  reason: string | null;
+}
+
+/** The specialist pass over one committee input, as recorded (`COMMITTEE_SPECIALIST_REVIEW`). */
+export interface SpecialistReview {
+  /** `committeeFingerprint` of the input the models read: a review binds only the plan it read. */
+  fingerprint: string;
+  reviewedAt: string;
+  findings: SpecialistFinding[];
+}
+
+/** What the committee reads beside the reading: research answers and the specialist pass. */
+export interface CommitteeContext {
+  answers?: readonly CommitteeAnswer[];
+  /** Recorded specialist reviews, newest first; only one with this input's fingerprint binds. */
+  specialistReviews?: readonly SpecialistReview[];
+  /** A specialist model is configured: on a FULL review a role without its answer is UNKNOWN, never a pass. */
+  specialistsAvailable?: boolean;
 }
 
 /** A judgment the code could not settle, put to a specialist with only the objective and the evidence. */
@@ -77,6 +159,10 @@ export interface CommitteeQuestion {
   fact: CommitteeFact;
   subject: string;
   question: string;
+  /** The research need this question is sent as (`committeeResearchSubject`): what a finding UNKNOWN for want of evidence waits on. */
+  research: string;
+  /** Answers research returned that did not settle it, by claim id. */
+  answeredBy?: string[];
 }
 
 export interface RoleVerdict {
@@ -89,6 +175,10 @@ export interface RoleVerdict {
   citations: string[];
   /** What it could not settle (UNKNOWN), as questions. */
   open: CommitteeQuestion[];
+  /** Its questions research has answered, and what each answer did. */
+  settled: CommitteeSettled[];
+  /** Its independent specialist's reading, when the specialist pass applies (FULL, a model configured). */
+  specialist: SpecialistFinding | null;
 }
 
 /** Two roles reading one fact of one leg the opposite way: investigated, never voted. */
@@ -117,6 +207,17 @@ export interface CommitteeReading {
   investigations: CommitteeInvestigation[];
   /** Milliseconds the review took on this read (set by the caller that timed it). */
   reviewMs?: number;
+  /** `committeeFingerprint` of the input: what a specialist review must have read to bind. */
+  fingerprint: string;
+  /**
+   * The specialist pass: NOT_RUN (a routine review, or no model configured — the
+   * deterministic committee alone, and the record says so), PENDING (due and not
+   * yet answered: every role it would read is UNKNOWN), BOUND (a review of this
+   * very input is combined).
+   */
+  specialists: { state: 'NOT_RUN' | 'PENDING' | 'BOUND'; reviewedAt: string | null; models: string[] };
+  /** Committee questions research answered on this read. */
+  answered: number;
 }
 
 /** The leg as every role reads it: its transaction facts and the simulation's inputs, nothing concluded. */
@@ -155,6 +256,13 @@ export interface CommitteeInput {
   };
   /** FULL for a final commercial plan or a material commitment (`committeeTier`). */
   tier: 'ROUTINE' | 'FULL';
+  /**
+   * Sourced research answers to the committee's own questions, read back
+   * (`committeeAnswersOf`): each role reads the answers to the questions it
+   * asked, and only those. Not part of the fingerprint: an answer changes what
+   * a role knows, not the plan a specialist read.
+   */
+  answers?: readonly CommitteeAnswer[];
 }
 
 const EVIDENCED = (f: PathFact | undefined | null) => !!f && f.status === 'PROVEN';
@@ -175,7 +283,11 @@ class Bench {
   readonly open: CommitteeQuestion[] = [];
   /** fact judgments: `<opportunityId>|<fact>` → established? */
   readonly judged = new Map<string, boolean>();
-  constructor(readonly role: CommitteeRole) {}
+  readonly settled: CommitteeSettled[] = [];
+  constructor(
+    readonly role: CommitteeRole,
+    private readonly input?: Pick<CommitteeInput, 'evidence' | 'answers'>,
+  ) {}
   cite(ref: string) {
     this.citations.add(ref);
   }
@@ -189,13 +301,103 @@ class Bench {
     this.citations.add(d.evidenceRef);
     if (d.opportunityId) this.judged.set(`${d.opportunityId}|${d.fact}`, false);
   }
-  ask(q: Omit<CommitteeQuestion, 'role'>) {
-    if (!this.open.some((x) => x.subject === q.subject)) this.open.push({ ...q, role: this.role });
+  /**
+   * A judgment the code could not settle, named by the research need it is
+   * sent as. When research has answered that question (`CommitteeInput.answers`),
+   * the answer is read here and settles it — establishing the fact, or breaking
+   * it with a RESEARCH defect — instead of it staying open; an answer that
+   * settles nothing keeps it open with the claims it read.
+   */
+  ask(q: Omit<CommitteeQuestion, 'role' | 'research'>) {
+    if (this.open.some((x) => x.subject === q.subject) || this.settled.some((x) => x.subject === q.subject)) return;
+    const research = committeeResearchSubject(q.subject);
+    const title = committeeIdeaTitle(research);
+    const answers = (this.input?.answers ?? []).filter((a) => a.ideaTitle === title);
+    if (answers.length === 0) {
+      this.open.push({ ...q, role: this.role, research });
+      return;
+    }
+    const read = settleByAnswers(q.fact, answers, this.input?.evidence.daysLeft ?? null);
+    const claimIds = answers.map((a) => a.claimId);
+    this.settled.push({ subject: q.subject, research, opportunityId: q.opportunityId, fact: q.fact, outcome: read.outcome, why: read.why, claimIds, sourceUrls: [...new Set(answers.map((a) => a.sourceUrl))] });
+    const ref = `research ${read.claim.claimId} (${read.claim.sourceUrl}): ${quote(read.claim.text)}`;
+    if (read.outcome === 'PASS') {
+      this.cite(ref);
+      if (q.opportunityId) this.judged.set(`${q.opportunityId}|${q.fact}`, true);
+    } else if (read.outcome === 'FAIL') {
+      this.fail({ claim: q.subject.replace(/^[A-Z_]+: /, ''), evidenceRef: ref, why: read.why, critical: read.critical, opportunityId: q.opportunityId, fact: q.fact, source: 'RESEARCH' });
+    } else {
+      this.cite(ref);
+      this.open.push({ ...q, role: this.role, research, answeredBy: claimIds });
+    }
   }
   verdict(): RoleVerdict {
     const verdict: CommitteeVerdict = this.defects.length > 0 ? 'FAIL' : this.open.length > 0 ? 'UNKNOWN' : 'PASS';
-    return { role: this.role, verdict, critical: this.defects.some((d) => d.critical), defects: this.defects, citations: [...this.citations].slice(0, 12), open: this.open };
+    return { role: this.role, verdict, critical: this.defects.some((d) => d.critical), defects: this.defects, citations: [...this.citations].slice(0, 12), open: this.open, settled: this.settled, specialist: null };
   }
+}
+
+/** The research need a committee question is sent as (`committeeNeeds`), keyed by the goal's committee scope. Pure. */
+export function committeeResearchSubject(subject: string): string {
+  return `committee ${subject}`.slice(0, 200);
+}
+
+/**
+ * The title `sendNeeds` gives the research idea a RESEARCH need opens
+ * (`needIdeaTitle`, quant/needs.ts, which owns it; kept here so this module
+ * stays free of the database, and pinned equal by tests/committeeResearch.test.ts):
+ * the idea a sourced answer is filed under, so an answer finds its question. Pure.
+ */
+export function committeeIdeaTitle(subject: string): string {
+  return `Causal unknown: ${subject}`.slice(0, 200);
+}
+
+/** An answer that says it could not settle the question. */
+const UNSETTLED_ANSWER = /\b(?:unknown|no (?:public |published )?(?:source|data|figure|evidence)|could not (?:find|establish|verify|confirm)|not (?:publicly )?(?:available|disclosed|published|found)|unable to (?:find|establish|verify))\b/i;
+/** A money figure stated in an answer. */
+const MONEY_FIGURE = /(?:[$€£]\s?\d[\d,]*(?:\.\d+)?|\b\d[\d,]*(?:\.\d+)?\s?(?:usd|eur|gbp|dollars?)\b)/i;
+/** A count stated in an answer. */
+const COUNT_FIGURE = /\b\d[\d,]*(?:\.\d+)?\b/;
+/** Days to cash stated in an answer: "net 30", "within 45 days", "14 business days". */
+const DAYS_FIGURE = /\bnet[\s-]?(\d{1,3})\b|\b(\d{1,3})\s?(?:business |calendar |working )?days?\b/gi;
+/** Paid at once: at order, at checkout, upfront, in advance. */
+const PAID_AT_ONCE = /\b(?:up[\s-]?front|at (?:checkout|order|purchase|booking)|on (?:order|purchase)|prepa(?:id|y|yment)|in advance|immediately)\b/i;
+
+/**
+ * What the research answers to one committee question establish, read from
+ * the claims' own sentences — never from the planner. PASS: a sourced answer
+ * establishes the fact. FAIL: the answer breaks it (money that is not a
+ * purchase, cash after the window), critical as the role's own rule would be.
+ * UNKNOWN: the answers do not settle it. Pure.
+ */
+export function settleByAnswers(fact: CommitteeFact, answers: readonly CommitteeAnswer[], daysLeft: number | null): { outcome: CommitteeVerdict; why: string; critical: boolean; claim: CommitteeAnswer } {
+  const first = answers[0]!;
+  const useful = answers.filter((a) => !UNSETTLED_ANSWER.test(a.text));
+  if (useful.length === 0) return { outcome: 'UNKNOWN', why: `research answered without settling it (${answers.length} claim(s) say it is not established)`, critical: false, claim: first };
+  const lead = useful[0]!;
+  if (fact === 'price') {
+    const misread = useful.find((a) => paymentNatureOf(a.text).nature !== 'PURCHASE');
+    if (misread) return { outcome: 'FAIL', why: `research found its money is ${nonPurchaseSentence(paymentNatureOf(misread.text))}`, critical: true, claim: misread };
+    const priced = useful.find((a) => MONEY_FIGURE.test(a.text));
+    return priced ? { outcome: 'PASS', why: 'a sourced answer states what these buyers pay', critical: false, claim: priced } : { outcome: 'UNKNOWN', why: 'research answered without a price', critical: false, claim: lead };
+  }
+  if (fact === 'volume') {
+    const counted = useful.find((a) => COUNT_FIGURE.test(a.text));
+    return counted ? { outcome: 'PASS', why: 'a sourced answer states how many buy', critical: false, claim: counted } : { outcome: 'UNKNOWN', why: 'research answered without a count', critical: false, claim: lead };
+  }
+  if (fact === 'payment') {
+    for (const a of useful) {
+      const days = [...a.text.matchAll(DAYS_FIGURE)].map((m) => Number(m[1] ?? m[2])).filter((d) => Number.isFinite(d));
+      if (days.length > 0) {
+        const soonest = Math.min(...days);
+        if (daysLeft !== null && soonest > daysLeft) return { outcome: 'FAIL', why: `research found the money arrives after ${soonest} days, past the ${daysLeft} days left`, critical: true, claim: a };
+        return { outcome: 'PASS', why: `research found the money arrives within ${soonest} days`, critical: false, claim: a };
+      }
+      if (PAID_AT_ONCE.test(a.text)) return { outcome: 'PASS', why: 'research found these buyers pay at order', critical: false, claim: a };
+    }
+    return { outcome: 'UNKNOWN', why: 'research answered without saying when the money arrives', critical: false, claim: lead };
+  }
+  return { outcome: 'PASS', why: `a sourced answer establishes the ${fact}`, critical: false, claim: lead };
 }
 
 /**
@@ -220,7 +422,7 @@ export function specialistQuestion(input: Pick<CommitteeInput['evidence'], 'obje
 }
 
 function skeptic(input: CommitteeInput): Bench {
-  const b = new Bench('SKEPTIC');
+  const b = new Bench('SKEPTIC', input);
   for (const leg of input.evidence.legs) {
     const p = leg.pathway;
     // A counted leg with no transaction record is judged by nobody: on a final plan that is an open question, never a pass.
@@ -262,7 +464,7 @@ function skeptic(input: CommitteeInput): Bench {
 }
 
 function marketExpert(input: CommitteeInput): Bench {
-  const b = new Bench('MARKET_EXPERT');
+  const b = new Bench('MARKET_EXPERT', input);
   for (const leg of input.evidence.legs) {
     const p = leg.pathway;
     if (!p) continue;
@@ -291,7 +493,7 @@ function marketExpert(input: CommitteeInput): Bench {
 }
 
 function operator(input: CommitteeInput): Bench {
-  const b = new Bench('OPERATOR');
+  const b = new Bench('OPERATOR', input);
   const daysLeft = input.evidence.daysLeft;
   for (const leg of input.evidence.legs) {
     const p = leg.pathway;
@@ -312,7 +514,7 @@ function operator(input: CommitteeInput): Bench {
 }
 
 function investor(input: CommitteeInput): Bench {
-  const b = new Bench('INVESTOR');
+  const b = new Bench('INVESTOR', input);
   const { capitalCeiling, currency } = input.evidence;
   const counted = input.evidence.legs.filter((l) => l.scope === 'COUNTED');
   let tied = 0;
@@ -363,7 +565,7 @@ export function evidencedReach(legs: readonly CommitteeLeg[]): { total: number; 
 }
 
 function quant(input: CommitteeInput): Bench {
-  const b = new Bench('QUANT');
+  const b = new Bench('QUANT', input);
   const { remaining, currency } = input.evidence;
   const c = input.claims;
   // 1. Reconstruct from the original evidence and set it against what the reading presents.
@@ -409,7 +611,7 @@ function quant(input: CommitteeInput): Bench {
 }
 
 function ownerProxy(input: CommitteeInput): Bench {
-  const b = new Bench('OWNER_PROXY');
+  const b = new Bench('OWNER_PROXY', input);
   const counted = input.evidence.legs.filter((l) => l.scope === 'COUNTED' && l.pathway);
   for (const leg of input.evidence.legs) {
     const p = leg.pathway;
@@ -451,12 +653,24 @@ export function reviewRole(role: CommitteeRole, input: CommitteeInput): RoleVerd
  * The committee over one reading's evidence. Each role judges alone (none reads
  * another's verdict); the verdicts are then combined without a vote: any FAIL
  * fails, a critical defect blocks, and on a final plan an unsettled role keeps
- * it a candidate. Disputed facts become investigations. Pure.
+ * it a candidate. Disputed facts become investigations.
+ *
+ * Research answers to the roles' own questions are read inside each role
+ * (`Bench.ask`). The specialist pass, when it applies (`specialistsApply`), is
+ * combined per role by `withSpecialist`: a model can add a FAIL, can turn a
+ * PASS into UNKNOWN, and can never turn a FAIL or an UNKNOWN into a PASS; an
+ * unanswered specialist is UNKNOWN. Pure.
  */
-export function reviewPlan(input: CommitteeInput): CommitteeReading {
+export function reviewPlan(input: CommitteeInput, context: Omit<CommitteeContext, 'answers'> = {}): CommitteeReading {
   // Each role sees its own copy of the inputs: nothing one writes can reach another, and none reads another's verdict.
   const benches = COMMITTEE_ROLES.map((role) => ROLE_OF[role](structuredClone(input)));
-  const roles = benches.map((b) => b.verdict());
+  const fingerprint = committeeFingerprint(input);
+  const applies = specialistsApply(input.tier, context.specialistsAvailable ?? false);
+  const review = applies ? ((context.specialistReviews ?? []).find((r) => r.fingerprint === fingerprint) ?? null) : null;
+  const roles = benches.map((b) => {
+    const own = b.verdict();
+    return applies ? withSpecialist(own, review?.findings.find((f) => f.role === own.role) ?? null) : own;
+  });
   const judged = new Map<string, { established: CommitteeRole[]; broken: CommitteeRole[] }>();
   for (const b of benches) for (const [key, ok] of b.judged) entry(judged, key)[ok ? 'established' : 'broken'].push(b.role);
   const investigations: CommitteeInvestigation[] = [];
@@ -488,7 +702,62 @@ export function reviewPlan(input: CommitteeInput): CommitteeReading {
     : unknown[0]?.open[0]
       ? `${unknown[0].role} could not settle ${unknown[0].open[0].subject.replace(/^[A-Z_]+: /, '')}; a specialist review is asked`
       : null;
-  return { tier: input.tier, reviewed: input.evidence.legs.map((l) => l.opportunityId), roles, verdict, criticalDefects, blocks, blocker, investigations };
+  const specialists: CommitteeReading['specialists'] = !applies
+    ? { state: 'NOT_RUN', reviewedAt: null, models: [] }
+    : review
+      ? { state: 'BOUND', reviewedAt: review.reviewedAt, models: [...new Set(review.findings.map((f) => f.model).filter((m): m is string => !!m))] }
+      : { state: 'PENDING', reviewedAt: null, models: [] };
+  const answered = roles.reduce((s, r) => s + r.settled.length, 0);
+  return { tier: input.tier, reviewed: input.evidence.legs.map((l) => l.opportunityId), roles, verdict, criticalDefects, blocks, blocker, investigations, fingerprint, specialists, answered };
+}
+
+/**
+ * Whether the specialist pass applies: a FULL review (a final plan or a material
+ * commitment) with a specialist model configured. A routine review, or one with
+ * no model configured, is the deterministic committee alone (NOT_RUN on the
+ * record) — the pass is bounded and optional, never a reason a plan cannot be
+ * read where no model is reachable. Pure.
+ */
+export function specialistsApply(tier: CommitteeInput['tier'], available: boolean): boolean {
+  return tier === 'FULL' && available;
+}
+
+/**
+ * The identity of the plan a specialist read: the objective, the evidence and
+ * the planner's figures, without the research answers. A plan whose figures
+ * changed is a different plan, and a review of one never binds another. Pure.
+ */
+export function committeeFingerprint(input: CommitteeInput): string {
+  const { answers: _answers, ...plan } = input;
+  return createHash('sha256').update(JSON.stringify(plan)).digest('hex').slice(0, 24);
+}
+
+/**
+ * One role's verdict with its specialist's reading combined, without a vote:
+ *   - the role's own FAIL stands whatever the model says (its critical defects
+ *     included); the model's cited defects are added beside them;
+ *   - a model FAIL with cited defects fails a PASS or an UNKNOWN role (its
+ *     defects are never critical: only the role's code declares one);
+ *   - a model UNKNOWN — no answer, a timeout, a FAIL without a cited defect —
+ *     makes a PASS role UNKNOWN: an unanswered specialist is never a pass;
+ *   - a model PASS never settles what the role left UNKNOWN: only evidence does.
+ * `finding` null means the pass is due and has not answered. Pure.
+ */
+export function withSpecialist(own: RoleVerdict, finding: SpecialistFinding | null): RoleVerdict {
+  const f: SpecialistFinding = finding ?? { role: own.role, verdict: 'UNKNOWN', defects: [], citations: [], model: null, reason: 'the independent specialist review has not answered yet' };
+  const out: RoleVerdict = { ...own, defects: [...own.defects], citations: [...own.citations], open: [...own.open], specialist: f };
+  if (f.verdict === 'FAIL' && f.defects.length > 0) {
+    for (const d of f.defects) if (!out.defects.some((x) => x.opportunityId === d.opportunityId && x.fact === d.fact && x.why === d.why)) out.defects.push({ ...d, critical: false, source: 'MODEL' });
+    out.verdict = 'FAIL';
+  } else if (f.verdict !== 'PASS' && out.verdict === 'PASS') {
+    const subject = `${own.role}: the independent specialist review`;
+    out.open.push({ role: own.role, opportunityId: null, fact: 'mechanism', subject, question: f.reason ?? 'The specialist did not settle it.', research: committeeResearchSubject(subject) });
+    out.verdict = 'UNKNOWN';
+  }
+  if (f.verdict === 'PASS' && f.model) out.citations.push(`specialist ${f.model}: PASS`);
+  out.citations = out.citations.slice(0, 12);
+  out.critical = out.defects.some((d) => d.critical);
+  return out;
 }
 
 function entry(m: Map<string, { established: CommitteeRole[]; broken: CommitteeRole[] }>, key: string) {
@@ -513,7 +782,7 @@ export function committeeNeeds(reading: CommitteeReading): Need[] {
   const asks = reading.tier === 'FULL' ? reading.roles.flatMap((r) => r.open.filter((q) => q.opportunityId !== null)) : [];
   return [
     ...reading.investigations.map((i) => ({ subject: `committee dispute: ${i.fact} of ${i.opportunityId}`, question: i.question, route: 'RESEARCH' as const, permissions: [] })),
-    ...asks.map((q) => ({ subject: `committee ${q.subject}`.slice(0, 200), question: q.question, route: 'RESEARCH' as const, permissions: [] })),
+    ...asks.map((q) => ({ subject: q.research ?? committeeResearchSubject(q.subject), question: q.question, route: 'RESEARCH' as const, permissions: [] })),
   ];
 }
 
@@ -523,8 +792,11 @@ export function committeeLines(c: CommitteeReading): string[] {
   for (const r of c.roles) {
     out.push(`    ${r.role.padEnd(13)} ${r.verdict}${r.critical ? ' CRITICAL' : ''}`);
     for (const d of r.defects.slice(0, 3)) out.push(`      - ${d.critical ? '[critical] ' : ''}${d.claim.slice(0, 120)} — ${d.why.slice(0, 200)} [${d.evidenceRef.slice(0, 140)}]`);
-    for (const q of r.open.slice(0, 2)) out.push(`      ? ${q.subject.slice(0, 160)}`);
+    for (const q of r.open.slice(0, 2)) out.push(`      ? ${q.subject.slice(0, 160)}${q.answeredBy?.length ? ` (research answered, not settled: ${q.answeredBy.slice(0, 3).join(', ')})` : ''}`);
+    for (const s of (r.settled ?? []).filter((x) => x.outcome !== 'UNKNOWN').slice(0, 2)) out.push(`      = ${s.subject.slice(0, 120)}: research ${s.outcome} — ${s.why.slice(0, 160)} [${s.claimIds.slice(0, 3).join(', ')}]`);
+    if (r.specialist) out.push(`      specialist ${r.specialist.verdict}${r.specialist.model ? ` (${r.specialist.model})` : ''}${r.specialist.reason ? ` — ${r.specialist.reason.slice(0, 160)}` : ''}`);
   }
+  if (c.specialists && c.specialists.state !== 'NOT_RUN') out.push(`    specialists ${c.specialists.state.toLowerCase()}${c.specialists.reviewedAt ? ` (${c.specialists.reviewedAt})` : ''}`);
   for (const i of c.investigations.slice(0, 3)) out.push(`    dispute     ${i.fact} of ${i.opportunityId}: ${i.established.join(', ')} vs ${i.broken.join(', ')}`);
   return out;
 }
@@ -584,9 +856,14 @@ export function committeeInputOf(reading: Pick<PlanReading, 'goalId' | 'target' 
   };
 }
 
-/** The committee over a reading, timed. Pure but for the clock. */
-export function committeeOf(reading: Parameters<typeof committeeInputOf>[0]): CommitteeReading {
+/**
+ * The committee over a reading, timed, with what was read back beside it: the
+ * research answers to its own questions and the specialist reviews recorded
+ * (`committeeContextOf`, committeeSpecialists.ts). Pure but for the clock.
+ */
+export function committeeOf(reading: Parameters<typeof committeeInputOf>[0], context: CommitteeContext = {}): CommitteeReading {
   const t0 = performance.now();
-  const out = reviewPlan(committeeInputOf(reading));
+  const { answers, ...rest } = context;
+  const out = reviewPlan({ ...committeeInputOf(reading), ...(answers?.length ? { answers } : {}) }, rest);
   return { ...out, reviewMs: Math.round((performance.now() - t0) * 100) / 100 };
 }

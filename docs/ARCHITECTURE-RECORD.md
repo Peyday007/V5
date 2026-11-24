@@ -17114,6 +17114,31 @@ only take it away (`refuseForCommittee`), never grant it.
   planner's conclusions; SKEPTIC's specialist layer is the existing independent
   model challenge (`quant/modelChallenge.ts`). Two roles reading one fact the
   opposite way is an investigation, sent the same way; the FAIL still stands.
+- **Research is read back (2026-11-24).** Every open question names the
+  research need it is sent as (`research`, `committee <ROLE>: …`). The accepted,
+  sourced claims filed under the idea that need opened (`committeeAnswersOf`,
+  via `claimsAnsweringScope` on `goal:<id>:committee`) reach the next reading,
+  and the role that asked settles its own question from them
+  (`settleByAnswers`): a figure establishes the fact (PASS, cited with the
+  claim and URL); money that is not a purchase or cash after the window breaks
+  it (a critical RESEARCH defect); an answer that settles nothing keeps it open
+  with the claims it read. Recorded per role as `settled` / `asked`.
+- **Model specialists (2026-11-24).** On a FULL review with a model configured
+  each role is also read by its own model call (`committeeSpecialists.ts`):
+  the operator's models (`modelsFor`), in the challenger's order
+  (`challengerModels`), through the same chat path (`chatFor`) — no new
+  routing. The prompt is the role's brief and the evidence (the planner's
+  figures only for QUANT, SKEPTIC, INVESTOR), never the acceptance. Combined
+  per role by `withSpecialist`: a cited model FAIL fails the role (never
+  critical); a silent, timed-out or uncited model holds a PASS as UNKNOWN; a
+  model never turns a FAIL or an UNKNOWN into a PASS. Bound to the plan it read
+  (`committeeFingerprint`), asked in the background after a persisted read
+  (`armSpecialistReview`, at most two goals in flight, 60 s per role, retried
+  after 30 min only when a role went unanswered) and recorded as the
+  `COMMITTEE_SPECIALIST_REVIEW` workstream event the next read binds. No model
+  configured, or `BRAIN_COMMITTEE_SPECIALISTS=off`: NOT_RUN, the deterministic
+  committee alone. Pinned by `tests/committeeResearch.test.ts` and
+  `tests/committeeSpecialists.test.ts`.
 - **Recorded and reported.** The verdicts are stored in the reading's forecast
   JSON (no schema change), printed by `npm run goals -- plan`, and the planning
   report's "commercially validated" requires the committee's PASS.

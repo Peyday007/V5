@@ -134,6 +134,11 @@ export function needKeyOf(graphScope: string, need: Need, prefix = 'causal'): st
   return `${prefix}-${digest(`${graphScope}\u0000${need.route}\u0000${need.subject}`)}`;
 }
 
+/** The title of the research idea a RESEARCH need opens: what its sourced answer is filed under. Pure. */
+export function needIdeaTitle(subject: string): string {
+  return `Causal unknown: ${subject}`.slice(0, 200);
+}
+
 /** A permission as a blocker-key argument: the characters the key grammar allows, nothing else. */
 function authorityArgument(permission: string): string {
   const cleaned = permission.trim().replace(/[^A-Za-z0-9_.:@/+-]/g, '_').slice(0, 200);
@@ -226,7 +231,7 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
     // Research is opened, not left for a person to open: the need is pointed at an idea the research path runs.
     let candidateId = result.value.candidateId ?? null;
     let opened = false;
-    const title = `Causal unknown: ${need.subject}`.slice(0, 200);
+    const title = needIdeaTitle(need.subject);
     // Room for a construction's own price question (`nextInputQuestion`, ~1,800 characters with its filing
     // instructions) and its scope: cut at 2,000, the instructions that make its answer file were lost.
     const statement = `For causal graph ${input.graphScope}, establish from sourced evidence: ${need.question}`.slice(0, STATEMENT_MAX);
