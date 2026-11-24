@@ -73,6 +73,57 @@ export function isRunpodSlot(model: string): boolean {
   return model.startsWith(RUNPOD_PREFIX);
 }
 
+/**
+ * The model whose answer a `FREE_LANE_ITEM` row records. Pure.
+ *
+ * A free slot is its own model. The GPU slot is the GPU when the GPU answered
+ * any of the item's calls, and otherwise the model `servedBy` names (its free
+ * fallback). A row with no `servedBy` is read as its slot, as before.
+ * Production 2026-11-24 (runpod-report run 45320773844): with the pod EXITED all
+ * day, five fallback answers on RESEARCH_PLAN held `runpod/openai/gpt-oss-120b`
+ * back from planning — a hold the GPU would have carried into its next run.
+ */
+export function answeredBy(slot: string, measures: unknown): string {
+  if (!isRunpodSlot(slot)) return slot;
+  let value: unknown = measures;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return slot;
+    }
+  }
+  const served = value && typeof value === 'object' ? (value as Record<string, unknown>)['servedBy'] : null;
+  if (!Array.isArray(served) || served.length === 0) return slot;
+  if (served.some((m) => typeof m === 'string' && isRunpodSlot(m))) return slot;
+  const other = served.find((m): m is string => typeof m === 'string' && m.trim() !== '');
+  return other ?? slot;
+}
+
+/**
+ * Whether a `FREE_LANE_ITEM` row's measures say the GPU itself answered one of
+ * the item's calls (`servedBy`, written by the free-lane worker). Pure.
+ *
+ * The row's `reason` names the slot, and the slot keeps its label whoever
+ * answers. Production 2026-11-23 (runpod-report, run 45260588741): 44 jobs read
+ * "submitted on runpod/openai/gpt-oss-120b" and $31.09 of GPU cost was priced
+ * over their span while the pod had been EXITED since 11-19 19:49Z — every one
+ * of those calls was answered by the free fallback. Only `servedBy` says who answered.
+ */
+export function servedByGpu(measures: unknown): boolean {
+  let value: unknown = measures;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return false;
+    }
+  }
+  if (!value || typeof value !== 'object') return false;
+  const served = (value as Record<string, unknown>)['servedBy'];
+  return Array.isArray(served) && served.some((m) => typeof m === 'string' && isRunpodSlot(m));
+}
+
 /* ------------------------------------------------------------------------- */
 /* Breaker                                                                    */
 /* ------------------------------------------------------------------------- */
