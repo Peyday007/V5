@@ -14,6 +14,7 @@
  */
 import type {
   AuditVerdict,
+  Dependency,
   DependencyCheckItem,
   Document,
   ExtractionStatus,
@@ -42,7 +43,7 @@ import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../rep
 import { getProject, updateProject } from '../repos/projects.ts';
 import { listRunSummariesByLayer, listRunSummariesInStatus, updateRun } from '../repos/runs.ts';
 import type { ResearchRunSummary } from '../repos/runs.ts';
-import { listRunDependenciesForProject } from '../repos/dependencies.ts';
+import { listRunDependenciesForRuns, RUN_DEPENDENCY_CHUNK } from '../repos/dependencies.ts';
 import {
   checkCanonicalNames,
   checkDocumentDependencies,
@@ -478,12 +479,11 @@ async function deriveLayerUnmemoized(layerId: string): Promise<LayerDerivation> 
       missingDependencyItems.push(item);
     }
   };
-  // One read for every run's dependencies rather than two statements per run.
-  const runDependencies = activeRuns.length > 0 ? await listRunDependenciesForProject(layer.projectId) : new Map();
-  for (const run of activeRuns) {
-    if (run.dependencyOverride) continue;
-    collect((await checkRunDependencyRows(layer.projectId, runDependencies.get(run.id) ?? [])).items);
-  }
+  // This layer's checked runs only, a bounded group at a time (`eachRunWithDependencies`).
+  await eachRunWithDependencies(
+    activeRuns.filter((run) => !run.dependencyOverride),
+    async (_run, dependencies) => collect((await checkRunDependencyRows(layer.projectId, dependencies)).items),
+  );
   for (const document of documents) {
     if (document.status === 'COMPLETE' || document.status === 'FROZEN' || document.status === 'SUPERSEDED') {
       continue;
@@ -741,14 +741,13 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
   const unblocked: string[] = [];
   const blocked: string[] = [];
 
-  const dependenciesByRun = await listRunDependenciesForProject(projectId);
   // Only runs that have not started yet; a finished run's status is history.
   // Filtered in the statement, and without the text columns: this ran on every
   // recompute and used to read every run of the project, prompts included.
-  for (const run of await listRunSummariesInStatus(projectId, ['BLOCKED', 'READY', 'PLANNED'])) {
-    const ready =
-      run.dependencyOverride ||
-      (await checkRunDependencyRows(projectId, dependenciesByRun.get(run.id) ?? [])).ready;
+  // Their dependencies are read a bounded group of runs at a time (`eachRunWithDependencies`).
+  const waiting = await listRunSummariesInStatus(projectId, ['BLOCKED', 'READY', 'PLANNED']);
+  await eachRunWithDependencies(waiting, async (run, dependencies) => {
+    const ready = run.dependencyOverride || (await checkRunDependencyRows(projectId, dependencies)).ready;
 
     // The status and its event commit together; the dependency reads above
     // do not need to be inside that transaction (INF-5).
@@ -779,8 +778,34 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
       });
       unblocked.push(run.id);
     }
-  }
+  });
   return { unblocked, blocked };
+}
+
+/**
+ * Hand each run its dependency rows, reading them for `RUN_DEPENDENCY_CHUNK`
+ * runs at a time, so what a recompute holds is bounded by a group of runs and
+ * never grows with the project (2026-11-24). A run with a dependency override
+ * is handed none: nothing reads them.
+ *
+ * Production's largest project held 216,844 run dependencies: 110 automatic
+ * redos waiting BLOCKED, each carrying its layer's ~2,190 documents as its
+ * packet. Every recompute read all of them in one statement, once for run
+ * readiness and again for every layer with an open run (and `buildPlan`
+ * derives every layer at once): ~230 MB of heap per read, measured on that
+ * shape, several at a time. The process reached its 2.5 GB heap ceiling every
+ * 15–22 minutes and restarted (130 restarts in 72 h).
+ */
+async function eachRunWithDependencies<R extends { id: string; dependencyOverride: boolean }>(
+  runs: readonly R[],
+  visit: (run: R, dependencies: Dependency[]) => Promise<void>,
+): Promise<void> {
+  for (let i = 0; i < runs.length; i += RUN_DEPENDENCY_CHUNK) {
+    const group = runs.slice(i, i + RUN_DEPENDENCY_CHUNK);
+    const read = group.filter((run) => !run.dependencyOverride).map((run) => run.id);
+    const byRun = read.length > 0 ? await listRunDependenciesForRuns(read) : new Map<string, Dependency[]>();
+    for (const run of group) await visit(run, byRun.get(run.id) ?? []);
+  }
 }
 
 /** Depth guard: the runtime-state writer reads derived state and must not recurse. */

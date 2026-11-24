@@ -58,22 +58,42 @@ export async function listDependenciesForRun(runId: string): Promise<Dependency[
 }
 
 /**
- * Every run dependency in a project, grouped by run, in one statement.
+ * Runs whose dependencies one statement reads, and so the most runs' rows a
+ * recompute holds at once (`eachRunWithDependencies` in stateEngine.ts). At
+ * production's widest packet (~2,200 documents a run) that is ~22,000 rows.
+ */
+export const RUN_DEPENDENCY_CHUNK = 10;
+
+/**
+ * The dependencies of the named runs, grouped by run, `RUN_DEPENDENCY_CHUNK`
+ * runs per statement. Same rows, same order within a run as
+ * `listDependenciesForRun`.
  *
  * Readiness used to ask per run (`listDependenciesForRun`, plus a re-read of
  * the run itself): 2,800 of each in twelve minutes of production on
  * 2026-10-12, inside the recompute transaction, for runs that mostly have no
- * dependencies at all. Same rows, same order within a run.
+ * dependencies at all. It then read every run dependency of the project in one
+ * statement — and on 2026-11-24 production's largest project held 216,844 of
+ * them (110 automatic redos waiting BLOCKED, each carrying ~2,190 documents),
+ * read whole on every recompute and for every layer with an open run. A
+ * caller that hands this a bounded group of runs holds a bounded amount.
  */
-export async function listRunDependenciesForProject(projectId: string): Promise<Map<string, Dependency[]>> {
-  const rows = (await getDb().all<DependencyRow>(
-    'SELECT * FROM dependencies WHERE project_id = ? AND dependent_run_id IS NOT NULL ORDER BY created_at',
-    [projectId],
-  )).map(mapDependency);
+export async function listRunDependenciesForRuns(runIds: readonly string[]): Promise<Map<string, Dependency[]>> {
   const byRun = new Map<string, Dependency[]>();
-  for (const row of rows) {
-    if (!row.dependentRunId) continue;
-    byRun.set(row.dependentRunId, [...(byRun.get(row.dependentRunId) ?? []), row]);
+  const unique = [...new Set(runIds)];
+  for (let i = 0; i < unique.length; i += RUN_DEPENDENCY_CHUNK) {
+    const slice = unique.slice(i, i + RUN_DEPENDENCY_CHUNK);
+    const rows = await getDb().all<DependencyRow>(
+      `SELECT * FROM dependencies WHERE dependent_run_id IN (${slice.map(() => '?').join(', ')}) ORDER BY created_at`,
+      slice,
+    );
+    for (const row of rows) {
+      const dependency = mapDependency(row);
+      if (!dependency.dependentRunId) continue;
+      const held = byRun.get(dependency.dependentRunId);
+      if (held) held.push(dependency);
+      else byRun.set(dependency.dependentRunId, [dependency]);
+    }
   }
   return byRun;
 }
@@ -107,19 +127,35 @@ export async function linkDependencyToDocument(dependencyId: string, documentId:
 }
 
 /**
- * Re-resolve every dependency in a project against current documents.
- * Returns the canonical names that newly resolved and that newly broke.
+ * The project's dependency links that differ from what current documents say:
+ * each dependency joined to the complete, present document its canonical name
+ * names, kept only where that document is not the one it links to.
+ *
+ * The comparison is made by the database (2026-11-24). It used to return every
+ * link of the project with every column and compare them here — production's
+ * largest project held 216,844 dependency rows, ~280 MB of heap per read
+ * measured on that shape, read on every recompute and nearly always to learn
+ * that nothing had moved. The rows that come back are exactly the ones the
+ * comparison here used to keep.
  */
-async function dependencyLinks(projectId: string): Promise<(DependencyRow & { doc_id: string | null })[]> {
-  return getDb().all<DependencyRow & { doc_id: string | null }>(
-    `SELECT d.*, doc.id AS doc_id
+async function driftedLinks(
+  projectId: string,
+  limit?: number,
+): Promise<{ id: string; required_document_id: string | null; required_canonical_name: string; doc_id: string | null }[]> {
+  return getDb().all<{ id: string; required_document_id: string | null; required_canonical_name: string; doc_id: string | null }>(
+    `SELECT d.id AS id, d.required_document_id AS required_document_id,
+            d.required_canonical_name AS required_canonical_name, doc.id AS doc_id
      FROM dependencies d
      LEFT JOIN documents doc
        ON doc.project_id = d.project_id
       AND doc.canonical_name = d.required_canonical_name COLLATE NOCASE
       AND doc.status IN ('COMPLETE','FROZEN')
       AND doc.file_missing = 0
-     WHERE d.project_id = ?`,
+     WHERE d.project_id = ?
+       AND ((doc.id IS NULL AND d.required_document_id IS NOT NULL)
+         OR (doc.id IS NOT NULL AND (d.required_document_id IS NULL OR d.required_document_id <> doc.id)))${
+           limit === undefined ? '' : `\n     LIMIT ${Math.max(1, Math.floor(limit))}`
+         }`,
     [projectId],
   );
 }
@@ -129,19 +165,23 @@ async function dependencyLinks(projectId: string): Promise<(DependencyRow & { do
  *
  * A read and nothing else, so a caller can skip opening a transaction for the
  * ordinary case where nothing changed (INF-5: a no-change recompute's one
- * remaining transaction was this refresh, held only to read).
+ * remaining transaction was this refresh, held only to read). One row at most
+ * comes back (`driftedLinks`).
  */
 export async function dependenciesDrifted(projectId: string): Promise<boolean> {
-  const rows = await dependencyLinks(projectId);
-  return rows.some((row) => (row.doc_id ?? null) !== row.required_document_id);
+  return (await driftedLinks(projectId, 1)).length > 0;
 }
 
+/**
+ * Re-resolve every dependency in a project against current documents.
+ * Returns the canonical names that newly resolved and that newly broke.
+ */
 export async function resolveProjectDependencies(projectId: string): Promise<{
   resolved: string[];
   broken: string[];
 }> {
   const db = getDb();
-  const rows = await dependencyLinks(projectId);
+  const rows = await driftedLinks(projectId);
   const resolved: string[] = [];
   const broken: string[] = [];
   for (const row of rows) {
