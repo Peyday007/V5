@@ -84,6 +84,8 @@ import {
   type ResearchPurpose,
   type SharesInForce,
 } from './researchAllocation.ts';
+import { OPEN_DEADLINE_SQL } from '../../domain/executionWindow.ts';
+import { startExecutionWindows } from './executionStart.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -313,7 +315,7 @@ export async function resumeMachinePausedTargetedGoals(now: string): Promise<str
   const candidates = await db.all<{ id: string }>(
     `SELECT id FROM workstreams
       WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL
-        AND due_at IS NOT NULL AND due_at > ?
+        AND ${OPEN_DEADLINE_SQL}
         AND paused_at IS NOT NULL AND cancelled_at IS NULL AND archived_at IS NULL
       ORDER BY id`,
     [now],
@@ -342,6 +344,8 @@ export async function resumeMachinePausedTargetedGoals(now: string): Promise<str
 
 export async function advanceGoals(options?: { now?: string; memory?: Partial<MemoryPasses>; floorOpeners?: FloorOpeners }): Promise<GoalTickReport> {
   await resumeMachinePausedTargetedGoals(options?.now ?? new Date().toISOString());
+  // A grant written by any path starts the execution window it authorizes (§119).
+  await startExecutionWindows({ actorRef: 'goal-tick', at: options?.now });
   // Archived goals are not derived here: they hold nothing and rank nowhere,
   // and there are more of them after every deploy. A hold one left behind is
   // released below, and its owner read directly (tests/goalTickCost.test.ts).

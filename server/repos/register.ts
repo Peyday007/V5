@@ -29,6 +29,7 @@ import type {
   WorkstreamRow,
 } from '../domain/register.ts';
 import { GOAL_METRICS, type GoalMetric } from '../domain/register.ts';
+import { effectiveDueAt, windowOfRow } from '../domain/executionWindow.ts';
 
 function mapWorkstream(row: WorkstreamRow): Workstream {
   return {
@@ -44,7 +45,11 @@ function mapWorkstream(row: WorkstreamRow): Workstream {
     updatedAt: row.updated_at,
     outcome: row.outcome ?? null,
     ownerUserId: row.owner_user_id ?? null,
-    dueAt: row.due_at ?? null,
+    // The deadline every subsystem reads: a commercial execution window that has not started is a full window from now (§119).
+    ...((): { dueAt: string | null; executionWindowDays: number | null; executionStartedAt: string | null } => {
+      const window = windowOfRow(row);
+      return { dueAt: effectiveDueAt(window), executionWindowDays: window.executionWindowDays, executionStartedAt: window.executionStartedAt };
+    })(),
     commitment:
       row.commitment === 'CUSTOMER' || row.commitment === 'INTERNAL' ? row.commitment : 'NONE',
     pausedAt: row.paused_at ?? null,

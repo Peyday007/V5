@@ -40,6 +40,7 @@ import { getObjectiveReadingByKey, insertObjectiveReading, type ObjectiveReading
 import { interpretIntent, readGeography } from '../industry/construction/intent.ts';
 import { goalConstruction } from '../industry/construction/service.ts';
 import type { Workstream } from '../../domain/register.ts';
+import { daysLeftOf } from '../../domain/executionWindow.ts';
 
 export const OBJECTIVE_REFRESH_MS = 6 * 3_600_000;
 export const OBJECTIVE_MIN_STRATEGIES = 4;
@@ -91,7 +92,7 @@ export function objectiveIndustry(text: string): string | null {
 }
 
 /** Pure: the goal's own words, read into an objective. Nothing is inferred that the words do not say. */
-export function interpretObjective(goal: Pick<Workstream, 'title' | 'intent' | 'outcome' | 'dueAt'>, now: Date = new Date()): ObjectiveInterpretation {
+export function interpretObjective(goal: Pick<Workstream, 'title' | 'intent' | 'outcome' | 'dueAt'> & Partial<Pick<Workstream, 'executionWindowDays' | 'executionStartedAt'>>, now: Date = new Date()): ObjectiveInterpretation {
   const text = [goal.title, goal.intent, goal.outcome].filter((one): one is string => !!one && !!one.trim()).join('. ').replace(/\s+/g, ' ').trim();
   const constraints: ObjectiveConstraint[] = [];
   const intent = interpretIntent(text);
@@ -103,8 +104,8 @@ export function interpretObjective(goal: Pick<Workstream, 'title' | 'intent' | '
     const n = count(deadline[1]!);
     if (n !== null) constraints.push({ id: 'deadline', kind: 'DEADLINE', statement: `done within ${deadline[0].replace(/^\w+\s+/, '')}`, value: n * UNIT_DAYS[deadline[2]!.toLowerCase()]!, unit: 'days' });
   } else if (goal.dueAt) {
-    const days = Math.max(0, Math.ceil((Date.parse(goal.dueAt) - now.getTime()) / 86_400_000));
-    if (Number.isFinite(days)) constraints.push({ id: 'deadline', kind: 'DEADLINE', statement: `done by ${goal.dueAt.slice(0, 10)} (${days} days)`, value: days, unit: 'days' });
+    const days = Math.max(0, daysLeftOf({ dueAt: goal.dueAt, executionWindowDays: goal.executionWindowDays ?? null, executionStartedAt: goal.executionStartedAt ?? null }, now) ?? 0);
+    if (Number.isFinite(days)) constraints.push({ id: 'deadline', kind: 'DEADLINE', statement: goal.executionWindowDays && !goal.executionStartedAt ? `done within ${days} days of the start of commercial execution` : `done by ${goal.dueAt.slice(0, 10)} (${days} days)`, value: days, unit: 'days' });
   }
   const quantity = /\b(?:open|opening|launch|build|hire|sign|win|reach|ship|close|serve|add|recruit|onboard)\s+(\d[\d,]*|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty)\s+(?:new\s+)?([a-z][a-z-]+)/i.exec(text);
   if (quantity) {

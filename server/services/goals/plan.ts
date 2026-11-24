@@ -122,6 +122,7 @@ import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type O
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 import { blockerResolutions, type Resolution } from './resolution.ts';
+import { effectiveDueAtOfRow } from '../../domain/executionWindow.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -6083,8 +6084,8 @@ export async function advanceGoalPlans(
    */
   options: { maxReads?: number } = {},
 ): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
-  const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null; due_at: string | null }>(
-    `SELECT id, target_project_id, paused_at, due_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
+  const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null; due_at: string | null; execution_window_days: number | null; execution_started_at: string | null }>(
+    `SELECT id, target_project_id, paused_at, due_at, execution_window_days, execution_started_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
   let read = 0;
   let outcomes = 0;
@@ -6094,7 +6095,10 @@ export async function advanceGoalPlans(
   let busy = false;
   let onEvidence = 0;
   let resumed = 0;
-  for (const { id, target_project_id: projectId, paused_at: pausedAt, due_at: dueAt } of goals) {
+  for (const row of goals) {
+    const { id, target_project_id: projectId, paused_at: pausedAt } = row;
+    // Before commercial execution starts the deadline is a full window away, never past (§119).
+    const dueAt = effectiveDueAtOfRow(row, now);
     if (await recordGoalOutcome(id, now)) {
       outcomes += 1;
       // A new outcome invalidates the held reading: the next read decides by the continuation rule whether the

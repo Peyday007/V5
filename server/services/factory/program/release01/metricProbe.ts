@@ -20,6 +20,7 @@ import { getDb } from '../../../../db/database.ts';
 import type { ProbeResult } from '../probes.ts';
 import type { TargetReading } from '../../../goals/target.ts';
 import { goalConditionsHoldOnRows } from './goalConditionProbe.ts';
+import { OPEN_DEADLINE_SQL, daysLeftOf, windowOfRow } from '../../../../domain/executionWindow.ts';
 
 export const GOAL_METRIC_PROBE = 'r01.goal-02';
 
@@ -35,6 +36,8 @@ export interface GoalRow {
   target_project_id: string;
   target_set_at: string;
   due_at: string | null;
+  execution_window_days?: number | string | null;
+  execution_started_at?: string | null;
 }
 
 /** Why a reading contradicts its goal row and the raw ledger totals, or null. Pure. */
@@ -43,7 +46,8 @@ export function metricProblem(goal: GoalRow, reading: TargetReading, raw: Record
   if (reading.metric !== goal.target_metric) return `reads metric ${reading.metric}, not the goal's ${goal.target_metric}`;
   if (reading.targetCents !== amount) return 'reads a different target amount than the goal states';
   if (reading.currency !== goal.target_currency) return 'reads a different currency than the goal states';
-  const expectedDays = goal.due_at ? Math.ceil((Date.parse(goal.due_at) - now.getTime()) / DAY) : null;
+  // The goal's own deadline, read through the one execution-window rule (§119): the full window before execution starts.
+  const expectedDays = daysLeftOf(windowOfRow(goal), now);
   if (reading.daysLeft !== expectedDays) return 'does not carry the goal\'s own deadline';
   const t = (kind: string) => Number(raw[kind] ?? 0);
   const expected =
@@ -69,9 +73,9 @@ export async function goalMetricsHoldOnRows(): Promise<ProbeResult> {
   const { contributionFrom } = await import('../../../cash/money.ts');
   const now = new Date();
   const goals = await db.all<GoalRow>(
-    `SELECT id, target_metric, target_amount_cents, target_currency, target_project_id, target_set_at, due_at FROM workstreams
+    `SELECT id, target_metric, target_amount_cents, target_currency, target_project_id, target_set_at, due_at, execution_window_days, execution_started_at FROM workstreams
       WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL AND target_project_id IS NOT NULL
-        AND target_currency IS NOT NULL AND target_set_at IS NOT NULL AND due_at IS NOT NULL AND due_at > ?
+        AND target_currency IS NOT NULL AND target_set_at IS NOT NULL AND ${OPEN_DEADLINE_SQL}
         AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL ORDER BY id`,
     [now.toISOString()],
   );
@@ -98,7 +102,7 @@ export async function goalMetricsHoldOnRows(): Promise<ProbeResult> {
     });
     const problem = metricProblem(goal, reading, raw, contribution, now);
     if (problem) return { ok: false, detail: `goal ${goal.id} ${problem}` };
-    shapes.add(`${goal.target_metric}|${goal.due_at}`);
+    shapes.add(`${goal.target_metric}|${goal.execution_window_days ? `${goal.execution_window_days}d:${goal.execution_started_at ?? 'not started'}` : goal.due_at}`);
   }
   return {
     ok: true,

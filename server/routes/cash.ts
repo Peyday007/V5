@@ -202,6 +202,7 @@ const SERVER_LEDGER_KEY_PREFIXES = [
   'settle:',
 ] as const;
 import type { Outcome } from '../services/cash/opportunities.ts';
+import { startExecutionWindows } from '../services/goals/executionStart.ts';
 
 export const cashRouter: Router = Router();
 
@@ -692,6 +693,8 @@ cashRouter.post(
     });
 
     await closeApprovalsAnsweredByGrant({ projectId: project.id, actions, actorUserId: principal.id });
+    // A grant of buyer-facing work starts the goal's commercial execution window (§119).
+    await startExecutionWindows({ projectId: project.id, actorRef: principal.id });
 
     await recordCashEvent({
       projectId: project.id,
