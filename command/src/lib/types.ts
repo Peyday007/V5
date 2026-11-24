@@ -174,7 +174,7 @@ export interface OperatorHistory { runs: { id: string; state: string; startedAt:
 export interface Health { ok: boolean; schemaVersion: number | string; revision?: string | null; driver?: string; providers: { name: string; available: boolean; reason: string | null; model: string | null }[] }
 
 // server/services/russell/work.ts — the card facts added 2026-11-24
-export interface WorkCard { startedAt: string | null; finishedAt: string | null; worker: string | null; result: string | null }
+export interface WorkCard { startedAt: string | null; finishedAt: string | null; worker: string | null; result: string | null; purpose?: string | null; goalId?: string | null; goalTitle?: string | null }
 export interface WorkEntryFull extends WorkEntry {
   card?: WorkCard;
   links: { missionId: string | null; orchestrationId: string | null; binId: string | null; documentId: string | null; conversationId: string | null; layerId: string | null };
