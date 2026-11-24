@@ -8,7 +8,7 @@
  *
  * Last lines, for the workflow: `POD <id> <status> <usd/h>` and `URL <address>`.
  */
-import { ensurePod, sweepBenchPods } from '../server/services/cheap/runpodRestore.ts';
+import { ensurePod, findPod, sweepBenchPods } from '../server/services/cheap/runpodRestore.ts';
 import { accountReading } from '../server/services/cheap/runpodAccount.ts';
 
 const apiKey = process.env['RUNPOD_API_KEY']?.trim();
@@ -29,6 +29,18 @@ async function main(): Promise<void> {
   if (account.balance !== null) {
     console.log(`ACCOUNT balance $${account.balance.toFixed(2)} · spending $${account.spendPerHour?.toFixed(3) ?? '?'}/h · runway ${account.runwayHours === null ? 'unknown' : `${Math.round(account.runwayHours)} h`}`);
     if (account.runwayHours !== null && account.runwayHours < 72) console.log(`RUNWAY-LOW ${Math.round(account.runwayHours)}`);
+  }
+  if (process.argv.includes('--find-only')) {
+    // Under the standing authorization (§121) the Brain's supervisor recreates a lost pod itself.
+    const found = await findPod({ apiKey: apiKey!, oldUrl: process.env['RUNPOD_VLLM_URL'] ?? null });
+    if (!found) {
+      console.log('NO-POD none found; the Brain\'s supervisor recreates it from the authorized recipe when work waits');
+      return;
+    }
+    for (const line of found.log) console.log(line);
+    console.log(`POD ${found.podId} ${found.status} ${found.costPerHr ?? 'unknown'}`);
+    console.log(`URL ${found.url}`);
+    return;
   }
   const attempt = () =>
     ensurePod({

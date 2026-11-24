@@ -34,6 +34,12 @@
 #             secrets exist; then probe and connect on its own; once connected,
 #             reconnect if the secrets change, and report the GPU's research jobs.
 #             With RUNPOD_API_KEY, a deleted pod is recreated first (runpod-restore).
+#   runpod-authorize — the owner's standing authorization (§121): continuous GPU
+#             operation at up to max_usd_per_hour for one card on recipe `recipes`
+#             (default gpt-oss-120b-a100 at $2.50/h); no budget window, no expiry.
+#
+# The hourly runpod-auto never recreates a pod under the standing authorization:
+# the Brain's own supervisor does, from the authorized recipe (§121).
 #
 # No key is printed. Free provider keys never pass through here: they are
 # entered in OmniRoute's own dashboard.
@@ -47,7 +53,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | heal | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget | runpod-start | runpod-launch'
+        description: 'deploy | status | prune | heal | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget | runpod-start | runpod-launch | runpod-authorize'
         required: true
         default: deploy
       recipes:
@@ -324,6 +330,52 @@ jobs:
               [ $rc -eq 0 ] && grep -q '^TOOLS on' probe.txt || { echo "::error title=runpod::Recipe $recipe did not come up with tool calls; the previous recipe was put back."; exit 1; }
               echo "::notice title=runpod::Pod $pod_id now serves $recipe with tool calls ($(grep '^CONTEXT ' probe.txt | cut -d' ' -f2) context)."
               ;;
+            runpod-authorize)
+              # The owner's standing order, 2026-11-24 (§121): the GPU runs continuously under a
+              # standing authorization — no budget window, no expiry, no recurring launch. Records the
+              # authorization as Fly secrets (it survives every deploy, restart and replenishment), moves
+              # the GPU to the authorized recipe within the authorized hourly rate (one card), probes it
+              # with tool calls, connects it, and retires the old pod. From then on the Brain's own
+              # supervisor stops it after 30 idle minutes, starts it when GPU work waits, restarts a
+              # stalled vLLM, recreates a deleted pod and replaces a pod priced above the rate.
+              # Inputs: recipes (default gpt-oss-120b-a100), max_usd_per_hour (the authorized rate, default 2.50).
+              [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              recipe=$(printf '%s' "${RECIPES_INPUT:-}" | tr -cd 'a-z0-9.-'); recipe=${recipe:-gpt-oss-120b-a100}
+              rate=$(printf '%s' "${MAX_USD_INPUT:-}" | tr -cd '0-9.'); rate=${rate:-2.50}
+              from=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+              # Staged, so the Brain restarts once — when gpu_connect points it at the new pod — and the
+              # supervisor never acts on the authorization while the upgrade is still creating that pod.
+              flyctl secrets set --app "$brain" --stage BRAIN_RUNPOD_AUTHORIZATION=continuous BRAIN_RUNPOD_AUTHORIZED_USD_PER_HOUR="$rate" \
+                BRAIN_RUNPOD_AUTHORIZED_AT="$from" BRAIN_RUNPOD_RECIPE="$recipe" BRAIN_RUNPOD_MAX_USD_PER_HOUR="$rate" >/dev/null
+              # No budget window applies under the authorization; the old bounded run's secrets go.
+              for s in BRAIN_RUNPOD_BUDGET_USD BRAIN_RUNPOD_BUDGET_WINDOW_HOURS BRAIN_RUNPOD_BUDGET_FROM; do
+                flyctl secrets unset --app "$brain" --stage "$s" >/dev/null 2>&1 || true
+              done
+              export RUNPOD_MAX_USD_PER_HOUR="$rate"; MAX_USD_INPUT="$rate"
+              echo "::notice title=runpod authorize::Continuous operation authorized from $from at up to \$$rate/h on recipe $recipe; moving the GPU to it."
+              if npx tsx scripts/runpod-upgrade.ts --recipe "$recipe" | tee upgrade.txt && grep -q '^READY ' upgrade.txt; then
+                new_id=$(grep '^NEW ' upgrade.txt | cut -d' ' -f2)
+                old_ids=$(grep '^OLD ' upgrade.txt | cut -d' ' -f2 | grep -v "^$new_id$" | paste -sd, - || true)
+                RUNPOD_VLLM_URL=$(grep '^URL ' upgrade.txt | cut -d' ' -f2-)
+                RUNPOD_VLLM_MODEL=""
+                pod_id="$new_id"
+                pod_price=$(grep '^POD ' upgrade.txt | cut -d' ' -f4 | tr -cd '0-9.')
+                fingerprint
+                if probe && grep -q '^TOOLS on' probe.txt; then
+                  gpu_connect
+                  [ -z "$old_ids" ] || npx tsx scripts/runpod-upgrade.ts --retire "$old_ids"
+                  echo "::notice title=runpod authorize::Continuous GPU live: recipe $recipe on pod $new_id (\$${pod_price:-?}/h); retired: ${old_ids:-none}."
+                  exit 0
+                fi
+                npx tsx scripts/runpod-upgrade.ts --retire "$new_id"
+                echo "::warning title=runpod authorize::The new pod failed the probe or its tool-call check and was deleted."
+              fi
+              # The authorization stands either way: applied now, the Brain's supervisor replaces the old
+              # pod with the authorized recipe itself when GPU work waits, retrying until RunPod has stock.
+              flyctl secrets deploy --app "$brain" >/dev/null
+              echo "::error title=runpod authorize::The authorization is recorded and applied, but the authorized pod did not come up in this run; the Brain's supervisor keeps trying (RUNPOD_POD MIGRATED / MIGRATE_FAILED rows). If $recipe cannot serve, dispatch again with recipes=gpt-oss-120b-h100 and the owner's approval of max_usd_per_hour=4.50."
+              exit 1
+              ;;
             runpod-launch)
               # The major GPU run in one dispatch: set the hard dollar budget for its window (#1002/#1011:
               # the supervisor stops the pod and refuses every start once RunPod's billed spend in the
@@ -432,7 +484,10 @@ jobs:
                 echo "::notice title=runpod::Waiting for the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY secrets. Free providers only."
                 exit 0
               fi
-              restore --wait || true
+              # Under the owner's standing authorization (§121) the Brain's own supervisor recreates a
+              # lost pod from the authorized recipe; this run only finds it, never creates a second.
+              authz=$(flyctl ssh console --app "$brain" -C 'printenv BRAIN_RUNPOD_AUTHORIZATION' 2>/dev/null | tr -d '\r' || true)
+              if echo "$authz" | grep -qw continuous; then restore --find-only || true; else restore --wait || true; fi
               # What the Brain runs now: its mode and the fingerprint of the settings it was given (never a key).
               state=$(flyctl ssh console --app "$brain" -C 'printenv BRAIN_RUNPOD_MODE BRAIN_RUNPOD_FINGERPRINT' 2>/dev/null | tr -d '\r' | tr '\n' ' ' || true)
               if echo "$state" | grep -qw primary && echo "$state" | grep -qw "$gpu_fp"; then

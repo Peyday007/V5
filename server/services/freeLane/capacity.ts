@@ -29,7 +29,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { recentInfraFailures } from '../../db/infra.ts';
 import { httpCompleter, laneConfig, routeLabel, type Completer, type LaneConfig } from '../cheap/lane.ts';
-import { isRunpodSlot, runpodCallWindow, RUNPOD_PREFIX } from '../cheap/runpod.ts';
+import { isRunpodSlot, runpodCallWindow, runpodLatency, RUNPOD_PREFIX } from '../cheap/runpod.ts';
 import { superviseRunpodPod } from '../cheap/runpodPod.ts';
 import { RECIPES, recipeFor, type PodRecipe } from '../cheap/runpodRestore.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
@@ -56,6 +56,8 @@ const CONTROL_MS = 30_000;
 const IDLE_SLEEP_MS = 20_000;
 /** Mean event-loop lag over a control window above which every model's slots halve. */
 export const LAG_SHRINK_MS = 1_000;
+/** The GPU's mean answer time, as a multiple of its baseline, above which its slots stop growing (§121). */
+export const LATENCY_HOLD_FACTOR = 2;
 
 export interface Window {
   ok: number;
@@ -120,6 +122,12 @@ export function decideTarget(input: {
   window: Window;
   pressure: Pressure;
   ceiling?: number;
+  /**
+   * The GPU's own answer time (§121): the mean of its recent successful calls and the lowest such
+   * mean seen in the last hour. Growth holds while the mean is over `LATENCY_HOLD_FACTOR` × that
+   * baseline — more sequences in one vLLM batch then cost every request time instead of adding work.
+   */
+  latency?: { meanMs: number; baselineMs: number } | null;
 }): Decision {
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const { target, active, waiting, window, pressure } = input;
@@ -148,6 +156,10 @@ export function decideTarget(input: {
   }
   if (target >= 4 && active < target / 2) {
     return { target, reason: `slots not filled (${active} of ${target} busy)`, stable };
+  }
+  const latency = input.latency;
+  if (latency && latency.baselineMs > 0 && latency.meanMs > LATENCY_HOLD_FACTOR * latency.baselineMs) {
+    return { target, reason: `GPU answer time ${Math.round(latency.meanMs / 1000)} s is over ${LATENCY_HOLD_FACTOR}x its ${Math.round(latency.baselineMs / 1000)} s baseline; holding`, stable };
   }
   if (target >= ceiling) return { target: ceiling, reason: 'at the safety ceiling', stable };
   const grown = Math.min(ceiling, target * 2, Math.max(target + 1, active + waiting));
@@ -519,6 +531,38 @@ export function slotShare(models: number, poolMax: number | null = databasePoolR
   return Math.max(MIN_TARGET, Math.floor((poolMax * SLOTS_PER_DB_CONNECTION) / models));
 }
 
+/**
+ * One model's cap on the lane's database-pool budget (`poolMax × SLOTS_PER_DB_CONNECTION`
+ * across every model), or null when the pool is not measured. Pure.
+ *
+ * A free model keeps its even share, as before. The GPU slot takes what the other models do
+ * not hold (§121): the budget is the same total the lane always had, so the database sees no
+ * more slots, but a GPU pod billed by the hour is no longer held at half of it while the free
+ * model beside it sits at four. Production, 2026-11-19: with two models the even split held
+ * the H200 at 12 of its 128 sequences (5.5–8.9 in flight, PR #1270). Each step bounds a model
+ * by the total less the others' current targets, so their sum never passes the budget.
+ */
+export function poolShare(input: { gpu: boolean; models: number; othersTarget: number; poolMax?: number | null; gpuBeside?: boolean }): number | null {
+  const poolMax = input.poolMax === undefined ? (databasePoolReadings()?.workload.max ?? null) : input.poolMax;
+  const even = slotShare(input.models, poolMax);
+  if (even === null || !poolMax) return null;
+  const left = Math.max(MIN_TARGET, poolMax * SLOTS_PER_DB_CONNECTION - input.othersTarget);
+  if (input.gpu) return Math.max(MIN_TARGET, left);
+  // A free model keeps its even share unless a GPU beside it may hold the rest of the budget.
+  return input.gpuBeside ? Math.min(even, left) : even;
+}
+
+/** GPU mean answer times per control step, for the latency baseline (`decideTarget`'s `latency`). */
+const latencyReadings: { at: number; ms: number }[] = [];
+const LATENCY_BASELINE_MS = 60 * 60_000;
+
+/** Pure: the lowest mean answer time read in the hour before `now`, after adding `reading`. */
+export function latencyBaseline(readings: { at: number; ms: number }[], reading: number | null, now: number): number | null {
+  if (reading !== null) readings.push({ at: now, ms: reading });
+  while (readings.length > 0 && readings[0]!.at < now - LATENCY_BASELINE_MS) readings.shift();
+  return readings.length > 0 ? Math.min(...readings.map((r) => r.ms)) : null;
+}
+
 /** Allocation fingerprints already applied, per model; backed by the FREE_LANE_CAPACITY rows across a restart. */
 const appliedGrants = new Map<string, string>();
 
@@ -577,7 +621,13 @@ export async function controlStep(): Promise<ControlReading | null> {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
+    let latency: { meanMs: number; baselineMs: number } | null = null;
+    if (gpu) {
+      const meanMs = runpodLatency(WINDOW_MS);
+      const baselineMs = latencyBaseline(latencyReadings, meanMs, Date.now());
+      if (meanMs !== null && baselineMs !== null) latency = { meanMs, baselineMs };
+    }
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, latency, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
     const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
     const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
     const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
@@ -604,11 +654,13 @@ export async function controlStep(): Promise<ControlReading | null> {
     // Every slot reaches the same database pool. Production, 2026-11-05 11:29Z: three
     // models' slots left 593 callers waiting on 8 connections, and audits threw. The
     // lane's slots together stay within a multiple of the pool's own ceiling.
-    const share = slotShare(pools.size);
+    const othersTarget = [...pools.values()].reduce((sum, p) => (p === pool ? sum : sum + p.target), 0);
+    const gpuBeside = !!config.runpod && [...pools.values()].some((p) => p !== pool && isRunpodSlot(p.worker.model));
+    const share = poolShare({ gpu: !!gpu, models: pools.size, othersTarget, gpuBeside });
     if (share !== null && decision.target > share) {
       // The cap bounds the step; it does not erase why the step was taken (the gate's
       // measured constraint stays on the record beside it).
-      decision = { ...decision, target: share, reason: `${decision.reason}; held to its share of the database pool (${share} of ${share * pools.size} slots)`, stable: false };
+      decision = { ...decision, target: share, reason: `${decision.reason}; held to its share of the database pool (${share} of ${share + othersTarget} slots)`, stable: false };
     }
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;
@@ -747,6 +799,7 @@ export function stopAdaptivePool(): void {
   pools.clear();
   workersCache = [];
   appliedGrants.clear();
+  latencyReadings.length = 0;
 }
 
 /**
@@ -799,10 +852,15 @@ export async function freeLaneProvenSlots(seam: PoolSeam = {}): Promise<number> 
   // The lane's models now; a row for a model no longer configured is history.
   const current = recorded.filter((r) => config.models.includes(r.model));
   const rows = current.length > 0 ? current : recorded;
-  const share = 'poolMax' in seam ? slotShare(Math.max(1, rows.length), seam.poolMax ?? null) : slotShare(Math.max(1, rows.length));
+  const models = Math.max(1, rows.length);
+  const total = rows.reduce((sum, r) => sum + r.target, 0);
   return (
     rows.reduce((sum, r) => {
-      const served = config.runpod && isRunpodSlot(r.model) ? servedSequences(r.model) : null;
+      const gpu = !!config.runpod && isRunpodSlot(r.model);
+      const served = gpu ? servedSequences(r.model) : null;
+      // The same share the controller applies (`poolShare`): the GPU's is what the other models do not hold.
+      const gpuBeside = !!config.runpod && rows.some((o) => o !== r && isRunpodSlot(o.model));
+      const share = poolShare({ gpu, models, othersTarget: total - r.target, gpuBeside, ...('poolMax' in seam ? { poolMax: seam.poolMax ?? null } : {}) });
       return sum + provenSlots({ target: r.target, stableHigh: r.stableHigh, served, share, ceiling: gpuCeiling(process.env, served) });
     }, 0) || START_TARGET * 2
   );
