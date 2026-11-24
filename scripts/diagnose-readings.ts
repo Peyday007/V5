@@ -189,12 +189,27 @@ async function binGates(binId: string): Promise<void> {
   console.log(`  missions: ${missions.map((one) => `${one.id} ${one.state}`).join(', ') || 'none'}`);
 }
 
+/** Free-lane outcomes by work type and model over 24 h, from FREE_LANE_ITEM events. */
+async function freeLaneYield(): Promise<void> {
+  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+  const rows = await getDb().all<{ workload_class: string | null; outcome: string | null; model: string | null; n: number }>(
+    `SELECT workload_class, outcome, SUBSTR(COALESCE(reason, ''), 1, INSTR(COALESCE(reason, '') || ':', ':') - 1) AS model, COUNT(*) AS n
+       FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ?
+      GROUP BY workload_class, outcome, SUBSTR(COALESCE(reason, ''), 1, INSTR(COALESCE(reason, '') || ':', ':') - 1)
+      ORDER BY workload_class, n DESC`,
+    [since],
+  );
+  console.log(`DIAGNOSE: free-lane-yield since ${since}`);
+  for (const row of rows) console.log(`  ${String(row.n).padStart(5)}x ${row.workload_class ?? '-'} ${row.outcome ?? '-'} ${row.model ?? ''}`);
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
   try {
     if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
+    else if (command === 'free-lane-yield') await freeLaneYield();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
     else throw new Error('usage: diagnose-readings.ts fragment-failures|operator-runs|bin-gates <bin>');
   } finally {
