@@ -1120,7 +1120,7 @@ describe('the scheduler', () => {
       6,
       6,
     );
-    expect(raised.target).toBe(4);
+    expect(raised.target).toBe(6);
 
     const held = tuneLaneTarget(3, evidence, 1, 1);
     expect(held.target).toBe(3);

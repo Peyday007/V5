@@ -121,7 +121,10 @@ export interface SchedulerDecision {
  * target whatever else is true, because running more lanes into a refusing
  * surface converts throughput into refusals. Contention lowers it next, because
  * two lanes fighting over one surface is one lane plus waste. Only a campaign
- * that is merging cleanly and using everything it has is allowed to grow.
+ * that is merging cleanly and using everything it has is allowed to grow — and
+ * then it grows to meet the independent work waiting, in one step, because a
+ * unit queued behind a lane count that clean evidence would have raised anyway
+ * is development time spent waiting.
  */
 export function tuneLaneTarget(
   current: number,
@@ -168,11 +171,18 @@ export function tuneLaneTarget(
     evidence.rateLimitedSessions === 0 &&
     current < MAX_LANE_TARGET
   ) {
+    // Catch up in one step. Lowering is one lane at a time because it answers a
+    // refusal; rising answers independent work already waiting, and rising by
+    // one lane per tick left a wide plan's units queued behind
+    // INITIAL_LANE_TARGET for several ticks (OPERATOR:RESOURCE_ALLOCATION:
+    // 591a21ff74213595). decide() still refuses overlapping ownership, so the
+    // graph, not this number, bounds how wide the work actually runs.
+    const target = clamp(Math.min(demand, availableSlots));
     return {
-      target: clamp(current + 1),
+      target,
       reason:
         `${demand} independent unit(s) waiting on ${availableSlots} free slot(s) with no ` +
-        'refusals: one more lane.',
+        `refusals: ${target - current} more lane(s), ${current} → ${target}.`,
     };
   }
   return { target: clamp(current), reason: 'unchanged: no evidence to move it' };
