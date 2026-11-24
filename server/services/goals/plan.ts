@@ -33,6 +33,7 @@
  * interval, and only once that record is large enough. Otherwise there is no
  * number — never one composed from assumptions.
  */
+import { notePlanEffects } from '../knowledge/apply.ts';
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
@@ -5831,6 +5832,10 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
     console.warn(`goal ${goal.id}: constructed arrangements not stored: ${errorText(error)}`),
   );
   trace('remembered');
+  // Where a buyer count this plan now reads came from an acquired dataset, say so once (§122).
+  await notePlanEffects(goal.id, target.projectId, arrangements, (one) => nextInputQuestion(one as ConstructedArrangement, constructionInput.currency)).catch((error: unknown) =>
+    console.warn(`goal ${goal.id}: knowledge effects not recorded: ${errorText(error)}`),
+  );
   return arrangements;
 }
 

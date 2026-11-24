@@ -151,6 +151,12 @@ describe('the money tree', () => {
     expect(reading.dimensions.AI_AUTOMATION).toBe('ESTABLISHED');
     expect(reading.dimensions.PRICES_COSTS_MARGINS).toBe('ESTABLISHED');
 
+    // An opening's payer sentence is a buyer, never an industry, when the opening records none.
+    const opening = readMechanism({ ...evidenced, design: { ...evidenced.design!, arrangement: { ...evidenced.design!.arrangement!, demand: { name: 'the payer is a city supply division', claimId: 'c', from: 'OPENING', path: 'OPENING_PAYER:>the payer is a city supply division' } } } });
+    expect(opening.industry).toBe('(opening: industry not recorded)');
+    const recorded = readMechanism({ ...evidenced, design: { ...evidenced.design!, arrangement: { ...evidenced.design!.arrangement!, demand: { name: 'clinics', claimId: 'c', from: 'OPENING', path: 'OPENING_PAYER:health care>clinics' } } } });
+    expect(recorded.industry).toBe('health care');
+
     // A price read under another payment mechanism is not evidence of this one's price.
     const notEvidence = readMechanism({ ...evidenced, design: { ...evidenced.design!, arrangement: { ...evidenced.design!.arrangement!, value: { tier: 'COMPARABLE', observations: 3, notEvidence: 'paid per hour', p50: 400 } } } });
     expect(notEvidence.dimensions.PRICES_COSTS_MARGINS).toBe('HYPOTHESIS');

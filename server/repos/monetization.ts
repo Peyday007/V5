@@ -1146,13 +1146,18 @@ export async function recordConstructedArrangements(
 ): Promise<{ created: number; updated: number; unchanged: number }> {
   const report = { created: 0, updated: 0, unchanged: 0 };
   if (arrangements.length === 0) return report;
+  // Only the rows these arrangements could match, never the project's whole library (`ARRANGEMENT_PAGE`).
   const held = new Map<string, { design_json: string | null; inputs_digest: string | null; legacy_key: string | null; position_json: string | null }>();
-  for (const row of await getDb().all<{ design_signature: string; design_json: string | null; inputs_digest: string | null; legacy_key: string | null; position_json: string | null }>(
-    `SELECT design_signature, design_json, inputs_digest, legacy_key, position_json FROM monetization_paths
-      WHERE project_id = ? AND design_signature IS NOT NULL`,
-    [projectId],
-  )) {
-    held.set(row.design_signature, row);
+  const signatures = [...new Set(arrangements.map((one) => one.signature))];
+  for (let i = 0; i < signatures.length; i += ARRANGEMENT_PAGE) {
+    const slice = signatures.slice(i, i + ARRANGEMENT_PAGE);
+    for (const row of await getDb().all<{ design_signature: string; design_json: string | null; inputs_digest: string | null; legacy_key: string | null; position_json: string | null }>(
+      `SELECT design_signature, design_json, inputs_digest, legacy_key, position_json FROM monetization_paths
+        WHERE project_id = ? AND design_signature IN (${slice.map(() => '?').join(', ')})`,
+      [projectId, ...slice],
+    )) {
+      held.set(row.design_signature, row);
+    }
   }
   const seen = new Set<string>();
   const writes: ArrangementToRecord[] = [];
@@ -1233,6 +1238,63 @@ export async function listConstructedArrangements(projectId: string): Promise<Co
     [projectId],
   );
   return rows.map(mapArrangement);
+}
+
+/**
+ * Constructed arrangements read per statement by `constructedArrangementsPage`
+ * and `constructedArrangementsByIds`, and so the most designs a reader of the
+ * whole library holds parsed at once.
+ *
+ * Production, 2026-11-24: the largest project's library held 9,908 designs
+ * (74 MB of design JSON, and growing every construction pass), and every
+ * construction — each goal's plan read, the goal-less library pass, the
+ * leverage reader and a factory probe over every project — read and parsed all
+ * of them in one statement, then shipped every parsed design to the evaluator
+ * thread to look up the few hundred it composes. The process reached its
+ * 2.5 GB heap ceiling minutes after the goal-plan pass started.
+ */
+export const ARRANGEMENT_PAGE = 500;
+
+/**
+ * One page of a project's constructed arrangements, in `listConstructedArrangements`
+ * order (created_at, id), after the given row. Keyset pagination, sayable in
+ * both dialects.
+ */
+export async function constructedArrangementsPage(
+  projectId: string,
+  after: { createdAt: string; pathId: string } | null,
+  limit: number = ARRANGEMENT_PAGE,
+): Promise<ConstructedArrangementRecord[]> {
+  const rows = after
+    ? await getDb().all<MonetizationPathRow>(
+        `SELECT * FROM monetization_paths
+          WHERE project_id = ? AND design_signature IS NOT NULL
+            AND (created_at > ? OR (created_at = ? AND id > ?))
+          ORDER BY created_at, id LIMIT ?`,
+        [projectId, after.createdAt, after.createdAt, after.pathId, limit],
+      )
+    : await getDb().all<MonetizationPathRow>(
+        `SELECT * FROM monetization_paths
+          WHERE project_id = ? AND design_signature IS NOT NULL
+          ORDER BY created_at, id LIMIT ?`,
+        [projectId, limit],
+      );
+  return rows.map(mapArrangement);
+}
+
+/** The named constructed arrangements, `ARRANGEMENT_PAGE` per statement, in no particular order. */
+export async function constructedArrangementsByIds(pathIds: readonly string[]): Promise<ConstructedArrangementRecord[]> {
+  const unique = [...new Set(pathIds)];
+  const out: ConstructedArrangementRecord[] = [];
+  for (let i = 0; i < unique.length; i += ARRANGEMENT_PAGE) {
+    const slice = unique.slice(i, i + ARRANGEMENT_PAGE);
+    const rows = await getDb().all<MonetizationPathRow>(
+      `SELECT * FROM monetization_paths WHERE design_signature IS NOT NULL AND id IN (${slice.map(() => '?').join(', ')})`,
+      slice,
+    );
+    out.push(...rows.map(mapArrangement));
+  }
+  return out;
 }
 
 /**

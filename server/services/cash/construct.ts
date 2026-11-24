@@ -59,7 +59,7 @@ import { reconstruct } from '../quant/reconstruct.ts';
 import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
 import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
 import { claimSources, claimsByIds } from '../../repos/research.ts';
-import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
+import type { CashCardFact, CashOpportunity, ConstructedArrangementRecord, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
 import { brainProduces } from '../goals/pathways.ts';
@@ -852,7 +852,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * arrangement stored under exactly this composition's inputs is reused
    * rather than recomposed — after a restart, a deploy or by another goal.
    */
-  const { known, reuse, held: leaders } = await libraryFor(input.projectId, input.goalId);
+  const { known, reusable, held: leaders } = await libraryFor(input.projectId, input.goalId);
   const rotation = rotationWindow(now);
   /*
    * The relational event graph (ALGO-16-1 items 3–4): brought up to date with
@@ -881,9 +881,11 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, paidFor, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse, held: leaders, rotation };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, paidFor, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse: [], held: leaders, rotation };
   // How many candidates the parts support, against how many are composed, and why each composed one was: the cut is reported, never silent (K-2).
   const selection = selectCandidates(job);
+  // The stored designs this pass reuses, and only those: never the whole library (`reuseFor`).
+  job.reuse = await reuseFor(job, selection, reusable);
   const { considered } = selection;
   /*
    * Composing is synchronous quantitative work — several reconstructions per
@@ -918,7 +920,6 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
   dropStale(constructionMemo, CONSTRUCTION_MEMO_MS);
   while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
-  const reusable = new Set(reuse.map(([under]) => under));
   constructionReports.set(input.projectId, {
     considered,
     composed: selection.selected.length,
@@ -1415,9 +1416,42 @@ export async function graphPass(input: Pick<ConstructionInput, 'capitalCeilingCe
  * reorder the next read's candidates — Deploy 44391060795 and 44410753096,
  * `planningSpeed`'s re-read composed a different 400 and its plan changed.
  */
-async function libraryFor(projectId: string, goalId: string | undefined): Promise<{ known: NonNullable<ConstructionJob['known']>; reuse: NonNullable<ConstructionJob['reuse']>; held: string[] }> {
-  const { listConstructedArrangements, recentLeaderSignatures } = await import('../../repos/monetization.ts');
-  const rows = await listConstructedArrangements(projectId);
+async function libraryFor(projectId: string, goalId: string | undefined): Promise<{ known: NonNullable<ConstructionJob['known']>; reusable: Map<string, string>; held: string[] }> {
+  const { ARRANGEMENT_PAGE, constructedArrangementsPage, recentLeaderSignatures } = await import('../../repos/monetization.ts');
+  /*
+   * The library a page at a time, keeping of each design only what this needs
+   * (production, 2026-11-24: 9,908 designs, 74 MB of JSON, read and parsed
+   * whole by every construction and shipped whole to the evaluator thread; the
+   * heap reached its ceiling). A stored design is reused only under the digest
+   * it was composed under, so the reusable ones are indexed by that digest and
+   * read back by id once the pass knows which it composes (`reuseFor`).
+   */
+  type Held = Pick<ConstructedArrangementRecord, 'pathId' | 'signature' | 'verdict' | 'evaluatedCount' | 'updatedAt' | 'lastComposedAt'> & {
+    canonical: string;
+    storedSignature: string | undefined;
+    composedUnder: string | undefined;
+  };
+  const rows: Held[] = [];
+  for (let after: { createdAt: string; pathId: string } | null = null; ; ) {
+    const page = await constructedArrangementsPage(projectId, after);
+    for (const one of page) {
+      const stored = one.design['arrangement'] as Partial<ConstructedArrangement> | undefined;
+      rows.push({
+        pathId: one.pathId,
+        signature: one.signature,
+        verdict: one.verdict,
+        evaluatedCount: one.evaluatedCount,
+        updatedAt: one.updatedAt,
+        lastComposedAt: one.lastComposedAt,
+        canonical: canonicalSignature(one.signature, stored),
+        storedSignature: stored && typeof stored === 'object' ? stored.signature : undefined,
+        composedUnder: stored && typeof stored === 'object' && typeof stored.composedUnder === 'string' ? stored.composedUnder : undefined,
+      });
+    }
+    const last = page[page.length - 1];
+    if (!last || page.length < ARRANGEMENT_PAGE) break;
+    after = { createdAt: last.createdAt, pathId: last.pathId };
+  }
   /*
    * Each stored signature's current spelling: a row an arrangement Brain
    * produces was stored under while its capability was spelt from the whole
@@ -1428,7 +1462,7 @@ async function libraryFor(projectId: string, goalId: string | undefined): Promis
    * structure (its leader and verdict), never as a second one.
    */
   const current = new Map<string, string>();
-  for (const one of rows) current.set(one.signature, canonicalSignature(one.signature, one.design['arrangement']));
+  for (const one of rows) current.set(one.signature, one.canonical);
   const moving = rows.filter((one) => current.get(one.signature) !== one.signature);
   if (moving.length > 0) {
     const { resignArrangements } = await import('./arrangementLibrary.ts');
@@ -1442,9 +1476,9 @@ async function libraryFor(projectId: string, goalId: string | undefined): Promis
     }
   }
   const knownBy = new Map<string, { verdict: 'CONFIRMED' | 'REFUTED' | null; composedAt?: string | null }>();
-  const reuse: NonNullable<ConstructionJob['reuse']> = [];
+  // Composition digest -> the row whose design is reused under it; a later row wins, as `new Map(job.reuse)` let it.
+  const reusable = new Map<string, string>();
   for (const one of rows) {
-    const stored = one.design['arrangement'] as ConstructedArrangement | undefined;
     const signature = current.get(one.signature) ?? one.signature;
     const mine = one.verdict?.verdict ?? null;
     const prior = knownBy.get(signature);
@@ -1452,12 +1486,37 @@ async function libraryFor(projectId: string, goalId: string | undefined): Promis
     const verdict = !prior ? mine : one.signature === signature && mine !== null ? mine : (prior.verdict ?? mine);
     const composedAt = [one.lastComposedAt, prior?.composedAt].filter((at): at is string => !!at).sort().pop() ?? null;
     knownBy.set(signature, { verdict, composedAt });
-    if (stored && typeof stored.composedUnder === 'string' && stored.signature === one.signature && one.signature === signature) reuse.push([stored.composedUnder, stored]);
+    if (one.composedUnder !== undefined && one.storedSignature === one.signature && one.signature === signature) reusable.set(one.composedUnder, one.pathId);
   }
   const known: NonNullable<ConstructionJob['known']> = [...knownBy.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   // The goal's current and previous leaders (P4), composed every pass whatever the cap — by their structure's current signature.
   const held = goalId ? [...new Set((await recentLeaderSignatures(goalId)).map((one) => current.get(one) ?? one))].sort() : [];
-  return { known, reuse, held };
+  return { known, reusable, held };
+}
+
+/**
+ * The stored designs a pass would reuse: those the library holds under the
+ * composition digests its plan names, read by id. The same entries
+ * `compositionPlan` found when the job carried the whole library — a digest
+ * outside the plan is never looked up — so the job carries at most the
+ * pass's own few hundred designs.
+ */
+async function reuseFor(job: ConstructionJob, selection: CandidateSelection, reusable: ReadonlyMap<string, string>): Promise<NonNullable<ConstructionJob['reuse']>> {
+  const wanted = new Map<string, string>();
+  for (const step of compositionPlan({ ...job, reuse: [] }, selection)) {
+    const pathId = reusable.get(step.under);
+    if (pathId !== undefined) wanted.set(pathId, step.under);
+  }
+  if (wanted.size === 0) return [];
+  const { constructedArrangementsByIds } = await import('../../repos/monetization.ts');
+  const reuse: NonNullable<ConstructionJob['reuse']> = [];
+  for (const one of await constructedArrangementsByIds([...wanted.keys()])) {
+    const stored = one.design['arrangement'] as ConstructedArrangement | undefined;
+    const under = wanted.get(one.pathId);
+    // A row rewritten since the index was read is reused only if it still names the same composition.
+    if (stored && under !== undefined && stored.composedUnder === under) reuse.push([under, stored]);
+  }
+  return reuse;
 }
 
 /**
@@ -2602,7 +2661,15 @@ function compose(args: {
     period: `${input.daysLeft} days`,
     currency: input.currency,
     demand: {
-      buyers: buyersObs.length > 0 ? { min: 0, max: 10_000_000, context, material: [], observations: buyersObs } : unknownCount(0, 10_000_000),
+      /*
+       * How many of these buyers exist is a fact about the population, not about
+       * the arrangement sold to it: a count filed on the buyer's map node (a
+       * census count, a research claim) is this population's own figure, never a
+       * comparable from another arrangement (§122). With the arrangement in its
+       * context the one count filed was read as a single comparable population
+       * and never justified a distribution, so the plan kept sweeping buyers.
+       */
+      buyers: buyersObs.length > 0 ? { min: 0, max: 10_000_000, context: { payer: context.payer, industry: context.industry }, material: [], observations: buyersObs } : unknownCount(0, 10_000_000),
       needRate: volumeObs.length > 0 ? { min: 0, max: 400, context, material: [], observations: volumeObs } : unknownCount(0, 400),
       reach: unknownShare,
       conversion: conversionObs.length > 0 ? { min: 0, max: 1, context, material: [], observations: conversionObs } : unknownShare,

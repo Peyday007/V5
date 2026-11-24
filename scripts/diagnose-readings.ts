@@ -427,6 +427,244 @@ async function liveness(): Promise<void> {
   }
 }
 
+/**
+ * Where a process's heap could come from (read-only): the statements that return
+ * the most rows per call (pg_stat_statements), and the largest relations.
+ */
+async function heapSources(): Promise<void> {
+  console.log('DIAGNOSE: heap-sources');
+  const show = async (label: string, sql: string): Promise<void> => {
+    const started = Date.now();
+    try {
+      const rows = await getDb().all<Record<string, unknown>>(sql);
+      console.log(`  ${label} (${Date.now() - started} ms)`);
+      for (const row of rows) console.log(`    ${JSON.stringify(row).slice(0, 900)}`);
+    } catch (error) {
+      console.log(`  ${label} FAILED ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  };
+  const where = await getDb()
+    .get<{ schema: string | null }>(
+      `SELECT n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_stat_statements'`,
+    )
+    .catch(() => null);
+  const schema = where?.schema ?? null;
+  if (schema) {
+    await show('statements window', `SELECT stats_reset::text AS stats_reset FROM ${schema}.pg_stat_statements_info`);
+    const dbFilter = `dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`;
+    await show(
+      'most rows per call (calls >= 2)',
+      `SELECT calls, rows, (rows / NULLIF(calls, 0))::bigint AS rows_per_call, round(mean_exec_time::numeric, 1) AS mean_ms,
+              SUBSTR(query, 1, 700) AS query
+         FROM ${schema}.pg_stat_statements WHERE ${dbFilter} AND calls >= 2
+        ORDER BY rows / NULLIF(calls, 0) DESC NULLS LAST LIMIT 25`,
+    );
+    await show(
+      'most rows in total',
+      `SELECT calls, rows, (rows / NULLIF(calls, 0))::bigint AS rows_per_call, round(mean_exec_time::numeric, 1) AS mean_ms,
+              SUBSTR(query, 1, 500) AS query
+         FROM ${schema}.pg_stat_statements WHERE ${dbFilter}
+        ORDER BY rows DESC LIMIT 20`,
+    );
+    /*
+     * The counters above are cumulative since the last reset, so what the
+     * running process reads now is the difference over a window: snapshot,
+     * watch the newest process's heap each minute, snapshot again.
+     */
+    const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '8');
+    type Snap = Map<string, { calls: number; rows: number; total: number; blocks: number }>;
+    const snap = async (): Promise<Snap> => {
+      const rows = await getDb().all<{ queryid: string; calls: number | string; rows: number | string; total: number | string; blocks: number | string }>(
+        `SELECT queryid::text AS queryid, calls, rows, total_exec_time AS total, shared_blks_hit + shared_blks_read AS blocks
+           FROM ${schema}.pg_stat_statements(false) WHERE ${dbFilter}`,
+      );
+      return new Map(rows.map((r) => [r.queryid, { calls: Number(r.calls), rows: Number(r.rows), total: Number(r.total), blocks: Number(r.blocks) }]));
+    };
+    const before = await snap();
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < windowMin * 60_000) {
+      await new Promise((resolve) => setTimeout(resolve, 60_000));
+      const live = await getDb().get<{ instance_id: string; started_at: string; readings: string | null }>(
+        'SELECT instance_id, started_at, readings FROM runtime_liveness ORDER BY alive_at DESC LIMIT 1',
+      );
+      let memory: unknown = null;
+      try {
+        memory = (JSON.parse(live?.readings ?? '{}') as Record<string, unknown>)['memory'];
+      } catch {
+        /* unreadable */
+      }
+      console.log(`  ${new Date().toISOString()} ${live?.instance_id} (started ${live?.started_at}) ${JSON.stringify(memory)}`);
+    }
+    const after = await snap();
+    const diff = [...after]
+      .map(([id, a]) => {
+        const b = before.get(id) ?? { calls: 0, rows: 0, total: 0, blocks: 0 };
+        return { id, calls: a.calls - b.calls, rows: a.rows - b.rows, ms: Math.round(a.total - b.total), mb: ((a.blocks - b.blocks) * 8) / 1024 };
+      })
+      .filter((d) => d.calls > 0);
+    const texts = new Map<string, string>();
+    for (let i = 0; i < diff.length; i += 200) {
+      const ids = diff.slice(i, i + 200).map((d) => d.id);
+      const rows = await getDb().all<{ queryid: string; query: string }>(
+        `SELECT queryid::text AS queryid, SUBSTR(query, 1, 300) AS query FROM ${schema}.pg_stat_statements WHERE ${dbFilter} AND queryid::text IN (${ids.map(() => '?').join(', ')})`,
+        ids,
+      );
+      for (const r of rows) texts.set(r.queryid, r.query.replace(/\s+/g, ' '));
+    }
+    const line = (d: (typeof diff)[number]) =>
+      `    rows ${d.rows} calls ${d.calls} per_call ${Math.round(d.rows / d.calls)} blocksMB ${d.mb.toFixed(0)} ms ${d.ms} :: ${texts.get(d.id) ?? '?'}`;
+    console.log(`  rows returned in the last ${windowMin} min, by statement`);
+    for (const d of [...diff].sort((x, y) => y.rows - x.rows).slice(0, 25)) console.log(line(d));
+    console.log(`  blocks touched (8 kB) in the last ${windowMin} min, by statement`);
+    for (const d of [...diff].sort((x, y) => y.mb - x.mb).slice(0, 25)) console.log(line(d));
+    console.log('  every statement on research_runs that returns its text columns');
+    for (const d of diff.filter((x) => /FROM research_runs/i.test(texts.get(x.id) ?? '') && /SELECT \*|prompt/i.test(texts.get(x.id) ?? ''))) console.log(line(d));
+  } else {
+    console.log('  pg_stat_statements is not installed');
+  }
+  await show(
+    'largest relations (MB, ~rows)',
+    `SELECT c.relname AS name, (pg_total_relation_size(c.oid) / 1048576)::int AS mb, c.reltuples::bigint AS rows
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r'
+      ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 30`,
+  );
+}
+
+/**
+ * Which allocation sites the running server's heap is made of: the server's
+ * inspector is opened (SIGUSR1, loopback only), V8's sampling heap profiler
+ * runs for a window, and the samples still alive at its end are summed by the
+ * site that allocated them. The inspector is closed again afterwards. Writes
+ * no row.
+ */
+async function heapProfile(): Promise<void> {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  let pid = 0;
+  for (const entry of readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
+    try {
+      const cmd = readFileSync(`/proc/${entry}/cmdline`, 'utf8');
+      if (cmd.includes('server/index.ts')) pid = Number(entry);
+    } catch {
+      /* gone */
+    }
+  }
+  if (!pid) throw new Error('no server process found');
+  console.log(`DIAGNOSE: heap-profile of pid ${pid}`);
+  process.kill(pid, 'SIGUSR1');
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const targets = (await (await fetch('http://127.0.0.1:9229/json/list')).json()) as Array<{ webSocketDebuggerUrl: string }>;
+  const ws = new WebSocket(targets[0]!.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    ws.onopen = resolve;
+    ws.onerror = reject;
+  });
+  let seq = 0;
+  const waiting = new Map<number, (value: Record<string, unknown>) => void>();
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(String(event.data)) as { id?: number; result?: Record<string, unknown>; error?: unknown };
+    if (msg.id !== undefined) waiting.get(msg.id)?.(msg.result ?? { error: msg.error });
+  };
+  const call = (method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> =>
+    new Promise((resolve) => {
+      seq += 1;
+      waiting.set(seq, resolve);
+      ws.send(JSON.stringify({ id: seq, method, params }));
+    });
+  const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '15');
+  try {
+    await call('HeapProfiler.enable');
+    console.log(`  start ${JSON.stringify(await call('HeapProfiler.startSampling', { samplingInterval: 131072 }))}`);
+    for (let minute = 0; minute < windowMin; minute += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 60_000));
+      const usage = await call('Runtime.getHeapUsage');
+      console.log(`  ${new Date().toISOString()} used ${Math.round(Number(usage['usedSize']) / 1048576)} MB of ${Math.round(Number(usage['totalSize']) / 1048576)} MB`);
+    }
+    const { profile } = (await call('HeapProfiler.getSamplingProfile')) as {
+      profile: { head: HeapNode };
+    };
+    type HeapNode = { callFrame: { functionName: string; url: string; lineNumber: number }; selfSize: number; children: HeapNode[] };
+    const where = (n: HeapNode) => `${n.callFrame.functionName || '(anon)'} ${n.callFrame.url.replace(/^.*\/app\//, '')}:${n.callFrame.lineNumber + 1}`;
+    const bySite = new Map<string, number>();
+    const byStack = new Map<string, number>();
+    const byFile = new Map<string, number>();
+    let total = 0;
+    const walk = (n: HeapNode, path: string[]) => {
+      const here = [...path, where(n)];
+      if (n.selfSize > 0) {
+        total += n.selfSize;
+        bySite.set(where(n), (bySite.get(where(n)) ?? 0) + n.selfSize);
+        const brain = here.filter((f) => f.includes('server/'));
+        const key = brain.slice(-6).join(' < ') || here.slice(-4).join(' < ');
+        byStack.set(key, (byStack.get(key) ?? 0) + n.selfSize);
+        for (const f of new Set(brain.map((x) => x.split(' ')[1]!.split(':')[0]!))) byFile.set(f, (byFile.get(f) ?? 0) + n.selfSize);
+      }
+      for (const c of n.children) walk(c, here);
+    };
+    walk(profile.head, []);
+    const mb = (b: number) => (b / 1048576).toFixed(1);
+    console.log(`  live sampled ${mb(total)} MB (allocated during the window and still alive)`);
+    console.log('  by Brain file on the stack (inclusive)');
+    for (const [k, v] of [...byFile].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(`    ${mb(v)} MB ${k}`);
+    console.log('  by Brain stack (innermost last 6 Brain frames)');
+    for (const [k, v] of [...byStack].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(`    ${mb(v)} MB ${k.split(' < ').reverse().join(' < ').slice(0, 700)}`);
+    console.log('  by allocating site');
+    for (const [k, v] of [...bySite].sort((a, b) => b[1] - a[1]).slice(0, 20)) console.log(`    ${mb(v)} MB ${k}`);
+  } finally {
+    await call('HeapProfiler.stopSampling').catch(() => undefined);
+    // Closing the inspector ends this connection before it can answer, so the reply is not awaited.
+    void call('Runtime.evaluate', { expression: "process.getBuiltinModule('node:inspector').close()" });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    ws.close();
+  }
+}
+
+/** How many bytes the heaviest whole-set reads return, per call, on the largest project (read-only). */
+async function rowBytes(): Promise<void> {
+  console.log('DIAGNOSE: row-bytes');
+  const show = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
+    const started = Date.now();
+    try {
+      const rows = await getDb().all<Record<string, unknown>>(sql, params as never[]);
+      console.log(`  ${label} (${Date.now() - started} ms)`);
+      for (const row of rows) console.log(`    ${JSON.stringify(row).slice(0, 600)}`);
+    } catch (error) {
+      console.log(`  ${label} FAILED ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  };
+  const mb = (expr: string) => `ROUND(SUM(${expr}) / 1048576.0, 1)`;
+  await show(
+    'monetization_paths with a design, by project (what recordConstructedArrangements and listConstructedArrangements read)',
+    `SELECT project_id, COUNT(*) AS n, ${mb('COALESCE(LENGTH(design_json),0)')} AS design_mb, ${mb('COALESCE(LENGTH(position_json),0)')} AS position_mb,
+            ${mb('pg_column_size(m.*)')} AS row_mb, MAX(LENGTH(design_json)) AS max_design
+       FROM monetization_paths m WHERE design_signature IS NOT NULL GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 5`,
+  );
+  await show(
+    'audit round events by project (auditRoundFor reads all of them per orchestration)',
+    `SELECT project_id, COUNT(*) AS n, ${mb('LENGTH(payload)')} AS payload_mb, MAX(LENGTH(payload)) AS max_payload FROM project_events
+      WHERE event_type IN ('DOCUMENT_HANDED_OFF', 'AUDIT_ROUND_REOPENED', 'RESEARCH_ROUND_RESUMED') GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 5`,
+  );
+  await show('cash_card_facts by project', `SELECT project_id, COUNT(*) AS n, ${mb('pg_column_size(f.*)')} AS row_mb FROM cash_card_facts f GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show('existing_claims by project', `SELECT project_id, COUNT(*) AS n, ${mb('pg_column_size(c.*)')} AS row_mb FROM existing_claims c GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show('routine_delivery_proofs settled', `SELECT COUNT(*) AS n, ${mb('pg_column_size(p.*)')} AS row_mb FROM routine_delivery_proofs p WHERE state IN ('PROVEN', 'FAILED', 'CLEARED')`);
+  await show('factory_program_verifications by program', `SELECT program_id, COUNT(*) AS n, ${mb('pg_column_size(v.*)')} AS row_mb FROM factory_program_verifications v GROUP BY program_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show('cash_events by kind (largest)', `SELECT kind, COUNT(*) AS n, ${mb('LENGTH(detail)')} AS detail_mb FROM cash_events GROUP BY kind ORDER BY SUM(LENGTH(detail)) DESC LIMIT 4`);
+  await show('cash_opportunities by project', `SELECT project_id, COUNT(*) AS n, ${mb('pg_column_size(o.*)')} AS row_mb FROM cash_opportunities o GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show(
+    'latest rank snapshot per path, largest project',
+    `SELECT s.project_id, COUNT(*) AS n, ${mb('pg_column_size(s.*)')} AS row_mb FROM monetization_rank_snapshots s
+       JOIN (SELECT path_id, MAX(evaluated_at) AS newest FROM monetization_rank_snapshots GROUP BY path_id) m ON m.path_id = s.path_id AND m.newest = s.evaluated_at
+      GROUP BY s.project_id ORDER BY COUNT(*) DESC LIMIT 3`,
+  );
+  await show(
+    'research_runs text by layer (what SELECT * by layer returns)',
+    `SELECT layer_id, COUNT(*) AS n, ${mb('COALESCE(LENGTH(prompt),0) + COALESCE(LENGTH(prompt_sections),0) + COALESCE(LENGTH(result_text),0) + COALESCE(LENGTH(required_attachments),0)')} AS text_mb
+       FROM research_runs GROUP BY layer_id ORDER BY 3 DESC LIMIT 4`,
+  );
+  await show('research_claims by project (accepted read)', `SELECT f.project_id, COUNT(*) AS n, ${mb('pg_column_size(c.*)')} AS row_mb FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id GROUP BY f.project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
@@ -438,6 +676,9 @@ async function main(): Promise<void> {
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
     else if (command === 'gpu-answers') await gpuAnswers();
+    else if (command === 'heap-sources') await heapSources();
+    else if (command === 'heap-profile') await heapProfile();
+    else if (command === 'row-bytes') await rowBytes();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
     else throw new Error('usage: diagnose-readings.ts query-times|fragment-failures|operator-runs|free-lane-yield|bin-gates <bin>');
   } finally {

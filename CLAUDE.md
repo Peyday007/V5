@@ -304,7 +304,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–122. The architecture record
+## 8–123. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -427,7 +427,8 @@ resolves. Read the section for the area you are changing before you change it
 - §119. A goal's execution window starts when commercial execution is authorized, and an owner's rule lives in a row.
 - §120. The Command Center is a window over Brain's own routes, and a read door is never a write door.
 - §121. A standing GPU authorization is bounded by a rate, never by a clock, and the GPU runs whenever useful work waits.
-- §122. Operator rights follow the access policy, a market statistic is not an opening, obsolete research leaves scheduling, and stranded Factory work is resolved by its cause.
+- §122. Brain acquires public commercial knowledge itself, and knowledge counts only where a plan reads it.
+- §123. Operator rights follow the access policy, a market statistic is not an opening, obsolete research leaves scheduling, and stranded Factory work is resolved by its cause.
 
 ## Conventions
 

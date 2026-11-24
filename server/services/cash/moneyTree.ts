@@ -155,6 +155,18 @@ export function placeOf(a: StoredArrangement): { industry: string; subIndustry: 
   if (isReverse(demand) && !demand?.path?.startsWith('INVENTED')) {
     return { industry: '(reverse design: buyers to be found)', subIndustry: '-', activity: a.need?.name ?? '-' };
   }
+  /*
+   * An opening's payer path is `OPENING_PAYER:<industry>><payer>`, and the
+   * opening's industry is usually unrecorded (production 2026-11-24: none of
+   * 695 openings names one), which leaves the payer's own sentence first.
+   * That sentence is a buyer, never an industry.
+   */
+  if (demand?.path?.startsWith('OPENING_')) {
+    const body = demand.path.slice(demand.path.indexOf(':') + 1);
+    const cut = body.indexOf('>');
+    const recorded = cut > 0 ? body.slice(0, cut).trim() : '';
+    return { industry: a.sector ?? (recorded || '(opening: industry not recorded)'), subIndustry: '-', activity: a.need?.name ?? '-' };
+  }
   const names = pathNames(demand?.path);
   const industry = a.sector ?? names[0] ?? '(unclassified)';
   const subIndustry = names.length >= 3 ? names[1]! : '-';
@@ -179,7 +191,8 @@ export function dimensionsOf(input: MechanismInput): Record<MoneyTreeDimension, 
   const exposure = a.stress?.exposure;
 
   return {
-    PAYING_CUSTOMERS: status(gated(a.demand) && !unknown.has('buyers'), named(a.demand)),
+    // An opening's payer is a buyer observed asking or paying on a gated claim; a map population is established once its size is.
+    PAYING_CUSTOMERS: status((a.demand?.from === 'OPENING' && !!a.demand.claimId) || (gated(a.demand) && !unknown.has('buyers')), named(a.demand)),
     EXCHANGE: status(gated(a.need) || isCapability(a.supply) || gated(a.supply), named(a.need) || !!a.supply),
     ROLES_AND_CONTRACTS: status(!!a.precedent || input.verdict === 'CONFIRMED', !!base),
     PRICES_COSTS_MARGINS: status(priced && costed, priced || (a.value?.p50 ?? null) !== null),

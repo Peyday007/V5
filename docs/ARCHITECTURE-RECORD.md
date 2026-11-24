@@ -17428,7 +17428,125 @@ dollar, and every active restriction in a sentence ("stopped: no waiting work",
 
 Pinned by `tests/runpodContinuous.test.ts`.
 
-## 122. Operator rights follow the access policy, a market statistic is not an opening, obsolete research leaves scheduling, and stranded Factory work is resolved by its cause.
+## 122. Brain acquires public commercial knowledge itself, and knowledge counts only where a plan reads it.
+
+Owner, 2026-11-24: Brain must acquire, understand, organise, retain and apply
+public commercial data without anyone downloading, uploading or classifying a
+dataset, and the measure is useful knowledge applied, not documents stored.
+`services/knowledge/` is the owner. It extends the feeds' conditional-read
+contract (`feeds/access.ts`), the construction facts plans already read (§92,
+W-5) and the free lane's GPU (§86), and duplicates none of them.
+
+- **What is read, and how Brain finds it.** Census Statistics of U.S.
+  Businesses (the newest vintage, and the newest economic-census year, which
+  is the only free source of receipts by 6-digit NAICS and firm size), County
+  Business Patterns (national, by state, and the vintage that matches SUSB),
+  Nonemployer Statistics, and SEC XBRL frames. None needs a key: the Census
+  API now refuses keyless calls (a 302 to `missing_key.html`, read as a
+  failure, never as "unchanged"), so Brain reads the bulk files the Census
+  publishes beside it. A family names a publisher's series; discovery reads
+  the publisher's own directory listing for the newest vintage once a day,
+  registers it (`knowledge_sources`), and supersedes the older one, whose
+  facts stay. Discovery also walks the other Census programs a few at a time
+  and records each NAICS-coded dataset it finds that no reader covers as a
+  `CANDIDATE` — a gap is a row the Command Center shows, not a silence.
+- **Incremental, deduplicated, retried.** A read is the feeds' conditional
+  read over bytes (ETag, Last-Modified, content hash → NOT_MODIFIED). A fact's
+  identity is its subject (family, metric, NAICS, geography, size class,
+  period): an unchanged value writes nothing, a changed value is a new row
+  naming the one it supersedes (invariant 17). A failed read is an append-only
+  acquisition row and an exponential backoff from 20 minutes to the weekly
+  re-check; the validators land only after the facts, so a read that died
+  half-way is read again. A source's position moves only from the attempt
+  count it was read at, in the statement that moves it.
+- **Classified on every dimension the owner named.** Each figure carries its
+  industry and subindustry (NAICS, the code the datasets use, every level
+  2–6), geography (nation or state), size class, period, metric class (volume,
+  price, cost, margin, capital, cash flow, operations, structure), freshness
+  (`valid_until` from the publisher's cadence) and how it is known: FACT as
+  printed, ESTIMATE derived by named arithmetic, INFERENCE from a model,
+  UNKNOWN where the publisher withheld the cell (never read as zero). Each
+  industry carries its activity, customer category and revenue basis
+  (`REVENUE_BASES`), deterministically from its sector and then from the GPU's
+  reading, which also names `MECHANISMS`, operating requirements, transferable
+  principles and what the figures leave unknown — validated against the
+  closed vocabularies, stored as `MODEL`, never a number.
+- **Comprehension is arithmetic first.** Per industry: receipts per firm (all
+  and under-20), receipts per employee, payroll share of receipts and what it
+  leaves (an upper bound on a labour-only margin), average wage, employees per
+  establishment, nonemployer receipts and share, small-establishment share,
+  growth between vintages, and receipts carried from the census year to the
+  newest payroll year by the payroll ratio. Per sector from SEC filers' own
+  statements: median gross and operating margin, receivable days, inventory
+  days and fixed assets per revenue dollar — the cash cycle and capital
+  intensity the counts cannot give. SIC codes come from EDGAR's own 10-K
+  index and fold onto NAICS sectors by the division-level correspondence,
+  stated on every row. Two programs that measured one quantity are compared
+  (CBP and SUSB for one year agree exactly: one register, one noise model).
+- **Applied where a plan reads it.** Each BUYER_TYPE node of a project with a
+  live goal is classified into NAICS by its words (`chooseIndustries`: the
+  best title, then a title for each word left uncovered, nested codes counted
+  once) and by the GPU only when no title matches. The count of those
+  industries in the goal's market — employer establishments (under 20
+  employees when the words say small or owner-operated) to all businesses
+  including nonemployers — is filed as one OBSERVED, PRIMARY
+  `accounts_reachable` construction fact on the node, lineage
+  `knw:<node>:accounts_reachable`, superseded by a new row when a vintage
+  changes it. An assumption it contradicts is recorded with its resolution
+  (a published count of the whole population outranks an ASSUMPTION or
+  ESTIMATE; an observed figure about a narrower market is scope, not
+  disagreement). An open research question asking how many of those buyers
+  exist is resolved with the answer instead of researched (invariant 13).
+- **A root-cause fix found by the first real run.** The plan's buyer-count
+  node carried the arrangement key in its context, so a count filed on the
+  buyer's own map node — by this pipeline or by research — was read as one
+  comparable population and never justified a distribution: every plan kept
+  sweeping buyers 0–10,000,000. A count of a population does not depend on the
+  arrangement sold to it; `construct.ts` now reads it in the population's
+  context (payer, industry).
+- **Applied knowledge is measured, not downloads.** `knowledge_applications`
+  is append-only: CONSTRUCTION_FACT (with what the node held before),
+  ASSUMPTION_REPLACED, UNCERTAINTY_RESOLVED and PLAN_INPUT_CHANGED — recorded
+  by the goal plan itself when it composes arrangements whose buyer count now
+  comes from the census where nothing evidenced one before, once per goal and
+  buyer, with what the plan asks research next. First real run (local, live
+  Census data, 2026-11-24): six datasets discovered and read in 58 s, 246,502
+  published facts and 20,824 derived estimates; "Owner-operated HVAC and
+  plumbing contractors" → NAICS 23822, 98,606–287,691; "Small accounting and
+  bookkeeping firms" → 54121, 129,097–534,209; the goal's lead plan step
+  stopped asking research how many such firms exist.
+- **Capacity, on its own clock.** The pass first rode the Russell tick; on
+  production (2026-11-24, revision 0f5df73) the tick's length and its
+  shedding kept it from starting at all for half an hour while the machine
+  reached every publisher (census probe: all 200). Independent work does not
+  wait for unrelated work (§90): `startCommercialKnowledgeLoop` checks every
+  minute after the boot grace and starts one pass at most every fifteen
+  minutes, never while the database is shedding (§63). Every pass is a
+  `knowledge_passes` row — RUNNING, then DONE with its report or FAILED with
+  its error — so "never started" and "every request failed" are told apart
+  from outside, and a one-line summary goes to the log. A pass reads up to three due datasets and makes up
+  to four GPU calls — half for buyer words nothing matched, the rest
+  interpreting industries, those a live plan reads first. The Command Center's
+  Knowledge page (`brain_operator_knowledge`, on the read door) says whether
+  the pass and the GPU sat idle beside work.
+- **What was not installed, and why.** dlt (incremental loading with state),
+  DuckDB (columnar analytics), Docling (document parsing), GraphRAG (LLM
+  entity graphs) and the OpenHands SDK (a coding agent) were each read
+  against what Brain already owns. dlt's cursor, merge and state are the
+  feeds' validators and the facts' supersession; a second loader would be a
+  second record of what was read. DuckDB would be a second store beside the
+  authoritative database (§1); the largest file Brain reads (56 MB of SUSB) is
+  parsed in a streaming pass in seconds. Docling parses PDFs, and every source
+  here is tabular; Brain's document extraction already reads PDFs. GraphRAG
+  builds an entity graph by spending model calls on text; Brain's graph is the
+  industry map, built through the claim gate, and its numbers must be
+  arithmetic, never a model's summary. OpenHands is a coding agent; Brain's
+  engineering runs through the Factory (§109). None is needed, so none was
+  added, and nothing was bought.
+
+Regression: `tests/commercialKnowledge.test.ts`.
+
+## 123. Operator rights follow the access policy, a market statistic is not an opening, obsolete research leaves scheduling, and stranded Factory work is resolved by its cause.
 
 The owner's first production inspection of the Command Center (2026-11-24)
 found three defects behind one page each. The rules they settled:

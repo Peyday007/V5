@@ -219,6 +219,23 @@ const capacityTool: McpTool = {
   },
 };
 
+const knowledgeTool: McpTool = {
+  name: 'brain_operator_knowledge',
+  title: 'Operator: commercial knowledge',
+  description:
+    'What Brain learned from public commercial datasets (Census business counts, payroll and receipts by industry, nonemployer ' +
+    'statistics): the sources it reads and their freshness, which industries it measured and interpreted, the monetization ' +
+    'mechanisms mapped, recent derived figures, what is still missing, where the knowledge reached your goals\' plans ' +
+    '(buyer counts filed, assumptions replaced, questions answered) and whether the GPU and the pass are kept busy (§122).',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: { title: 'Operator: commercial knowledge', ...READ_ONLY },
+  run: async (_args, { principal }) => {
+    const projects = await requireReader(principal);
+    const { knowledgeView } = await import('../services/knowledge/view.ts');
+    return { projectId: null, value: await knowledgeView(projects) };
+  },
+};
+
 const historyTool: McpTool = {
   name: 'brain_operator_history',
   title: 'Operator: history',
@@ -1016,6 +1033,7 @@ export const OPERATOR_TOOLS: readonly McpTool[] = [
   goalTool,
   planTool,
   capacityTool,
+  knowledgeTool,
   integrationsTool,
   historyTool,
   withdrawTool,

@@ -88,7 +88,7 @@ if (projectId) await api('POST', `/api/admin/projects/${projectId}/members`, { p
 process.env.EMAIL = EMAIL;
 process.env.PASSWORD = PASSWORD;
 
-const PAGES = ['', 'conversation/', 'objectives/', 'plans/', 'operations/', 'agents/', 'committee/', 'reports/', 'approvals/', 'settings/'];
+const PAGES = ['', 'conversation/', 'objectives/', 'plans/', 'operations/', 'agents/', 'committee/', 'knowledge/', 'reports/', 'approvals/', 'settings/'];
 const results = [];
 function check(name, ok, detail = '') { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); }
 

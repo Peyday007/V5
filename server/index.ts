@@ -63,6 +63,7 @@ import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop
 import { recordProcessStart, startInfraIncidentRecorder } from './services/infra/incidents.ts';
 import { settleTokenTouches } from './services/identity/tokenTouch.ts';
 import { afterBootGrace, BOOT_GRACE_STAGGER_MS, startRussell } from './services/russell/loop.ts';
+import { databasePressure } from './db/pressure.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
 import { startIntegrationsLoop } from './services/integrations/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
@@ -968,6 +969,16 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
       );
     }
     startRussell(`brain:${process.pid}`);
+
+    /*
+     * Commercial knowledge (§122): public datasets read into the world model
+     * and filed where plans read them, on its own clock after the boot grace.
+     */
+    afterBootGrace('commercial knowledge', () => {
+      void import('./services/knowledge/pipeline.ts').then(({ startCommercialKnowledgeLoop }) =>
+        startCommercialKnowledgeLoop(() => databasePressure().state === 'SHEDDING'),
+      );
+    }, BOOT_GRACE_STAGGER_MS * 2);
 
     /*
      * The connected site's delta feed.
