@@ -17310,4 +17310,6 @@ starter, served by Brain's own process at `/command`. The rules it settled:
   show when each panel was last read. A conversation is re-read every 4 s
   while a reply is pending, as the console does.
 
-Pinned by `tests/commandCenter.test.ts`.
+Pinned by `tests/commandCenter.test.ts`, and driven in a real browser by
+`node tests/browser/command-center.mjs`: a throwaway Brain, every page on a
+desktop and a phone viewport, and the writes a person makes through it.
