@@ -1313,26 +1313,54 @@ async function screenVerdicts(ids: readonly string[]): Promise<Map<string, 'KEEP
   return out;
 }
 
-/** Read one rule version's detections back against the independent screen. */
-export async function ruleReading(detector: Detector, now: Date = new Date()): Promise<RuleReading> {
+/** The most stored items one pass reads for one rule. */
+export const DETECTOR_RECORD_LIMIT = 5000;
+
+/**
+ * The stored items one rule reads in one pass: its sources, fetched inside its
+ * lookback, newest first with a stable tie-break, capped at
+ * DETECTOR_RECORD_LIMIT. The one query both `runDetectors` (for `detect`) and
+ * `ruleReading` (for `couldKeep`) read, so the earliest-date merge of a
+ * document's copies sees the same copies in the reading as in detection — an
+ * unordered capped read can return a different set from an ordered one.
+ */
+export async function loadDetectorRecords(detector: Detector, now: Date, limit: number = DETECTOR_RECORD_LIMIT): Promise<DetectorRecord[]> {
+  const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
+  const rows = await getDb().all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
+    `SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items
+      WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ?
+      ORDER BY fetched_at DESC, id LIMIT ?`,
+    [...detector.sources, since, limit],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    source: row.source,
+    url: row.url,
+    title: row.title,
+    organization: row.organization,
+    publishedAt: row.published_at,
+    fetchedAt: row.fetched_at,
+    body: row.body,
+  }));
+}
+
+/**
+ * Read one rule version's detections back against the independent screen.
+ *
+ * `records` is the set the rule's `detect` read this pass; `runDetectors`
+ * passes it so the reading judges the very copies detection judged. Without
+ * it the reading loads the same set through `loadDetectorRecords`.
+ */
+export async function ruleReading(detector: Detector, now: Date = new Date(), records?: readonly DetectorRecord[]): Promise<RuleReading> {
   const db = getDb();
   const rows = await db.all<{ member_ids: string; entity_key: string | null; category: string | null }>(
     'SELECT member_ids, entity_key, category FROM feed_detections WHERE rule_id = ? AND rule_version = ?',
     [detector.id, detector.version],
   );
   const memberIds = [...new Set(rows.flatMap((row) => JSON.parse(row.member_ids) as string[]))];
-  const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-  const items = await db.all<{ id: string; source: string; title: string; url: string; organization: string | null; published_at: string | null; fetched_at: string; body?: string | null }>(
-    `SELECT id, source, title, url, organization, published_at, fetched_at${detector.couldKeep ? ', body' : ''} FROM feed_items
-      WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ? LIMIT 5000`,
-    [...detector.sources, since],
-  );
-  // The rule's own predicate, over every copy it would read, when it states one.
-  const copies: DetectorRecord[] = items.map((item) => ({
-    id: item.id, source: item.source, url: item.url, title: item.title, organization: item.organization,
-    publishedAt: item.published_at, fetchedAt: item.fetched_at, body: item.body ?? null,
-  }));
-  const keepable = (index: number): boolean => !detector.couldKeep || detector.couldKeep(copies[index]!, now, copies);
+  // The rule's own predicate, over every copy detection reads, when it states one.
+  const copies: readonly DetectorRecord[] = records ?? await loadDetectorRecords(detector, now);
+  const keepable = (record: DetectorRecord): boolean => !detector.couldKeep || detector.couldKeep(record, now, copies);
   const members = new Set(memberIds);
   // Related items are keyed the way the rule keys its own entities, or its misses are invisible.
   const entityKeyOf = (organization: string | null): string | null =>
@@ -1353,9 +1381,9 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   const categories = new Set(rows.filter((row) => !row.entity_key).map((row) => row.category).filter((one): one is string => !!one));
   // A miss is an item the rule could have kept: one it reads only as context
   // (outside its membership window) is never a miss, however far back it reads.
-  const related = items.filter((item, index) => !members.has(item.id) && withinMemberWindow(detector, item.published_at, item.fetched_at, now) && (
+  const related = copies.filter((item) => !members.has(item.id) && withinMemberWindow(detector, item.publishedAt, item.fetchedAt, now) && (
     entities.has(entityKeyOf(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
-  ) && keepable(index));
+  ) && keepable(item));
   const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
   const screened = memberIds.filter((id) => verdicts.has(id));
   const confirmed = screened.filter((id) => verdicts.get(id) === 'KEEP').length;
@@ -1544,30 +1572,15 @@ export async function runDetectors(input: {
   // `rules` narrows a pass to the rules whose version or data changed: nothing else is recomputed.
   const chosen = (input.detectors ?? DETECTORS).filter((one) => !input.rules || input.rules.includes(one.id));
   for (const detector of chosen) {
-    const reading = await ruleReading(detector, now);
+    // One read, judged by both the reading and detection.
+    const records = await loadDetectorRecords(detector, now);
+    const reading = await ruleReading(detector, now, records);
     const decision = modeDecision(detector.mode, reading);
     // A proposal is a record for the improvement loop; failing to file one never stops detection.
     const proposed = await proposeRuleRepair(detector, reading, now).catch((error: unknown) => {
       console.warn(`rule proposal for ${reading.rule} not registered: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
       return null;
     });
-    const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-    const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
-      `SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items
-        WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ?
-        ORDER BY fetched_at DESC, id LIMIT 5000`,
-      [...detector.sources, since],
-    );
-    const records: DetectorRecord[] = rows.map((row) => ({
-      id: row.id,
-      source: row.source,
-      url: row.url,
-      title: row.title,
-      organization: row.organization,
-      publishedAt: row.published_at,
-      fetchedAt: row.fetched_at,
-      body: row.body,
-    }));
     const signals = detector.detect(records, now);
     const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0, proposed, audited: 0 };
     for (const signal of signals) {

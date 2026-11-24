@@ -32,6 +32,7 @@ import {
   RULE_EFFECTIVE_SOON_V6,
   RULE_EFFECTIVE_SOON_V7,
   RULE_EFFECTIVE_SOON_V7_LEAD_DAYS,
+  loadDetectorRecords,
   ruleReading,
   runDetectors,
   type Detector,
@@ -167,5 +168,84 @@ describe('ruleReading counts as a miss only what the rule could have kept', () =
     const without: Detector = { ...rest, detect: (records, now) => RULE_EFFECTIVE_SOON_V7.detect(records, now) };
     const before = await ruleReading(without, live);
     expect(before.misses).toBe(3);
+  });
+});
+
+describe('the reading merges copies over exactly the records detection read (F2)', () => {
+  const live = new Date();
+  const day = (offset: number) => new Date(live.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+  const published = day(-2);
+  const [y, m, d] = published.split('-');
+
+  async function seedOne(): Promise<string> {
+    await freshProject();
+    await insertFeedItems('federal-register-rules', [
+      { externalId: '2026-80010', url: `${FR}/${y}/${m}/${d}/2026-80010/rule-a`, title: 'Rule 2026-80010', body: `Effective ${day(10)}.`, organization: USCG, publishedAt: `${published}T00:00:00.000Z` },
+      { externalId: '2026-80011', url: `${FR}/${y}/${m}/${d}/2026-80011/rule-b`, title: 'Rule 2026-80011', body: 'Rule text with no effective sentence.', organization: USCG, publishedAt: `${published}T00:00:00.000Z` },
+    ]);
+    for (const row of await getDb().all<{ id: string }>(`SELECT id FROM feed_items WHERE source = 'federal-register-rules'`)) {
+      for (const model of ['m1', 'm2']) {
+        await getDb().run(
+          `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
+           VALUES (?, 'SCREEN_LEAD', ?, ?, ?, 1, ?, NULL, ?)`,
+          [`cr-${row.id}-${model}`, `h-${row.id}`, row.id, model, JSON.stringify({ verdict: 'KEEP', window: 'SHORT', deliverable: 'DOCUMENT', need: 'x', payer: 'y', reason: 'z' }), live.toISOString()],
+        );
+      }
+    }
+    return (await getDb().get<{ id: string }>(`SELECT id FROM feed_items WHERE external_id = '2026-80011'`))!.id;
+  }
+
+  it('runDetectors hands detect and couldKeep the identical record set', async () => {
+    await seedOne();
+    const seen: { detect: string[] | null; couldKeep: Set<string> } = { detect: null, couldKeep: new Set() };
+    const spy: Detector = {
+      ...RULE_EFFECTIVE_SOON_V7,
+      couldKeep(record, now, copies) {
+        for (const one of copies ?? []) seen.couldKeep.add(one.id);
+        return RULE_EFFECTIVE_SOON_V7.couldKeep!(record, now, copies);
+      },
+      detect(records, now) {
+        seen.detect = records.map((one) => one.id);
+        return RULE_EFFECTIVE_SOON_V7.detect(records, now);
+      },
+    };
+    await runDetectors({ now: live, detectors: [spy] });
+    // A second pass: now there is a stored detection, so the reading consults couldKeep.
+    const firstId = (await getDb().get<{ id: string }>(`SELECT id FROM feed_items WHERE external_id = '2026-80010'`))!.id;
+    await getDb().run(`UPDATE feed_detections SET member_ids = ? WHERE rule_id = 'RULE_EFFECTIVE_SOON' AND rule_version = 7`, [JSON.stringify([firstId])]);
+    seen.couldKeep.clear();
+    await runDetectors({ now: live, detectors: [spy] });
+    expect(seen.detect).not.toBeNull();
+    expect([...seen.couldKeep].sort()).toEqual([...seen.detect!].sort());
+  });
+
+  it('ruleReading judges keepability over the records it is given, not a second read', async () => {
+    const laterId = await seedOne();
+    await runDetectors({ now: live, detectors: [RULE_EFFECTIVE_SOON_V7] });
+    const firstId = (await getDb().get<{ id: string }>(`SELECT id FROM feed_items WHERE external_id = '2026-80010'`))!.id;
+    await getDb().run(`UPDATE feed_detections SET member_ids = ? WHERE rule_id = 'RULE_EFFECTIVE_SOON' AND rule_version = 7`, [JSON.stringify([firstId])]);
+    const stored = await loadDetectorRecords(RULE_EFFECTIVE_SOON_V7, live);
+    // Over the database's copies alone, 2026-80011 carries no date: the rule cannot keep it.
+    expect((await ruleReading(RULE_EFFECTIVE_SOON_V7, live, stored)).misses).toBe(0);
+    // Detection read a second copy of 2026-80011 that states its date. Copies merge by
+    // document number, so the rule keeps both — and since the stored detection left them
+    // out, the reading must count both, agreeing with detection rather than a fresh query.
+    const later = stored.find((one) => one.id === laterId)!;
+    const datedCopy: DetectorRecord = { ...later, id: `${later.id}-copy`, body: `Effective ${day(20)}.` };
+    const withCopy = [...stored, datedCopy];
+    const detected = new Set(RULE_EFFECTIVE_SOON_V7.detect(withCopy, live).flatMap((one) => one.memberIds));
+    expect(detected.has(laterId)).toBe(true);
+    const reading = await ruleReading(RULE_EFFECTIVE_SOON_V7, live, withCopy);
+    expect(reading.misses).toBe(1); // only the stored item has a screen verdict; the copy has none
+    expect(reading.missedSamples.join(' ')).toContain('Rule 2026-80011');
+  });
+
+  it('loadDetectorRecords is ordered and capped deterministically', async () => {
+    await seedOne();
+    const all = await loadDetectorRecords(RULE_EFFECTIVE_SOON_V7, live);
+    expect(all).toHaveLength(2);
+    const one = await loadDetectorRecords(RULE_EFFECTIVE_SOON_V7, live, 1);
+    expect(one.map((r) => r.id)).toEqual([all[0]!.id]);
+    expect(await loadDetectorRecords(RULE_EFFECTIVE_SOON_V7, live, 1)).toEqual(one);
   });
 });
