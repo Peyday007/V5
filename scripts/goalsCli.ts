@@ -743,14 +743,24 @@ async function plan(): Promise<void> {
   // after round 26 of 38 until the step's 30-minute timeout, with no verdict.
   const searching = Date.now();
   let listing = true;
-  const listed = await finishesWithin(PLAN_LISTING_MS, async () => {
+  /*
+   * A listing error is a line, not the verdict (release check 45300351663, 2026-11-24): the
+   * plan was read in 136 s, then the listing waited 120 s for the one pooled connection that
+   * background work the read started still held, and its pool timeout became "GOALS: FAILED".
+   */
+  const read = reading;
+  const readGoal = goalId;
+  const listed = await finishesWithin(PLAN_LISTING_MS, () => listSearching(read, readGoal).catch((error: unknown) => {
+    console.log(`  timing      the search listing stopped: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}; the plan above is the read`);
+  }));
+  async function listSearching(reading: PlanReading, goalId: string): Promise<void> {
     await printSearching(reading);
     if (!listing) return;
     console.log(`  timing      search and digging listed in ${Date.now() - searching} ms`);
     const history = await listReadings(goalId);
     if (!listing) return;
     for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
-  });
+  }
   listing = false;
   if (!listed) console.log(`  timing      the search listing did not finish within ${PLAN_LISTING_MS / 1000}s and was left; the plan above is the read`);
   console.log('GOALS: OK');
