@@ -46,7 +46,7 @@ import { auditAdmission } from '../research/auditAdmission.ts';
 import { laneFitFailure } from '../research/gate.ts';
 import { isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, servedRoute, type Completer, type LaneConfig } from '../cheap/lane.ts';
-import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
+import { answeredBy, isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
 import { redactCredentials } from '../effects/failureDetail.ts';
@@ -2624,14 +2624,27 @@ export async function unfitNow(models: readonly string[], now = Date.now(), fall
  * Answers that are not the model's own (`notTheAnswer`) do not use up the window.
  */
 export async function answerRows(now = Date.now()): Promise<{ model: string; reason: string | null; work_type: string; outcome: string; n: number | string }[]> {
-  const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string }>(
-    `SELECT e.reason, w.work_type, e.outcome FROM bin_events e
+  const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string; measures: string | null }>(
+    `SELECT e.reason, w.work_type, e.outcome, e.measures FROM bin_events e
        JOIN work_items w ON w.id = e.work_item_id
       WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at >= ?
       ORDER BY e.at DESC`,
     [new Date(now - 86_400_000).toISOString()],
   );
-  return recentAnswers(rows);
+  return recentAnswers(rows.map(attributeAnswer));
+}
+
+/**
+ * The row as the answer of the model that gave it (`answeredBy`): a GPU-slot row
+ * the free fallback answered is that fallback's answer, so it never holds the GPU
+ * back (nor clears it). Pure.
+ */
+export function attributeAnswer<T extends { reason: string | null; measures?: string | null }>(row: T): T {
+  const reason = row.reason ?? '';
+  const slot = reason.replace(/^model /, '').split(':')[0] ?? '';
+  const model = answeredBy(slot, row.measures ?? null);
+  if (model === slot) return row;
+  return { ...row, reason: `model ${model}${reason.slice(`model ${slot}`.length)}` };
 }
 
 /** How many of a pair's latest judged answers decide whether it is fit. */

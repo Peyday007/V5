@@ -13624,6 +13624,7 @@ On 2026-10-31 a session presented the owner a mailer plan as "roughly 90%" likel
 - **A plan that does not reach its goal is an ANALYSIS**, never a plan to run.
 - **The same rule holds where prose reaches a person.** A Russell answer stating a chance of success is refused (`UNVERIFIED_PROBABILITY`). Brain's own goal plans quote a chance only from their measured record (`services/goals/plan.ts`).
 - **The rule for sessions.** A quantitative recommendation to the owner is presented only as the narrative printed under `PLAN: VERIFIED <digest>` (or `VERIFIED_ANALYSIS`), quoted unchanged with its digest. A plan the gate rejects is reported as rejected, with its problems.
+- **One plan read, one set of figures** (audit of goal `wst_7b4fcbb5f2384f31b6c3`, 2026-11-24: about a dozen contradictory figures in one `goals plan` read). `services/goals/figures.ts` decides which printed figures are the held plan's — its own simulated run — and labels every other one as what it is: the quant engine's `best` when it is another set of legs, the pathways' leading bounds (quoted beside the run of exactly those legs, or said to have none), the committee's figure from proven facts alone. A candidate's median and reach come from one run or neither. An unestablished input is held no more favourably than the favourable end of its reconstruction's evidenced range (`heldCentreOf`), so a range widened for an unbridged transfer never sells a leg above the range its pathway prints, and the demand row says the price it drew is assumed. The header names the leg the steps are written for, apart from a hypothetical reconstruction's. `figureContradictions` is the check; `tests/planFigureReconcile.test.ts` the regression.
 
 `plans/mailer-2026-10-31-as-presented.json` is the regression. It is rejected nine ways. `plans/mailer-corrected-2026-10-31.json` passes as an analysis: at the assumed rates the mailer collects $5,400, short of the target. `tests/planCheck.test.ts` was run against each disabled safeguard to watch it fail.
 
@@ -17113,6 +17114,31 @@ only take it away (`refuseForCommittee`), never grant it.
   planner's conclusions; SKEPTIC's specialist layer is the existing independent
   model challenge (`quant/modelChallenge.ts`). Two roles reading one fact the
   opposite way is an investigation, sent the same way; the FAIL still stands.
+- **Research is read back (2026-11-24).** Every open question names the
+  research need it is sent as (`research`, `committee <ROLE>: …`). The accepted,
+  sourced claims filed under the idea that need opened (`committeeAnswersOf`,
+  via `claimsAnsweringScope` on `goal:<id>:committee`) reach the next reading,
+  and the role that asked settles its own question from them
+  (`settleByAnswers`): a figure establishes the fact (PASS, cited with the
+  claim and URL); money that is not a purchase or cash after the window breaks
+  it (a critical RESEARCH defect); an answer that settles nothing keeps it open
+  with the claims it read. Recorded per role as `settled` / `asked`.
+- **Model specialists (2026-11-24).** On a FULL review with a model configured
+  each role is also read by its own model call (`committeeSpecialists.ts`):
+  the operator's models (`modelsFor`), in the challenger's order
+  (`challengerModels`), through the same chat path (`chatFor`) — no new
+  routing. The prompt is the role's brief and the evidence (the planner's
+  figures only for QUANT, SKEPTIC, INVESTOR), never the acceptance. Combined
+  per role by `withSpecialist`: a cited model FAIL fails the role (never
+  critical); a silent, timed-out or uncited model holds a PASS as UNKNOWN; a
+  model never turns a FAIL or an UNKNOWN into a PASS. Bound to the plan it read
+  (`committeeFingerprint`), asked in the background after a persisted read
+  (`armSpecialistReview`, at most two goals in flight, 60 s per role, retried
+  after 30 min only when a role went unanswered) and recorded as the
+  `COMMITTEE_SPECIALIST_REVIEW` workstream event the next read binds. No model
+  configured, or `BRAIN_COMMITTEE_SPECIALISTS=off`: NOT_RUN, the deterministic
+  committee alone. Pinned by `tests/committeeResearch.test.ts` and
+  `tests/committeeSpecialists.test.ts`.
 - **Recorded and reported.** The verdicts are stored in the reading's forecast
   JSON (no schema change), printed by `npm run goals -- plan`, and the planning
   report's "commercially validated" requires the committee's PASS.

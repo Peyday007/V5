@@ -116,7 +116,8 @@ import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
 import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
 import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrityInput.ts';
-import { committeeOf, type CommitteeReading } from './committee.ts';
+import { committeeOf, type CommitteeContext, type CommitteeReading } from './committee.ts';
+import { armSpecialistReview, committeeContextOf } from './committeeSpecialists.ts';
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
@@ -1645,6 +1646,8 @@ export function judgeAcceptance(input: {
   const pathwayRows = input.pathways?.pathways;
   const judge = (ids: readonly string[]) => legsOf(ids, pathwayRows, input.portfolio);
   const titles = new Map<string, string>([...(input.portfolio?.demand ?? []).map((d) => [d.opportunityId, d.title] as const), ...(pathwayRows ?? []).filter((p) => !!p.title).map((p) => [p.opportunityId, p.title] as const)]);
+  // The engine's own run of exactly the pathways' leading members, when it made one: the source of both its median and its reach.
+  const leadingRun = input.pathways?.portfolio.leading ? simulatedCombination(input.pathways.portfolio.leading.members, input.portfolio ?? null) : null;
   const proposed: PlanAcceptance['candidate'] =
     held && heldIds.length > 0
       ? { label: held.members.map((m) => m.title.slice(0, 60)).join(' + '), opportunityIds: heldIds, source: 'QUANT_PORTFOLIO', settledP50: held.settledP50, reach: held.reach, reachBasis: input.portfolio!.basis }
@@ -1661,11 +1664,13 @@ export function judgeAcceptance(input: {
                * own ends, summed and capped at the gap), not a distribution, so its median is
                * the engine's for exactly these members when the engine simulated them, and
                * otherwise none (production wst_7b4fcbb5f2384f31b6c3: a $10,000 "p50" beside a
-               * $368 "p10" and a $32,266 adverse case, from two estimators).
+               * $368 "p10" and a $32,266 adverse case, from two estimators). Its reach comes
+               * from the same run, or is not stated: a median beside "reach not computed" for
+               * one simulated combination was two answers about one run (§77, 2026-11-24).
                */
-              settledP50: simulatedCombination(input.pathways.portfolio.leading.members, input.portfolio ?? null)?.settledP50 ?? null,
-              reach: null,
-              reachBasis: null,
+              settledP50: leadingRun?.settledP50 ?? null,
+              reach: leadingRun?.reach ?? null,
+              reachBasis: leadingRun ? input.portfolio!.basis : null,
             }
           : null;
   const candidate = withLegSupport(proposed, proposed ? judge(proposed.opportunityIds) : null);
@@ -2517,11 +2522,19 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       continuation: refusedContinuation,
     };
     // The plan's integrity (`planIntegrity`): a reading that breaks a rule is never ACCEPTED.
-    const reading = gateIntegrity(built, (acceptance) => ({
-      ...composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance, arrangementModels: refusedModels }),
-      continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: acceptance.status, instantOnly: refusedInfeasible?.instantOnly, surplus: refusedContinuation.surplusForSuccessors }),
-    }));
+    const committeeContext = await committeeContextOf(goal.id, target.projectId, now);
+    degraded.push(...committeeContext.degraded);
+    const reading = gateIntegrity(
+      built,
+      (acceptance) => ({
+        ...composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance, arrangementModels: refusedModels }),
+        continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: acceptance.status, instantOnly: refusedInfeasible?.instantOnly, surplus: refusedContinuation.surplusForSuccessors }),
+      }),
+      committeeContext,
+    );
     if (input.persist) {
+      // The committee's specialists are asked in the background when due; the next read binds their recorded answer.
+      armSpecialistReview(goal.id, built, reading.committee, committeeContext, now);
       await recordDegraded(goal.id, target.projectId, degraded);
       await persistReading(goal, reading, null);
     }
@@ -2906,7 +2919,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   if (candidateStrategy) strategies.push(candidateStrategy);
   const superseded = !infeasible && openingsVerdict === 'NOT_VIABLE' && candidateStrategy !== null && (candidateStrategy.sweep.goalMetShare ?? 0) > 0;
   const verdict: PlanVerdict = superseded ? 'NEEDS_EVIDENCE' : openingsVerdict;
-  const hypotheticalNote = plan.adoption.hypothetical ? ` The reconstruction is hypothetical, not the plan: ${plan.adoption.reason}.` : '';
+  // The header names the leg the steps are written for, so a hypothetical reconstruction's own legs are never read as the plan's (§77).
+  const stepsLeg = stepsLegOf(steps, lead, titlesOf(model));
+  const hypotheticalNote = plan.adoption.hypothetical ? ` The reconstruction is hypothetical, not the plan: ${plan.adoption.reason}.${stepsLeg ? ` The plan's steps are for ${stepsLeg}.` : ''}` : '';
   const summary =
     verdict === 'RECOMMENDABLE'
       ? acceptance.sentence
@@ -3027,11 +3042,19 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     continuation,
   };
   // The plan's integrity (`planIntegrity`), checked on the steps, the lead and every text a person reads: a reading that breaks a rule is never ACCEPTED.
-  const reading = gateIntegrity(built, (refused) => {
-    const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models, supported });
-    return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets, surplus: continuation.surplusForSuccessors }) };
-  });
+  const committeeContext = await committeeContextOf(goal.id, target.projectId, now);
+  degraded.push(...committeeContext.degraded);
+  const reading = gateIntegrity(
+    built,
+    (refused) => {
+      const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models, supported });
+      return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, heldMarkets: infeasible?.heldMarkets, surplus: continuation.surplusForSuccessors }) };
+    },
+    committeeContext,
+  );
   if (input.persist) {
+    // The committee's specialists are asked in the background when due; the next read binds their recorded answer.
+    armSpecialistReview(goal.id, built, reading.committee, committeeContext, now);
     await recordDegraded(goal.id, target.projectId, degraded);
     await persistReading(goal, reading, chosen);
     await pursueSales(goal, reading);
@@ -5106,10 +5129,12 @@ export function refuseForCommittee(acceptance: PlanAcceptance, committee: Pick<C
 export function gateIntegrity(
   reading: PlanReading,
   recompose: (refused: PlanAcceptance) => Pick<PlanReading, 'timelines' | 'objective' | 'planSet' | 'continuation'>,
+  committeeContext: CommitteeContext = {},
 ): PlanReading {
   const { violations } = planIntegrity(integrityInput(reading));
-  // The investment committee (§117) reads the same reading; it can only take an acceptance away.
-  const committee = committeeOf(reading);
+  // The investment committee (§117) reads the same reading, with the research answers to its own questions and its
+  // specialists' recorded review (`committeeContextOf`); it can only take an acceptance away.
+  const committee = committeeOf(reading, committeeContext);
   const committeeRefuses = reading.acceptance.status === 'ACCEPTED' && reading.acceptance.probability?.basis !== 'TARGET_MET' && committee.blocks;
   if (reading.acceptance.status !== 'ACCEPTED' || (violations.length === 0 && !committeeRefuses)) return { ...reading, integrity: violations, committee };
   const acceptance = violations.length > 0 ? refuseForIntegrity(reading.acceptance, violations) : refuseForCommittee(reading.acceptance, committee);
@@ -5184,7 +5209,21 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
           blocker: reading.committee.blocker,
           criticalDefects: reading.committee.criticalDefects,
           reviewMs: reading.committee.reviewMs ?? null,
-          roles: reading.committee.roles.map((r) => ({ role: r.role, verdict: r.verdict, critical: r.critical, defects: r.defects.slice(0, 6), open: r.open.map((q) => q.subject).slice(0, 4), citations: r.citations.slice(0, 6) })),
+          fingerprint: reading.committee.fingerprint,
+          specialists: reading.committee.specialists,
+          answered: reading.committee.answered,
+          roles: reading.committee.roles.map((r) => ({
+            role: r.role,
+            verdict: r.verdict,
+            critical: r.critical,
+            defects: r.defects.slice(0, 6),
+            open: r.open.map((q) => q.subject).slice(0, 4),
+            // Each UNKNOWN for want of evidence names the research need it waits on, and the answers read that did not settle it.
+            asked: r.open.slice(0, 4).map((q) => ({ subject: q.subject, research: q.research, answeredBy: q.answeredBy ?? [] })),
+            settled: (r.settled ?? []).slice(0, 4),
+            specialist: r.specialist ? { verdict: r.specialist.verdict, model: r.specialist.model, reason: r.specialist.reason, defects: r.specialist.defects.slice(0, 4) } : null,
+            citations: r.citations.slice(0, 6),
+          })),
           investigations: reading.committee.investigations.map((i) => ({ opportunityId: i.opportunityId, fact: i.fact, established: i.established, broken: i.broken })),
         }
       : null,
@@ -5859,6 +5898,23 @@ export function leadingArrangement(
     }
   }
   return best ?? leaders[0]!;
+}
+
+/**
+ * The leg the plan's steps are written for, in words: the leading
+ * arrangement's buyers when its steps are an arrangement's, else the titles
+ * of the openings the steps act on; null when no step names one (§77).
+ * Production goal wst_7b4fcbb5f2384f31b6c3, 2026-11-24: the header named a
+ * hypothetical reconstruction's leg ("counts money from Constructed: Small
+ * and mid-size firms…") while every step was written for "domain buyer or
+ * seller", and nothing said which leg the steps were. Pure.
+ */
+export function stepsLegOf(steps: readonly Pick<PlanStep, 'arrangement' | 'openings'>[], lead: { key: string; demand: { name: string } } | null, titles: ReadonlyMap<string, string> = new Map()): string | null {
+  const keys = new Set(steps.flatMap((s) => (s.arrangement ? [s.arrangement.key] : [])));
+  if (lead && keys.has(lead.key)) return `"${lead.demand.name.slice(0, 90)}"`;
+  const ids = [...new Set(steps.flatMap((s) => s.openings ?? []))];
+  const named = ids.map((id) => titles.get(id) ?? titles.get(openingOfMember(id))).filter((t): t is string => !!t);
+  return named.length > 0 ? named.slice(0, 3).map((t) => `"${t.slice(0, 70)}"`).join(', ') : null;
 }
 
 /**

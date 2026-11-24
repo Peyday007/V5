@@ -32,7 +32,7 @@ import type { ResearchClaim } from '../../domain/types.ts';
 import { timingOfText } from '../cash/paymentTiming.ts';
 import { GOAL_PRICE_KEY_PREFIX, GOAL_PRICE_SCOPE_PREFIX, goalPriceSubject } from './goalWork.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
-import { committeeNeeds, type CommitteeReading } from './committee.ts';
+import { committeeNeeds, type CommitteeAnswer, type CommitteeReading } from './committee.ts';
 
 /**
  * Asking a counterparty is contacting the buyer: the commercial authority an
@@ -449,6 +449,27 @@ export async function sendCommitteeNeeds(
       out.sent += 1;
       if (one.created) out.created += 1;
     } else out.refused.push(`${one.subject}: ${one.reason}`);
+  }
+  return out;
+}
+
+/**
+ * The accepted, sourced answers to this goal's committee questions, read back
+ * to the committee (§117): claim → orchestration → mission → the idea the
+ * question opened under the goal's committee scope (`claimsAnsweringScope`),
+ * each with the idea's title, which names the question it answers. The next
+ * committee reading settles each role's question from them (`Bench.ask`).
+ */
+export async function committeeAnswersOf(
+  projectId: string,
+  goalId: string,
+  deps: { claimsAnsweringScope?: typeof claimsAnsweringScope } = {},
+): Promise<CommitteeAnswer[]> {
+  const read = deps.claimsAnsweringScope ?? claimsAnsweringScope;
+  const out: CommitteeAnswer[] = [];
+  for (const { claim, idea } of await read(projectId, goalCommitteeScope(goalId))) {
+    if (!claim.sourceUrl) continue;
+    out.push({ ideaTitle: idea.title, claimId: claim.id, text: claim.claim.slice(0, 1200), sourceUrl: claim.sourceUrl });
   }
   return out;
 }

@@ -595,11 +595,37 @@ function centreOf(input: ModelInput): number | null {
   return low === null || low === undefined || high === null || high === undefined ? null : (low + high) / 2;
 }
 
+/**
+ * The point an unestablished input is held no better than: its swept range's
+ * centre, or — when the input carries a reconstruction (`inferred`) whose
+ * evidenced range ends on the unfavourable side of that centre — the end of
+ * that range: its p90 for a price, close, reply rate or volume, its p10 for a
+ * cost or a delay (§77). Production goal wst_7b4fcbb5f2384f31b6c3,
+ * 2026-11-24: a design its pathway priced at $75 (the reconstruction's p10,
+ * p50 and p90 alike) was swept over a range widened for an unbridged
+ * transfer, whose arithmetic centre is $111, so the simulation sold it at
+ * $111 beside the $75 every other line printed — a price above anything the
+ * evidence showed, counted as money. Widening a range for what nobody has
+ * bridged adds uncertainty on the unfavourable side; it never sells above the
+ * evidenced range. Pure.
+ */
+export function heldCentreOf(input: ModelInput, unfavourable: Unfavourable): number | null {
+  const c = centreOf(input);
+  const end = unfavourable === 'LOW' ? input.inferred?.p90 : input.inferred?.p10;
+  if (c === null || typeof end !== 'number' || !Number.isFinite(end)) return c;
+  // An evidenced range wholly outside the swept one describes another unit than the one drawn: the range's centre stands.
+  const d = input.distribution;
+  const low = d && (d.kind === 'RANGE' || d.kind === 'TRIANGULAR' || d.kind === 'NORMAL') ? d.min : (input.low ?? null);
+  const high = d && (d.kind === 'RANGE' || d.kind === 'TRIANGULAR' || d.kind === 'NORMAL') ? d.max : (input.high ?? null);
+  if (low === null || high === null || end < low || end > high) return c;
+  return unfavourable === 'LOW' ? Math.min(c, end) : Math.max(c, end);
+}
+
 /** One draw of an input, from its own distribution or its swept range; an unestablished one held no better than its range's centre (see `Unfavourable`). */
 export function sampler(input: ModelInput, rng: () => number, unfavourable?: Unfavourable): () => number {
   const draw = drawOf(input, rng);
   if (!unfavourable || isEstablished(input)) return draw;
-  const c = centreOf(input);
+  const c = heldCentreOf(input, unfavourable);
   if (c === null) return draw;
   return unfavourable === 'LOW'
     ? () => {

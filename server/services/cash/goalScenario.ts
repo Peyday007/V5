@@ -25,7 +25,7 @@
  * faster plan beat a bigger, slower one.
  */
 import { describesOneBody, namesOneOrganisation } from '../../domain/industry.ts';
-import { evidenceIsAbout, evidencesPurchase, nonCommercialExclusion, nonPurchaseSentence, payerPaysOut, paymentNatureOf } from '../../domain/paymentNature.ts';
+import { arrangementExclusion, paymentNatureOf, readPriceEvidence } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
@@ -2420,15 +2420,11 @@ export async function modelOpportunity(
     // The figure is a reward, grant, rebate or wage: real money, but no evidence of what a buyer pays for the deliverable (§116).
     const paidFor = priceFact && typeof priceFact.value === 'string' ? paymentNatureOf(priceFact.value) : null;
     priceNature = paidFor;
-    const offTopic = priceFact && typeof priceFact.value === 'string' && !evidenceIsAbout(priceFact.value, [opportunity.payer, opportunity.title, opportunity.offerScope, opportunity.industry].filter(Boolean).join(' '));
-    if (offTopic && !(paidFor && paidFor.nature !== 'PURCHASE')) {
-      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not these buyers' price: the only figure on record ("${String(priceFact!.value).slice(0, 100)}") is about another market; what these buyers pay for the deliverable is not established` };
-    }
-    if (paidFor && paidFor.nature !== 'PURCHASE') {
-      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not a price: the only figure on record is ${nonPurchaseSentence(paidFor)}; what these buyers pay for the deliverable is not established` };
-    } else if (priceFact && typeof priceFact.value === 'string' && !evidencesPurchase(priceFact.value)) {
-      // Worded evidence that shows nobody paying a supplier for anything is not evidence of a purchase (owner, 2026-11-23).
-      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `not shown to be a purchase: the only figure on record ("${priceFact.value.slice(0, 100)}") shows no buyer paying a supplier for a deliverable` };
+    // Read as a transaction against this opening: who pays whom, for what, and which way the money runs relative to Brain (Task E, 2026-11-24).
+    const reading = priceFact && typeof priceFact.value === 'string' ? readPriceEvidence(priceFact.value, opportunity) : null;
+    if (reading && !reading.counts) {
+      const lead = reading.direction === 'PAYOUT' ? 'not a price' : reading.direction === 'OFF_MARKET' ? "not these buyers' price" : reading.direction === 'NO_EXCHANGE_SHOWN' ? 'not shown to be a purchase' : "not this buyer's price for this deliverable";
+      price = { ...price, value: null, low: price.low ?? price.value, high: price.high ?? price.value, provenance: 'UNKNOWN', note: `${lead}: the only figure on record is ${reading.why}; what these buyers pay for the deliverable is not established` };
     }
   } else {
     const range = fact('revenueRange');
@@ -2923,8 +2919,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     // A reward, prize, contest, grant, rebate or wage is not a sale: it never enters a revenue goal's model unless the goal asks for it (§116).
     const notASale = IN_FLIGHT.has(opportunity.state)
       ? null
-      : (nonCommercialExclusion([opportunity.title, opportunity.offerScope, opportunity.buyingSignal, opportunity.source, opportunity.payer].filter(Boolean).join('. '), goalText) ??
-        (payerPaysOut(opportunity.payer) && nonCommercialExclusion(`${opportunity.payer} $1`, goalText) !== null ? `not a sale: its payer pays out rather than buys ("${(opportunity.payer ?? '').slice(0, 80)}"); a revenue goal's strategies are commercial purchases` : null));
+      : arrangementExclusion(opportunity, goalText);
     if (notASale) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: notASale });
       continue;
