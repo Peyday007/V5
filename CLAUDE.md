@@ -304,7 +304,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–118. The architecture record
+## 8–119. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -424,6 +424,7 @@ resolves. Read the section for the area you are changing before you change it
 - §116. A price is what a buyer pays a supplier, a buyer population is more than one company, and coverage over unsupported legs is not reliability.
 - §117. An investment committee reads every plan independently, and agreement is not evidence.
 - §118. Twelve idle routines beside the owner's plan is a defect, not a policy.
+- §119. A goal's execution window starts when commercial execution is authorized, and an owner's rule lives in a row.
 
 ## Conventions
 

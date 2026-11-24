@@ -162,8 +162,17 @@ export async function createGoal(input: {
    */
   const recurring = !input.target && reading.recurring === 'MONTHLY';
   const outcome = target ? targetOutcome(target, recurring) : undefined;
+  /*
+   * A cash target stated as a span ("within 30 days") is a commercial
+   * execution window (§119; owner, 2026-11-19): it starts when commercial
+   * execution is authorized, so the time spent planning, building and
+   * researching before then is not taken out of it. The stored deadline stays
+   * empty until the start; every reader derives it (`effectiveDueAt`). A date
+   * the caller states explicitly is a date.
+   */
+  const windowDays = target && !input.dueAt && reading.windowDays ? reading.windowDays : null;
   if (dueAt || outcome || input.userId) {
-    await setTerms(goal.id, { outcome, dueAt: dueAt ? new Date(dueAt).toISOString() : undefined, ownerUserId: input.userId ?? undefined }, input.actorRef);
+    await setTerms(goal.id, { outcome, dueAt: windowDays ? null : dueAt ? new Date(dueAt).toISOString() : undefined, ownerUserId: input.userId ?? undefined, ...(windowDays ? { executionWindowDays: windowDays } : {}) }, input.actorRef);
   }
   let set: GoalTarget | null = null;
   if (target) {
@@ -303,11 +312,26 @@ export async function reinstate(goalId: string, actorRef: string): Promise<Decis
 
 export async function setTerms(
   goalId: string,
-  terms: { outcome?: string | null; ownerUserId?: string | null; dueAt?: string | null; commitment?: GoalCommitment },
+  terms: { outcome?: string | null; ownerUserId?: string | null; dueAt?: string | null; commitment?: GoalCommitment; executionWindowDays?: number | null },
   actorRef: string,
 ): Promise<DecisionResult> {
   const before = await getWorkstream(goalId);
   if (!before) return { ok: false, reason: 'No such goal.', consequence: 'Nothing changed.' };
+  /*
+   * A goal with a commercial execution window has no calendar deadline until
+   * execution starts (§119). A date sent for it — a form echoing the derived
+   * date back, a script copying it — would silently turn the window into a
+   * countdown again, which is exactly how the owner's 2026-11-19 instruction
+   * was lost. A date replaces a window only when the window is cleared in the
+   * same decision.
+   */
+  if (before.executionWindowDays !== null && typeof terms.dueAt === 'string' && terms.executionWindowDays === undefined) {
+    return {
+      ok: false,
+      reason: `This goal's deadline is a ${before.executionWindowDays}-day commercial execution window that starts when commercial execution is authorized${before.executionStartedAt ? ` (started ${before.executionStartedAt.slice(0, 10)})` : ''}, not a date. To replace it with a fixed date, clear the window in the same decision (executionWindowDays: null, or --window none).`,
+      consequence: 'Nothing changed.',
+    };
+  }
   const moved = await setGoalTerms(goalId, terms);
   if (!moved) return { ok: false, reason: 'Nothing to change.', consequence: 'Nothing changed.' };
   await recordWorkstreamEvent({
@@ -315,7 +339,7 @@ export async function setTerms(
     kind: 'GOAL_TERMS_SET',
     summary: 'A person set what this goal is for, whose it is, when it is due, or who it is owed to.',
     detail: {
-      before: { outcome: before.outcome, ownerUserId: before.ownerUserId, dueAt: before.dueAt, commitment: before.commitment },
+      before: { outcome: before.outcome, ownerUserId: before.ownerUserId, dueAt: before.dueAt, commitment: before.commitment, executionWindowDays: before.executionWindowDays },
       after: terms,
     },
     actorRef,
@@ -383,7 +407,11 @@ export async function changeObjective(
   const terms: { outcome?: string | null; dueAt?: string } = {};
   if (input.outcome !== undefined) terms.outcome = input.outcome;
   else if (restated) terms.outcome = targetOutcome(restated, reading!.recurring === 'MONTHLY');
-  if (restated && reading!.deadline) terms.dueAt = new Date(reading!.deadline).toISOString();
+  const restatedWindow = restated && reading!.windowDays ? reading!.windowDays : null;
+  if (restated && reading!.deadline) terms.dueAt = restatedWindow ? undefined : new Date(reading!.deadline).toISOString();
+  // A restated span is the execution window again, unchanged if it has started (§119); a restated date replaces the window.
+  if (restatedWindow && !before.executionStartedAt) await setGoalTerms(goalId, { executionWindowDays: restatedWindow, dueAt: null });
+  else if (restated && reading!.deadline && !restatedWindow) await setGoalTerms(goalId, { executionWindowDays: null });
   if (terms.outcome !== undefined || terms.dueAt !== undefined) await setGoalTerms(goalId, terms);
   let target: GoalTarget | null = null;
   if (restated) {

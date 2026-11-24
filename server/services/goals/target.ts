@@ -25,6 +25,7 @@ import { getProject } from '../../repos/projects.ts';
 import { getWorkstream, workstreamEventsOfKind } from '../../repos/register.ts';
 import { GOAL_METRICS, type GoalMetric, type GoalTarget, type Workstream } from '../../domain/register.ts';
 import { readObjective } from '../industry/construction/intent.ts';
+import { daysLeftOf } from '../../domain/executionWindow.ts';
 
 export const GOAL_METRIC_LABEL: Record<GoalMetric, string> = {
   SETTLED_CASH: 'settled cash',
@@ -41,8 +42,10 @@ export interface TargetReading {
   achievedCents: number;
   remainingCents: number;
   achieved: boolean;
-  /** Days until the goal's own due date, or null when it has none. */
+  /** Days until the goal's own due date, or null when it has none; the full execution window before execution starts (§119). */
   daysLeft: number | null;
+  /** The goal's commercial execution window, or null for a fixed calendar deadline (§119). */
+  execution?: { windowDays: number; startedAt: string | null } | null;
   /** The ledger entry kinds this reading adds up, read from the goal's own metric. */
   counted: string[];
   /** Real money facts that are deliberately NOT counted toward the target. */
@@ -221,7 +224,9 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
     achievedCents: achieved,
     remainingCents: Math.max(0, target.amountCents - achieved),
     achieved: achieved >= target.amountCents,
-    daysLeft: goal.dueAt ? Math.ceil((Date.parse(goal.dueAt) - now.getTime()) / DAY) : null,
+    // Before commercial execution starts the full window remains: planning, engineering and research do not consume it (§119).
+    daysLeft: daysLeftOf({ dueAt: goal.dueAt, executionWindowDays: goal.executionWindowDays ?? null, executionStartedAt: goal.executionStartedAt ?? null }, now),
+    execution: goal.executionWindowDays ? { windowDays: goal.executionWindowDays, startedAt: goal.executionStartedAt ?? null } : null,
     counted,
     notCounted,
     since,

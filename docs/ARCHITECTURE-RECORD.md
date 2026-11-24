@@ -17171,3 +17171,57 @@ Factory surfaces 2 and 3 (about 1,300 fires each) were never the fault.
   holds membership on its project for it. A Routine that can serve it still
   goes first. Pinned by `tests/pinnedProbeClaim.test.ts` and
   `tests/freeLane.test.ts`.
+
+## 119. A goal's execution window starts when commercial execution is authorized, and an owner's rule lives in a row, never in a conversation.
+
+**The defect, recurring.** On 2026-11-19 the owner told Brain that the $10K
+objective has a 30-day COMMERCIAL EXECUTION period beginning when commercial
+execution actually starts. On 2026-11-24 Brain was still counting down to
+2026-12-09: planning, engineering and research had been consuming the window.
+
+**Why the correction did not persist.** It was never encoded anywhere a reader
+could find it. `readObjective` turned the words "within 30 days" into a
+calendar date at the moment the target was set (2026-11-03 → 2026-12-09), and
+`createGoal` stored that date in `workstreams.due_at`. Every subsystem derives
+its days left from that column. The 2026-11-19 instruction changed no row, no
+column and no code; it lived only in a conversation, which is invariant 12
+broken (no project state dependent on one chat transcript). With nothing to
+read it from, every later session, plan read and Hermes run reconstructed the
+deadline from the date, and the owner had to repeat the rule.
+
+**The rule.** A cash goal whose deadline is stated as a span ("within 30
+days", "in 4 weeks") has a commercial execution window:
+
+- `workstreams.execution_window_days` holds the window and
+  `execution_started_at` its start (migrations 160 / pg 151). Before the
+  start, `due_at` is NULL.
+- `domain/executionWindow.ts` is the one derivation. `effectiveDueAt` is now +
+  window before the start and start + window after it; `daysLeftOf` is the full
+  window before the start. The workstream mapper derives `Workstream.dueAt`
+  through it, so planning, quant, research, Hermes, simulations, acceptance and
+  reporting all read the same value. Readers that select the row directly use
+  `effectiveDueAtOfRow`, and filters on live goals use `OPEN_DEADLINE_SQL`
+  (an unstarted window is always open).
+- Execution starts when a grant authorizes buyer-facing work
+  (`EXECUTION_ACTIONS`: CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT).
+  `startExecutionWindows` runs on the grant route and on every goal tick. It
+  records the start once, guarded in the statement, sets `due_at` to start +
+  window, and writes a `GOAL_EXECUTION_STARTED` event. Research-only and
+  preparation authority (BUILD_A_TEST, RUN_PAID_TEST, PURCHASE_TOOL_OR_DATA,
+  SPEND_FROM_ALLOWANCE) does not start it.
+- Before the start, reports state the deadline relatively ("within 30 days of
+  the start of commercial execution (not started; the full 30 days remain)"),
+  never as a date.
+- A date sent for a goal with a window is refused unless the same decision
+  clears the window (`executionWindowDays: null`, `--window none`). This
+  prevents the failure path where a form echoes the derived date back and
+  silently turns the window into a countdown again.
+- A date the owner states ("by 2026-12-31") stays a date.
+
+**The live goal.** Migration 160 gives `wst_7b4fcbb5f2384f31b6c3` its full
+30-day window back: its authority is research-only, so execution has not
+started. A `GOAL_EXECUTION_WINDOW_SET` event keeps the date it replaced.
+
+Pinned by `tests/goalExecutionWindow.test.ts`, including structural guards
+that refuse a live-goal filter on `due_at > ?` alone and a days-left figure
+computed from the stored date.
