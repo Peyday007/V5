@@ -30,12 +30,82 @@ export interface JobTally {
   notAccepted: number;
   /** Σ item durations, ms. */
   ms: number;
+  /** Of these items, how many were attributed from the pod's serving state, not `servedBy` (`SERVED_BY_SINCE`). */
+  inferred: number;
 }
 
-const tally = (): JobTally => ({ submitted: 0, notAccepted: 0, ms: 0 });
+const tally = (): JobTally => ({ submitted: 0, notAccepted: 0, ms: 0, inferred: 0 });
+
+/**
+ * The first `FREE_LANE_ITEM` row production recorded `servedBy` on (#1191,
+ * deployed 2026-11-20): before it, no row says who answered, so a missing
+ * `servedBy` is no evidence the fallback answered. After it, a row without
+ * one is an item no model answered at all.
+ *
+ * Production 2026-11-24 (dispatch-diagnose run 45348622625, reading
+ * `gpu-answers`): of 19,500 GPU-slot rows since 11-08, none before
+ * 2026-11-20T21:13:15Z carries `servedBy`, and the pod `eaboawshas41wq` ran
+ * from 11-10 to 11-19 19:49Z — so every job the GPU answered predates the
+ * record, and `runpod-report` 45346060299 read all 126.5 running hours as
+ * "GPU answered: submitted 0".
+ */
+export const SERVED_BY_SINCE = '2026-11-20T21:13:15.213Z';
+
+/**
+ * Pure: whether the GPU was serving at an instant, from the supervisor's
+ * `SAMPLE_*` rows — the latest sample at or before it says RUNNING with vLLM
+ * ready, and is no older than two sample periods. While it serves, every call
+ * on the GPU slot goes to the GPU first (`routeRunpod`); the fallback answers
+ * only a call the GPU failed.
+ */
+export function servingAt(samples: readonly PodSampleRow[]): (at: string) => boolean {
+  const points = samples
+    .filter((s) => s.outcome.startsWith('SAMPLE_'))
+    .map((s) => ({ t: Date.parse(s.at), serving: s.outcome === 'SAMPLE_RUNNING' && s.ready === true, span: 2 * (s.durationMs ?? SAMPLE_MS) }))
+    .filter((p) => Number.isFinite(p.t))
+    .sort((a, b) => a.t - b.t);
+  return (at) => {
+    const t = Date.parse(at);
+    let lo = 0;
+    let hi = points.length - 1;
+    let found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (points[mid]!.t <= t) {
+        found = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    const p = found >= 0 ? points[found]! : null;
+    return !!p && p.serving && t - p.t <= p.span;
+  };
+}
+
+/**
+ * Pure: who answered one GPU-slot row. `servedBy` decides when the row carries
+ * it; a row from before `SERVED_BY_SINCE` carries none, and is the GPU's when
+ * the pod was serving as it ended (`inferred`), else the fallback's.
+ */
+export function gpuAnswered(row: LaneJobRow, serving: (at: string) => boolean): { gpu: boolean; inferred: boolean } {
+  if (hasServedBy(row.measures) || row.at >= SERVED_BY_SINCE) return { gpu: servedByGpu(row.measures), inferred: false };
+  if (!row.slot.startsWith('runpod/')) return { gpu: false, inferred: false };
+  return { gpu: serving(row.at), inferred: true };
+}
+
+function hasServedBy(measures: unknown): boolean {
+  let value: unknown = measures;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return false;
+    }
+  }
+  return !!value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>)['servedBy']);
+}
 
 export interface GpuJobSummary {
-  /** Items at least one of whose calls the GPU itself answered. */
+  /** Items at least one of whose calls the GPU itself answered (recorded, or inferred before `SERVED_BY_SINCE`). */
   gpu: JobTally;
   /** Items on the GPU slot answered only by its free fallback (the pod stopped, loading or failing). */
   slotFallback: JobTally;
@@ -43,11 +113,15 @@ export interface GpuJobSummary {
   byDay: Map<string, { gpu: JobTally; slotFallback: JobTally }>;
 }
 
-/** Pure: free-lane items split by who answered the GPU slot. Items on other slots are not counted. */
-export function summarizeGpuJobs(rows: readonly LaneJobRow[]): GpuJobSummary {
+/**
+ * Pure: free-lane items split by who answered the GPU slot. Items on other
+ * slots are not counted. `serving` (`servingAt`) attributes rows from before
+ * `servedBy` was recorded; without it they are read as the fallback's.
+ */
+export function summarizeGpuJobs(rows: readonly LaneJobRow[], serving: (at: string) => boolean = () => false): GpuJobSummary {
   const out: GpuJobSummary = { gpu: tally(), slotFallback: tally(), byDay: new Map() };
   for (const row of rows) {
-    const served = servedByGpu(row.measures);
+    const { gpu: served, inferred } = gpuAnswered(row, serving);
     if (!served && !row.slot.startsWith('runpod/')) continue;
     const day = row.at.slice(0, 10);
     const entry = out.byDay.get(day) ?? { gpu: tally(), slotFallback: tally() };
@@ -56,6 +130,7 @@ export function summarizeGpuJobs(rows: readonly LaneJobRow[]): GpuJobSummary {
       if (row.outcome === 'SUBMITTED') t.submitted += 1;
       else t.notAccepted += 1;
       t.ms += Math.max(0, row.durationMs ?? 0);
+      if (inferred) t.inferred += 1;
     }
   }
   return out;
@@ -66,6 +141,8 @@ export interface PodSampleRow {
   outcome: string;
   durationMs: number | null;
   costPerHr: number | null;
+  /** The sample's `measures.ready`: vLLM answered the supervisor's probe. */
+  ready?: boolean | null;
 }
 
 export interface RunningDay {

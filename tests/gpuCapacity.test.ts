@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { answeredBy, servedByGpu } from '../server/services/cheap/runpod.ts';
-import { gpuThroughput, hoursToClear, runningByDay, shrinkCauses, summarizeGpuJobs, type LaneJobRow } from '../server/services/cheap/gpuCapacity.ts';
+import { gpuThroughput, hoursToClear, runningByDay, servingAt, shrinkCauses, summarizeGpuJobs, type LaneJobRow } from '../server/services/cheap/gpuCapacity.ts';
 
 const GPU = 'runpod/openai/gpt-oss-120b';
 
@@ -76,11 +76,72 @@ describe('summarizeGpuJobs', () => {
       row('2026-11-23T15:01:00Z', 'RELEASED_TRANSIENT', GPU, ['auto/best-coding']),
       row('2026-11-23T15:02:00Z', 'SUBMITTED', 'auto', ['auto']),
     ]);
-    expect(s.gpu).toEqual({ submitted: 1, notAccepted: 1, ms: 120_000 });
-    expect(s.slotFallback).toEqual({ submitted: 1, notAccepted: 1, ms: 120_000 });
+    expect(s.gpu).toEqual({ submitted: 1, notAccepted: 1, ms: 120_000, inferred: 0 });
+    expect(s.slotFallback).toEqual({ submitted: 1, notAccepted: 1, ms: 120_000, inferred: 0 });
     expect(s.byDay.get('2026-11-19')?.gpu.submitted).toBe(1);
     expect(s.byDay.get('2026-11-23')?.gpu.submitted).toBe(0);
     expect(s.byDay.get('2026-11-23')?.slotFallback.submitted).toBe(1);
+  });
+});
+
+/*
+ * Production 2026-11-24: runpod-report 45346060299 printed 126.5 h of the H200
+ * pod eaboawshas41wq running (11-10 to 11-19, $135.10) and "GPU answered:
+ * submitted 0" on every day. dispatch-diagnose 45348622625 (`gpu-answers`):
+ * no GPU-slot row before 2026-11-20T21:13:15Z carries `servedBy` (#1191 began
+ * recording it then), so every job the GPU answered was read as the fallback's.
+ * The rows below are those rows' real shapes.
+ */
+describe('rows from before servedBy was recorded', () => {
+  const POD = 'eaboawshas41wq';
+  const sample = (at: string, outcome: string, ready: boolean) => ({ at, outcome, durationMs: 300_000, costPerHr: outcome === 'SAMPLE_RUNNING' ? 5.29 : 0, ready, podId: POD });
+  const samples = [
+    sample('2026-11-17T10:00:00.000Z', 'SAMPLE_RUNNING', true),
+    sample('2026-11-17T10:05:00.000Z', 'SAMPLE_RUNNING', true),
+    sample('2026-11-17T10:10:00.000Z', 'SAMPLE_RUNNING', false), // vLLM loading after a restart
+    sample('2026-11-19T19:50:00.000Z', 'SAMPLE_EXITED', false),
+    sample('2026-11-21T10:00:00.000Z', 'SAMPLE_EXITED', false),
+  ];
+  const usage = { modelCalls: 3, modelCallsAvoided: 0, cpuMicros: 41_000, peakRssBytes: 0, rssShareBytes: 0, dbCalls: 12, dbMs: 80, networkBytesOut: 9000, networkBytesIn: 4000 };
+  const legacy = (at: string, outcome: string): LaneJobRow => ({ at, outcome, slot: GPU, durationMs: 72_000, measures: JSON.stringify({ usage }) });
+
+  it('attributes a GPU-slot row with no servedBy to the GPU while the pod was serving', () => {
+    const s = summarizeGpuJobs(
+      [
+        legacy('2026-11-17T10:02:11.000Z', 'SUBMITTED'),
+        legacy('2026-11-17T10:07:40.000Z', 'FAILED_RETRYABLE'),
+        // vLLM not ready: the fallback answered.
+        legacy('2026-11-17T10:11:00.000Z', 'SUBMITTED'),
+        // Pod exited, servedBy not yet recorded.
+        legacy('2026-11-20T08:00:00.000Z', 'SUBMITTED'),
+        // After servedBy was recorded: its absence is no inference.
+        { at: '2026-11-21T10:01:00.000Z', outcome: 'RELEASED_TRANSIENT', slot: GPU, durationMs: 5000, measures: JSON.stringify({ usage }) },
+        { at: '2026-11-21T10:02:00.000Z', outcome: 'SUBMITTED', slot: GPU, durationMs: 208_000, measures: JSON.stringify({ usage, servedBy: ['auto/best-coding'] }) },
+      ],
+      servingAt(samples),
+    );
+    expect(s.gpu).toEqual({ submitted: 1, notAccepted: 1, ms: 144_000, inferred: 2 });
+    expect(s.slotFallback.submitted).toBe(3);
+    expect(s.slotFallback.notAccepted).toBe(1);
+    expect(s.slotFallback.inferred).toBe(2);
+    expect(s.byDay.get('2026-11-17')?.gpu.submitted).toBe(1);
+    expect(s.byDay.get('2026-11-21')?.gpu.submitted).toBe(0);
+  });
+
+  it('serves only within two sample periods of a ready RUNNING sample', () => {
+    const serving = servingAt(samples);
+    expect(serving('2026-11-17T09:59:59.000Z')).toBe(false);
+    expect(serving('2026-11-17T10:00:00.000Z')).toBe(true);
+    expect(serving('2026-11-17T10:09:59.000Z')).toBe(true);
+    expect(serving('2026-11-17T10:10:01.000Z')).toBe(false);
+    expect(serving('2026-11-19T20:00:00.000Z')).toBe(false);
+    expect(servingAt([sample('2026-11-17T10:00:00.000Z', 'SAMPLE_RUNNING', true)])('2026-11-17T10:10:01.000Z')).toBe(false);
+  });
+
+  it('without the pod samples, reads them as before (the fallback)', () => {
+    const s = summarizeGpuJobs([legacy('2026-11-17T10:02:11.000Z', 'SUBMITTED')]);
+    expect(s.gpu.submitted).toBe(0);
+    expect(s.slotFallback).toEqual({ submitted: 1, notAccepted: 0, ms: 72_000, inferred: 1 });
   });
 });
 
