@@ -36,6 +36,8 @@ export async function setGoalTerms(
     ownerUserId?: string | null;
     dueAt?: string | null;
     commitment?: GoalCommitment;
+    /** A commercial execution window in days (§119); null makes the deadline a fixed date again. */
+    executionWindowDays?: number | null;
   },
 ): Promise<boolean> {
   const sets: string[] = [];
@@ -44,11 +46,38 @@ export async function setGoalTerms(
   if (terms.ownerUserId !== undefined) { sets.push('owner_user_id = ?'); params.push(terms.ownerUserId); }
   if (terms.dueAt !== undefined) { sets.push('due_at = ?'); params.push(terms.dueAt); }
   if (terms.commitment !== undefined) { sets.push('commitment = ?'); params.push(terms.commitment); }
+  if (terms.executionWindowDays !== undefined) { sets.push('execution_window_days = ?'); params.push(terms.executionWindowDays); }
   if (sets.length === 0) return false;
   sets.push('updated_at = ?');
   params.push(nowIso(), id);
   const result = await getDb().run(`UPDATE workstreams SET ${sets.join(', ')} WHERE id = ?`, params);
   return result.changes > 0;
+}
+
+/**
+ * Anchor a goal's commercial execution window (§119): record the start once and
+ * set `due_at` to start + window, guarded on it not having started, so two
+ * starters produce one start. The loser is `false`.
+ */
+export async function startGoalExecution(id: string, startedAt: string, dueAt: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE workstreams SET execution_started_at = ?, due_at = ?, updated_at = ?
+      WHERE id = ? AND execution_window_days IS NOT NULL AND execution_started_at IS NULL`,
+    [startedAt, dueAt, nowIso(), id],
+  );
+  return result.changes > 0;
+}
+
+/** Goals of a project whose execution window has not started (§119). */
+export async function unstartedExecutionGoals(projectId: string | null): Promise<{ id: string; target_project_id: string | null; execution_window_days: number }[]> {
+  const rows = await getDb().all<{ id: string; target_project_id: string | null; execution_window_days: number | string }>(
+    `SELECT id, target_project_id, execution_window_days FROM workstreams
+      WHERE execution_window_days IS NOT NULL AND execution_started_at IS NULL
+        AND archived_at IS NULL AND cancelled_at IS NULL${projectId ? ' AND target_project_id = ?' : ''}
+      ORDER BY id`,
+    projectId ? [projectId] : [],
+  );
+  return rows.map((r) => ({ ...r, execution_window_days: Number(r.execution_window_days) }));
 }
 
 /** Guarded on the goal being live and unpaused. The loser is `false`. */

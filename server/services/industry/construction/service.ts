@@ -41,6 +41,7 @@ import { constructIndustry, type Construction, type ConstructionGoal } from './c
 import { interpretIntent, type IntentOverrides } from './intent.ts';
 import { referenceFor } from './references.ts';
 import { EQUIPMENT_WORDS } from '../../../domain/construction.ts';
+import { daysLeftOf } from '../../../domain/executionWindow.ts';
 
 function words(text: string): Set<string> {
   return new Set(text.toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 4));
@@ -287,7 +288,7 @@ export async function goalConstruction(goalId: string, options: GoalConstruction
   const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map, recorded, operatorNamed: true });
   const others = (await listWorkstreams({ projectIds: null }))
     .filter((g) => g.id !== goal.id && activeMoneyGoal(g))
-    .map((g) => ({ id: g.id, title: g.title, policy: goalExecutionPolicy({ daysLeft: g.dueAt ? Math.ceil((Date.parse(g.dueAt) - now.getTime()) / 86_400_000) : null, remainingCents: g.target?.amountCents ?? 0 }) }));
+    .map((g) => ({ id: g.id, title: g.title, policy: goalExecutionPolicy({ daysLeft: daysLeftOf({ dueAt: g.dueAt, executionWindowDays: g.executionWindowDays ?? null, executionStartedAt: g.executionStartedAt ?? null }, now), remainingCents: g.target?.amountCents ?? 0 }) }));
   const construction = constructIndustry({ intentText: text, overrides: options.overrides, evidence, goal: target ? constructionGoal : { ...constructionGoal, daysLeft: null, remainingCents: 0 }, otherMoneyGoals: others, now });
   return { goal, construction, evidenceLayers: evidence.provenance };
 }

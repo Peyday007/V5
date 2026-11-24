@@ -1610,6 +1610,12 @@ export interface ArrangementCut {
   reason: string;
   /** The kept arrangement the model reads it exactly as (`modelledTwinKey`): one strategy, this design an alternative way to run it. */
   sameModelAs?: string;
+  /**
+   * The kept arrangement it is a variant of (`samePopulationOfferKey`): the
+   * same offer to the same buyers at the same price, differing only in how
+   * often it repeats, so counting both would count one population twice.
+   */
+  variantOf?: string;
 }
 /** A design of the same buyers the model reads exactly as a kept one: how it would be run differently, which the plan's numbers do not price. */
 export interface ArrangementAlternative {
@@ -1668,6 +1674,33 @@ export function cutReasonClass(reason: string): string {
 
 const designKey = (a: ConstructedArrangement) => `${a.design.base}/${a.design.funding}/${a.design.aggregation}/${a.design.repeat}`;
 const paidKey = (a: ConstructedArrangement) => `${a.design.funding}/${a.design.repeat}`;
+/**
+ * One offer to one buyer population at one price, whatever its repeat: the
+ * population (its market), the design's structure, funding and pooling, the
+ * need and supply it names, and the modelled price. Pure.
+ *
+ * Production 2026-11-24 (goal wst_7b4fcbb5f2384f31b6c3, independent audit of
+ * the plan read): arr_7c86bd58f732 (one-off) and arr_41db2c7bf63f
+ * (subscription) were the same buyer kind, the same demand row and the same
+ * price, and the plan counted both as legs. `modelledTwinKey` told them apart
+ * only because one repeats, so one population was counted twice. Designs with
+ * one such key are one offer: the first-ranked enters and the other is
+ * recorded on it as a variant.
+ */
+export function samePopulationOfferKey(a: Pick<ConstructedArrangement, 'design' | 'need' | 'supply'>, one: PlannedOpening): string {
+  const p = one.price;
+  return JSON.stringify([
+    one.marketKey ?? one.opportunity.id,
+    a.design.base,
+    a.design.funding,
+    a.design.aggregation,
+    a.need?.ref ?? null,
+    a.supply?.ref ?? null,
+    { value: p.value, low: p.low, high: p.high, provenance: p.provenance, inferred: p.inferred ?? null, takeShare: p.takeShare ?? null },
+    one.commission ?? null,
+  ]);
+}
+
 /** The market every design over one buyer population shares in the engine. */
 export const populationMarket = (population: string) => `${ARRANGEMENT_ID_PREFIX}market:${population}`;
 
@@ -1905,12 +1938,23 @@ export function selectEstimatedArrangements(
    * different exposure, repeat, run cost or price — still enters on its own.
    */
   const twinOf = new Map<Row, Row>();
+  /** Twins that are the same offer to the same buyers at the same price, differing only in how often it repeats (`samePopulationOfferKey`). */
+  const repeatVariant = new Set<Row>();
   const firstByTwin = new Map<string, Row>();
+  const firstByOffer = new Map<string, Row>();
   for (const r of [...candidates.filter((x) => x.arrangement.leader), ...candidates.filter((x) => !x.arrangement.leader)]) {
     const key = modelledTwinKey(r.one);
+    const offer = samePopulationOfferKey(r.arrangement, r.one);
     const kept = firstByTwin.get(key);
+    const keptOffer = firstByOffer.get(offer);
     if (kept) twinOf.set(r, kept);
-    else firstByTwin.set(key, r);
+    else if (keptOffer) {
+      twinOf.set(r, keptOffer);
+      repeatVariant.add(r);
+    } else {
+      firstByTwin.set(key, r);
+      firstByOffer.set(offer, r);
+    }
   }
   const alternativesOf = new Map<Row, ArrangementAlternative[]>();
   for (let i = candidates.length - 1; i >= 0; i--) {
@@ -1920,6 +1964,18 @@ export function selectEstimatedArrangements(
     candidates.splice(i, 1);
     const differs = designDifference(kept.arrangement, r.arrangement);
     alternativesOf.set(kept, [{ arrangementKey: r.arrangement.key, label: r.arrangement.label, differs }, ...(alternativesOf.get(kept) ?? [])]);
+    if (repeatVariant.has(r)) {
+      cut.push({
+        arrangementKey: r.arrangement.key,
+        label: r.arrangement.label,
+        population: r.population,
+        screen: r.screen.value,
+        upside: r.screen.upside,
+        reason: `it sells the same offer to the same buyers at the same price as ${kept.arrangement.key}, so it draws on that one population and is a variant of it, not a second source of money: ${differs}`,
+        variantOf: kept.arrangement.key,
+      });
+      continue;
+    }
     cut.push({
       arrangementKey: r.arrangement.key,
       label: r.arrangement.label,

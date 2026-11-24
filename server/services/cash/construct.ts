@@ -1593,12 +1593,58 @@ export function paidForParts(
     add(payer, { name: clean(need), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_NEED:${norm(o.industry)}>${norm(need)}` });
   }
   for (const f of facts) {
-    // The unit without its figure: two prices of one compliance report are one thing these buyers pay for, not two.
-    const unit = clean(f.name.replace(/(?:USD|US\$|\$|€|£)\s?\d[\d,.]*(?:\s?(?:k|m|thousand|million))?|\b\d[\d,.]*\s?(?:USD|dollars?)\b/gi, ' '));
+    // What the price buys, read out of the fact's sentence — never the sentence (`paidForUnit`).
+    const unit = paidForUnit(f.name);
     if (!unit || !safeBuyer(f.payer) || !allowed(f.payer) || !safeName(unit) || !allowed(unit)) continue;
     add(f.payer, { name: unit, claimId: f.claimId, from: 'INDUSTRY_MAP', ref: f.ref, path: `FACT_NEED:${payerKey(f.payer)}>${norm(unit)}` });
   }
   return [...out.entries()];
+}
+
+/** The framings a back-fill puts before a source's words in a fact's `measures` (`industry/expand.ts`): what the figure is, never what is bought. */
+const FACT_FRAMINGS: readonly RegExp[] = [
+  /^.*?\bfrom a constructed arrangement['’]s research\s*:\s*/i,
+  /^answering Brain['’]s price question about "[^"]*"\s*:\s*/i,
+  /^what this buyer pays per unit of work,? as published\s*:?\s*/i,
+];
+/** A money figure, removed so two prices of one thing read as one thing. */
+const MONEY_FIGURE = /(?:USD|US\$|\$|€|£)\s?\d[\d,.]*(?:\s?(?:k|m|thousand|million))?|\b\d[\d,.]*\s?(?:USD|dollars?)\b/gi;
+/** What a sentence pays: a paying verb, then (within a few words) "per / for / to / on" and its object. */
+const PAID_OBJECT = /\b(?:pays?|paid|paying|charges?|charged|charging|costs?|spends?|spent|bills?|billed|fees?|prices?|priced)\b(?:\s+[^\s.;:]+){0,6}?\s+(?:per|for|to|on)\s+(?:an?\s+|the\s+|each\s+|one\s+|every\s+)?([a-z][^.;:,()"\n]{2,120})/i;
+/** Where an object phrase ends and the sentence goes on about something else. */
+const OBJECT_END = /\s+(?:according|which|that|while|whereas|but|as of|as published|in (?:19|20)\d\d|from (?:the|a|an)\b|on (?:the|a|an|its|their|his|her) (?:blog|page|site|website)|per the)\b.*$/i;
+/** Words that describe where a figure was read, not what anyone bought. */
+const SOURCE_WORDS = /\b(?:blog|blog post|article|listing|source|published|publishes|states?|says|according|reports? that)\b/i;
+/** A rate's unit is how a price is counted, never what is bought. */
+const RATE_UNIT = /^(?:unit|units|unit of work|work|item|items|month|months|year|years|week|weeks|day|days|hour|hours|minute|minutes|word|words|seat|seats|user|users|person|head|time|use)$/i;
+
+/**
+ * What a price fact's sentence says these buyers pay for — the object of the
+ * payment ("a dental practice pays $220 per compliance report" → "compliance
+ * report") — or null when the sentence names none. Pure.
+ *
+ * Production 2026-11-24 (goal wst_7b4fcbb5f2384f31b6c3, independent audit of
+ * the plan read): the whole of a fact's `measures` was read as the need, and a
+ * back-filled fact's `measures` is the back-fill's framing plus the claim's
+ * words ("what this buyer pays per unit of work, as published: The
+ * NameExperts blog page 'domain-name-…'"). So the plan said Offer "what this
+ * buyer pays per unit of work as published The NameExperts blog page
+ * 'domain-name-", Brain produces "business document for …" that, and a buyer
+ * label became "domain buyer or seller — what this buyer pays per unit of
+ * wo…". A description of the evidence is not an offer: only the object of a
+ * stated payment is read, and a sentence that names none leaves the need
+ * unknown — "(not yet specified)", asked by the design's question — rather
+ * than spliced in.
+ */
+export function paidForUnit(measures: string | null | undefined): string | null {
+  let text = (measures ?? '').trim();
+  for (const framing of FACT_FRAMINGS) text = text.replace(framing, '');
+  text = text.replace(MONEY_FIGURE, ' ').replace(/\s+/g, ' ');
+  const match = PAID_OBJECT.exec(text);
+  if (!match) return null;
+  const object = clean(match[1]!.replace(OBJECT_END, '').replace(/['‘’]+/g, ' ')).replace(/^(?:the|an?|each|every|one)\s+/i, '').trim();
+  if (object.length < 3 || SOURCE_WORDS.test(object) || RATE_UNIT.test(object) || /\d/.test(object)) return null;
+  return object;
 }
 
 /** One forward or transfer arrangement the parts support, before it is composed. */

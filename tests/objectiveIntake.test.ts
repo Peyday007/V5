@@ -132,7 +132,9 @@ describe('createGoal, setTarget and setTargetLimits', () => {
     expect(made.ok).toBe(true);
     if (!made.ok) return;
     expect(made.goal.purpose).toBe('REVENUE_DIRECT');
-    expect(made.goal.dueAt).toBe(new Date(NOW.getTime() + 30 * 24 * HOUR).toISOString());
+    // "within 30 days" is a 30-day commercial execution window that has not started (§119), never a date fixed at intake.
+    expect(made.goal).toMatchObject({ executionWindowDays: 30, executionStartedAt: null });
+    expect(Date.parse(made.goal.dueAt!) - Date.now()).toBeGreaterThan(30 * 24 * HOUR - 60_000);
     expect(made.goal.target).toMatchObject({ metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, capitalCeilingCents: 300_000, setAt: NOW.toISOString() });
     const kinds = (await listWorkstreamEvents(made.goal.id)).map((e) => e.kind);
     expect(kinds).toEqual(expect.arrayContaining(['WORKSTREAM_OPENED', 'GOAL_TERMS_SET', 'GOAL_TARGET_SET']));
