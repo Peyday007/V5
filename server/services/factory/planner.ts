@@ -47,6 +47,7 @@ import {
   getCampaign,
   getChangeRequest,
   getUnitByKey,
+  pathsOverlap,
   promoteReadyUnits,
   refreshDownstreamCounts,
 } from '../../repos/factory.ts';
@@ -55,6 +56,8 @@ import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { forbiddenPathsFor } from './forbidden.ts';
 import { FactoryError } from './errors.ts';
 import {
+  isConcrete,
+  isTestPath,
   rewritePlanGraph,
   validateUnitGraph,
   type OwnershipIssue,
@@ -116,7 +119,46 @@ export interface PlanValidation {
   issues: OwnershipIssue[];
   /** What the factory changed about the proposed graph to make it completable, in order. */
   rewrites: PlanRewrite[];
+  /** How wide and how deep the plan is — the shape that decides how long DEVELOPMENT takes. */
+  shape: PlanShape;
 }
+
+/**
+ * The shape of a plan, measured rather than judged.
+ *
+ * DEVELOPMENT was the largest share of the measured engineering critical path
+ * (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595): every dependency edge costs a
+ * whole implement-and-integrate round before the dependent unit can start, and a
+ * unit that owns several modules is one long session where several short ones
+ * could have run at once. Nothing here refuses a plan — a deep plan is sometimes
+ * the honest one — but every validation reports the shape, and a chain or a unit
+ * the plan itself gives no reason for comes back as a warning the architect reads.
+ */
+export interface PlanShape {
+  unitCount: number;
+  /** Units on the longest `dependsOn` chain; 1 when nothing waits for anything. */
+  maxDepth: number;
+  /** The most units that sit at one depth, i.e. that can be ready at once. */
+  maxWidth: number;
+  /** Concrete owned paths of the unit that owns the most. */
+  largestUnitPaths: number;
+  /** Distinct directories holding the non-test source files of the widest unit. */
+  largestUnitModules: number;
+  /** The longest chain, root first. */
+  longestChain: string[];
+}
+
+const EMPTY_SHAPE: PlanShape = {
+  unitCount: 0,
+  maxDepth: 0,
+  maxWidth: 0,
+  largestUnitPaths: 0,
+  largestUnitModules: 0,
+  longestChain: [],
+};
+
+/** A unit owning at least this many non-test source files across two or more directories is one to split. */
+export const OVERSIZED_UNIT_SOURCE_FILES = 3;
 
 export const MAX_PLAN_UNITS = 24;
 
@@ -148,14 +190,14 @@ export function validatePlan(
   const forbiddenHere = forbiddenPathsFor(changeRequest.repository);
 
   if (typeof proposed !== 'object' || proposed === null || Array.isArray(proposed)) {
-    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
+    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE };
   }
   const raw = (proposed as { units?: unknown }).units;
   if (!Array.isArray(raw)) {
-    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
+    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE };
   }
   if (raw.length === 0) {
-    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
+    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE };
   }
   if (raw.length > maxUnits) {
     errors.push(`The plan has ${raw.length} units; the ceiling is ${maxUnits}.`);
@@ -271,6 +313,9 @@ export function validatePlan(
   }
   for (const rewrite of rewrites) warnings.push(`Rewritten: ${rewrite.detail}`);
 
+  const shaped = measurePlanShape(finalUnits);
+  warnings.push(...shaped.warnings);
+
   const served = new Set(finalUnits.flatMap((unit) => unit.serves));
   const uncoveredConditions = changeRequest.acceptanceConditions
     .filter((condition) => condition.mandatory && !served.has(condition.id))
@@ -284,6 +329,109 @@ export function validatePlan(
     uncoveredConditions,
     issues: verdict.issues,
     rewrites,
+    shape: shaped.shape,
+  };
+}
+
+function directoryOf(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+}
+
+/**
+ * Measure a plan's width and depth, and name what makes it deeper or longer than
+ * the plan itself justifies.
+ *
+ * An edge is *unexplained* when the dependent owns none of the dependency's
+ * paths and names none of them in its required context or objective: nothing in
+ * the plan says the dependent reads what the dependency writes, so the edge only
+ * delays it. That is reported, never removed — the architect may know of an
+ * import the plan does not spell out, and a plan is still a proposal.
+ */
+export function measurePlanShape(units: UnitSpec[]): { shape: PlanShape; warnings: string[] } {
+  if (units.length === 0) return { shape: EMPTY_SHAPE, warnings: [] };
+  const warnings: string[] = [];
+  const byKey = new Map(units.map((unit) => [unit.key, unit]));
+
+  // Longest chain ending at each unit, cycle-safe: a cycle is refused elsewhere,
+  // so here it only stops the walk.
+  const depth = new Map<string, { depth: number; chain: string[] }>();
+  const visiting = new Set<string>();
+  const walk = (key: string): { depth: number; chain: string[] } => {
+    const known = depth.get(key);
+    if (known) return known;
+    if (visiting.has(key)) return { depth: 0, chain: [] };
+    visiting.add(key);
+    let best: { depth: number; chain: string[] } = { depth: 0, chain: [] };
+    for (const dependency of byKey.get(key)?.dependsOn ?? []) {
+      if (!byKey.has(dependency) || dependency === key) continue;
+      const candidate = walk(dependency);
+      if (candidate.depth > best.depth) best = candidate;
+    }
+    visiting.delete(key);
+    const result = { depth: best.depth + 1, chain: [...best.chain, key] };
+    depth.set(key, result);
+    return result;
+  };
+  for (const unit of units) walk(unit.key);
+
+  let longest: { depth: number; chain: string[] } = { depth: 0, chain: [] };
+  const atDepth = new Map<number, number>();
+  for (const unit of units) {
+    const entry = depth.get(unit.key) ?? { depth: 1, chain: [unit.key] };
+    if (entry.depth > longest.depth) longest = entry;
+    atDepth.set(entry.depth, (atDepth.get(entry.depth) ?? 0) + 1);
+  }
+
+  let largestUnitPaths = 0;
+  let largestUnitModules = 0;
+  for (const unit of units) {
+    const concrete = unit.ownedPaths.filter(isConcrete);
+    largestUnitPaths = Math.max(largestUnitPaths, concrete.length);
+    const sources = concrete.filter((path) => !isTestPath(path));
+    const modules = new Set(sources.map(directoryOf));
+    largestUnitModules = Math.max(largestUnitModules, modules.size);
+    if (sources.length >= OVERSIZED_UNIT_SOURCE_FILES && modules.size >= 2) {
+      warnings.push(
+        `Shape: \`${unit.key}\` owns ${sources.length} source files across ${modules.size} directories ` +
+          `(${[...modules].map((m) => m || '.').join(', ')}); split it by file ownership into ` +
+          'independent units so they run in parallel sessions rather than one long one.',
+      );
+    }
+  }
+
+  const unexplained: string[] = [];
+  for (const unit of units) {
+    const named = [...unit.requiredContext, ...unit.ownedPaths];
+    for (const dependencyKey of unit.dependsOn) {
+      const dependency = byKey.get(dependencyKey);
+      if (!dependency || dependencyKey === unit.key) continue;
+      const read =
+        pathsOverlap(named, dependency.ownedPaths) ||
+        dependency.ownedPaths.some((path) => path.length > 0 && unit.objective.includes(path));
+      if (!read) unexplained.push(`${unit.key} -> ${dependencyKey}`);
+    }
+  }
+  if (unexplained.length > 0) {
+    warnings.push(
+      `Shape: ${unexplained.length} dependency edge(s) the plan gives no reason for ` +
+        `(${unexplained.join('; ')}): the dependent owns none of the dependency's paths and names ` +
+        'none of them in its required context or objective. Each edge costs a whole implement-and-' +
+        'integrate round; drop it unless the dependent really reads code the dependency creates. ' +
+        `Longest chain: ${longest.chain.join(' -> ')} (depth ${longest.depth}).`,
+    );
+  }
+
+  return {
+    shape: {
+      unitCount: units.length,
+      maxDepth: longest.depth,
+      maxWidth: Math.max(0, ...atDepth.values()),
+      largestUnitPaths,
+      largestUnitModules,
+      longestChain: longest.chain,
+    },
+    warnings,
   };
 }
 
