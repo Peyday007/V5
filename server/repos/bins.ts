@@ -1660,6 +1660,26 @@ export function purposeAdmitsSql(prefix: string): string {
  * TRUE or FALSE and never NULL: `NOT purposeAdmitsSql(…)` (brain-only mode's
  * release pass) depends on that.
  */
+/**
+ * The ids of every packet an owner-directed goal reaches — linked directly, or
+ * through a mission the goal links by id or by candidate — as one uncorrelated
+ * sub-select (see above for why it is never correlated). With no such goal it
+ * selects nothing.
+ */
+export function ownerDirectedPacketIdsSql(): string {
+  const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
+  if (ids.length === 0) return 'SELECT NULL WHERE 1 = 0';
+  const list = ids.map((id) => `'${id}'`).join(', ');
+  const live = `gl.workstream_id IN (${list}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
+  return (
+    `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'PACKET' AND gl.ref IS NOT NULL` +
+    ` UNION SELECT gm.orchestration_id FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
+    ` WHERE ${live} AND gl.kind = 'MISSION' AND gm.orchestration_id IS NOT NULL` +
+    ` UNION SELECT gm.orchestration_id FROM workstream_links gl JOIN russell_missions gm ON gm.candidate_id = gl.ref` +
+    ` WHERE ${live} AND gl.kind = 'CANDIDATE' AND gm.orchestration_id IS NOT NULL`
+  );
+}
+
 export function ownerDirectedGoalBinSql(prefix: string): string {
   const outer = prefix === '' ? 'bins.' : prefix;
   const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
@@ -1673,9 +1693,7 @@ export function ownerDirectedGoalBinSql(prefix: string): string {
     ` UNION SELECT gm.${column} FROM workstream_links gl JOIN russell_missions gm ON gm.candidate_id = gl.ref` +
     ` WHERE ${live} AND gl.kind = 'CANDIDATE' AND gm.${column} IS NOT NULL`;
   return (
-    `((${outer}orchestration_id IS NOT NULL AND ${outer}orchestration_id IN (` +
-    `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'PACKET' AND gl.ref IS NOT NULL` +
-    ` UNION ${missions('orchestration_id')}))` +
+    `((${outer}orchestration_id IS NOT NULL AND ${outer}orchestration_id IN (${ownerDirectedPacketIdsSql()}))` +
     ` OR (${outer}factory_campaign_id IS NOT NULL AND ${outer}factory_campaign_id IN (` +
     `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'CAMPAIGN' AND gl.ref IS NOT NULL))` +
     ` OR ${outer}id IN (${missions('bin_id')}))`
