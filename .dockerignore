@@ -10,6 +10,9 @@ data/
 
 node_modules
 client/dist
+command/node_modules
+command/.next
+command/out
 dist
 
 .git

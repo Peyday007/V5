@@ -17224,3 +17224,47 @@ started. A `GOAL_EXECUTION_WINDOW_SET` event keeps the date it replaced.
 Pinned by `tests/goalExecutionWindow.test.ts`, including structural guards
 that refuse a live-goal filter on `due_at > ?` alone and a days-left figure
 computed from the stored date.
+
+## 120. The Command Center is a window over Brain's own routes, and a read door is never a write door.
+
+The owner asked for a command center built on Kiranism's
+`next-shadcn-dashboard-starter`, styled after Linear and Vercel, with ten pages:
+Overview, a direct Brain conversation, financial objectives, commercial plans,
+live operations, agents and tasks, the investment committee, reports and
+audits, budgets and approvals, and settings and integrations. `command/` is that
+starter, served by Brain's own process at `/command`. The rules it settled:
+
+- **The starter is the foundation; two of its parts are not.** It ships Clerk
+  for sign-in and a Next.js server runtime. Clerk would be a second identity
+  system beside Brain's sessions (§17, §46), and a server runtime would be a
+  second process and a second origin, which the Dockerfile's opening paragraph
+  refuses. So Clerk, Sentry, the mock APIs and the demo pages were removed and
+  the app is a static export (`output: 'export'`, `basePath: '/command'`): every
+  page is a shell with no data in it, served by `server/index.ts` beside the
+  console. Every row is read in the browser from `/api` with the person's own
+  session cookie, behind `requireAuthentication` and each route's own
+  authorization. The shell's sign-in form posts to `/api/auth/pin` or
+  `/api/auth/login` — Brain's doors, not a new one.
+- **No business logic in the browser.** Each page reads a route that already
+  existed: goals and their decisions (`/api/goals`), Russell conversations,
+  Needs you and its answers, the workforce, fleet and work views, the Factory
+  fleet, the cash view, integrations and health. Nothing is recomputed, cached
+  across sessions or summed client-side; a value Brain did not return is shown
+  as "not reported", never as zero, and a refused read says it was refused.
+- **One read door, `GET /api/command/read/:tool`** (`server/routes/command.ts`),
+  for what only the operator's MCP tools could read — the goal plan with its
+  committee review (§117), capacity, deficiencies, engineering outcomes, the
+  operator's run history. It calls `callTool`, the executor MCP uses, so the
+  tool's own authorization, the per-credential rate slot, the time limit and
+  the `MCP_TOOL_CALL` audit row are the same code path (§21, invariant 28). It
+  serves persons only (`requirePerson`), only tools on `COMMAND_READ_TOOLS`, and
+  re-checks each tool's read-only annotation per call, so a tool whose
+  annotation becomes a mutation leaves the door by itself. An unknown,
+  unlisted or mutating tool is one 404 (invariant 23). Writes stay on the
+  routes that own them.
+- **Live means re-read, not pushed.** Pages re-read their routes every 15–40 s
+  while visible (TanStack Query), back off on a retryable 503 as §57 asks, and
+  show when each panel was last read. A conversation is re-read every 4 s
+  while a reply is pending, as the console does.
+
+Pinned by `tests/commandCenter.test.ts`.

@@ -32,6 +32,7 @@ import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
 import { registerRouter } from './register.ts';
 import { goalsRouter } from './goals.ts';
+import { commandRouter } from './command.ts';
 import { bridgeRouter } from './bridge.ts';
 import { magicRouter } from './magic.ts';
 import { memoryRouter } from './memory.ts';
@@ -102,6 +103,8 @@ export function createApiRouter(): Router {
   router.use(integrationsRouter);
 
   router.use(healthRouter);
+  // The Command Center's read door onto the operator's read-only tools (routes/command.ts).
+  router.use(commandRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),
   // so they mount at the root ahead of the entity routers.
   router.use(auditsRouter);

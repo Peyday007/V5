@@ -32,6 +32,15 @@ COPY server ./server
 # Typechecks and then builds; a type error fails the image rather than the deploy.
 RUN npm run build
 
+# The Command Center (`command/`, served at /command): Kiranism's Next.js
+# shadcn dashboard starter, statically exported. Static on purpose, for the two
+# reasons at the top of this file: one process, one origin. Its own lockfile, so
+# its React 19 / Next dependencies never meet the console's.
+COPY command/package.json command/package-lock.json ./command/
+RUN cd command && npm ci --no-audit --no-fund
+COPY command ./command
+RUN cd command && NEXT_TELEMETRY_DISABLED=1 npm run build
+
 # ---------------------------------------------------------------------------
 # Runtime: production dependencies, the server, and the built client.
 # ---------------------------------------------------------------------------
@@ -102,6 +111,7 @@ COPY objectives ./objectives
 # move is bounded by `INGESTION_MAY_MOVE`, which is DEFINITION and nothing else.
 COPY blueprints ./blueprints
 COPY --from=build /app/client/dist ./client/dist
+COPY --from=build /app/command/out ./command/out
 
 # Not root. The process needs no privilege: it opens a socket and talks to two
 # network services.
