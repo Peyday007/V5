@@ -364,6 +364,27 @@ async function main(): Promise<void> {
       console.log(`DIAG UNMEASURED — ${message(error)}`);
     }
     try {
+      // Can this machine reach the publishers the knowledge pass reads (§122)? Status codes only.
+      const { USER_AGENT } = await import('../server/services/knowledge/acquire.ts');
+      for (const url of [
+        'https://www2.census.gov/programs-surveys/susb/datasets/',
+        'https://www2.census.gov/programs-surveys/cbp/datasets/2023/',
+        'https://data.sec.gov/api/xbrl/frames/us-gaap/Revenues/USD/CY2025.json',
+        'https://efts.sec.gov/LATEST/search-index?forms=10-K&dateRange=custom&startdt=2026-01-01&enddt=2026-01-02',
+      ]) {
+        const started = Date.now();
+        try {
+          const response = await fetch(url, { headers: { 'user-agent': USER_AGENT }, redirect: 'manual', signal: AbortSignal.timeout(30_000) });
+          const body = await response.text();
+          console.log(`KNOWLEDGE_PROBE ${response.status} ${body.length}B ${Date.now() - started}ms ${url}`);
+        } catch (error) {
+          console.log(`KNOWLEDGE_PROBE FAILED ${Date.now() - started}ms ${url} — ${message(error)}`);
+        }
+      }
+    } catch (error) {
+      console.log(`KNOWLEDGE_PROBE UNMEASURED — ${message(error)}`);
+    }
+    try {
       // What the commercial knowledge pass learned and where it reached a plan (§122), across every project.
       const { knowledgeView } = await import('../server/services/knowledge/view.ts');
       const projects = (await getDb().all<{ id: string }>('SELECT id FROM projects')).map((one) => one.id);

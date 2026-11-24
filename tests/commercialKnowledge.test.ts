@@ -32,7 +32,7 @@ import { readSecYear, sectorOfSic } from '../server/services/knowledge/sec.ts';
 import { discoverSources, runKnowledgePass, type KnowledgeDeps } from '../server/services/knowledge/pipeline.ts';
 import { buyerCountClaimId, notePlanEffects } from '../server/services/knowledge/apply.ts';
 import { knowledgeView } from '../server/services/knowledge/view.ts';
-import { listApplications, listLinks, listSources } from '../server/repos/commercialKnowledge.ts';
+import { finishPassRow, listApplications, listLinks, listSources, recentPasses, startPassRow } from '../server/repos/commercialKnowledge.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { Layer } from '../server/domain/types.ts';
 
@@ -430,4 +430,14 @@ describe('the pass: acquire, understand, apply — with no person in it', () => 
     expect((await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM knowledge_facts WHERE quality = 'MODEL'`))!.n).toBe(0);
     expect((await listNodes(projectId)).length).toBeGreaterThan(0);
   }, 60_000);
+
+  it('every pass is a row: running, then done with its report — so a pass that never started is told apart from one that failed', async () => {
+    const id = await startPassRow();
+    expect((await recentPasses())[0]).toMatchObject({ id, status: 'RUNNING' });
+    await finishPassRow(id, 'DONE', { reads: [{ source: 'cbp-2023', outcome: 'MODIFIED', facts: 7985 }], errors: [] });
+    await finishPassRow(id, 'FAILED', { error: 'late' });
+    expect((await recentPasses())[0]).toMatchObject({ id, status: 'DONE' });
+    const view = await knowledgeView([projectId]);
+    expect((view['learning'] as { lastPass: { status: string; reads: unknown[] } }).lastPass).toMatchObject({ status: 'DONE', reads: [{ source: 'cbp-2023' }] });
+  });
 });
