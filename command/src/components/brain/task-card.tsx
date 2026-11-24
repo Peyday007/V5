@@ -11,7 +11,9 @@ import { useState } from 'react';
 /** The title as a person reads it: the first clause, at most ~90 characters. Presentation only. */
 export function shortTitle(text: string): string {
   const clean = text.replace(/\s+/g, ' ').trim();
-  const stripped = clean.replace(/^(establish|find out|determine|research|investigate),?\s+(from published sources,?\s+)?/i, '');
+  const stripped = clean
+    .replace(/^(establish|find out|determine|research|investigate),?\s+(from published sources,?\s+)?/i, '')
+    .replace(/^causal unknown:\s*/i, '');
   const base = stripped.charAt(0).toUpperCase() + stripped.slice(1);
   const cut = base.search(/[.:;?!](\s|$)| — /);
   const first = cut > 20 ? base.slice(0, cut) : base;
@@ -42,7 +44,7 @@ const GROUP_LABEL: Record<string, string> = {
 
 export function TaskCard({ entry, objective }: { entry: WorkEntryFull; objective: string | null }) {
   const [open, setOpen] = useState(false);
-  const card = entry.card ?? { startedAt: null, finishedAt: null, worker: null, result: null };
+  const card: NonNullable<WorkEntryFull['card']> = entry.card ?? { startedAt: null, finishedAt: null, worker: null, result: null };
   const running = entry.group === 'WORKING_NOW';
   const finished = entry.group === 'FINISHED';
   const spent = duration(card.startedAt, finished ? card.finishedAt : running ? null : card.finishedAt);
@@ -53,13 +55,13 @@ export function TaskCard({ entry, objective }: { entry: WorkEntryFull; objective
         <h3 className='min-w-0 flex-1 text-sm font-medium break-words text-pretty'>{shortTitle(entry.title)}</h3>
         <StatusPill status={entry.blocked ? 'Blocked' : (GROUP_LABEL[entry.group] ?? entry.state)} tone={entry.blocked ? 'bad' : running ? 'good' : undefined} />
       </div>
-      {entry.why && entry.why !== entry.title && (
-        <p className='text-muted-foreground mt-1.5 line-clamp-2 text-sm break-words'>{entry.why}</p>
+      {(card.purpose || (entry.why && entry.why !== entry.title)) && (
+        <p className='text-muted-foreground mt-1.5 line-clamp-2 text-sm break-words'>{card.purpose ?? entry.why}</p>
       )}
       <dl className='mt-3 grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-2'>
         <div className='min-w-0'>
           <dt className='text-muted-foreground'>Objective</dt>
-          <dd className='break-words'>{objective ?? 'Not tied to a goal'}</dd>
+          <dd className='break-words'>{card.goalTitle ?? objective ?? 'Not tied to a goal'}</dd>
         </div>
         <div className='min-w-0'>
           <dt className='text-muted-foreground'>Worker</dt>

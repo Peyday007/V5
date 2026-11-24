@@ -121,7 +121,7 @@ const RETIRABLE: ReadonlySet<ObsoleteReason> = new Set<ObsoleteReason>([
   'DUPLICATE',
 ]);
 
-interface IdeaRow {
+export interface IdeaRow {
   id: string;
   project_id: string;
   title: string;
