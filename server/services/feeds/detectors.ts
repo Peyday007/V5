@@ -92,6 +92,14 @@ export interface Detector {
    * not a miss (`ruleReading`). Unset: every item the rule reads can be kept.
    */
   memberWindowMs?: number;
+  /**
+   * Whether this rule could keep `record` at all, read with the same predicate
+   * `detect` applies (`copies`: every stored record the rule would read beside
+   * it, so copies of one document are merged as `detect` merges them). An item
+   * the rule could never keep is not a miss (`ruleReading`), exactly as an item
+   * outside `memberWindowMs` is not. Unset: every in-window item can be kept.
+   */
+  couldKeep?(record: DetectorRecord, now: Date, copies?: readonly DetectorRecord[]): boolean;
   detect(records: readonly DetectorRecord[], now: Date): DetectedSignal[];
 }
 
@@ -444,7 +452,7 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
       const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
       return corrected ? effectiveDateOf(corrected.body) : null;
     };
-    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    const groups: RuleEffectiveSoonGroups = new Map();
     for (const record of ours) {
       const name = issuingAgencyOf(record.organization);
       const agency = this.entityKeyOf!(record.organization);
@@ -582,7 +590,7 @@ export const RULE_EFFECTIVE_SOON_V3: Detector = {
       const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
       return corrected ? effectiveDateOf(corrected.body) : null;
     };
-    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    const groups: RuleEffectiveSoonGroups = new Map();
     for (const record of ours) {
       const name = issuingAgencyOf(record.organization);
       const agency = this.entityKeyOf!(record.organization);
@@ -716,7 +724,7 @@ export const RULE_EFFECTIVE_SOON_V4: Detector = {
       if (!corrects) return null;
       return correctedEffectiveDateOf(record.body) ?? (documentNumber ? correctedRule.get(documentNumber) ?? null : null) ?? own.get(corrects) ?? null;
     };
-    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    const groups: RuleEffectiveSoonGroups = new Map();
     for (const record of ours) {
       const name = issuingAgencyOf(record.organization);
       const agency = this.entityKeyOf!(record.organization);
@@ -890,8 +898,28 @@ function detectRuleEffectiveSoonV5(
   detector: Detector,
   records: readonly DetectorRecord[],
   now: Date,
-  options: { readStatedEffective: boolean; extraQualifiers: readonly string[] },
+  options: { readStatedEffective: boolean; extraQualifiers: readonly string[]; leadDays?: number },
 ): DetectedSignal[] {
+    const groups = ruleEffectiveSoonKept(detector, records, now, options);
+    return ruleEffectiveSoonSignals(groups, now, options.extraQualifiers);
+}
+
+type RuleEffectiveSoonGroups = Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>;
+
+/**
+ * The records RULE_EFFECTIVE_SOON (v5 onward) keeps, grouped by issuing agency:
+ * the one predicate both `detect` and `couldKeep` read, so what the rule
+ * detects and what its reading counts as a miss cannot drift apart. `leadDays`
+ * is the upper bound after publication (RULE_EFFECTIVE_SOON_V2_LEAD_DAYS unless
+ * a version states its own). Pure.
+ */
+function ruleEffectiveSoonKept(
+  detector: Detector,
+  records: readonly DetectorRecord[],
+  now: Date,
+  options: { readStatedEffective: boolean; leadDays?: number },
+): RuleEffectiveSoonGroups {
+    const leadDays = options.leadDays ?? RULE_EFFECTIVE_SOON_V2_LEAD_DAYS;
     const ours = records.filter((record) => detector.sources.includes(record.source));
     const keep = (map: Map<string, string>, key: string, value: string | null): void => {
       if (value && (!map.has(key) || value < map.get(key)!)) map.set(key, value);
@@ -942,7 +970,7 @@ function detectRuleEffectiveSoonV5(
       const stated = federalRegisterPublishedDayOf(record.url) ?? /^(\d{4}-\d{2}-\d{2})/.exec(record.publishedAt ?? '')?.[1] ?? null;
       return stated ? Date.parse(`${stated}T00:00:00.000Z`) : utcDay(Date.parse(record.fetchedAt));
     };
-    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    const groups: RuleEffectiveSoonGroups = new Map();
     for (const record of ours) {
       const documentNumber = federalRegisterDocumentOf(record.url);
       const listed = documentNumber ? agencies.get(documentNumber) : undefined;
@@ -957,11 +985,15 @@ function detectRuleEffectiveSoonV5(
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       // Not before its own publication, and no later than eight weeks after it: both bounds are the
       // Federal Register's own dates, never the day Brain happened to fetch the document (cause 4).
-      if (!Number.isFinite(at) || at < publishedDay || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      if (!Number.isFinite(at) || at < publishedDay || at > publishedDay + leadDays * DAY) continue;
       const group = groups.get(agency) ?? { name, members: [] };
       group.members.push({ record, effective });
       groups.set(agency, group);
     }
+    return groups;
+}
+
+function ruleEffectiveSoonSignals(groups: RuleEffectiveSoonGroups, now: Date, extraQualifiers: readonly string[]): DetectedSignal[] {
     const out: DetectedSignal[] = [];
     for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
       const dates = group.members.map((one) => one.effective).sort();
@@ -990,7 +1022,7 @@ function detectRuleEffectiveSoonV5(
           'every stored copy of a document is read for its stated dates and agencies, matched by document number',
           'the publication day is the one the Federal Register states in the document URL',
           'kept against the publication day the Federal Register states, not the day Brain fetched it; the wording says which effective dates had passed on the day it ran',
-          ...options.extraQualifiers,
+          ...extraQualifiers,
         ],
         hypothesis: wording.hypothesis,
         deliverable: 'DOCUMENT',
@@ -1051,13 +1083,80 @@ export const RULE_EFFECTIVE_SOON_V6: Detector = {
 };
 
 /**
+ * RULE_EFFECTIVE_SOON v7's upper bound: 60 days after publication. Under the
+ * Congressional Review Act a major rule cannot take effect until 60 days after
+ * it is published, so v2..v6's eight weeks (56 days) excluded every major rule
+ * by construction — FCC 2026-23040, published 2026-11-12 and effective
+ * 2027-01-11, is exactly 60 days out. This widens what the rule can see; it
+ * lowers no bar. RULE_EFFECTIVE_SOON_V2_LEAD_DAYS stays 56 for v2..v6.
+ */
+export const RULE_EFFECTIVE_SOON_V7_LEAD_DAYS = 60;
+
+/** Kept-record ids per array of copies, so `couldKeep` over one reading's records runs the predicate once. */
+const keptByCopies = new WeakMap<readonly DetectorRecord[], Set<string>>();
+
+/**
+ * RULE_EFFECTIVE_SOON, version 7 (SHADOW). Two causes of v6's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@6), fixed without lowering a bar:
+ *
+ *  1. Most "misses" were not misses. `ruleReading` counted any in-window item
+ *     from a recognised agency that the free screen KEPT, without asking the
+ *     rule's own date predicate, so Coast Guard 2026-23027 ("Effective
+ *     2026-11-11.", published 2026-11-12) and 2026-23047 (an enforcement window
+ *     that ended the day before publication) — both correct exclusions — were
+ *     reported as misses. v7 declares `couldKeep`, the very predicate `detect`
+ *     applies (`ruleEffectiveSoonKept`), and the reading leaves out what the
+ *     rule could never keep, as it already does for `memberWindowMs`.
+ *  2. A major rule is effective no sooner than 60 days after publication, past
+ *     v6's 56-day bound (FCC 2026-23040). v7's bound is
+ *     RULE_EFFECTIVE_SOON_V7_LEAD_DAYS.
+ *
+ * Everything else is v6's, unchanged: the bar that a rule is never effective
+ * before its own publication, the 30-day membership window, issuing-agency
+ * grouping, the stated-effective marker, no free-text date parsing in the
+ * detector, the wording, and no industry or agency filter.
+ */
+export const RULE_EFFECTIVE_SOON_V7: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 7,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V6.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  couldKeep(record, now, copies) {
+    const all = copies && copies.includes(record) ? copies : [...(copies ?? []), record];
+    let kept = keptByCopies.get(all);
+    if (!kept) {
+      const groups = ruleEffectiveSoonKept(this, all, now, { readStatedEffective: true, leadDays: RULE_EFFECTIVE_SOON_V7_LEAD_DAYS });
+      kept = new Set([...groups.values()].flatMap((group) => group.members.map((one) => one.record.id)));
+      if (copies === all) keptByCopies.set(all, kept);
+    }
+    return kept.has(record.id);
+  },
+  detect(records, now) {
+    return detectRuleEffectiveSoonV5(this, records, now, {
+      readStatedEffective: true,
+      leadDays: RULE_EFFECTIVE_SOON_V7_LEAD_DAYS,
+      extraQualifiers: [
+        "with no effective_on, the date the Federal Register's own DATES field states, as the connector recorded it",
+        'kept up to 60 days after publication, the earliest a major rule may take effect under the Congressional Review Act',
+      ],
+    });
+  },
+};
+
+/**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1..v5 stay exported so their recorded rows and readings keep their keys (@1..@5).
+ * RULE_EFFECTIVE_SOON v1..v6 stay exported so their recorded rows and readings keep their keys (@1..@6).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V6];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V7];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows
@@ -1214,20 +1313,54 @@ async function screenVerdicts(ids: readonly string[]): Promise<Map<string, 'KEEP
   return out;
 }
 
-/** Read one rule version's detections back against the independent screen. */
-export async function ruleReading(detector: Detector, now: Date = new Date()): Promise<RuleReading> {
+/** The most stored items one pass reads for one rule. */
+export const DETECTOR_RECORD_LIMIT = 5000;
+
+/**
+ * The stored items one rule reads in one pass: its sources, fetched inside its
+ * lookback, newest first with a stable tie-break, capped at
+ * DETECTOR_RECORD_LIMIT. The one query both `runDetectors` (for `detect`) and
+ * `ruleReading` (for `couldKeep`) read, so the earliest-date merge of a
+ * document's copies sees the same copies in the reading as in detection — an
+ * unordered capped read can return a different set from an ordered one.
+ */
+export async function loadDetectorRecords(detector: Detector, now: Date, limit: number = DETECTOR_RECORD_LIMIT): Promise<DetectorRecord[]> {
+  const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
+  const rows = await getDb().all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
+    `SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items
+      WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ?
+      ORDER BY fetched_at DESC, id LIMIT ?`,
+    [...detector.sources, since, limit],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    source: row.source,
+    url: row.url,
+    title: row.title,
+    organization: row.organization,
+    publishedAt: row.published_at,
+    fetchedAt: row.fetched_at,
+    body: row.body,
+  }));
+}
+
+/**
+ * Read one rule version's detections back against the independent screen.
+ *
+ * `records` is the set the rule's `detect` read this pass; `runDetectors`
+ * passes it so the reading judges the very copies detection judged. Without
+ * it the reading loads the same set through `loadDetectorRecords`.
+ */
+export async function ruleReading(detector: Detector, now: Date = new Date(), records?: readonly DetectorRecord[]): Promise<RuleReading> {
   const db = getDb();
   const rows = await db.all<{ member_ids: string; entity_key: string | null; category: string | null }>(
     'SELECT member_ids, entity_key, category FROM feed_detections WHERE rule_id = ? AND rule_version = ?',
     [detector.id, detector.version],
   );
   const memberIds = [...new Set(rows.flatMap((row) => JSON.parse(row.member_ids) as string[]))];
-  const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-  const items = await db.all<{ id: string; title: string; url: string; organization: string | null; published_at: string | null; fetched_at: string }>(
-    `SELECT id, title, url, organization, published_at, fetched_at FROM feed_items
-      WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ? LIMIT 5000`,
-    [...detector.sources, since],
-  );
+  // The rule's own predicate, over every copy detection reads, when it states one.
+  const copies: readonly DetectorRecord[] = records ?? await loadDetectorRecords(detector, now);
+  const keepable = (record: DetectorRecord): boolean => !detector.couldKeep || detector.couldKeep(record, now, copies);
   const members = new Set(memberIds);
   // Related items are keyed the way the rule keys its own entities, or its misses are invisible.
   const entityKeyOf = (organization: string | null): string | null =>
@@ -1248,9 +1381,9 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   const categories = new Set(rows.filter((row) => !row.entity_key).map((row) => row.category).filter((one): one is string => !!one));
   // A miss is an item the rule could have kept: one it reads only as context
   // (outside its membership window) is never a miss, however far back it reads.
-  const related = items.filter((item) => !members.has(item.id) && withinMemberWindow(detector, item.published_at, item.fetched_at, now) && (
+  const related = copies.filter((item) => !members.has(item.id) && withinMemberWindow(detector, item.publishedAt, item.fetchedAt, now) && (
     entities.has(entityKeyOf(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
-  ));
+  ) && keepable(item));
   const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
   const screened = memberIds.filter((id) => verdicts.has(id));
   const confirmed = screened.filter((id) => verdicts.get(id) === 'KEEP').length;
@@ -1439,30 +1572,15 @@ export async function runDetectors(input: {
   // `rules` narrows a pass to the rules whose version or data changed: nothing else is recomputed.
   const chosen = (input.detectors ?? DETECTORS).filter((one) => !input.rules || input.rules.includes(one.id));
   for (const detector of chosen) {
-    const reading = await ruleReading(detector, now);
+    // One read, judged by both the reading and detection.
+    const records = await loadDetectorRecords(detector, now);
+    const reading = await ruleReading(detector, now, records);
     const decision = modeDecision(detector.mode, reading);
     // A proposal is a record for the improvement loop; failing to file one never stops detection.
     const proposed = await proposeRuleRepair(detector, reading, now).catch((error: unknown) => {
       console.warn(`rule proposal for ${reading.rule} not registered: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
       return null;
     });
-    const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-    const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
-      `SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items
-        WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ?
-        ORDER BY fetched_at DESC, id LIMIT 5000`,
-      [...detector.sources, since],
-    );
-    const records: DetectorRecord[] = rows.map((row) => ({
-      id: row.id,
-      source: row.source,
-      url: row.url,
-      title: row.title,
-      organization: row.organization,
-      publishedAt: row.published_at,
-      fetchedAt: row.fetched_at,
-      body: row.body,
-    }));
     const signals = detector.detect(records, now);
     const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0, proposed, audited: 0 };
     for (const signal of signals) {

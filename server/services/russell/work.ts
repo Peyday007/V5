@@ -40,6 +40,8 @@ import { groupOf, listMissions } from '../../repos/russellMissions.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listCandidates } from '../../repos/russellCandidates.ts';
 import { listWorkers } from '../../repos/identity.ts';
+import { getWorkstream } from '../../repos/register.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 // The one mapping for the five classes. It already exists in the domain; a
 // second copy here is how two screens come to disagree about one enum.
 import { CANDIDATE_PRIORITY_LABELS } from '../../domain/types.ts';
@@ -140,6 +142,11 @@ export interface WorkEntry {
     finishedAt: string | null;
     worker: string | null;
     result: string | null;
+    /** What the work is for, from the backlog classifier's purpose for its idea (`research/backlog.ts`). */
+    purpose?: string | null;
+    /** The goal it serves, read from the idea's links the way `goals/goalWork.ts` reads them. */
+    goalId?: string | null;
+    goalTitle?: string | null;
   };
   /** Links to the rows this entry already knows about. */
   links: {
@@ -285,13 +292,14 @@ export async function workForProject(input: {
    * missions and unusable with four hundred.
    */
   const workerNames = new Map<string, string>();
-  for (const worker of await listWorkers({ includeArchived: true })) workerNames.set(worker.id, worker.displayName || worker.name);
+  for (const worker of await listWorkers({ includeArchived: true })) workerNames.set(worker.id, workerIdentity(worker));
 
   const candidates = new Map<string, RussellCandidate>();
   for (const candidate of await listCandidates({ projectId: input.projectId, limit: 500 })) {
     candidates.set(candidate.id, candidate);
   }
 
+  const packets = new Map(orchestrations.map((o) => [o.id, o]));
   for (const mission of missions) {
     if (mission.orchestrationId) claimedOrchestrations.add(mission.orchestrationId);
     if (mission.binId) claimedBins.add(mission.binId);
@@ -300,8 +308,58 @@ export async function workForProject(input: {
         mission,
         label('PROJECT'),
         mission.candidateId ? (candidates.get(mission.candidateId) ?? null) : null,
+        mission.orchestrationId ? (packets.get(mission.orchestrationId) ?? null) : null,
       ),
     );
+  }
+
+  /*
+   * A packet sent to the fleet records its provider as the word WORKER, which
+   * names no one. The worker is the one holding a lease on one of the packet's
+   * bins; with none leased it is waiting for one, and the card says so.
+   */
+  for (const entry of entries) {
+    if (entry.source !== 'MISSION' || entry.card.worker === null || !/^WORKER\b/.test(entry.card.worker)) continue;
+    const packetId = entry.links.orchestrationId;
+    const holder = packetId ? bins.find((b) => b.orchestrationId === packetId && b.workerId) : undefined;
+    entry.card.worker = holder?.workerId
+      ? (workerNames.get(holder.workerId) ?? holder.workerId)
+      : 'Brain worker fleet (no worker holds it at this moment)';
+  }
+
+  /*
+   * What each mission is for and which goal it serves, read by the backlog
+   * classifier from its idea's links (rounds, openings, questions) — the same
+   * reading `goals/goalWork.ts` uses to say whose research an idea is. One pass
+   * over every mission's idea, not one per card.
+   */
+  try {
+    const ideaIds = [...new Set(missions.map((m) => m.candidateId).filter((id): id is string => !!id))];
+    const ideas = ideaIds
+      .map((id) => candidates.get(id))
+      .filter((c): c is RussellCandidate => !!c)
+      .map((c) => ({ id: c.id, project_id: c.projectId ?? input.projectId, title: c.title, priority: c.priority, created_at: c.createdAt, compiled: 0 }));
+    if (ideas.length > 0) {
+      const { classifyIdeas, CATEGORY_TEXT } = await import('../research/backlog.ts');
+      const classified = new Map((await classifyIdeas(ideas)).map((c) => [c.id, c]));
+      const goalIds = [...new Set([...classified.values()].map((c) => c.goalId).filter((g): g is string => !!g))];
+      const goals = new Map<string, string>();
+      for (const goalId of goalIds) {
+        const goal = await getWorkstream(goalId).catch(() => null);
+        if (goal) goals.set(goalId, goal.title);
+      }
+      for (const entry of entries) {
+        if (entry.source !== 'MISSION') continue;
+        const mission = missions.find((m) => m.id === entry.sourceId);
+        const c = mission?.candidateId ? classified.get(mission.candidateId) : undefined;
+        if (!c) continue;
+        entry.card.purpose = CATEGORY_TEXT[c.category].purpose;
+        entry.card.goalId = c.goalId;
+        entry.card.goalTitle = c.goalId ? (goals.get(c.goalId) ?? null) : null;
+      }
+    }
+  } catch {
+    /* the cards still render without a purpose; the next read tries again */
   }
 
   for (const orchestration of orchestrations) {
@@ -340,6 +398,7 @@ function fromMission(
   mission: RussellMission,
   provenance: WorkProvenance,
   candidate: RussellCandidate | null,
+  packet: ResearchOrchestration | null = null,
 ): WorkEntry {
   return {
     id: `mission:${mission.id}`,
@@ -347,7 +406,7 @@ function fromMission(
     sourceId: mission.id,
     group: groupOf(mission),
     provenance,
-    title: mission.objective,
+    title: candidate?.title || mission.objective,
     why: mission.whyNow,
     state: mission.state,
     waitingOn: mission.waitingOn ?? mission.terminalReason,
@@ -359,7 +418,7 @@ function fromMission(
     card: {
       startedAt: mission.createdAt,
       finishedAt: mission.completedAt,
-      worker: null,
+      worker: packet ? [packet.provider, packet.model].filter(Boolean).join(' · ') || null : null,
       result: mission.terminalReason ?? (mission.documentId ? 'A document was filed' : null),
     },
     how: [
