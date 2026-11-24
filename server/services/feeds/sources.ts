@@ -602,10 +602,15 @@ function hnHits(body: unknown): Record<string, unknown>[] {
  * from the author's own words.
  *
  * The heading is the comment's first non-empty paragraph, however HN delimits
- * it: a comment whose first paragraph is itself wrapped (`<p>SEEKING FREELANCER
- * | …</p><p>…`) used to leave an empty heading and every hit was dropped while
- * the pull still "succeeded" — the SCHEMA_CHANGED reading of
- * FEED_CONNECTOR_REPAIR:hn-seeking-freelancer (2026-11-24).
+ * it (`SEEKING FREELANCER | …<p>…`, or a wrapped `<p>SEEKING FREELANCER | …</p>`).
+ * The wrapped form is tolerated, but it was not why
+ * FEED_CONNECTOR_REPAIR:hn-seeking-freelancer (2026-11-24) saw eighteen empty
+ * pulls: the production fixture of 2026-11-10 is unwrapped and was read. The
+ * pulls are incremental (`created_at_i` > the last success, every 6 h) over a
+ * monthly thread, so a window late in the month is often empty. Algolia says so
+ * itself (`nbHits: 0`), and the source now reports that as nothing published
+ * (`statesZeroAlgoliaHits`), so health no longer counts a quiet window as a
+ * schema change.
  */
 export function parseHnFreelance(side: HnFreelanceSide): (body: unknown) => FeedItem[] {
   const tag = new RegExp(`^\\s*${side.replace(' ', '\\s+')}\\b[\\s:|\\-–—]*`, 'i');
@@ -636,6 +641,19 @@ export function parseHnFreelance(side: HnFreelanceSide): (body: unknown) => Feed
     }
     return out;
   };
+}
+
+/**
+ * Whether an Algolia search body (the HN search API) states that it holds no
+ * hits for what was asked: `{ hits: [], nbHits: 0, ... }`. Only that explicit
+ * zero counts. A body with hits the parser does not keep (replies quoting the
+ * tag), a body missing `nbHits`, or a moved shape is not a statement of zero,
+ * so a parser that really stops reading is still found (inv. 39). Pure; never throws.
+ */
+export function statesZeroAlgoliaHits(body: unknown): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const o = body as Record<string, unknown>;
+  return o['nbHits'] === 0 && Array.isArray(o['hits']) && o['hits'].length === 0;
 }
 
 /**
@@ -766,6 +784,8 @@ function hnFreelance(id: string, label: string, side: HnFreelanceSide): FeedSour
     intervalMs: 6 * HOUR,
     headers: { 'user-agent': 'brain-feed/1.0' },
     parse: parseHnFreelance(side),
+    // An incremental window with no new comment is Algolia saying `nbHits: 0`: a quiet window, not an empty parse.
+    emptyBody: statesZeroAlgoliaHits,
     acquisition: jsonApi(
       'domain:permitted-marketplaces',
       side === 'SEEKING FREELANCER' ? ['buyer-request', 'listing'] : ['supplier', 'price', 'listing'],

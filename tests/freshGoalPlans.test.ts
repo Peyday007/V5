@@ -27,7 +27,9 @@ import { createUser } from '../server/repos/identity.ts';
 import { seedSubject } from '../server/services/industry/seed.ts';
 import { namesOnlyAPlace } from '../server/domain/jurisdiction.ts';
 import { buyerPopulationName, namesABuyerPopulation, payerNamedIn } from '../server/domain/industry.ts';
-import { parseHnFreelance } from '../server/services/feeds/sources.ts';
+import { FEED_SOURCES, parseHnFreelance, pullUrl, statesZeroAlgoliaHits } from '../server/services/feeds/sources.ts';
+import { classifyConnector, SCHEMA_ZERO_STREAK, type PullOutcome } from '../server/services/feeds/health.ts';
+import { isQuietPull, NOTHING_PUBLISHED_MARK } from '../server/services/feeds/run.ts';
 import { factsFromItem } from '../server/services/industry/eventGraph.ts';
 import { addGraphParts, BRAIN_MAP_SENTENCE, brainComparablePrices, clearConstructionMemo, constructArrangements, type Primitive } from '../server/services/cash/construct.ts';
 import { comparablePricesFor, selectEstimatedArrangements, type ComparablePrice } from '../server/services/cash/goalScenario.ts';
@@ -89,6 +91,49 @@ describe('D1: a handle and a place are not an arrangement', () => {
     // Another source's organization is still its actor's name.
     const named = factsFromItem({ ...stored, source: 'some-request-board', title: 'Request for quotes: bookkeeping', organization: 'Acme Dental' });
     expect(named.some((f) => f.actor.name === 'Acme Dental')).toBe(true);
+  });
+
+  it('the freelance thread: a quiet incremental window is the provider saying zero, not a moved shape', () => {
+    // FEED_CONNECTOR_REPAIR:hn-seeking-freelancer: 112 read, then 18 successful empty pulls, every 6 h, each
+    // narrowed to comments since the last success. Algolia's answer for such a window carries nbHits: 0.
+    const quiet = { hits: [], nbHits: 0, page: 0, nbPages: 0, hitsPerPage: 200, exhaustiveNbHits: true, query: '"seeking freelancer"', params: 'tags=comment' };
+    const repliesOnly = { hits: [{ objectID: '9', author: 'a', comment_text: 'Re SEEKING FREELANCER above: did you find someone?', created_at: '2026-11-24T00:00:00Z' }], nbHits: 1 };
+    for (const id of ['hn-seeking-freelancer', 'hn-seeking-work']) {
+      const source = FEED_SOURCES.find((one) => one.id === id)!;
+      expect(source, id).toBeTruthy();
+      expect(pullUrl(source, '2026-11-20T00:00:00.000Z').incremental, id).toBe(true);
+      expect(source.parse(quiet), id).toEqual([]);
+      expect(source.emptyBody?.(quiet), id).toBe(true);
+      // Hits the parser does not keep, or a body without the explicit zero, are not a statement of zero: a real parser fault is still found.
+      expect(source.emptyBody?.(repliesOnly), id).toBe(false);
+      for (const strange of [null, undefined, 'x', 0, [], {}, { hits: [] }, { hits: 'no', nbHits: 0 }, { nbHits: '0', hits: [] }]) {
+        expect(() => source.parse(strange), id).not.toThrow();
+        expect(source.emptyBody?.(strange), id).toBe(false);
+      }
+    }
+    expect(statesZeroAlgoliaHits({ hits: [], nbHits: 0 })).toBe(true);
+
+    // The recorded history, as the acquisition pipeline records each pull and health reads it.
+    const hour = 3_600_000;
+    const start = Date.parse('2026-11-01T00:00:00Z');
+    const first: PullOutcome = { at: new Date(start).toISOString(), ok: true, fetched: 112, inserted: 112, error: null };
+    const window = (i: number, statedZero: boolean): PullOutcome => ({
+      at: new Date(start + (i + 1) * 6 * hour).toISOString(),
+      ok: true,
+      fetched: 0,
+      inserted: 0,
+      error: statedZero ? `${NOTHING_PUBLISHED_MARK}: the provider reports no records` : null,
+    });
+    const now = start + 19 * 6 * hour;
+    const opts = { intervalMs: 6 * hour, now };
+    expect(18).toBeGreaterThanOrEqual(SCHEMA_ZERO_STREAK);
+    // Before: the empty windows were recorded as empty parses and read as SCHEMA_CHANGED.
+    const asEmptyParses = [first, ...Array.from({ length: 18 }, (_, i) => window(i, false))];
+    expect(classifyConnector('hn-seeking-freelancer', asEmptyParses.filter((p) => !isQuietPull(p)), opts).state).toBe('SCHEMA_CHANGED');
+    // After: the provider's own zero is a quiet pull, which health does not read as a parser that stopped.
+    const asStatedZero = [first, ...Array.from({ length: 18 }, (_, i) => window(i, true))];
+    expect(asStatedZero.slice(1).every(isQuietPull)).toBe(true);
+    expect(classifyConnector('hn-seeking-freelancer', asStatedZero.filter((p) => !isQuietPull(p)), opts).state).not.toBe('SCHEMA_CHANGED');
   });
 
   it('construction takes no part from a place-only neighborhood, and no actor without a name', () => {
