@@ -187,4 +187,16 @@ describe('the free lane on a RESEARCH_PLAN item', () => {
     expect(said).toMatch(/it sent \{"title":"Receptionist cost","summary":"Use BLS\."\}/);
     expect(said).not.toMatch(/no usable JSON/);
   });
+
+  it('costs at most two model calls, even when a reply with no JSON is followed by replies in the wrong shape', async () => {
+    // At 22981c4 the shape re-ask was a second `ask`, each with two attempts:
+    // prose, then a wrong shape, then two more wrong shapes was four calls.
+    const itemId = await planItem();
+    const { completer, prompts } = model(['I would look at BLS data.', JSON.stringify({ title: 'Receptionist cost', summary: 'Use BLS.' })]);
+    await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(prompts).toHaveLength(2);
+    expect((await getWorkItem(itemId))?.state).not.toBe('SUCCEEDED');
+    const reasons = await getDb().all<{ reason: string | null }>("SELECT reason FROM bin_events WHERE event_type LIKE 'FREE_LANE%'");
+    expect(reasons.map((one) => one.reason ?? '').join(' | ')).toMatch(/proposed no fragments: it held keys \["title","summary"\]/);
+  });
 });

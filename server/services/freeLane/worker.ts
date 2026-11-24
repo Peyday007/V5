@@ -992,13 +992,24 @@ export function hostClass(url: string): 'official' | 'reference' | 'commercial' 
   return 'commercial';
 }
 
+/**
+ * How `ask` asks. `shape`, when given, judges a reply that parsed: `miss`
+ * returns why it is not the answer wanted (or null when it is), and `repair`
+ * words the next ask from that reason. Either way a reply costs at most the two
+ * calls `ask` makes; a shape miss is not a reason for the caller to ask again.
+ */
+interface AskOptions {
+  json?: boolean;
+  shape?: { miss: (parsed: Record<string, unknown>) => string | null; repair: (why: string) => string };
+}
+
 async function ask(
   completer: Completer,
   config: LaneConfig,
   model: string,
   prompt: string,
   onFail: (why: string) => void = () => undefined,
-  options: { json?: boolean } = {},
+  options: AskOptions = {},
 ): Promise<Record<string, unknown> | null> {
   let asked = prompt;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1016,7 +1027,15 @@ async function ask(
       continue;
     }
     const parsed = firstJson(text);
-    if (parsed) return parsed;
+    if (parsed) {
+      // A reply that parsed in the wrong shape spends this loop's next attempt,
+      // told what it held — never a second loop of its own.
+      const miss = options.shape?.miss(parsed) ?? null;
+      if (miss === null) return parsed;
+      onFail(miss);
+      asked = options.shape!.repair(miss);
+      continue;
+    }
     const shape = replyShape(text);
     onFail(`no JSON in a ${text.length}-character reply: ${shape}`);
     // An empty reply says nothing and is asked again as it was; a reply with words is told what was wrong.
@@ -1660,7 +1679,7 @@ export function meteredIo(
 }
 
 /** `ask` for one item, recording why on the item when the model gives nothing usable. */
-async function askFor(ctx: Ctx, prompt: string, options: { json?: boolean } = {}): Promise<Record<string, unknown> | null> {
+async function askFor(ctx: Ctx, prompt: string, options: AskOptions = {}): Promise<Record<string, unknown> | null> {
   return ask(
     ctx.completer,
     ctx.config,
@@ -2402,25 +2421,23 @@ async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<bool
     'together answer it. Each fragment asks one answerable question, states its geography, timeframe, ' +
     'population and definitions, and declares the evidence lanes that would settle it and what counts ' +
     `as complete. Reply with one JSON object matching: ${JSON.stringify(schema)}`;
-  let raw = await askFor(ctx, prompt, { json: true });
-  let read = raw ? planFragmentsOf(raw) : null;
   /*
-   * A reply that parsed but proposed no fragments is told so, once, with what it
-   * held — the same prompt again is the same reply again (temperature 0). Until
-   * now it failed under the default "no usable JSON", so the rows could not tell
-   * a reply in the wrong shape from no reply at all.
+   * A reply that parsed but proposed no fragments is told so, with what it held,
+   * on `ask`'s own second attempt — the same prompt again is the same reply
+   * again (temperature 0). Until 22981c4 it failed under the default "no usable
+   * JSON"; that commit re-asked through a second `ask`, so one item could cost
+   * four model calls. The judgement now lives inside the one loop: two at most.
    */
-  if (raw && !read) {
-    ctx.why = planMissReason(raw);
-    raw = await askFor(
-      ctx,
-      `${prompt}\n\nYour previous reply ${ctx.why.replace(/^the reply /, '')}. Reply again with ONLY one JSON ` +
+  const raw = await askFor(ctx, prompt, {
+    json: true,
+    shape: {
+      miss: (parsed) => (planFragmentsOf(parsed) ? null : planMissReason(parsed)),
+      repair: (why) =>
+        `${prompt}\n\nYour previous reply ${why.replace(/^the reply /, '')}. Reply again with ONLY one JSON ` +
         'object whose top-level "fragments" key is the list of fragment objects: no prose, no code fence, no wrapping key.',
-      { json: true },
-    );
-    read = raw ? planFragmentsOf(raw) : null;
-    if (raw && !read) ctx.why = planMissReason(raw);
-  }
+    },
+  });
+  const read = raw ? planFragmentsOf(raw) : null;
   if (!read) return false;
   const ok = await submitWithRepair(
     ctx,
