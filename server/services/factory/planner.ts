@@ -121,6 +121,39 @@ export interface PlanValidation {
   rewrites: PlanRewrite[];
   /** How wide and how deep the plan is — the shape that decides how long DEVELOPMENT takes. */
   shape: PlanShape;
+  /**
+   * The shape warnings the architect has not yet answered. Non-empty means the
+   * plan goes back to its architect once, before install, to be reshaped or to
+   * say in `shapeReason` why the shape stands. Empty when the plan has no shape
+   * warning or already carries a reason.
+   */
+  shapeFeedback: string[];
+  /** The architect's stated reason the shape stands, when it gave one. */
+  shapeReason: string | null;
+}
+
+/** The top-level plan field an architect answers shape feedback with when it keeps the shape. */
+export const SHAPE_REASON_FIELD = 'shapeReason';
+/** A reason shorter than this is not a reason. */
+export const MIN_SHAPE_REASON_LENGTH = 24;
+
+/**
+ * The words that send a plan back to its architect for its one shape revision.
+ *
+ * The warnings were measured and then only logged on an already-installed plan,
+ * so the serial chain and the oversized unit that held DEVELOPMENT at 44% of the
+ * critical path (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595) reached nobody
+ * who could change them. This is what reaches the architect while it can.
+ */
+export function shapeRevisionRequest(feedback: string[]): string {
+  return [
+    'The plan is valid, but its shape makes DEVELOPMENT longer than the plan itself justifies:',
+    ...feedback.map((line) => `- ${line}`),
+    'Revise it once before it is installed: drop the dependency edges nothing reads, and split ' +
+      'oversized units by file ownership into independent units that run in parallel sessions. ' +
+      `If the shape is right as it is, resubmit the same plan with a top-level \`${SHAPE_REASON_FIELD}\` ` +
+      `string (at least ${MIN_SHAPE_REASON_LENGTH} characters) saying why. Every other rule still applies.`,
+  ].join('\n');
 }
 
 /**
@@ -190,14 +223,14 @@ export function validatePlan(
   const forbiddenHere = forbiddenPathsFor(changeRequest.repository);
 
   if (typeof proposed !== 'object' || proposed === null || Array.isArray(proposed)) {
-    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE };
+    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE, shapeFeedback: [], shapeReason: null };
   }
   const raw = (proposed as { units?: unknown }).units;
   if (!Array.isArray(raw)) {
-    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE };
+    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE, shapeFeedback: [], shapeReason: null };
   }
   if (raw.length === 0) {
-    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE };
+    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [], issues: [], rewrites: [], shape: EMPTY_SHAPE, shapeFeedback: [], shapeReason: null };
   }
   if (raw.length > maxUnits) {
     errors.push(`The plan has ${raw.length} units; the ceiling is ${maxUnits}.`);
@@ -315,6 +348,12 @@ export function validatePlan(
 
   const shaped = measurePlanShape(finalUnits);
   warnings.push(...shaped.warnings);
+  const rawReason = (proposed as Record<string, unknown>)[SHAPE_REASON_FIELD];
+  const reasonText = typeof rawReason === 'string' ? rawReason.trim() : '';
+  const shapeReason = reasonText.length >= MIN_SHAPE_REASON_LENGTH ? reasonText : null;
+  if (reasonText.length > 0 && shapeReason === null) {
+    warnings.push(`\`${SHAPE_REASON_FIELD}\` is too short to be a reason; it was ignored.`);
+  }
 
   const served = new Set(finalUnits.flatMap((unit) => unit.serves));
   const uncoveredConditions = changeRequest.acceptanceConditions
@@ -330,6 +369,8 @@ export function validatePlan(
     issues: verdict.issues,
     rewrites,
     shape: shaped.shape,
+    shapeFeedback: shapeReason === null ? shaped.warnings : [],
+    shapeReason,
   };
 }
 

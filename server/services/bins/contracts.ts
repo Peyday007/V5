@@ -549,7 +549,7 @@ export async function readSurfaceProbe(bin: Bin): Promise<SurfaceProbeReading[]>
  */
 async function evaluateFactoryPlan(bin: Bin): Promise<ContractVerdict> {
   const { readPlanProposal } = await import('../factory/remote.ts');
-  const { validatePlan } = await import('../factory/planner.ts');
+  const { validatePlan, shapeRevisionRequest } = await import('../factory/planner.ts');
   const { getCampaign, getChangeRequest } = await import('../../repos/factory.ts');
 
   const campaignId = bin.factoryCampaignId;
@@ -597,10 +597,30 @@ async function evaluateFactoryPlan(bin: Bin): Promise<ContractVerdict> {
       uncoveredConditions: validation.uncoveredConditions,
     });
   }
+  /*
+   * A valid plan whose shape the planner flagged — a dependency edge nothing
+   * reads, a unit spanning several modules — goes back to its architect once,
+   * before install, while it can still be reshaped. The measurement used to ride
+   * along in `warnings` on a plan already accepted, so the serial chains that
+   * held DEVELOPMENT at 44% of the critical path reached nobody
+   * (OPERATOR:RESOURCE_ALLOCATION:591a21ff74213595). One round only: a reshaped
+   * plan with no warning, or the same plan with a stated `shapeReason`, passes.
+   * No other bar moves.
+   */
+  if (validation.shapeFeedback.length > 0) {
+    return refuse('RETRY', [shapeRevisionRequest(validation.shapeFeedback)], {
+      campaignId,
+      unitsProposed: validation.units.length,
+      shape: validation.shape,
+      shapeFeedback: validation.shapeFeedback,
+    });
+  }
   return satisfied({
     campaignId,
     unitsProposed: validation.units.length,
     warnings: validation.warnings,
+    shape: validation.shape,
+    shapeReason: validation.shapeReason,
   });
 }
 
