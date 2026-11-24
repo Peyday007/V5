@@ -92,6 +92,15 @@ export interface Detector {
    * not a miss (`ruleReading`). Unset: every item the rule reads can be kept.
    */
   memberWindowMs?: number;
+  /**
+   * Whether this rule could keep `record` at all, read the way `detect` reads it
+   * (with `context`, the other stored records, for what the rule merges across
+   * copies). False only when the rule read what it needs and that reading is
+   * outside its own bounds: an item it correctly excludes is not a miss
+   * (`ruleReading`), exactly as an item outside `memberWindowMs` is not. An item
+   * the rule could not read at all stays a miss. Unset: every item can be kept.
+   */
+  couldKeep?(record: DetectorRecord, now: Date, context?: readonly DetectorRecord[]): boolean;
   detect(records: readonly DetectorRecord[], now: Date): DetectedSignal[];
 }
 
@@ -890,8 +899,41 @@ function detectRuleEffectiveSoonV5(
   detector: Detector,
   records: readonly DetectorRecord[],
   now: Date,
-  options: { readStatedEffective: boolean; extraQualifiers: readonly string[] },
+  options: RuleEffectiveSoonOptions,
 ): DetectedSignal[] {
+    const { groups } = ruleEffectiveSoonReading(detector, records, now, options);
+    return ruleEffectiveSoonSignals(groups, now, options);
+}
+
+interface RuleEffectiveSoonOptions {
+  readStatedEffective: boolean;
+  extraQualifiers: readonly string[];
+  /** The upper bound, in days after publication. v2..v6: RULE_EFFECTIVE_SOON_V2_LEAD_DAYS. */
+  leadDays?: number;
+}
+
+/**
+ * Why a record is or is not a RULE_EFFECTIVE_SOON member: KEEP (a member),
+ * OUT_OF_BOUNDS (an effective date was read and falls before its own publication
+ * or past the lead bound: a correct exclusion) or UNREAD (no agency, no date or
+ * no publication day the rule could read, or outside the membership window).
+ */
+type RuleEffectiveSoonVerdict = 'KEEP' | 'OUT_OF_BOUNDS' | 'UNREAD';
+
+type RuleEffectiveSoonGroups = Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>;
+
+/**
+ * The one reading both `detect` and `couldKeep` use, so what a version keeps and
+ * what it counts as a miss cannot drift apart. Pure.
+ */
+function ruleEffectiveSoonReading(
+  detector: Detector,
+  records: readonly DetectorRecord[],
+  now: Date,
+  options: RuleEffectiveSoonOptions,
+): { groups: RuleEffectiveSoonGroups; verdicts: Map<string, RuleEffectiveSoonVerdict> } {
+    const leadDays = options.leadDays ?? RULE_EFFECTIVE_SOON_V2_LEAD_DAYS;
+    const verdicts = new Map<string, RuleEffectiveSoonVerdict>();
     const ours = records.filter((record) => detector.sources.includes(record.source));
     const keep = (map: Map<string, string>, key: string, value: string | null): void => {
       if (value && (!map.has(key) || value < map.get(key)!)) map.set(key, value);
@@ -942,8 +984,9 @@ function detectRuleEffectiveSoonV5(
       const stated = federalRegisterPublishedDayOf(record.url) ?? /^(\d{4}-\d{2}-\d{2})/.exec(record.publishedAt ?? '')?.[1] ?? null;
       return stated ? Date.parse(`${stated}T00:00:00.000Z`) : utcDay(Date.parse(record.fetchedAt));
     };
-    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    const groups: RuleEffectiveSoonGroups = new Map();
     for (const record of ours) {
+      verdicts.set(record.id, 'UNREAD');
       const documentNumber = federalRegisterDocumentOf(record.url);
       const listed = documentNumber ? agencies.get(documentNumber) : undefined;
       const name = listed ? listed[listed.length - 1]! : issuingAgencyOf(record.organization);
@@ -957,11 +1000,20 @@ function detectRuleEffectiveSoonV5(
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       // Not before its own publication, and no later than eight weeks after it: both bounds are the
       // Federal Register's own dates, never the day Brain happened to fetch the document (cause 4).
-      if (!Number.isFinite(at) || at < publishedDay || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      if (!Number.isFinite(at)) continue;
+      if (at < publishedDay || at > publishedDay + leadDays * DAY) {
+        verdicts.set(record.id, 'OUT_OF_BOUNDS');
+        continue;
+      }
+      verdicts.set(record.id, 'KEEP');
       const group = groups.get(agency) ?? { name, members: [] };
       group.members.push({ record, effective });
       groups.set(agency, group);
     }
+    return { groups, verdicts };
+}
+
+function ruleEffectiveSoonSignals(groups: RuleEffectiveSoonGroups, now: Date, options: RuleEffectiveSoonOptions): DetectedSignal[] {
     const out: DetectedSignal[] = [];
     for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
       const dates = group.members.map((one) => one.effective).sort();
@@ -1047,6 +1099,76 @@ export const RULE_EFFECTIVE_SOON_V6: Detector = {
       readStatedEffective: true,
       extraQualifiers: ["with no effective_on, the date the Federal Register's own DATES field states, as the connector recorded it"],
     });
+  },
+};
+
+/**
+ * The upper bound RULE_EFFECTIVE_SOON v7 keeps: sixty days after publication.
+ * Under the Congressional Review Act (5 U.S.C. 801(a)(3)) a major rule cannot
+ * take effect earlier than sixty days after it is published, so an eight-week
+ * bound left out every major rule published with the statutory minimum delay
+ * (FCC 2026-23040, published 2026-11-12, effective 2027-01-11).
+ */
+export const RULE_EFFECTIVE_SOON_V7_LEAD_DAYS = 60;
+
+const RULE_EFFECTIVE_SOON_V7_OPTIONS: RuleEffectiveSoonOptions = {
+  readStatedEffective: true,
+  leadDays: RULE_EFFECTIVE_SOON_V7_LEAD_DAYS,
+  extraQualifiers: [
+    "with no effective_on, the date the Federal Register's own DATES field states, as the connector recorded it",
+    'kept up to sixty days after publication, the minimum delay the Congressional Review Act sets for a major rule',
+  ],
+};
+
+/** One reading per context array, so `ruleReading` asking about each of 5,000 items reads them once. */
+const ruleEffectiveSoonV7Readings = new WeakMap<readonly DetectorRecord[], { at: number; verdicts: Map<string, RuleEffectiveSoonVerdict> }>();
+
+/**
+ * RULE_EFFECTIVE_SOON, version 7 (SHADOW). Two causes of v6's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@6):
+ *
+ *  1. Its reading counted as a miss items it correctly excludes. `ruleReading`
+ *     counted any non-member from a recognised agency that the screen KEPT,
+ *     without asking whether the rule could ever keep it. Coast Guard 2026-23027
+ *     ("Effective 2026-11-11.", published 2026-11-12) and 2026-23047 ("Stated
+ *     effective 2026-11-11.", an enforcement that ended before its notice was
+ *     published) were counted, although v6's bar that a rule is never effective
+ *     before its own publication rightly keeps them out. v7 declares
+ *     `couldKeep`: false only where the rule read an effective date and that
+ *     date is outside its bounds. It is the same reading `detect` uses
+ *     (`ruleEffectiveSoonReading`), so the two cannot drift. An item with no
+ *     date the rule can read is still a miss.
+ *  2. The eight-week upper bound excluded major rules, which by statute take
+ *     effect no earlier than sixty days after publication
+ *     (RULE_EFFECTIVE_SOON_V7_LEAD_DAYS). That widens coverage and lowers no bar.
+ *
+ * Everything else is v6's, unchanged: the publication-day lower bound, the
+ * 30-day membership window, issuing-agency grouping, the stated DATES date,
+ * the wording, and no free-text date parsing.
+ */
+export const RULE_EFFECTIVE_SOON_V7: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 7,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V6.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  couldKeep(record, now, context) {
+    const records = context ?? [record];
+    let held = ruleEffectiveSoonV7Readings.get(records);
+    if (!held || held.at !== now.getTime()) {
+      held = { at: now.getTime(), verdicts: ruleEffectiveSoonReading(this, records, now, RULE_EFFECTIVE_SOON_V7_OPTIONS).verdicts };
+      ruleEffectiveSoonV7Readings.set(records, held);
+    }
+    const verdict = held.verdicts.get(record.id) ?? ruleEffectiveSoonReading(this, [...records, record], now, RULE_EFFECTIVE_SOON_V7_OPTIONS).verdicts.get(record.id);
+    return verdict !== 'OUT_OF_BOUNDS';
+  },
+  detect(records, now) {
+    return detectRuleEffectiveSoonV5(this, records, now, RULE_EFFECTIVE_SOON_V7_OPTIONS);
   },
 };
 
@@ -1223,8 +1345,8 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   );
   const memberIds = [...new Set(rows.flatMap((row) => JSON.parse(row.member_ids) as string[]))];
   const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-  const items = await db.all<{ id: string; title: string; url: string; organization: string | null; published_at: string | null; fetched_at: string }>(
-    `SELECT id, title, url, organization, published_at, fetched_at FROM feed_items
+  const items = await db.all<{ id: string; source: string; title: string; url: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
+    `SELECT id, source, title, url, organization, published_at, fetched_at, body FROM feed_items
       WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ? LIMIT 5000`,
     [...detector.sources, since],
   );
@@ -1248,9 +1370,15 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   const categories = new Set(rows.filter((row) => !row.entity_key).map((row) => row.category).filter((one): one is string => !!one));
   // A miss is an item the rule could have kept: one it reads only as context
   // (outside its membership window) is never a miss, however far back it reads.
+  // Nor is one the rule read and correctly excluded (`couldKeep`), read against
+  // every stored copy exactly as `detect` reads them.
+  const context: DetectorRecord[] = detector.couldKeep
+    ? items.map((item) => ({ id: item.id, source: item.source, url: item.url, title: item.title, organization: item.organization, publishedAt: item.published_at, fetchedAt: item.fetched_at, body: item.body }))
+    : [];
+  const recordOf = new Map(context.map((record) => [record.id, record]));
   const related = items.filter((item) => !members.has(item.id) && withinMemberWindow(detector, item.published_at, item.fetched_at, now) && (
     entities.has(entityKeyOf(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
-  ));
+  ) && (!detector.couldKeep || detector.couldKeep(recordOf.get(item.id)!, now, context)));
   const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
   const screened = memberIds.filter((id) => verdicts.has(id));
   const confirmed = screened.filter((id) => verdicts.get(id) === 'KEEP').length;
