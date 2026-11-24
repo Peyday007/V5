@@ -2332,6 +2332,53 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
   );
 }
 
+/** A list whose every entry is an object. */
+const objectList = (value: unknown): value is Record<string, unknown>[] =>
+  Array.isArray(value) && value.length > 0 && value.every((one) => one && typeof one === 'object' && !Array.isArray(one));
+
+/**
+ * The fragments a RESEARCH_PLAN reply proposed, wherever a JSON answer put them,
+ * or null. Pure.
+ *
+ * Production, 2026-11-24: auto/best-coding had 5 of 5 RESEARCH_PLAN answers
+ * refused as "the model returned no usable JSON" — the default reason, recorded
+ * whenever `plan` found no top-level `fragments` list, including on a reply that
+ * parsed. A model answers `{"plan":{"fragments":[…]}}`, or a bare list (which
+ * `firstJson` reads as `{claims:[…]}`). Those are the same proposal, and read as
+ * one; nothing is invented, and `brain_propose_fragments` judges every fragment
+ * exactly as before.
+ */
+export function planFragmentsOf(raw: Record<string, unknown>): { fragments: Record<string, unknown>[]; rationale?: string } | null {
+  const rationaleOf = (from: Record<string, unknown>): { rationale?: string } =>
+    typeof from['rationale'] === 'string' ? { rationale: from['rationale'] } : {};
+  if (objectList(raw['fragments'])) return { fragments: raw['fragments'], ...rationaleOf(raw) };
+  // A bare list, read by `firstJson` as claims, whose entries ask questions.
+  const keys = Object.keys(raw);
+  if (keys.length === 1 && objectList(raw['claims']) && raw['claims'].every((one) => 'question' in one)) {
+    return { fragments: raw['claims'] };
+  }
+  // One level of wrapping: {"plan": {"fragments": […]}} or {"proposal": […fragments]}.
+  const wrapped = keys.filter((key) => key !== 'rationale');
+  if (wrapped.length === 1) {
+    const inner = raw[wrapped[0]!];
+    if (objectList(inner) && inner.every((one) => 'question' in one)) return { fragments: inner, ...rationaleOf(raw) };
+    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+      const nested = inner as Record<string, unknown>;
+      if (objectList(nested['fragments'])) return { fragments: nested['fragments'], ...rationaleOf(nested), ...rationaleOf(raw) };
+    }
+  }
+  return null;
+}
+
+/** Why a RESEARCH_PLAN reply that parsed proposed no fragments, naming what it held. Pure. */
+export function planMissReason(raw: Record<string, unknown>): string {
+  const fragments = raw['fragments'];
+  const held = Array.isArray(fragments)
+    ? `a "fragments" list of ${fragments.length} entr${fragments.length === 1 ? 'y' : 'ies'} that are not all objects`
+    : `keys ${JSON.stringify(Object.keys(raw).slice(0, 8))}`;
+  return `the reply parsed but proposed no fragments: it held ${held}, and a plan needs a top-level "fragments" list of objects`.slice(0, 400);
+}
+
 async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {
   const orchestration = (assignment['orchestration'] ?? {}) as Record<string, unknown>;
   const schema = schemaForModel('brain_propose_fragments');
@@ -2346,13 +2393,32 @@ async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<bool
     'together answer it. Each fragment asks one answerable question, states its geography, timeframe, ' +
     'population and definitions, and declares the evidence lanes that would settle it and what counts ' +
     `as complete. Reply with one JSON object matching: ${JSON.stringify(schema)}`;
-  const answer = await askFor(ctx, prompt);
-  if (!answer || !Array.isArray(answer['fragments'])) return false;
+  let raw = await askFor(ctx, prompt, { json: true });
+  let read = raw ? planFragmentsOf(raw) : null;
+  /*
+   * A reply that parsed but proposed no fragments is told so, once, with what it
+   * held — the same prompt again is the same reply again (temperature 0). Until
+   * now it failed under the default "no usable JSON", so the rows could not tell
+   * a reply in the wrong shape from no reply at all.
+   */
+  if (raw && !read) {
+    ctx.why = planMissReason(raw);
+    raw = await askFor(
+      ctx,
+      `${prompt}\n\nYour previous reply ${ctx.why.replace(/^the reply /, '')}. Reply again with ONLY one JSON ` +
+        'object whose top-level "fragments" key is the list of fragment objects: no prose, no code fence, no wrapping key.',
+      { json: true },
+    );
+    read = raw ? planFragmentsOf(raw) : null;
+    if (raw && !read) ctx.why = planMissReason(raw);
+  }
+  if (!read) return false;
   const ok = await submitWithRepair(
     ctx,
     'brain_propose_fragments',
-    answer,
+    read,
     (error, previous) => `${prompt}\n\nBrain refused your previous answer: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 6000)}\nCorrect it.`,
+    (answer) => planFragmentsOf(answer) ?? answer,
   );
   if (ok) await complete(ctx, 'free lane: fragments proposed');
   return ok;
