@@ -466,6 +466,55 @@ async function heapSources(): Promise<void> {
          FROM ${schema}.pg_stat_statements WHERE ${dbFilter}
         ORDER BY rows DESC LIMIT 20`,
     );
+    /*
+     * The counters above are cumulative since the last reset, so what the
+     * running process reads now is the difference over a window: snapshot,
+     * watch the newest process's heap each minute, snapshot again.
+     */
+    const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '14');
+    type Snap = Map<string, { calls: number; rows: number; total: number }>;
+    const snap = async (): Promise<Snap> => {
+      const rows = await getDb().all<{ queryid: string; calls: number | string; rows: number | string; total: number | string }>(
+        `SELECT queryid::text AS queryid, calls, rows, total_exec_time AS total FROM ${schema}.pg_stat_statements(false) WHERE ${dbFilter}`,
+      );
+      return new Map(rows.map((r) => [r.queryid, { calls: Number(r.calls), rows: Number(r.rows), total: Number(r.total) }]));
+    };
+    const before = await snap();
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < windowMin * 60_000) {
+      await new Promise((resolve) => setTimeout(resolve, 60_000));
+      const live = await getDb().get<{ instance_id: string; started_at: string; readings: string | null }>(
+        'SELECT instance_id, started_at, readings FROM runtime_liveness ORDER BY alive_at DESC LIMIT 1',
+      );
+      let memory: unknown = null;
+      try {
+        memory = (JSON.parse(live?.readings ?? '{}') as Record<string, unknown>)['memory'];
+      } catch {
+        /* unreadable */
+      }
+      console.log(`  ${new Date().toISOString()} ${live?.instance_id} (started ${live?.started_at}) ${JSON.stringify(memory)}`);
+    }
+    const after = await snap();
+    const diff = [...after]
+      .map(([id, a]) => {
+        const b = before.get(id) ?? { calls: 0, rows: 0, total: 0 };
+        return { id, calls: a.calls - b.calls, rows: a.rows - b.rows, ms: Math.round(a.total - b.total) };
+      })
+      .filter((d) => d.calls > 0)
+      .sort((x, y) => y.rows - x.rows)
+      .slice(0, 30);
+    const texts = new Map<string, string>();
+    if (diff.length > 0) {
+      const rows = await getDb().all<{ queryid: string; query: string }>(
+        `SELECT queryid::text AS queryid, SUBSTR(query, 1, 400) AS query FROM ${schema}.pg_stat_statements WHERE ${dbFilter} AND queryid::text IN (${diff.map(() => '?').join(', ')})`,
+        diff.map((d) => d.id),
+      );
+      for (const r of rows) texts.set(r.queryid, r.query);
+    }
+    console.log(`  rows returned in the last ${windowMin} min, by statement`);
+    for (const d of diff) {
+      console.log(`    rows ${d.rows} calls ${d.calls} per_call ${Math.round(d.rows / d.calls)} ms ${d.ms} :: ${(texts.get(d.id) ?? '?').replace(/\s+/g, ' ')}`);
+    }
   } else {
     console.log('  pg_stat_statements is not installed');
   }
