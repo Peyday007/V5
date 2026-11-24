@@ -319,6 +319,8 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   };
   const relative = new RegExp(String.raw`\b(?:in|within|inside(?:\s+of)?|over|during)\s+(?:the\s+)?(?:next\s+|coming\s+|first\s+)?(\d+(?:\.\d+)?|${NUMBER_WORD_SRC})\s+(hours?|hrs?|days?|weeks?|months?|years?)\b`, 'gi');
   for (const m of text.matchAll(relative)) {
+    // "can put in 10 hours this week" is the person's time, not a deadline: the hours reader (step 3) takes it.
+    if (/\bhours?|hrs?\b/i.test(m[2]!) && /\b(?:put|putting|spend|spending|give|giving|work|working)\s*$/i.test(text.slice(Math.max(0, m.index! - 12), m.index!))) continue;
     const n = /^\d/.test(m[1]!) ? Number(m[1]) : NUMBER_WORDS[m[1]!.toLowerCase()]!;
     const unit = m[2]!.toLowerCase().replace(/s$/, '');
     let at: Date | null = null;
@@ -373,6 +375,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   let hoursCeiling: number | null = null;
   const hourPatterns = [
     new RegExp(String.raw`(?:\b${LIMIT}\s+)?(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s+of\s+(?:(?:my|our|own|total)\s+)*(?:time|work|effort|labou?r)\b(?!\s+(?:per|a|each|every)\s+(?:day|week|month))`, 'gi'),
+    new RegExp(String.raw`\b(?:put|putting|spend|spending|give it|work)\s+in\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)(?:\s+(?:this|that)\s+week)?(?!\s+(?:of\s+\w+\s+)?(?:per|a|each|every)\s+(?:day|week|month))`, 'gi'),
     new RegExp(String.raw`\b(?:at most|no more than|not more than|up to|only|a maximum of|max(?:imum)?)\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b(?!\s+(?:of\s+\w+\s+)?(?:per|a|each|every)\s+(?:day|week|month))`, 'gi'),
   ];
   for (const re of hourPatterns) {
@@ -384,6 +387,14 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       for (const t of tokensIn(span)) t.role = 'DEADLINE';
       if (hoursCeiling === null) hoursCeiling = Number(m[1]);
       else unread.push(`"${m[0]}": a second hours limit`);
+    }
+  }
+  // "Zero hours of my time", "without spending any of my own hours": a limit of nothing, never no limit (invariant 39).
+  if (hoursCeiling === null) {
+    const none = /\b(?:zero|no)\s+(?:hours?|time)\s+(?:of\s+)?(?:my|our|owner)\b|\bwithout\s+(?:spending\s+|using\s+)?any\s+(?:of\s+)?(?:my|our)\s+(?:own\s+)?(?:hours|time)\b/i.exec(text);
+    if (none) {
+      hoursCeiling = 0;
+      constraintSpans.push({ start: none.index, end: none.index + none[0].length, text: none[0] });
     }
   }
   /*
@@ -423,6 +434,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     { role: 'CAPITAL', re: new RegExp(String.raw`\b${spend}\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)\s+(?:only\s+)?(?:have|has|got|own|can (?:spend|invest|put in|afford))\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\bwith\s+(?:${LIMIT}\s+)?(?:an?\s+)?${MP}(?!\s*(?:in|of)\s+(?:revenue|sales|profit|income))`, 'gi') },
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:using|use)\s+(?:${LIMIT}\s+)?(?:an?\s+)?${MP}(?!\s*(?:in|of|a|per)\s+(?:revenue|sales|profit|income|month|week|year))`, 'gi') },
     // "Turn $1,000 into $10,000": the first figure is the stake the plan may use; the second is the amount (step 5).
     { role: 'CAPITAL', re: new RegExp(String.raw`\b${GROW}\s+${MP}(?=\s+into\s)`, 'gi') },
   ];
@@ -446,7 +458,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
 
   // 5. The amount: a figure the words say is to be brought in.
   // Every person of the verb: "a business that collects $50,000" names the amount as surely as "collect $50,000".
-  const verbBefore = /\b(?:generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
+  const verbBefore = /\b(?:builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
   const nounAfter = /^\s*(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments)\b/i;
   let amountToken: MoneyToken | null = null;
   let recurring: ObjectiveReading['recurring'] = null;
@@ -457,14 +469,22 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     const beforeDeadline = consumed.some((s) => s.start >= t.end && /^\s*$/.test(text.slice(t.end, s.start)) && /^(?:in|within|inside|over|during|by)\b/i.test(s.text));
     // The figure a stake is turned into: the stake's own phrase (step 4) ends right before "into".
     const turnedInto = constraintSpans.some((s) => new RegExp(String.raw`^${GROW}\s`, 'i').test(s.text) && /^\s+into\s+$/i.test(text.slice(s.end, t.start)));
-    if (!(verbBefore.test(before) || nounAfter.test(after) || beforeDeadline || turnedInto)) {
+    // "$5,000 a month in recurring revenue", "$5k MRR", "$5,000 in monthly recurring revenue": a monthly run-rate is the amount.
+    const statedRecurring =
+      /^\s*(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?)\s+(?:(?:in|of)\s+)?(?:(?:new|net|gross|monthly)\s+)*(?:recurring|subscription|retainer)\s+(?:revenue|income|sales|billings?)\b/i.test(after) ||
+      /^\s*(?:(?:in|of)\s+)?(?:(?:new|net|gross)\s+)*(?:monthly\s+recurring\s+(?:revenue|income|sales)|MRR)\b/i.test(after);
+    /*
+     * "Get to $4,000 a month within 60 days", "reach $6,000 a month": a per-month figure the
+     * sentence's own verb says is to be brought in, with no other amount, is a monthly run-rate.
+     * The owner's ordinary phrasing (2026-11-24 investigation: 12 of 40 fresh requests were
+     * refused or read without an amount) — a rate with no such verb stays unread below.
+     */
+    const ranRate = !amountToken && verbBefore.test(before) && /^\s*(?:per|a|each|every)\s+month\b(?!\s+(?:of|in)\s+(?:capital|budget|spend))/i.test(after);
+    const monthlyRecurring = statedRecurring || ranRate;
+    if (!(verbBefore.test(before) || nounAfter.test(after) || beforeDeadline || turnedInto || statedRecurring)) {
       unread.push(`"${t.raw}": a figure the reader could not place`);
       continue;
     }
-    // "$5,000 a month in recurring revenue", "$5k MRR", "$5,000 in monthly recurring revenue": a monthly run-rate is the amount.
-    const monthlyRecurring =
-      /^\s*(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?)\s+(?:(?:in|of)\s+)?(?:(?:new|net|gross|monthly)\s+)*(?:recurring|subscription|retainer)\s+(?:revenue|income|sales|billings?)\b/i.test(after) ||
-      /^\s*(?:(?:in|of)\s+)?(?:(?:new|net|gross)\s+)*(?:monthly\s+recurring\s+(?:revenue|income|sales)|MRR)\b/i.test(after);
     if (monthlyRecurring && !amountToken) {
       t.role = 'AMOUNT';
       amountToken = t;

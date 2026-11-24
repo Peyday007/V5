@@ -72,6 +72,8 @@ export function diffResults(before: BenchResult, after: BenchResult, critical: R
   if (regressed.length) reasons.push(`${regressed.length} case(s) regressed: ${regressed.map((c) => c.id).join(', ')}`);
   const critical_ = cases.filter((c) => c.newCritical.length);
   if (critical_.length) reasons.push(`${critical_.length} new critical failure(s): ${critical_.map((c) => `${c.id} [${c.newCritical.join(', ')}]`).join(', ')}`);
+  const usableRegressed = cases.filter((c) => c.before?.usable?.pass && c.after?.usable && !c.after.usable.pass);
+  if (usableRegressed.length) reasons.push(`${usableRegressed.length} case(s) lost an owner-usable plan: ${usableRegressed.map((c) => c.id).join(', ')}`);
   const removed = cases.filter((c) => c.change === 'REMOVED');
   if (removed.length) reasons.push(`${removed.length} baseline case(s) did not run: ${removed.map((c) => c.id).join(', ')}`);
   return { suite: after.suite, baselineSha: before.sha, sha: after.sha, cases, metrics, verdict: reasons.length ? 'REJECT' : 'PASS', reasons };
@@ -127,6 +129,7 @@ export function formatDiff(d: BenchDiff, options: { showUnchanged?: boolean } = 
     if (k === 'UNCHANGED' && options.showUnchanged === false) continue;
     for (const c of d.cases.filter((x) => x.change === k)) lines.push(caseLine(c));
   }
+  lines.push(...usableLines(d));
   for (const m of d.metrics) {
     if (!['accuracy', 'passed', 'cases', 'criticalFailures', 'errors', 'accuracy.familiar', 'accuracy.heldOut'].includes(m.name)) continue;
     if (m.before === m.after) continue;
@@ -134,4 +137,24 @@ export function formatDiff(d: BenchDiff, options: { showUnchanged?: boolean } = 
     lines.push(`  metric ${m.name}: ${f(m.before)} → ${f(m.after)}`);
   }
   return lines;
+}
+
+/**
+ * The owner-usable level's own before → after, on the cases both runs graded at that level:
+ * which recovered, which regressed, the counts and the net percentage-point change. Silent
+ * when neither run carries the level (a suite without it, or a baseline from before it).
+ */
+export function usableLines(d: BenchDiff): string[] {
+  const both = d.cases.filter((c) => c.before?.usable && c.after?.usable);
+  if (both.length === 0) return [];
+  const before = both.filter((c) => c.before!.usable!.pass).length;
+  const after = both.filter((c) => c.after!.usable!.pass).length;
+  const recovered = both.filter((c) => !c.before!.usable!.pass && c.after!.usable!.pass).map((c) => c.id);
+  const regressed = both.filter((c) => c.before!.usable!.pass && !c.after!.usable!.pass).map((c) => c.id);
+  const pp = (100 * (after - before)) / both.length;
+  return [
+    `  owner-usable: ${before}/${both.length} → ${after}/${both.length} (${pp >= 0 ? '+' : ''}${pp.toFixed(1)} pp) · recovered ${recovered.length} · regressed ${regressed.length}`,
+    ...(recovered.length ? [`    recovered: ${recovered.join(', ')}`] : []),
+    ...(regressed.length ? [`    REGRESSED: ${regressed.join(', ')}`] : []),
+  ];
 }

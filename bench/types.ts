@@ -16,6 +16,8 @@ export interface CaseResult {
   critical?: boolean;
   /** The grader's reason. Never present on a hidden case. */
   reason?: string;
+  /** planningReliability's owner-usable level: a plan the owner could start (its reason only on a public case). */
+  usable?: { pass: boolean; reason?: string };
 }
 
 /** Wall-clock milliseconds of a run's stages, and the worker count it ran on. */

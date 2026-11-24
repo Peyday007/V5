@@ -45,12 +45,17 @@
  */
 
 const BUYER_WORDS =
-  'buyers|businesses|companies|firms|customers|clients|households|homeowners|stores|shops|retailers|restaurants|practices|offices|owners|landlords|managers|agencies|contractors|organizations|organisations|members|accounts|venues|schools|clinics|dealers|dealerships|properties|operators|brokers|merchants|hotels|salons|studios|nonprofits|charities|teams|users|subscribers|employers|carriers|farms|wineries|breweries|builders|fleets|hospitals|pharmacies|gyms|churches|associations|shippers|distributors|manufacturers|wholesalers|families|parents|drivers|freelancers|creators|authors|publishers|photographers|realtors|agents|lawyers|attorneys|dentists|physicians|therapists|coaches|boards|homeowners|tenants';
+  'buyers|businesses|companies|firms|customers|clients|households|homeowners|stores|shops|retailers|restaurants|practices|offices|owners|landlords|managers|agencies|contractors|organizations|organisations|members|accounts|venues|schools|clinics|dealers|dealerships|properties|operators|brokers|merchants|hotels|salons|studios|nonprofits|charities|teams|users|subscribers|employers|carriers|farms|wineries|breweries|builders|fleets|hospitals|pharmacies|gyms|churches|associations|shippers|distributors|manufacturers|wholesalers|families|parents|drivers|freelancers|creators|authors|publishers|photographers|realtors|agents|lawyers|attorneys|dentists|physicians|therapists|coaches|boards|homeowners|tenants|establishments|advertisers|producers|facilities|investors|communities|brokerages|proprietors|advisors|advisers|planners|consultants|founders|shoppers|consumers';
 
 const COUNT = '(\\d{1,3}(?:,\\d{3})+|\\d+)';
 // The words between a count and what it counts may carry an ampersand or an apostrophe:
 // "12 B&B owners" and "40 children's clinics" count buyers as "12 inn owners" does (round 13).
-const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`, 'gi');
+// A compound buyer noun may list its kinds with commas: "6,800 roofing, landscaping and plumbing businesses"
+// counts businesses (2026-11-24 investigation: 19 of 30 published-style market sizes read as unsized without it).
+const BETWEEN = "(?:[A-Za-z&'’-]+,?\\s+){0,7}?";
+const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+${BETWEEN}(?:${BUYER_WORDS})\\b`, 'gi');
+/** A count, then in the same sentence "each buys / pays / orders …": the counted units are buyers. */
+const EACH_BUYS = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,5}?[A-Za-z&'’-]+\\b[^.;!?]{0,120}[;,]\\s*(?:and\\s+)?(?:they\\s+)?each(?:\\s+one)?\\s+(?:buys?|pays?|purchases?|orders?|subscribes?|signs?|needs?)\\b`, 'i');
 const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts|renewals|entries|registrations|applications|filings|enrolments|enrollments|leads';
 /** A vague count of a per-unit rate, read at its low end (2); never a count of buyers. */
 const VAGUE = 'several|a few|a couple of|a couple|multiple|a handful of';
@@ -399,12 +404,28 @@ function readRates(text: string, buyerWords: string, buyerCount: RegExp): Stated
   return [...byPosition.values()];
 }
 
+/**
+ * A published count in the form the readers below take (2026-11-24 investigation): "5 million
+ * sellers" read as 2 buyers (the "2" of a later "2 million"), so a market of millions was judged
+ * too small to reach a $1,200 target; "U.S." and "501(c)(3)" cut the noun phrase a count
+ * belongs to. Pure; every figure keeps its value.
+ */
+function publishedCount(text: string): string {
+  return text
+    .replace(/(\d+(?:\.\d+)?)\s*(million|thousand)\b/gi, (_, n: string, unit: string) =>
+      Math.round(Number(n) * (unit.toLowerCase() === 'million' ? 1_000_000 : 1_000)).toLocaleString('en-US'))
+    .replace(/\bU\.S\.(?=\s)/g, 'US')
+    .replace(/\b501\s*\(c\)\s*\(\d{1,2}\)/gi, 'tax-exempt')
+    .replace(/\((?:[a-z0-9]{1,3})\)/gi, '');
+}
+
 /** Read the deals a market can take inside `windowDays`, or null when no number is stated. */
-export function readVolume(text: string, windowDays: number, payer: string | null = null, industry: string | null = null): VolumeReading | null {
-  if (!text || !(windowDays > 0)) return null;
+export function readVolume(raw: string, windowDays: number, payer: string | null = null, industry: string | null = null): VolumeReading | null {
+  if (!raw || !(windowDays > 0)) return null;
+  const text = publishedCount(raw);
   const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer), ...payerAgentWords(payer), ...industryBuyerWords(industry)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
   const buyerWords = held.length === 0 ? BUYER_WORDS : `${BUYER_WORDS}|${held.join('|')}`;
-  const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${buyerWords})\\b`, 'gi');
+  const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+${BETWEEN}(?:${buyerWords})\\b`, 'gi');
   const window = Math.max(1, Math.floor(windowDays));
 
   // An order rate states the volume directly; the slowest one stated is taken.
@@ -427,7 +448,18 @@ export function readVolume(text: string, windowDays: number, payer: string | nul
     }
   }
 
-  const counts = buyerCounts(text, buyerCount).map((c) => c.n);
+  let counts = buyerCounts(text, buyerCount).map((c) => c.n);
+  /*
+   * A count whose own sentence goes on to say each of them buys ("About 800 active Detroit
+   * investors are listed on BiggerPockets; each buys one") counts buyers whatever its noun:
+   * the text itself names them as buyers. Before, only a noun from the buyer vocabulary or the
+   * payer's own words counted, so an evidenced market of "investors" or "facilities" read as
+   * unsized and left MARKET_VOLUME open (2026-11-24 investigation: 3 of 10 fresh requests).
+   */
+  if (counts.length === 0) {
+    const each = EACH_BUYS.exec(text);
+    if (each) counts = [toInt(each[1]!)];
+  }
   if (counts.length === 0) return null;
   const counted = Math.min(...counts);
   const share = buyingShare(text);
