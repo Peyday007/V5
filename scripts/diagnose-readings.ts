@@ -472,12 +472,13 @@ async function heapSources(): Promise<void> {
      * watch the newest process's heap each minute, snapshot again.
      */
     const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '14');
-    type Snap = Map<string, { calls: number; rows: number; total: number }>;
+    type Snap = Map<string, { calls: number; rows: number; total: number; blocks: number }>;
     const snap = async (): Promise<Snap> => {
-      const rows = await getDb().all<{ queryid: string; calls: number | string; rows: number | string; total: number | string }>(
-        `SELECT queryid::text AS queryid, calls, rows, total_exec_time AS total FROM ${schema}.pg_stat_statements(false) WHERE ${dbFilter}`,
+      const rows = await getDb().all<{ queryid: string; calls: number | string; rows: number | string; total: number | string; blocks: number | string }>(
+        `SELECT queryid::text AS queryid, calls, rows, total_exec_time AS total, shared_blks_hit + shared_blks_read AS blocks
+           FROM ${schema}.pg_stat_statements(false) WHERE ${dbFilter}`,
       );
-      return new Map(rows.map((r) => [r.queryid, { calls: Number(r.calls), rows: Number(r.rows), total: Number(r.total) }]));
+      return new Map(rows.map((r) => [r.queryid, { calls: Number(r.calls), rows: Number(r.rows), total: Number(r.total), blocks: Number(r.blocks) }]));
     };
     const before = await snap();
     const startedAt = Date.now();
@@ -497,24 +498,27 @@ async function heapSources(): Promise<void> {
     const after = await snap();
     const diff = [...after]
       .map(([id, a]) => {
-        const b = before.get(id) ?? { calls: 0, rows: 0, total: 0 };
-        return { id, calls: a.calls - b.calls, rows: a.rows - b.rows, ms: Math.round(a.total - b.total) };
+        const b = before.get(id) ?? { calls: 0, rows: 0, total: 0, blocks: 0 };
+        return { id, calls: a.calls - b.calls, rows: a.rows - b.rows, ms: Math.round(a.total - b.total), mb: ((a.blocks - b.blocks) * 8) / 1024 };
       })
-      .filter((d) => d.calls > 0)
-      .sort((x, y) => y.rows - x.rows)
-      .slice(0, 30);
+      .filter((d) => d.calls > 0);
     const texts = new Map<string, string>();
-    if (diff.length > 0) {
+    for (let i = 0; i < diff.length; i += 200) {
+      const ids = diff.slice(i, i + 200).map((d) => d.id);
       const rows = await getDb().all<{ queryid: string; query: string }>(
-        `SELECT queryid::text AS queryid, SUBSTR(query, 1, 400) AS query FROM ${schema}.pg_stat_statements WHERE ${dbFilter} AND queryid::text IN (${diff.map(() => '?').join(', ')})`,
-        diff.map((d) => d.id),
+        `SELECT queryid::text AS queryid, SUBSTR(query, 1, 300) AS query FROM ${schema}.pg_stat_statements WHERE ${dbFilter} AND queryid::text IN (${ids.map(() => '?').join(', ')})`,
+        ids,
       );
-      for (const r of rows) texts.set(r.queryid, r.query);
+      for (const r of rows) texts.set(r.queryid, r.query.replace(/\s+/g, ' '));
     }
+    const line = (d: (typeof diff)[number]) =>
+      `    rows ${d.rows} calls ${d.calls} per_call ${Math.round(d.rows / d.calls)} blocksMB ${d.mb.toFixed(0)} ms ${d.ms} :: ${texts.get(d.id) ?? '?'}`;
     console.log(`  rows returned in the last ${windowMin} min, by statement`);
-    for (const d of diff) {
-      console.log(`    rows ${d.rows} calls ${d.calls} per_call ${Math.round(d.rows / d.calls)} ms ${d.ms} :: ${(texts.get(d.id) ?? '?').replace(/\s+/g, ' ')}`);
-    }
+    for (const d of [...diff].sort((x, y) => y.rows - x.rows).slice(0, 25)) console.log(line(d));
+    console.log(`  blocks touched (8 kB) in the last ${windowMin} min, by statement`);
+    for (const d of [...diff].sort((x, y) => y.mb - x.mb).slice(0, 25)) console.log(line(d));
+    console.log('  every statement on research_runs that returns its text columns');
+    for (const d of diff.filter((x) => /FROM research_runs/i.test(texts.get(x.id) ?? '') && /SELECT \*|prompt/i.test(texts.get(x.id) ?? ''))) console.log(line(d));
   } else {
     console.log('  pg_stat_statements is not installed');
   }
