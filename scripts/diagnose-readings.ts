@@ -620,6 +620,51 @@ async function heapProfile(): Promise<void> {
   }
 }
 
+/** How many bytes the heaviest whole-set reads return, per call, on the largest project (read-only). */
+async function rowBytes(): Promise<void> {
+  console.log('DIAGNOSE: row-bytes');
+  const show = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
+    const started = Date.now();
+    try {
+      const rows = await getDb().all<Record<string, unknown>>(sql, params as never[]);
+      console.log(`  ${label} (${Date.now() - started} ms)`);
+      for (const row of rows) console.log(`    ${JSON.stringify(row).slice(0, 600)}`);
+    } catch (error) {
+      console.log(`  ${label} FAILED ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  };
+  const mb = (expr: string) => `ROUND(SUM(${expr}) / 1048576.0, 1)`;
+  await show(
+    'monetization_paths with a design, by project (what recordConstructedArrangements and listConstructedArrangements read)',
+    `SELECT project_id, COUNT(*) AS n, ${mb('COALESCE(LENGTH(design_json),0)')} AS design_mb, ${mb('COALESCE(LENGTH(position_json),0)')} AS position_mb,
+            ${mb('pg_column_size(m.*)')} AS row_mb, MAX(LENGTH(design_json)) AS max_design
+       FROM monetization_paths m WHERE design_signature IS NOT NULL GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 5`,
+  );
+  await show(
+    'audit round events by project (auditRoundFor reads all of them per orchestration)',
+    `SELECT project_id, COUNT(*) AS n, ${mb('LENGTH(payload)')} AS payload_mb, MAX(LENGTH(payload)) AS max_payload FROM project_events
+      WHERE event_type IN ('DOCUMENT_HANDED_OFF', 'AUDIT_ROUND_REOPENED', 'RESEARCH_ROUND_RESUMED') GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 5`,
+  );
+  await show('cash_card_facts by project', `SELECT project_id, COUNT(*) AS n, ${mb('pg_column_size(f.*)')} AS row_mb FROM cash_card_facts f GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show('existing_claims by project', `SELECT project_id, COUNT(*) AS n, ${mb('pg_column_size(c.*)')} AS row_mb FROM existing_claims c GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show('routine_delivery_proofs settled', `SELECT COUNT(*) AS n, ${mb('pg_column_size(p.*)')} AS row_mb FROM routine_delivery_proofs p WHERE state IN ('PROVEN', 'FAILED', 'CLEARED')`);
+  await show('factory_program_verifications by program', `SELECT program_id, COUNT(*) AS n, ${mb('pg_column_size(v.*)')} AS row_mb FROM factory_program_verifications v GROUP BY program_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show('cash_events by kind (largest)', `SELECT kind, COUNT(*) AS n, ${mb('LENGTH(detail)')} AS detail_mb FROM cash_events GROUP BY kind ORDER BY SUM(LENGTH(detail)) DESC LIMIT 4`);
+  await show('cash_opportunities by project', `SELECT project_id, COUNT(*) AS n, ${mb('pg_column_size(o.*)')} AS row_mb FROM cash_opportunities o GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+  await show(
+    'latest rank snapshot per path, largest project',
+    `SELECT s.project_id, COUNT(*) AS n, ${mb('pg_column_size(s.*)')} AS row_mb FROM monetization_rank_snapshots s
+       JOIN (SELECT path_id, MAX(evaluated_at) AS newest FROM monetization_rank_snapshots GROUP BY path_id) m ON m.path_id = s.path_id AND m.newest = s.evaluated_at
+      GROUP BY s.project_id ORDER BY COUNT(*) DESC LIMIT 3`,
+  );
+  await show(
+    'research_runs text by layer (what SELECT * by layer returns)',
+    `SELECT layer_id, COUNT(*) AS n, ${mb('COALESCE(LENGTH(prompt),0) + COALESCE(LENGTH(prompt_sections),0) + COALESCE(LENGTH(result_text),0) + COALESCE(LENGTH(required_attachments),0)')} AS text_mb
+       FROM research_runs GROUP BY layer_id ORDER BY 3 DESC LIMIT 4`,
+  );
+  await show('research_claims by project (accepted read)', `SELECT f.project_id, COUNT(*) AS n, ${mb('pg_column_size(c.*)')} AS row_mb FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id GROUP BY f.project_id ORDER BY COUNT(*) DESC LIMIT 3`);
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
@@ -633,6 +678,7 @@ async function main(): Promise<void> {
     else if (command === 'gpu-answers') await gpuAnswers();
     else if (command === 'heap-sources') await heapSources();
     else if (command === 'heap-profile') await heapProfile();
+    else if (command === 'row-bytes') await rowBytes();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
     else throw new Error('usage: diagnose-readings.ts query-times|fragment-failures|operator-runs|free-lane-yield|bin-gates <bin>');
   } finally {
