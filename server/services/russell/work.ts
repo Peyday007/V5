@@ -314,6 +314,20 @@ export async function workForProject(input: {
   }
 
   /*
+   * A packet sent to the fleet records its provider as the word WORKER, which
+   * names no one. The worker is the one holding a lease on one of the packet's
+   * bins; with none leased it is waiting for one, and the card says so.
+   */
+  for (const entry of entries) {
+    if (entry.source !== 'MISSION' || entry.card.worker === null || !/^WORKER\b/.test(entry.card.worker)) continue;
+    const packetId = entry.links.orchestrationId;
+    const holder = packetId ? bins.find((b) => b.orchestrationId === packetId && b.workerId) : undefined;
+    entry.card.worker = holder?.workerId
+      ? (workerNames.get(holder.workerId) ?? holder.workerId)
+      : 'Brain worker fleet (no worker holds it at this moment)';
+  }
+
+  /*
    * What each mission is for and which goal it serves, read by the backlog
    * classifier from its idea's links (rounds, openings, questions) — the same
    * reading `goals/goalWork.ts` uses to say whose research an idea is. One pass
