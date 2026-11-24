@@ -311,11 +311,57 @@ async function liveness(): Promise<void> {
   }
 }
 
+/** Where the heap could come from: the largest relations, the largest event kinds, and the last processes' activity. Read-only. */
+async function heapSources(): Promise<void> {
+  console.log('DIAGNOSE: heap-sources');
+  const time = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
+    const started = Date.now();
+    try {
+      const rows = await getDb().all<Record<string, unknown>>(sql, params as never[]);
+      console.log(`  ${label} (${Date.now() - started} ms)`);
+      for (const row of rows.slice(0, 45)) console.log(`    ${JSON.stringify(row).slice(0, 300)}`);
+    } catch (error) {
+      console.log(`  ${label} FAILED ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  };
+  await time(
+    'largest relations (MB, ~rows)',
+    `SELECT c.relname AS name, (pg_total_relation_size(c.oid) / 1048576)::int AS mb, c.reltuples::bigint AS rows
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r'
+      ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 45`,
+  );
+  await time('cash_events by kind', 'SELECT kind, COUNT(*) AS n, SUM(LENGTH(detail)) AS bytes FROM cash_events GROUP BY kind ORDER BY SUM(LENGTH(detail)) DESC LIMIT 25');
+  await time('dependencies by project', 'SELECT project_id, COUNT(*) AS n, COUNT(dependent_run_id) AS runs, COUNT(DISTINCT dependent_run_id) AS distinct_runs FROM dependencies GROUP BY project_id ORDER BY COUNT(*) DESC LIMIT 10');
+  await time('projects', 'SELECT COUNT(*) AS n FROM projects');
+  await time('goals with targets', 'SELECT COUNT(*) AS n FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL');
+  const rows = await getDb().all<{ instance_id: string; started_at: string; alive_at: string; readings: string | null }>(
+    'SELECT instance_id, started_at, alive_at, readings FROM runtime_liveness ORDER BY alive_at DESC LIMIT 3',
+    [],
+  );
+  for (const row of rows) {
+    console.log(`  process ${row.instance_id} ${row.started_at} -> ${row.alive_at}`);
+    let readings: Record<string, unknown> = {};
+    try {
+      readings = JSON.parse(row.readings ?? '{}') as Record<string, unknown>;
+    } catch {
+      /* unreadable */
+    }
+    console.log(`    memory: ${JSON.stringify(readings['memory'])}`);
+    const stalls = readings['stalls'] as { byActivity?: unknown; recent?: unknown; profiles?: Array<Record<string, unknown>> } | undefined;
+    console.log(`    byActivity: ${JSON.stringify(stalls?.byActivity ?? null).slice(0, 3000)}`);
+    console.log(`    recent: ${JSON.stringify(stalls?.recent ?? null).slice(0, 3000)}`);
+    for (const p of stalls?.profiles ?? []) console.log(`    profile at ${String(p['at'])}: brain ${JSON.stringify(p['brain']).slice(0, 2500)}`);
+    console.log(`    keys: ${Object.keys(readings).join(', ')}`);
+  }
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
   try {
-    if (command === 'query-times') await queryTimes();
+    if (command === 'heap-sources') await heapSources();
+    else if (command === 'query-times') await queryTimes();
     else if (command === 'restarts') await restarts();
     else if (command === 'liveness') await liveness();
     else if (command === 'fragment-failures') await fragmentFailures();

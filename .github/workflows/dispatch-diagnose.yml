@@ -66,7 +66,7 @@ jobs:
             *) echo "::error::A bin id is bin_ followed by hex."; exit 1 ;;
           esac
           case "$DIAG_READING" in
-            ''|query-times|restarts|liveness) ;;
+            ''|query-times|restarts|liveness|heap-sources) ;;
             *) echo "::error::A reading is query-times, restarts or liveness."; exit 1 ;;
           esac
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
