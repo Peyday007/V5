@@ -45,7 +45,7 @@
  * sentence. Pure.
  */
 import { namesOneOrganisation } from '../../domain/industry.ts';
-import { evidenceIsAbout, nonPurchaseSentence, paymentNatureOf } from '../../domain/paymentNature.ts';
+import { evidenceIsAbout, nonPurchaseSentence, paymentNatureOf, readPriceEvidence } from '../../domain/paymentNature.ts';
 import type { Need } from '../quant/needs.ts';
 import type { GapKind, PathFact, TransactionPathway } from './pathways.ts';
 import type { PlanReading } from './plan.ts';
@@ -229,6 +229,9 @@ function skeptic(input: CommitteeInput): Bench {
     const price = p.revenuePerDeal;
     // What the money is, re-read from the evidence sentence and the offer's own words, not from the planner's status.
     const nature = paymentNatureOf([p.title, price.basis, typeof p.buyer.value === 'string' ? p.buyer.value : ''].join('. '));
+    // Which way the money runs: a fee the selling side pays, a supplier's input cost, or another supplier's fee for another deliverable is not this leg's price (Task E, 2026-11-24).
+    const read = EVIDENCED(price) && price.basis ? readPriceEvidence(price.basis, { title: p.title, payer: typeof p.buyer.value === 'string' ? p.buyer.value : null, offerScope: typeof p.offer.value === 'string' ? p.offer.value : null }) : null;
+    const wrongWay = read && (read.direction === 'PAID_BY_SELLER' || read.direction === 'SUPPLIER_COST' || read.direction === 'ANOTHER_DELIVERABLE') ? read : null;
     if (nature.nature !== 'PURCHASE' || has(leg, 'NOT_A_PURCHASE')) {
       b.fail({
         claim: `"${titleOf(leg)}" is counted at ${num(price.value) ?? num(price.high) ?? 'an unstated'} a deal`,
@@ -238,6 +241,8 @@ function skeptic(input: CommitteeInput): Bench {
         opportunityId: leg.opportunityId,
         fact: 'price',
       });
+    } else if (wrongWay) {
+      b.fail({ claim: `"${titleOf(leg)}" is priced from what its buyer pays for it`, evidenceRef: refOf(leg, 'price', price), why: `its price evidence is ${wrongWay.why}`, critical: true, opportunityId: leg.opportunityId, fact: 'price' });
     } else if (EVIDENCED(price) && !evidenceIsAbout(price.basis, [p.title, typeof p.buyer.value === 'string' ? p.buyer.value : '', typeof p.offer.value === 'string' ? p.offer.value : ''].join(' '))) {
       b.fail({ claim: `"${titleOf(leg)}" is priced from established evidence`, evidenceRef: refOf(leg, 'price', price), why: 'the price evidence names another market: none of its words is this buyer, this offer or its industry', critical: true, opportunityId: leg.opportunityId, fact: 'price' });
     }
