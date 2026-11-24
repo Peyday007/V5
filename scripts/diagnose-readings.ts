@@ -192,15 +192,18 @@ async function binGates(binId: string): Promise<void> {
 /** Free-lane outcomes by work type and model over 24 h, from FREE_LANE_ITEM events. */
 async function freeLaneYield(): Promise<void> {
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-  const rows = await getDb().all<{ workload_class: string | null; outcome: string | null; model: string | null; n: number }>(
-    `SELECT workload_class, outcome, SUBSTR(COALESCE(reason, ''), 1, INSTR(COALESCE(reason, '') || ':', ':') - 1) AS model, COUNT(*) AS n
-       FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ?
-      GROUP BY workload_class, outcome, SUBSTR(COALESCE(reason, ''), 1, INSTR(COALESCE(reason, '') || ':', ':') - 1)
-      ORDER BY workload_class, n DESC`,
+  const rows = await getDb().all<{ workload_class: string | null; outcome: string | null; reason: string | null }>(
+    `SELECT workload_class, outcome, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? LIMIT 20000`,
     [since],
   );
-  console.log(`DIAGNOSE: free-lane-yield since ${since}`);
-  for (const row of rows) console.log(`  ${String(row.n).padStart(5)}x ${row.workload_class ?? '-'} ${row.outcome ?? '-'} ${row.model ?? ''}`);
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const model = (row.reason ?? '').replace(/^model\s+/, '').split(':')[0]?.trim() ?? '';
+    const key = `${row.workload_class ?? '-'} ${row.outcome ?? '-'} ${model}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  console.log(`DIAGNOSE: free-lane-yield since ${since} (${rows.length} events)`);
+  for (const [key, n] of [...counts].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
 }
 
 async function main(): Promise<void> {
