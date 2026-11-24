@@ -49,6 +49,7 @@ export interface GoalView {
   commitmentLabel: string; lifecycle: string; lifecycleReason: string; target: TargetReading | null; state: string; stateEvidence: string;
   waiting: { kind: string; detail: string; since: string | null }; next: { action: string; by: string; afterwards: string | null };
   blockers: { [k: string]: unknown }[]; decisions: { [k: string]: unknown }[]; obligations: string[];
+  work?: GoalWorkLink[];
   priority: { [k: string]: unknown } | null; pausedAt: string | null; pausedReason: string | null; createdAt: string; updatedAt: string;
 }
 export interface DecisionResult { ok: boolean; reason: string | null; consequence: string }
@@ -154,3 +155,46 @@ export interface EngineeringOutcome { candidateId: string; title: string; goalId
 export interface OperatorHistory { runs: { id: string; state: string; startedAt: string; summary: string | null; tools: string[]; error: unknown }[]; learnings: { goalId: string; lesson: string; evidence: string; at: string }[]; actions: { type: string; at: string; payload: unknown }[] }
 
 export interface Health { ok: boolean; schemaVersion: number | string; revision?: string | null; driver?: string; providers: { name: string; available: boolean; reason: string | null; model: string | null }[] }
+
+// server/services/russell/work.ts — the card facts added 2026-11-24
+export interface WorkCard { startedAt: string | null; finishedAt: string | null; worker: string | null; result: string | null }
+export interface WorkEntryFull extends WorkEntry {
+  card?: WorkCard;
+  links: { missionId: string | null; orchestrationId: string | null; binId: string | null; documentId: string | null; conversationId: string | null; layerId: string | null };
+  how: { label: string; value: string }[];
+  priorityReason: string | null;
+}
+export interface GoalWorkLink { binId: string; state: string; workerOnIt: boolean }
+
+// server/services/operator/resources.ts
+export interface ResourceReading {
+  key: string; name: string; accomplishing: string; waiting: number | null; running: number | null; capacity: number | null;
+  atLimit: boolean | null; idleBesideWork: boolean; why: string; brainDoing: string; spendingHelps: 'YES' | 'NO' | 'UNKNOWN';
+  spending: string; costPerHour: number | null;
+}
+export interface ResourcesView { readAt: string | null; source: string; resources: ResourceReading[] }
+
+// server/services/research/backlog.ts
+export interface BacklogReading {
+  readAt: string; total: number; launchable: number; obsolete: number; held: number;
+  categories: { category: string; purpose: string; contribution: string; tier: number; count: number; launchable: number; obsolete: number; byPriority: Record<string, number>; finished7d: { done: number; useful: number; failed: number; cancelled: number } }[];
+  goals: { goalId: string | null; title: string; state: string; count: number; obsolete: number; held: number }[];
+  obsoleteReasons: { reason: string; text: string; count: number; retirable: boolean }[];
+  samples: { category: string; title: string; obsolete: string | null }[];
+  limits: string[];
+}
+
+// server/routes/command.ts GET /command/reports
+export type Section<T> = { ok: true; value: T } | { ok: false; error: string };
+export interface InventoryItem { id: string; status: string; capability: string; symptom: string; evidence: string; rootCause: string | null; severity: string; owner: string | null; verificationCriteria: string | null; result: string | null; verification: { kind: string; ref: string; detail: string } | null; note: string | null; updatedAt: string }
+export interface ReportsView {
+  readAt: string;
+  inventory: Section<InventoryItem[]>;
+  engineering: Section<EngineeringOutcome[]>;
+  deficiencies: Section<{ diagnosis: Record<string, unknown> & { title?: string; deficiency?: string; observed?: string; cause?: string | null }; intervention: string; why: string }[]>;
+  runs: Section<{ id: string; state: string; model: string; startedAt: string; finishedAt: string | null; summary: string | null; toolCalls: unknown[]; error: string | null }[]>;
+  learnings: Section<{ id: string; goalId: string | null; lesson: string; evidence: string; recordedAt?: string }[]>;
+  hourly: Section<{ noticeId: string; readyAt: string | null; subject: string; text: string }[]>;
+  audits: Section<{ id: string; projectId: string; layerId: string | null; verdict: string; summary: string; confidence: number | null; mode: string; createdAt: string }[]>;
+  interventions: Section<{ byKind: Record<string, number>; minutesAvoided: number; [k: string]: unknown }>;
+}

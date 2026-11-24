@@ -39,6 +39,7 @@ import { listOrchestrationsByProject } from '../../repos/research.ts';
 import { groupOf, listMissions } from '../../repos/russellMissions.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listCandidates } from '../../repos/russellCandidates.ts';
+import { listWorkers } from '../../repos/identity.ts';
 // The one mapping for the five classes. It already exists in the domain; a
 // second copy here is how two screens come to disagree about one enum.
 import { CANDIDATE_PRIORITY_LABELS } from '../../domain/types.ts';
@@ -128,6 +129,18 @@ export interface WorkEntry {
    * technical identifiers stay inspectable rather than being discarded.
    */
   how: { label: string; value: string }[];
+  /**
+   * The facts a task card needs beyond its title, each read from the row:
+   * when the work started and finished (a card computes time spent from
+   * these), who holds or held it, and what came of it. Null is "the row does
+   * not say", never a default.
+   */
+  card: {
+    startedAt: string | null;
+    finishedAt: string | null;
+    worker: string | null;
+    result: string | null;
+  };
   /** Links to the rows this entry already knows about. */
   links: {
     missionId: string | null;
@@ -271,6 +284,9 @@ export async function workForProject(input: {
    * id rather than one query per mission: a fan-out is invisible with four
    * missions and unusable with four hundred.
    */
+  const workerNames = new Map<string, string>();
+  for (const worker of await listWorkers({ includeArchived: true })) workerNames.set(worker.id, worker.displayName || worker.name);
+
   const candidates = new Map<string, RussellCandidate>();
   for (const candidate of await listCandidates({ projectId: input.projectId, limit: 500 })) {
     candidates.set(candidate.id, candidate);
@@ -301,7 +317,7 @@ export async function workForProject(input: {
     // A bin driving a packet already shown is the same work seen from the
     // dispatcher's side, not a second thing to do.
     if (bin.orchestrationId && claimedOrchestrations.has(bin.orchestrationId)) continue;
-    entries.push(fromBin(bin, label(provenanceOfBinKind(bin.kind))));
+    entries.push(fromBin(bin, label(provenanceOfBinKind(bin.kind)), workerNames));
   }
 
   const wanted = input.includeTechnical
@@ -340,6 +356,12 @@ function fromMission(
     priorityLabel: candidate?.priority ? CANDIDATE_PRIORITY_LABELS[candidate.priority] : null,
     priorityReason: candidate?.reason ?? null,
     blocked: mission.state === 'NEEDS_HUMAN' || mission.state === 'FAILED',
+    card: {
+      startedAt: mission.createdAt,
+      finishedAt: mission.completedAt,
+      worker: null,
+      result: mission.terminalReason ?? (mission.documentId ? 'A document was filed' : null),
+    },
     how: [
       { label: 'Mission', value: mission.id },
       ...(mission.orchestrationId ? [{ label: 'Packet', value: mission.orchestrationId }] : []),
@@ -393,6 +415,15 @@ function fromOrchestration(
       orchestration.status === 'AWAITING_APPROVAL' ||
       orchestration.status === 'FAILED' ||
       orchestration.status === 'PAUSED_QUOTA',
+    card: {
+      startedAt: orchestration.startedAt ?? orchestration.queuedAt,
+      finishedAt: orchestration.completedAt ?? orchestration.failedAt ?? orchestration.cancelledAt,
+      worker: [orchestration.provider, orchestration.model].filter(Boolean).join(' · ') || null,
+      result:
+        orchestration.failureReason ??
+        (orchestration.verdict ? `Audit verdict: ${orchestration.verdict}` : null) ??
+        (orchestration.documentId ? 'A document was filed' : null),
+    },
     how: [
       { label: 'Packet', value: orchestration.id },
       { label: 'Status', value: orchestration.status },
@@ -411,7 +442,7 @@ function fromOrchestration(
   };
 }
 
-function fromBin(bin: Bin, provenance: WorkProvenance): WorkEntry {
+function fromBin(bin: Bin, provenance: WorkProvenance, workerNames: Map<string, string>): WorkEntry {
   return {
     id: `bin:${bin.id}`,
     source: 'BIN',
@@ -427,6 +458,12 @@ function fromBin(bin: Bin, provenance: WorkProvenance): WorkEntry {
     priorityLabel: null,
     priorityReason: null,
     blocked: bin.state === 'NEEDS_HUMAN' || bin.state === 'FAILED',
+    card: {
+      startedAt: bin.leasedAt ?? bin.readyAt ?? bin.createdAt,
+      finishedAt: bin.completedAt,
+      worker: bin.workerId ? (workerNames.get(bin.workerId) ?? bin.workerId) : null,
+      result: bin.terminalReason ?? bin.heldReason ?? bin.lastRefusal,
+    },
     how: [
       { label: 'Bin', value: bin.id },
       { label: 'Kind', value: bin.kind },

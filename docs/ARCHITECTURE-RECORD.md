@@ -17313,3 +17313,48 @@ starter, served by Brain's own process at `/command`. The rules it settled:
 Pinned by `tests/commandCenter.test.ts`, and driven in a real browser by
 `node tests/browser/command-center.mjs`: a throwaway Brain, every page on a
 desktop and a phone viewport, and the writes a person makes through it.
+
+## 121. Operator rights follow the access policy, a market statistic is not an opening, and obsolete research leaves scheduling with its row kept.
+
+The owner's first production inspection of the Command Center (2026-11-24)
+found three defects behind one page each. The rules they settled:
+
+- **Operator rights are the policy's, never a second list.**
+  `operatorTools.operatorProjects` walked `principal.memberships`, while
+  `decideProjectAccess` allows a Brain administrator on every project without
+  one. The owner — a Brain administrator with no memberships — was refused
+  every operator reading (engineering, deficiencies, operator runs) on the
+  Reports page. It now filters every project the policy shows the caller by
+  `decideProjectAccess(…, 'WRITE', 'operator:act')`, exactly as
+  `readableProjects` does for reads. A worker still needs a live membership
+  carrying `operator:act`; a viewer is still refused. The Reports page reads
+  the stored readings — the findings register, engineering outcomes,
+  deficiencies, operator runs and learnings, the recorded hourly operations
+  reports, completed audits — through `GET /api/command/reports`, calling
+  their existing readers. Nothing generates a report or an audit.
+- **A market-level figure is context, not an opening.** `harvest` filed a
+  claim such as "global eCommerce is worth $6.3 trillion" as an opening, and
+  each drew dives and questions. A claim whose `claimBasis` is
+  `TOTAL_MARKET_SIZE` is no longer filed; it keeps its row and still informs
+  readings. An opening filed earlier from such a sentence, naming no payer and
+  no price, is `MARKET_LEVEL` in `notWorthResearching`, a durable reason, so
+  `releaseUnworthyResearch` releases its research.
+- **Obsolete queued research leaves scheduling; its row stays.**
+  `services/research/backlog.ts` classifies every QUEUED idea by purpose,
+  goal, priority and the rows' proof of obsolescence: its question withdrawn
+  or answered, its opening closed or market-level, its round closed, its goal
+  cancelled or archived, or a duplicate of an older idea. Those move QUEUED →
+  REJECTED with one `RESEARCH_BACKLOG_RETIRED` event per project naming each
+  idea and why (§5, invariant 3) — every 30 minutes from the tick, and on
+  demand with `admin research retire`. A paused goal or a passed deadline is
+  reported and never retired, because a person can undo either.
+- **A resource is read as seven questions.** `services/operator/resources.ts`
+  answers, for the routines, the free lane, the GPU, the research slots and
+  the Factory: what it accomplishes, what waits, whether it is at its limit,
+  why not, what Brain is doing, whether spending would help and what it would
+  cost — every sentence built from the existing readings, untruncated on the
+  page. The 31 research slots are the sum of the research grants'
+  `max_concurrent`, a controller's output (§78, §86), not hardware.
+
+Pinned by `tests/commandCenter.test.ts` and `tests/marketLevelOpening.test.ts`.
+

@@ -37,15 +37,27 @@ async function readableProjects(principal: Principal): Promise<string[]> {
   return visibleProjectIds(principal, all).filter((id) => decideProjectAccess(principal, id, 'READ').allowed);
 }
 
-/** Projects where this credential may act as the operator. Empty for every other caller. */
-function operatorProjects(principal: Principal): string[] {
-  return principal.memberships
-    .filter((m) => m.active && decideProjectAccess(principal, m.projectId, 'WRITE', 'operator:act').allowed)
-    .map((m) => m.projectId);
+/**
+ * Projects where this credential may act as the operator. Empty for every other caller.
+ *
+ * Decided by `decideProjectAccess` over every project the policy lets the
+ * caller see, exactly as `readableProjects` is. It used to walk
+ * `principal.memberships` alone, which disagreed with the policy for the one
+ * caller the policy allows everywhere without a membership: a Brain
+ * administrator. The owner — a Brain administrator — was refused every
+ * operator reading in the Command Center (2026-11-24) while every other
+ * surface let them in. A worker still needs a live membership carrying
+ * `operator:act`, because that is what the policy decides for a worker.
+ */
+export async function operatorProjects(principal: Principal): Promise<string[]> {
+  const all = (await listProjects()).map((project) => project.id);
+  return visibleProjectIds(principal, all).filter(
+    (id) => decideProjectAccess(principal, id, 'WRITE', 'operator:act').allowed,
+  );
 }
 
-function requireOperator(principal: Principal): string[] {
-  const projects = operatorProjects(principal);
+async function requireOperator(principal: Principal): Promise<string[]> {
+  const projects = await operatorProjects(principal);
   if (projects.length === 0) throw notFoundError();
   return projects;
 }
@@ -216,7 +228,7 @@ const historyTool: McpTool = {
   },
   annotations: { title: 'Operator: history', ...READ_ONLY },
   run: async (args, { principal }) => {
-    const projects = requireOperator(principal);
+    const projects = await requireOperator(principal);
     const goalId = optionalString(args, 'goal_id');
     if (goalId) {
       // Lessons about one goal are that goal's project's to read; absent and forbidden refuse alike.
@@ -262,7 +274,7 @@ const withdrawTool: McpTool = {
   },
   annotations: { title: 'Operator: withdraw a moot request', ...MUTATING },
   run: async (args, { principal }) => {
-    const projects = requireOperator(principal);
+    const projects = await requireOperator(principal);
     const gate = await decisionGate(args);
     if (!gate.ok) return { projectId: null, value: gate };
     const result = await withdrawMootRequest({ requestId: requiredString(args, 'request_id'), runId: await currentRunId(), projectIds: projects });
@@ -281,7 +293,7 @@ const continueTool: McpTool = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Operator: continue idle capacity', ...MUTATING },
   run: async (_args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     return { projectId: null, value: await continueIdleCapacity(await currentRunId()) };
   },
 };
@@ -315,7 +327,7 @@ const deficienciesTool: McpTool = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Operator: deficiencies', ...READ_ONLY },
   run: async (_args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const { readDeficiencies, readingId } = await import('../services/operator/director.ts');
     const found = await readDeficiencies();
     return { projectId: null, value: { deficiencies: found.map((one) => ({ id: readingId(one), intervention: one.intervention, why: one.why, ...one.diagnosis })) } };
@@ -382,7 +394,7 @@ const commissionTool: McpTool = {
   },
   annotations: { title: 'Operator: commission an intervention', ...MUTATING },
   run: async (args, { principal }) => {
-    const projects = requireOperator(principal);
+    const projects = await requireOperator(principal);
     const gate = await decisionGate(args);
     if (!gate.ok) return { projectId: null, value: gate };
     const director = await import('../services/operator/director.ts');
@@ -467,7 +479,7 @@ const experimentsTool: McpTool = {
   inputSchema: { type: 'object', properties: { limit: { type: 'number', description: 'How many experiments, newest first (default 20).' } }, additionalProperties: false },
   annotations: { title: 'Operator: experiments', ...READ_ONLY },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const { readExperiments } = await import('../services/evolution/experiments.ts');
     const limit = optionalNumber(args, 'limit');
     return { projectId: null, value: await readExperiments({ limit: limit === null ? 20 : Math.min(100, Math.max(1, Math.trunc(limit))) }) };
@@ -493,7 +505,7 @@ const hiddenCaseTool: McpTool = {
   },
   annotations: { title: 'Operator: add a hidden benchmark case', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const { addHiddenCase } = await import('../services/evolution/experiments.ts');
     const value = args['case'];
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalidInput('case must be an object.');
@@ -517,7 +529,7 @@ const engineeringTool: McpTool = {
   },
   annotations: { title: 'Operator: engineering results', ...READ_ONLY },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const { engineeringOutcomes } = await import('../services/operator/director.ts');
     const includeClosed = args['include_closed'] === undefined ? true : optionalBoolean(args, 'include_closed');
     return { projectId: null, value: { engineering: (await engineeringOutcomes({ includeClosed, limit: 10 })).map((one) => ({ ...one })) } };
@@ -542,7 +554,7 @@ const prioritizeTool: McpTool = {
   },
   annotations: { title: 'Operator: re-prioritize engineering', ...MUTATING },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const { reprioritize } = await import('../services/operator/director.ts');
     const priority = optionalNumber(args, 'priority');
     if (priority === null) throw invalidInput('priority is required.');
@@ -573,7 +585,7 @@ const reattemptTool: McpTool = {
   },
   annotations: { title: 'Operator: re-attempt engineering', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const { reattempt } = await import('../services/operator/director.ts');
     return {
       projectId: null,
@@ -646,7 +658,7 @@ const inventoryTool: McpTool = {
       const items = await inventory.listInventory({ status: optionalString(args, 'status') ?? undefined });
       return { projectId: null, value: { ok: true, total: items.length, items: items.slice(0, 80) } };
     }
-    requireOperator(principal);
+    await requireOperator(principal);
     const runId = await currentRunId();
     const ctx = { runId, actor: `operator:${runId ?? 'run'}` };
     const raw = args['verification'];
@@ -709,7 +721,7 @@ const fixTool: McpTool = {
   },
   annotations: { title: 'Operator: send a defect to Factory', ...MUTATING },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const gate = await decisionGate(args);
     if (!gate.ok) return { projectId: null, value: gate };
     const result = await submitOperatorFix({
@@ -746,7 +758,7 @@ const learnTool: McpTool = {
   },
   annotations: { title: 'Operator: record a lesson', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    await requireOperator(principal);
     const lesson = requiredString(args, 'lesson');
     const evidence = requiredString(args, 'evidence');
     const candidateId = optionalString(args, 'candidate_id');
@@ -846,7 +858,7 @@ const decideTool: McpTool = {
   },
   annotations: { title: 'Operator: commit a decision', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
-    const projects = requireOperator(principal);
+    const projects = await requireOperator(principal);
     const rawOptions = Array.isArray(args['options']) ? (args['options'] as Record<string, unknown>[]) : [];
     const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
     const nullableNumber = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -915,7 +927,7 @@ const verifyTool: McpTool = {
   },
   annotations: { title: 'Operator: judge a past decision', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
-    const projects = requireOperator(principal);
+    const projects = await requireOperator(principal);
     const { openDecisions, verify } = await import('../services/operator/decisions.ts');
     const id = optionalString(args, 'decision_id');
     if (!id) return { projectId: null, value: { open: await openDecisions(20) } };
@@ -952,7 +964,7 @@ const focusTool: McpTool = {
   },
   annotations: { title: 'Operator: pause or resume a goal', ...MUTATING },
   run: async (args, { principal }) => {
-    const projects = requireOperator(principal);
+    const projects = await requireOperator(principal);
     const action = requiredString(args, 'action').toUpperCase();
     if (action !== 'PAUSE' && action !== 'RESUME') throw invalidInput('action must be PAUSE or RESUME.');
     const { setGoalFocus } = await import('../services/operator/decisions.ts');
@@ -984,7 +996,7 @@ const createGoalTool: McpTool = {
   },
   annotations: { title: 'Operator: create a goal', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
-    const projects = requireOperator(principal);
+    const projects = await requireOperator(principal);
     const projectId = requiredString(args, 'project_id');
     if (!projects.includes(projectId)) throw notFoundError();
     const { createGoal } = await import('../services/goals/decide.ts');

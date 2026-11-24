@@ -70,7 +70,7 @@ const DURABLE: ReadonlySet<string> = new Set(['EXCLUDED_BY_GOAL', 'OWNER_PHYSICA
 
 function durable(reason: Awaited<ReturnType<typeof notWorthResearching>>): boolean {
   if (!reason) return false;
-  if (reason.kind === 'MARKETPLACE_LISTING' || reason.kind === 'CLOSES_TOO_SOON') return true;
+  if (reason.kind === 'MARKETPLACE_LISTING' || reason.kind === 'CLOSES_TOO_SOON' || reason.kind === 'MARKET_LEVEL') return true;
   return DURABLE.has(reason.reason);
 }
 

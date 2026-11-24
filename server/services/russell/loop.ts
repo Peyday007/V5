@@ -2558,6 +2558,20 @@ async function tickOnce(owner: string): Promise<TickReport> {
     });
 
     /*
+     * Queued research ideas the rows prove obsolete — a withdrawn or answered
+     * question, a closed or market-level opening, an ended goal, a duplicate —
+     * leave scheduling so the research grant's slots go to live work
+     * (`research/backlog.ts`, owner 2026-11-24). Rows are kept; one event per
+     * project says which and why. Throttled inside to every thirty minutes.
+     */
+    try {
+      const { retireObsoleteIdeasIfDue } = await import('../research/backlog.ts');
+      await retireObsoleteIdeasIfDue();
+    } catch {
+      /* retried on a later tick */
+    }
+
+    /*
      * 1e-iv. Carry asked lenses to a worker, and read the answers back.
      *
      * The frontier's five DERIVED lenses are answered above, from rows. The

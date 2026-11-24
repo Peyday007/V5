@@ -123,7 +123,7 @@ export default function OverviewPage() {
                     <li key={item.id} className='flex items-start justify-between gap-3 py-2'>
                       <div className='min-w-0'>
                         <p className='truncate text-sm font-medium'>{item.title}</p>
-                        <p className='text-muted-foreground line-clamp-2 text-xs'>{item.reason}</p>
+                        <p className='text-muted-foreground text-xs break-words'>{item.reason}</p>
                       </div>
                       <StatusPill status={item.urgency} />
                     </li>
@@ -157,7 +157,7 @@ export default function OverviewPage() {
                       <span><b className='tabular-nums'>{p.waiting}</b> waiting</span>
                       <span><b className='tabular-nums'>{p.capacity}</b> capacity</span>
                     </div>
-                    <p className='text-muted-foreground mt-2 line-clamp-2 text-xs'>{p.because}</p>
+                    <p className='text-muted-foreground mt-2 text-xs break-words'>{p.because}</p>
                   </div>
                 ))}
                 <p className='text-muted-foreground text-xs sm:col-span-2 lg:col-span-4'>

@@ -28,6 +28,7 @@
  * rule holds: not being able to act today is a named gap, never a reason to
  * drop an opening.
  */
+import { isMarketLevelFigure } from './positionEvidence.ts';
 import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getClaim, sourceUrlsForProject } from '../../repos/research.ts';
@@ -108,6 +109,7 @@ export function closesWithin(expiresAt: string | null, now: string, runwayMs = D
 
 export type NotWorthResearching =
   | { kind: 'MARKETPLACE_LISTING'; marketplace: string }
+  | { kind: 'MARKET_LEVEL' }
   | { kind: 'CLOSES_TOO_SOON'; at: string }
   | { kind: 'SCREENED_OUT'; reason: string; detail: string; limit: string | null };
 
@@ -115,6 +117,8 @@ export function describeNotWorthResearching(reason: NotWorthResearching): string
   switch (reason.kind) {
     case 'MARKETPLACE_LISTING':
       return 'a freelance-marketplace listing — this operation takes no freelance work, so nothing a dive found could be acted on';
+    case 'MARKET_LEVEL':
+      return 'a market-level figure (a market\'s size or worth) with no buyer, supplier or price — context for reasoning, not a transaction anyone could take';
     case 'CLOSES_TOO_SOON':
       return `it closes ${reason.at}, sooner than a dive could finish and the first step be taken`;
     case 'SCREENED_OUT':
@@ -248,6 +252,19 @@ export async function notWorthResearching(
    * that would need it is not researched at all — no answer could make it one
    * this operation would run. Brokered physical work is kept.
    */
+  /*
+   * A market statistic is not an opening (2026-11-24). An opening filed from a
+   * sentence that states a market's size or worth, and that names no payer and
+   * no price, is context: no dive or question about it can turn it into a sale.
+   * `harvest` no longer files these; this releases the ones filed before.
+   */
+  if (
+    (isMarketLevelFigure(opportunity.title) || isMarketLevelFigure(opportunity.buyingSignal)) &&
+    !opportunity.payer &&
+    opportunity.priceCents === null
+  ) {
+    return { kind: 'MARKET_LEVEL' };
+  }
   const fit = operatingFit(operatingFactsOf(opportunity));
   if (breaksOperatingModel(fit)) {
     return { kind: 'SCREENED_OUT', reason: 'OWNER_PHYSICAL_WORK', detail: fit.because, limit: 'the owner does no physical work' };

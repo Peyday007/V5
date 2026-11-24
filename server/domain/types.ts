@@ -542,6 +542,14 @@ export const EVENT_TYPES = [
   'OWNER_PLAN_READY_NOTIFIED',
   // The hourly operations report waiting for the owner's conversation (operator/operationsReport.ts).
   'OWNER_OPERATIONS_REPORT',
+  /*
+   * Queued research ideas taken out of scheduling because the rows show them
+   * obsolete — their question withdrawn or answered, their opening closed or a
+   * market-level figure, their goal ended, or a duplicate of an older idea
+   * (`services/research/backlog.ts`). Each idea keeps its row (state REJECTED);
+   * this records which ones, and why, as one row per project and pass.
+   */
+  'RESEARCH_BACKLOG_RETIRED',
   // A goal's plan read absorbed a failure (construction, library, reconstruction) and was read thinner (goals/plan.ts).
   'GOAL_PLAN_DEGRADED',
   // A goal with no cash target was planned: strategies, critique, revision, verdict (goals/objectivePlan.ts).

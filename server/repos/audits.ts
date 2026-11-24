@@ -410,3 +410,31 @@ export async function listGapsByLayer(layerId: string, limit = 200): Promise<Aud
     ))
     .map(mapGap);
 }
+
+/**
+ * The newest audits across these projects, as headlines (no findings, no raw
+ * payload), for a reader that lists completed audits — the Command Center's
+ * Reports page. Reads only.
+ */
+export async function listRecentAudits(
+  projectIds: string[],
+  limit = 40,
+): Promise<{ id: string; projectId: string; layerId: string | null; verdict: string; summary: string; confidence: number | null; mode: string; createdAt: string }[]> {
+  if (projectIds.length === 0) return [];
+  const marks = projectIds.map(() => '?').join(', ');
+  const rows = await getDb().all<{ id: string; project_id: string; layer_id: string | null; verdict: string; summary: string; confidence: number | null; mode: string; created_at: string }>(
+    `SELECT id, project_id, layer_id, verdict, summary, confidence, mode, created_at FROM audits
+      WHERE project_id IN (${marks}) ORDER BY created_at DESC LIMIT ?`,
+    [...projectIds, Math.max(1, Math.min(200, limit))],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    projectId: r.project_id,
+    layerId: r.layer_id,
+    verdict: r.verdict,
+    summary: r.summary,
+    confidence: r.confidence,
+    mode: r.mode,
+    createdAt: r.created_at,
+  }));
+}

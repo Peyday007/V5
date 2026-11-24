@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useBrain } from '@/hooks/use-brain';
 import { useHomeProject } from '@/hooks/use-homes';
 import { enc } from '@/lib/brain';
-import type { FactoryFleet, FleetView, WorkEntry, WorkResponse } from '@/lib/types';
+import type { FactoryFleet, FleetView, GoalBriefing, GoalView, WorkEntry, WorkEntryFull, WorkResponse } from '@/lib/types';
+import { TaskCard } from '@/components/brain/task-card';
 
 const GROUPS: { key: WorkEntry['group']; label: string }[] = [
   { key: 'WORKING_NOW', label: 'Working now' },
@@ -21,6 +22,7 @@ export default function AgentsPage() {
   const fleet = useBrain<{ fleet: FleetView }>(projectId ? `/api/russell/projects/${enc(projectId)}/fleet` : null);
   const factory = useBrain<FactoryFleet>('/api/factory/fleet');
   const work = useBrain<WorkResponse>(projectId ? `/api/russell/projects/${enc(projectId)}/work?limit=200` : null);
+  const goals = useBrain<{ briefing: GoalBriefing; goals: GoalView[] }>('/api/goals');
 
   return (
     <PageContainer
@@ -37,49 +39,41 @@ export default function AgentsPage() {
 
         <TabsContent value='tasks' className='mt-4'>
           <QueryView query={work} rows={6}>
-            {({ work: w }) =>
-              w.items.length === 0 ? (
-                <Empty>{w.explanation ?? 'Brain has no tasks for this project.'}</Empty>
-              ) : (
-                <div className='flex flex-col gap-4'>
+            {({ work: w }) => {
+              const items = w.items as WorkEntryFull[];
+              if (items.length === 0) return <Empty>{w.explanation ?? 'Brain has no tasks for this project.'}</Empty>;
+              const objectiveOf = (entry: WorkEntryFull): string | null => {
+                const bin = entry.links.binId;
+                if (!bin) return null;
+                const goal = (goals.data?.goals ?? []).find((g) => (g.work ?? []).some((one) => one.binId === bin));
+                return goal ? goal.title : null;
+              };
+              return (
+                <div className='flex flex-col gap-6'>
                   {GROUPS.map((g) => {
-                    const items = w.items.filter((i) => i.group === g.key);
-                    if (items.length === 0) return null;
+                    const mine = items.filter((i) => i.group === g.key);
+                    if (mine.length === 0) return null;
                     return (
-                      <Panel key={g.key} title={`${g.label} · ${items.length}`} flush>
-                        <div className='overflow-x-auto'>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className='pl-4'>Task</TableHead>
-                                <TableHead>State</TableHead>
-                                <TableHead className='hidden md:table-cell'>Priority</TableHead>
-                                <TableHead className='pr-4 text-right'>Updated</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {items.map((item) => (
-                                <TableRow key={item.id}>
-                                  <TableCell className='max-w-md pl-4 whitespace-normal'>
-                                    <p className='font-medium text-pretty'>{item.title}</p>
-                                    {(item.waitingOn ?? item.why) && (
-                                      <p className='text-muted-foreground line-clamp-2 text-xs'>{item.waitingOn ?? item.why}</p>
-                                    )}
-                                  </TableCell>
-                                  <TableCell><StatusPill status={item.blocked ? 'Blocked' : item.state} /></TableCell>
-                                  <TableCell className='text-muted-foreground hidden text-xs md:table-cell'>{item.priorityLabel ?? '—'}</TableCell>
-                                  <TableCell className='text-muted-foreground pr-4 text-right text-xs'><TimeAgo at={item.updatedAt} /></TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </Panel>
+                      <section key={g.key} className='min-w-0'>
+                        <h2 className='mb-2 text-sm font-medium'>
+                          {g.label} <span className='text-muted-foreground tabular-nums'>· {mine.length}</span>
+                        </h2>
+                        <ul className='grid min-w-0 gap-3 lg:grid-cols-2'>
+                          {mine.slice(0, g.key === 'FINISHED' ? 20 : 60).map((entry) => (
+                            <TaskCard key={entry.id} entry={entry} objective={objectiveOf(entry)} />
+                          ))}
+                        </ul>
+                        {mine.length > (g.key === 'FINISHED' ? 20 : 60) && (
+                          <p className='text-muted-foreground mt-2 text-xs'>
+                            Showing the {g.key === 'FINISHED' ? 20 : 60} most recent of {mine.length}.
+                          </p>
+                        )}
+                      </section>
                     );
                   })}
                 </div>
-              )
-            }
+              );
+            }}
           </QueryView>
         </TabsContent>
 
