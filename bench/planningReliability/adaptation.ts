@@ -51,13 +51,19 @@ export function gradeAdaptation(c: PlanningCase, readings: readonly PlanReading[
         detail: e2eFailed.map((g) => `${label(g)}${g.grade.e2e.detail}`).join(' | '),
       }
     : { ...final.grade.e2e, detail: graded.map((g) => `${label(g)}${g.grade.e2e.detail}`).join(' | ') };
-  if (!failed.length) return { pass: true, outcome: final.grade.outcome, failures: [], detail: graded.map((g) => `${label(g)}${g.grade.detail}`).join(' | '), e2e, steps: graded, final: final.observed };
+  // The owner-usable level holds across every graded reading as well.
+  const unusable = graded.filter((g) => !g.grade.usable?.pass);
+  const usable = unusable.length
+    ? { pass: false, detail: unusable.map((g) => `${label(g)}${g.grade.usable?.detail ?? 'not graded'}`).join(' | ') }
+    : { pass: true, detail: graded.map((g) => `${label(g)}${g.grade.usable!.detail}`).join(' | ') };
+  if (!failed.length) return { pass: true, outcome: final.grade.outcome, failures: [], detail: graded.map((g) => `${label(g)}${g.grade.detail}`).join(' | '), e2e, usable, steps: graded, final: final.observed };
   return {
     pass: false,
     outcome: null,
     failures: [...new Set<FailureClass>(failed.flatMap((g) => g.grade.failures))],
     detail: failed.map((g) => `${label(g)}${g.grade.detail}`).join(' | '),
     e2e,
+    usable,
     steps: graded,
     final: final.observed,
   };

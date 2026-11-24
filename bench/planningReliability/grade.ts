@@ -723,7 +723,8 @@ export function gradeUsable(c: PlanningCase, o: ObservedPlan, v: Pick<Grade, 'pa
     return { pass: false, detail: open.length ? `no opening is startable: ${open.join(', ')} not established` : 'no opening was planned' };
   }
   const e2e = gradeE2E(c, o, { pass: true });
-  const blocking = e2e.failures.filter((f) => f !== 'STEP_FIELD_ABSENT');
+  // A field the planner does not carry, and two estimators disagreeing, are measured gaps of the report, not of the plan.
+  const blocking = e2e.failures.filter((f) => f !== 'STEP_FIELD_ABSENT' && f !== 'ESTIMATES_CONTRADICT');
   if (blocking.length) return { pass: false, detail: `the plan cannot be carried out: ${blocking.join(', ')}` };
   return { pass: true, detail: o.stance === 'EXECUTABLE' ? 'usable: the planner calls it executable' : `usable: ${startable.map(([k]) => k).join(', ')} established but for the close rate selling measures` };
 }
