@@ -375,12 +375,12 @@ function quant(input: CommitteeInput): Bench {
     b.fail({
       claim: `the reading presents ${c.reach !== null && c.reach > 0 ? `a ${Math.round(c.reach * 1000) / 10}% reach` : ''}${c.reach !== null && c.reach > 0 && presented > 0 ? ' and ' : ''}${presented > 0 ? `up to ${money(presented, currency)}` : ''} toward ${money(remaining, currency)}`,
       evidenceRef: `reconstruction: ${rebuilt.byLeg.filter((x) => x.amount > 0).map((x) => `${x.opportunityId} ${x.deals} deal(s) × ${Math.round(x.net)}`).join(' + ') || 'no leg has an evidenced price and buyer'}`,
-      why: `rebuilt from the evidenced prices, costs and deal counts the legs bring at most ${money(rebuilt.total, currency)}: the rest of the figure rests on prices or volumes nobody established`,
+      why: `rebuilt from proven facts alone (a proven price × a proven deal count − cost, one deal where only the buyer is proven) the legs bring at most ${money(rebuilt.total, currency)}: the rest of the figure rests on prices or volumes nobody established, which the simulation's figures assume`,
       critical: true,
       opportunityId: null,
       fact: 'reach',
     });
-  } else if (remaining > 0) b.cite(`evidence supports ${money(rebuilt.total, currency)}`);
+  } else if (remaining > 0) b.cite(`proven facts alone support ${money(rebuilt.total, currency)} (a proven price × a proven deal count − cost); any larger figure in the reading assumes the rest`);
   // 2. A probability only from evidence: a coverage figure is never one.
   const unestablished = input.evidence.legs.filter((l) => l.scope === 'COUNTED' && (l.demand?.unestablished.length ?? 1) > 0);
   if ((c.reachBasis === 'PROBABILITY' || (c.probability && c.probability.basis === 'EVIDENCED_PORTFOLIO')) && (c.portfolioBasis !== 'PROBABILITY' || unestablished.length > 0))
@@ -428,7 +428,7 @@ function ownerProxy(input: CommitteeInput): Bench {
   // The goal reached at all, on what the evidence supports.
   const rebuilt = evidencedReach(counted);
   if (input.evidence.remaining > 0 && counted.length > 0 && rebuilt.total < input.evidence.remaining - 1e-6)
-    b.fail({ claim: input.evidence.objective, evidenceRef: `reconstruction of the counted legs: ${money(rebuilt.total, input.evidence.currency)}`, why: `the counted legs' evidence supports ${money(rebuilt.total, input.evidence.currency)} of the ${money(input.evidence.remaining, input.evidence.currency)} the goal needs`, critical: false, opportunityId: null, fact: 'reach' });
+    b.fail({ claim: input.evidence.objective, evidenceRef: `reconstruction of the counted legs: ${money(rebuilt.total, input.evidence.currency)}`, why: `on proven facts alone (a proven price × a proven deal count − cost) the counted legs' evidence supports ${money(rebuilt.total, input.evidence.currency)} of the ${money(input.evidence.remaining, input.evidence.currency)} the goal needs; the simulation's larger figures rest on assumed prices and volumes`, critical: false, opportunityId: null, fact: 'reach' });
   else if (counted.length > 0) b.cite(`the counted legs' evidence supports ${money(rebuilt.total, input.evidence.currency)} of ${money(input.evidence.remaining, input.evidence.currency)}`);
   return b;
 }
