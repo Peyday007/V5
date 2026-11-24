@@ -527,6 +527,95 @@ async function heapSources(): Promise<void> {
   );
 }
 
+/**
+ * Which allocation sites the running server's heap is made of: the server's
+ * inspector is opened (SIGUSR1, loopback only), V8's sampling heap profiler
+ * runs for a window, and the samples still alive at its end are summed by the
+ * site that allocated them. The inspector is closed again afterwards. Writes
+ * no row.
+ */
+async function heapProfile(): Promise<void> {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  let pid = 0;
+  for (const entry of readdirSync('/proc')) {
+    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
+    try {
+      const cmd = readFileSync(`/proc/${entry}/cmdline`, 'utf8');
+      if (cmd.includes('server/index.ts')) pid = Number(entry);
+    } catch {
+      /* gone */
+    }
+  }
+  if (!pid) throw new Error('no server process found');
+  console.log(`DIAGNOSE: heap-profile of pid ${pid}`);
+  process.kill(pid, 'SIGUSR1');
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const targets = (await (await fetch('http://127.0.0.1:9229/json/list')).json()) as Array<{ webSocketDebuggerUrl: string }>;
+  const ws = new WebSocket(targets[0]!.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    ws.onopen = resolve;
+    ws.onerror = reject;
+  });
+  let seq = 0;
+  const waiting = new Map<number, (value: Record<string, unknown>) => void>();
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(String(event.data)) as { id?: number; result?: Record<string, unknown>; error?: unknown };
+    if (msg.id !== undefined) waiting.get(msg.id)?.(msg.result ?? { error: msg.error });
+  };
+  const call = (method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> =>
+    new Promise((resolve) => {
+      seq += 1;
+      waiting.set(seq, resolve);
+      ws.send(JSON.stringify({ id: seq, method, params }));
+    });
+  const windowMin = Number(process.env['DIAG_WINDOW_MIN'] ?? '12');
+  try {
+    await call('HeapProfiler.enable');
+    console.log(`  start ${JSON.stringify(await call('HeapProfiler.startSampling', { samplingInterval: 131072 }))}`);
+    for (let minute = 0; minute < windowMin; minute += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 60_000));
+      const usage = await call('Runtime.getHeapUsage');
+      console.log(`  ${new Date().toISOString()} used ${Math.round(Number(usage['usedSize']) / 1048576)} MB of ${Math.round(Number(usage['totalSize']) / 1048576)} MB`);
+    }
+    const { profile } = (await call('HeapProfiler.getSamplingProfile')) as {
+      profile: { head: HeapNode };
+    };
+    type HeapNode = { callFrame: { functionName: string; url: string; lineNumber: number }; selfSize: number; children: HeapNode[] };
+    const where = (n: HeapNode) => `${n.callFrame.functionName || '(anon)'} ${n.callFrame.url.replace(/^.*\/app\//, '')}:${n.callFrame.lineNumber + 1}`;
+    const bySite = new Map<string, number>();
+    const byStack = new Map<string, number>();
+    const byFile = new Map<string, number>();
+    let total = 0;
+    const walk = (n: HeapNode, path: string[]) => {
+      const here = [...path, where(n)];
+      if (n.selfSize > 0) {
+        total += n.selfSize;
+        bySite.set(where(n), (bySite.get(where(n)) ?? 0) + n.selfSize);
+        const brain = here.filter((f) => f.includes('server/'));
+        const key = brain.slice(-6).join(' < ') || here.slice(-4).join(' < ');
+        byStack.set(key, (byStack.get(key) ?? 0) + n.selfSize);
+        for (const f of new Set(brain.map((x) => x.split(' ')[1]!.split(':')[0]!))) byFile.set(f, (byFile.get(f) ?? 0) + n.selfSize);
+      }
+      for (const c of n.children) walk(c, here);
+    };
+    walk(profile.head, []);
+    const mb = (b: number) => (b / 1048576).toFixed(1);
+    console.log(`  live sampled ${mb(total)} MB (allocated during the window and still alive)`);
+    console.log('  by Brain file on the stack (inclusive)');
+    for (const [k, v] of [...byFile].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(`    ${mb(v)} MB ${k}`);
+    console.log('  by Brain stack (innermost last 6 Brain frames)');
+    for (const [k, v] of [...byStack].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(`    ${mb(v)} MB ${k.split(' < ').reverse().join(' < ').slice(0, 700)}`);
+    console.log('  by allocating site');
+    for (const [k, v] of [...bySite].sort((a, b) => b[1] - a[1]).slice(0, 20)) console.log(`    ${mb(v)} MB ${k}`);
+  } finally {
+    await call('HeapProfiler.stopSampling').catch(() => undefined);
+    // Closing the inspector ends this connection before it can answer, so the reply is not awaited.
+    void call('Runtime.evaluate', { expression: "process.getBuiltinModule('node:inspector').close()" });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    ws.close();
+  }
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   await initDatabase();
@@ -539,6 +628,7 @@ async function main(): Promise<void> {
     else if (command === 'free-lane-yield') await freeLaneYield();
     else if (command === 'gpu-answers') await gpuAnswers();
     else if (command === 'heap-sources') await heapSources();
+    else if (command === 'heap-profile') await heapProfile();
     else if (command === 'bin-gates') await binGates(process.argv[3] ?? '');
     else throw new Error('usage: diagnose-readings.ts query-times|fragment-failures|operator-runs|free-lane-yield|bin-gates <bin>');
   } finally {
