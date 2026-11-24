@@ -58,6 +58,8 @@ import {
   reopenNeedsHumanBin,
   resolveNeedsHumanBin,
   terminateUnleasedBin,
+  strandedPinnedBins,
+  unpinBin,
   binWorkReady,
   type BinProof,
   type ReopenOutcome,
@@ -1770,6 +1772,9 @@ export interface ReconcileReport {
  * anything complete — because the one thing worse than a stalled bin is a
  * stalled bin reported as finished.
  */
+/** How long a bin may stay pinned to an out-of-service Routine before the pin is released (a recovery probe settles in minutes). */
+export const STRANDED_PIN_AFTER_MS = 6 * 60 * 60_000;
+
 export async function reconcileBins(projectId?: string): Promise<ReconcileReport> {
   /*
    * Correct the accounting before judging the bin by it.
@@ -1862,6 +1867,30 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
         'The condition it stopped on is resolved, so there is nothing here for a person to ' +
         'decide. Nothing was reset: every refusal and every attempt keeps its row.',
     });
+  }
+
+  /*
+   * A pin to a Routine routing will never fire is released (§118): a stale
+   * probe is closed — what it was to prove about that surface is moot while the
+   * surface is out of service — and any other pinned work is unpinned, so it
+   * routes to whichever eligible Routine is free. No single Routine holds a
+   * bin indefinitely.
+   */
+  if (!projectId) {
+    const before = new Date(Date.now() - STRANDED_PIN_AFTER_MS).toISOString();
+    for (const stranded of await strandedPinnedBins(before)) {
+      const why =
+        `Pinned to Routine ${stranded.pinnedRoutineId}, which is ${stranded.routineState ?? 'gone'} and is never fired by routing, ` +
+        `so the pin could only hold this bin for ever.`;
+      if (stranded.kind === 'DETERMINISTIC_CHECK') {
+        const reason = `${why} A probe of a surface that is out of service proves nothing; closed. Every event keeps its row.`;
+        if (await terminateUnleasedBin(stranded.id, stranded.leaseGeneration, 'CANCELLED', reason)) {
+          closedWithPacket.push({ binId: stranded.id, disposition: 'CLOSED_STRANDED_PIN', reason });
+        }
+      } else if (await unpinBin(stranded.id, stranded.leaseGeneration, `${why} Unpinned so any eligible Routine may take it.`)) {
+        closedWithPacket.push({ binId: stranded.id, disposition: 'UNPINNED', reason: why });
+      }
+    }
   }
 
   const page = await listBinHeads({

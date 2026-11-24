@@ -14,7 +14,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { asksByPriority, citedWithinLimit, claimAsks, droppedReason, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, noneBecause, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { freeLaneAdmits, resetPurposeCache, asksByPriority, citedWithinLimit, claimAsks, droppedReason, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, noneBecause, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
 import { MAX_LIST_ITEMS } from '../server/mcp/researchTools.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
@@ -505,6 +505,22 @@ describe('the free research lane', () => {
     expect(tick.submitted).toBe(1);
     const claims = await listClaimsForFragment(fragment.id);
     expect(claims.map((one) => one.claim)).toEqual(['Employers pay receptionists a median hourly wage of $17.39 (May 2024).']);
+  });
+
+  it('takes Brain-improvement work Claude routing has refused for hours, and not before (production, 2026-11-23)', async () => {
+    // bin_7e4b9543427d462f9f78: refused NO_SURFACE_SERVES_THIS_PROJECT on every tick since 2026-10-07.
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const bin = await getDb().get<{ id: string }>('SELECT id FROM bins WHERE orchestration_id = ?', [orchestration.id]);
+    await getDb().run(`UPDATE bins SET purpose = 'BRAIN_IMPROVEMENT', purpose_basis = 'test' WHERE id = ?`, [bin!.id]);
+    resetPurposeCache();
+    const item = { id: itemId, bin_id: null, orchestration_id: orchestration.id, project_id: play.project.id };
+    expect(await freeLaneAdmits(item)).toBe(false);
+    await recordBinEvent({ eventType: 'DISPATCH_UNROUTED', binId: bin!.id, outcome: 'NO_SURFACE_SERVES_THIS_PROJECT', reason: 'No enabled Routine serves this project' });
+    // Fresh: a Routine that can serve it still goes first.
+    expect(await freeLaneAdmits(item)).toBe(false);
+    await getDb().run('UPDATE bins SET created_at = ? WHERE id = ?', [new Date(Date.now() - 24 * 3_600_000).toISOString(), bin!.id]);
+    expect(await freeLaneAdmits(item)).toBe(true);
   });
 
   it('hands an item back with its attempt refunded when Brain\'s own database is unavailable', async () => {

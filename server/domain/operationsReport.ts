@@ -299,8 +299,23 @@ export function scalingDecisions(now: OpsWindow, plan: PlanReadingFacts | null):
   const f = now.queues.factoryUnits;
   const workers = now.factory.workers.filter((w) => w.availability === 'AVAILABLE');
   const free = workers.filter((w) => !w.rateLimited && w.leased < w.maxConcurrency).length;
+  /*
+   * Owner, 2026-11-23: "Do not recommend purchasing additional subscriptions
+   * until existing capacity is accounted for and usable." A pool reading idle
+   * beside waiting work is capacity not accounted for, so no purchase is
+   * proposed while one does; and an empty registered-worker table is not a
+   * saturated Factory (its surfaces are Routines, counted in the pools).
+   */
+  const idlePools = (now.pools ?? []).filter((one) => one.idle);
+  const idleNote = idlePools.length > 0
+    ? `existing capacity is idle beside waiting work (${idlePools.map((one) => `${one.pool} ${one.running}/${one.capacity}, ${one.waiting} waiting`).join('; ')}): account for it and make it usable before buying more.`
+    : null;
   const agents: ScalingCall =
-    f.queued === 0
+    idleNote
+      ? { call: 'NO', why: `No purchase: ${idleNote}` }
+      : workers.length === 0 && f.queued > 0
+        ? { call: 'INSUFFICIENT EVIDENCE', why: 'No worker is registered in the worker table; the Factory runs on Routine surfaces, whose saturation this window did not read.' }
+        : f.queued === 0
       ? { call: 'NO', why: 'No Factory work is waiting; another agent would idle.' }
       : free > 0
         ? { call: 'NO', why: `${f.queued} unit(s) wait beside ${free} worker(s) with free slots — the limit is routing or eligibility, not agents.` }
@@ -327,7 +342,11 @@ export function scalingDecisions(now: OpsWindow, plan: PlanReadingFacts | null):
   const research: ScalingCall =
     !evidenceShort
       ? { call: 'NO', why: "The plan's shortfalls are not evidence shortfalls." }
-      : r.queued > 0 && r.running > 0 && (r.oldestWaitMin ?? 0) >= 60
+      : idleNote
+        ? { call: 'NO', why: `No purchase: ${idleNote}` }
+        : r.failed >= r.completed && r.failed > 0
+          ? { call: 'NO', why: 'Research is failing more than completing; more of it would fail the same way. Repair the commonest failure first.' }
+          : r.queued > 0 && r.running > 0 && (r.oldestWaitMin ?? 0) >= 60
         ? { call: 'YES', why: `Resource: one more research surface (a Claude routine account). Why: evidence is the binding shortfall and ${r.queued} item(s) have waited up to ${Math.round(r.oldestWaitMin ?? 0)} min behind ${r.running} running. Expected: those items start sooner and the plan's evidence arrives earlier. Cost: one account's subscription — not recorded in Brain. Confidence: medium. Smallest test: one more surface for a day, measured by fragments accepted.` }
         : r.failed >= r.completed && r.failed > 0
           ? { call: 'NO', why: 'Research is failing more than completing; more of it would fail the same way.' }
