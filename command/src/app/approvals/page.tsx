@@ -107,7 +107,11 @@ function ApprovalItem({ item }: { item: InboxItem }) {
           </Button>
         )}
         {(a.type === 'OPEN' || a.type === 'SOFTWARE' || a.type === 'GRANT_RESEARCH_AUTHORITY') && (
-          <Button size='sm' variant='outline' render={<a href='/needs-you' />}>
+          <Button
+            size='sm'
+            variant='outline'
+            render={<a href={a.type === 'OPEN' ? `/${a.destination.toLowerCase()}` : '/needs-you'} />}
+          >
             {a.type === 'OPEN' ? a.label : 'Decide in Brain'}
           </Button>
         )}
