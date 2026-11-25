@@ -111,12 +111,13 @@ export interface GoalScope {
   capitalRemoved?: boolean;
 }
 
-export function goalScope(goal: Pick<Workstream, 'intent' | 'title' | 'target'>, now: Date = new Date()): GoalScope {
+export function goalScope(goal: Pick<Workstream, 'intent' | 'title' | 'target'> & { outcome?: string | null }, now: Date = new Date()): GoalScope {
   const words = goal.intent?.trim() ? goal.intent : goal.title;
   const read = readObjective(words ?? '', now);
   const assumed = goal.target && goal.target.capitalCeilingCents === null && goal.target.capitalBeforeProofCents === null && read.capitalAssumed ? read.capitalAssumed : null;
   return {
-    recurring: read.recurring,
+    // A cadence a second reading of the words found (`objectiveAssist.ts`) is in the outcome the goal was created with.
+    recurring: read.recurring ?? (/^a monthly recurring run-rate\b/.test(goal.outcome ?? '') ? 'MONTHLY' : null),
     industry: read.industry,
     hoursPerWeek: read.hoursPerWeek,
     capitalAssumed: assumed ? { cents: Math.round(assumed.amount * 100), phrase: assumed.phrase, basis: assumed.basis } : null,
