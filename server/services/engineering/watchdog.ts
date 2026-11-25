@@ -311,6 +311,38 @@ async function researchSlotPool(now: Date): Promise<PoolReading> {
   };
 }
 
+/**
+ * Research slots' continuation: the launch pass's own step, for the ideas that fit a free slot.
+ *
+ * The launch is one pass deep inside the Russell tick, behind every pass before
+ * it, so a slow tick leaves slots free for as long as the tick takes — the
+ * recorded RESEARCH_SLOTS class: "5x launchable idea(s) have a free slot in
+ * their own project's grant" in window after window, recorded with "its own
+ * pass on the next tick" and nothing continued. This is not a second launcher:
+ * it is the same window (`nextLaunchable`, so the reader and the launch cannot
+ * disagree), the same `launch()`, bounded by the same `SLOT_FILL_PER_TICK`, and
+ * `reserve` still refuses anything over a grant's at-once ceiling. `launch()`
+ * derives its idempotency key from the rows, so this racing the tick's own pass
+ * replays rather than starting an idea twice. Follow-ons are left to the tick,
+ * which links them to their parent mission when they start. A refusal is left
+ * where it is: the tick's launch pass is what answers it (parking, reporting).
+ */
+export async function launchIntoFreeSlots(): Promise<string[]> {
+  const { nextLaunchable, SLOT_FILL_PER_TICK } = await import('../russell/loop.ts');
+  const { launch } = await import('../russell/launch.ts');
+  const window = (await nextLaunchable(SLOT_FILL_PER_TICK * 2)).filter(
+    (entry) => entry.fitsFreeSlot && !entry.followOnOfMissionId,
+  );
+  const launched: string[] = [];
+  for (const entry of window) {
+    if (launched.length >= SLOT_FILL_PER_TICK) break;
+    // One idea that throws does not stop the rest; the tick's own pass meets it again.
+    const outcome = await launch({ ...entry.spec, candidateId: entry.candidateId }).catch(() => null);
+    if (outcome?.ok && !outcome.replayed && outcome.mission) launched.push(outcome.mission.id);
+  }
+  return launched;
+}
+
 /** Ideas that could launch now: the launch window's ideas that fit a free slot in their own project's grant. */
 export async function researchSlotsFree(now = new Date()): Promise<number> {
   return (await researchSlotRows(now)).startable;
@@ -457,8 +489,8 @@ export async function utilizationWithin(
  * which tops up idle slots; the Factory line gets the same guarded dispatch
  * pass, because Factory stage bins are fired by that tick — and the pass runs
  * at most once per call even when routines and the Factory are both idle.
- * Research slots are continued by the Russell loop's own launch pass, so
- * idleness there is recorded with its reason. A pool idle for the same reason
+ * Research slots get the launch pass's own step (`launchIntoFreeSlots`),
+ * because that pass sits deep inside a Russell tick that may take minutes. A pool idle for the same reason
  * is recorded once per window.
  *
  * Production, 2026-11-12: "FACTORY: 1 piece(s) of executable work and 2 free
@@ -489,7 +521,9 @@ export async function watchUtilization(options: { continueWork?: boolean; now?: 
             ? 'one guarded dispatch pass'
             : one.pool === 'FREE_LANE'
               ? "the free lane controller's step, which tops up idle slots"
-              : 'its own pass on the next tick',
+              : one.pool === 'RESEARCH_SLOTS'
+                ? "the launch pass's own step: launch the ideas that fit a free slot in their own project's grant"
+                : 'its own pass on the next tick',
         actorType: 'BRAIN',
         actorId: 'engineering:watchdog',
       });
@@ -506,6 +540,8 @@ export async function watchUtilization(options: { continueWork?: boolean; now?: 
       const { controlStep } = await import('../freeLane/capacity.ts');
       await controlStep();
       continued.push(one.pool);
+    } else if (one.pool === 'RESEARCH_SLOTS') {
+      if ((await launchIntoFreeSlots()).length > 0) continued.push(one.pool);
     }
   }
   return { pools, recorded, continued };
