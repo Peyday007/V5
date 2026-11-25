@@ -756,3 +756,45 @@ describe('a closing date is read, never compared as text', () => {
     expect(closedBy(null, now)).toBe(false);
   });
 });
+
+describe('a card price read from a rate is taken back', () => {
+  /*
+   * Production 2026-11-25 (cop_a167f9eb396f43268de4): "Agencies charge $0.01 to
+   * $0.05 per email" put USD 0.01 on the card as the price of a 10k-contact job,
+   * and the plan read it as an established offer and price.
+   */
+  const RATE = 'Agencies charge $0.01 to $0.05 per email for list cleaning';
+
+  it('withdraws the fact and the column, once, and writes no price in its place', async () => {
+    const one = await dive('rate-price', [{ lane: 'price_evidence', text: RATE }]);
+    const id = await opening([one]);
+    await getDb().run(
+      `INSERT INTO cash_card_facts (id, project_id, opportunity_id, field, kind, value, claim_id, decided_by, created_at, updated_at)
+       VALUES ('ccf_rate', ?, ?, 'price', 'EVIDENCE', ?, ?, 'BRAIN', '2026-11-25', '2026-11-25')`,
+      [projectId, id, RATE, one.claimIds[0]],
+    );
+    await updateOpportunity(id, { price_cents: 1 });
+    await applyValidationAnswers(projectId);
+    expect(await cardFact(id, 'price')).toBeNull();
+    expect((await getOpportunity(id))!.priceCents).toBeNull();
+    const withdrawn = "SELECT detail FROM cash_events WHERE opportunity_id = ? AND kind = 'CASH_CARD_FACT_WITHDRAWN'";
+    expect(await getDb().all(withdrawn, [id])).toHaveLength(1);
+    await applyValidationAnswers(projectId);
+    expect(await getDb().all(withdrawn, [id])).toHaveLength(1);
+    expect((await getOpportunity(id))!.priceCents).toBeNull();
+  });
+
+  it('leaves a price the claim states for one purchase', async () => {
+    const one = await dive('deal-price', [{ lane: 'price_evidence', text: 'The study is priced at $25,000 in total.' }]);
+    const id = await opening([one]);
+    await getDb().run(
+      `INSERT INTO cash_card_facts (id, project_id, opportunity_id, field, kind, value, claim_id, decided_by, created_at, updated_at)
+       VALUES ('ccf_deal', ?, ?, 'price', 'EVIDENCE', 'The study is priced at $25,000 in total.', ?, 'BRAIN', '2026-11-25', '2026-11-25')`,
+      [projectId, id, one.claimIds[0]],
+    );
+    await updateOpportunity(id, { price_cents: 2_500_000 });
+    await applyValidationAnswers(projectId);
+    expect((await cardFact(id, 'price'))?.kind).toBe('EVIDENCE');
+    expect((await getOpportunity(id))!.priceCents).toBe(2_500_000);
+  });
+});
