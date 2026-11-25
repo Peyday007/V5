@@ -119,6 +119,31 @@ describe('scouting: directions before anything is priced', () => {
   });
 });
 
+describe('a review before research is spent on directions', () => {
+  const many = [direction, { ...direction, title: 'Notion templates for everyone', payer: 'Productivity fans online', offer: 'A template pack', ownerFit: '' }];
+  it('drops what fails a rule no research could fix, ranks the rest, and keeps all when no review is readable', async () => {
+    const { applyDirectionCritique, directionCritiquePrompt } = await import('../server/services/goals/routeProposal.ts');
+    const { critiqueJson } = await import('../server/services/goals/routeProposal.ts');
+    const parsed = parseDirections(JSON.stringify({ directions: many }), ctx({ ownerLabour: { offered: true, evidence: 'I run two embroidery machines' } as never })).directions;
+    expect(parsed).toHaveLength(2); // a missing owner fit is the review's to judge, not a parse refusal
+    const prompt = directionCritiquePrompt(ctx(), parsed);
+    expect(prompt).toMatch(/VALUE: the owner's side adds something/);
+    expect(prompt).toMatch(/2\. \{"title":"Notion templates for everyone"[\s\S]*"ownerFit":"\(not stated\)"/);
+    const review = critiqueJson(JSON.stringify({ reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5 }, why: 'uses the machines' }, { index: 2, verdict: 'DROP', scores: { OWNER_FIT: 0 }, failed: ['OWNER_FIT'], why: 'fits any request' }], ranking: [1] }), 2);
+    const applied = applyDirectionCritique(parsed, review);
+    expect(applied.kept.map((one) => one.title)).toEqual([direction.title]);
+    expect(applied.dropped[0]).toMatchObject({ title: 'Notion templates for everyone', rule: 'CRITIQUE' });
+    expect(applyDirectionCritique(parsed, null).kept).toHaveLength(2);
+  });
+
+  it('reads a cut-off reply and refuses a buyer kind written as the payer', () => {
+    const cut = `{"owner":{},"directions":[${JSON.stringify(direction)},{"title":"half`;
+    expect(parseDirections(cut, ctx({ ownerLabour: { offered: true, evidence: 'x' } as never })).directions.map((one) => one.title)).toEqual([direction.title]);
+    const kindAsPayer = parseDirections(JSON.stringify({ directions: [{ ...direction, payer: 'LOCAL_BUSINESS' }] }), ctx({ ownerLabour: { offered: true, evidence: 'x' } as never }));
+    expect(kindAsPayer.rejected[0]).toMatchObject({ rule: 'INCOMPLETE' });
+  });
+});
+
 describe('routes from findings', () => {
   const findings = findingsOf([
     claim('Custom embroidered aprons cost $18–$24 each for orders of 12 from online embroidery shops.', { evidenceLane: 'price_evidence' }),
@@ -240,13 +265,17 @@ describe('the loop on a goal', () => {
     };
     const { deps, asked, critic } = scripted(
       [{ owner: { skills: ['embroidery'], assets: ['two embroidery machines'], location: 'Tucson' }, directions: [direction] }, { rethink: null, routes: [priced] }],
-      [{ reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5, WINDOW: 4, CHANNEL: 4, FULFILLER: 5, PRICE: 4, CAPITAL: 5, MARKET: 4, EVIDENCE: 5 }, why: 'priced from F1, sized from F2' }], ranking: [1] }],
+      [
+        { reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5, WINDOW: 4, CHANNEL: 4, FULFILLER: 5, CAPITAL: 5, MARKET: 4, VALUE: 5, LAWFUL: 5 }, why: 'uses the machines locally' }], ranking: [1] },
+        { reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5, WINDOW: 4, CHANNEL: 4, FULFILLER: 5, PRICE: 4, CAPITAL: 5, MARKET: 4, EVIDENCE: 5 }, why: 'priced from F1, sized from F2' }], ranking: [1] },
+      ],
       () => held,
       written,
     );
     // Nothing researched: a direction, no price.
     const t0 = new Date();
-    expect(await proposeGoalRoutes({ goalId, now: t0 }, deps)).toMatchObject({ kind: 'PROPOSED', critique: 'SKIPPED' });
+    expect(await proposeGoalRoutes({ goalId, now: t0 }, deps)).toMatchObject({ kind: 'PROPOSED', critique: 'CRITIQUED' });
+    expect(critic[0]).toMatch(/DIRECTIONS NAMED, before anything is priced/);
     let openings = await opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
     expect(openings).toHaveLength(1);
     expect(openings[0]!.priceCents).toBeNull();
@@ -268,8 +297,8 @@ describe('the loop on a goal', () => {
     expect(await proposeGoalRoutes({ goalId, now: t1 }, deps)).toMatchObject({ kind: 'PROPOSED', critique: 'CRITIQUED' });
     expect(asked[1]).toMatch(/FINDINGS — what research has established/);
     expect(asked[1]).toMatch(/DIRECTIONS ALREADY SCOUTED[\s\S]*Embroidered staff uniforms for local cafés/);
-    expect(critic[0]).toMatch(/FINDINGS research holds for this goal/);
-    expect(critic[0]).toMatch(/cites price: F1, volume: F2, demand: F3 \(demand COMPARABLE\)/);
+    expect(critic[1]).toMatch(/FINDINGS research holds for this goal/);
+    expect(critic[1]).toMatch(/cites price: F1, volume: F2, demand: F3 \(demand COMPARABLE\)/);
 
     openings = await opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
     const route = openings.find((one) => one.title === 'Café apron runs')!;
