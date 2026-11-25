@@ -161,6 +161,36 @@ async function read(): Promise<void> {
       `SELECT kind, COUNT(*) AS n FROM cash_events WHERE project_id = ? GROUP BY kind ORDER BY n DESC LIMIT 20`,
       [project.id],
     ).catch(() => []);
+    /*
+     * The path from an idea to a launched packet, counted for this project:
+     * captured → judged (a priority) → compiled (a missionSpec) → launched (a
+     * mission) → a packet. A goal whose dives started and whose research is
+     * empty stopped at one of these, and this says which.
+     */
+    const ideas = await getDb().all<{ state: string; judged: number; spec: number; missions: number; n: number }>(
+      `SELECT c.state AS state,
+              CASE WHEN c.priority IS NULL THEN 0 ELSE 1 END AS judged,
+              CASE WHEN c.judgment LIKE '%"missionSpec"%' THEN 1 ELSE 0 END AS spec,
+              CASE WHEN EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id) THEN 1 ELSE 0 END AS missions,
+              COUNT(*) AS n
+         FROM russell_candidates c WHERE c.project_id = ?
+        GROUP BY 1, 2, 3, 4 ORDER BY n DESC`,
+      [project.id],
+    ).catch(() => []);
+    const missions = await getDb().all<{ state: string; n: number }>(
+      `SELECT state, COUNT(*) AS n FROM russell_missions WHERE project_id = ? GROUP BY state ORDER BY n DESC`,
+      [project.id],
+    ).catch(() => []);
+    // Each deep dive's idea, and when it was judged and launched — the latency the goal waits on.
+    const dives = await getDb().all<{ id: string; state: string; priority: string | null; created_at: string; updated_at: string; mission_at: string | null; packet_at: string | null }>(
+      `SELECT c.id, c.state, c.priority, c.created_at, c.updated_at,
+              (SELECT MIN(m.created_at) FROM russell_missions m WHERE m.candidate_id = c.id) AS mission_at,
+              (SELECT MIN(o.created_at) FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id = c.id) AS packet_at
+         FROM russell_candidates c
+        WHERE c.id IN (SELECT op.candidate_id FROM cash_opportunities op WHERE op.project_id = ? AND op.candidate_id IS NOT NULL)
+        ORDER BY c.created_at`,
+      [project.id],
+    ).catch(() => []);
     const plan = reading && !('error' in reading) ? reading : null;
     const report = plan ? planningReportLines(planningReport(plan as never, goal.dueAt ?? null)) : [];
     const out = {
@@ -177,11 +207,29 @@ async function read(): Promise<void> {
         : null,
       openings: cards,
       research,
+      ideas,
+      missions,
+      dives,
       goalEvents: goalEvents.map((e) => ({ at: e.created_at, kind: e.kind, summary: e.summary.slice(0, 300) })),
       cashEvents,
     };
     console.log(`EVAL_CASE ${kase} ${JSON.stringify(out)}`);
   }
+  /*
+   * The Brain-wide queues every goal's ideas wait in: how many ideas are
+   * unjudged (all, and in a live goal's tier), how many are launchable, and
+   * how old the oldest of each is. Counts and timestamps only.
+   */
+  const { goalIdeaSql } = await import('../server/services/goals/goalWork.ts');
+  const queue = await getDb().get<Record<string, unknown>>(
+    `SELECT
+        (SELECT COUNT(*) FROM russell_candidates c WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL) AS unjudged,
+        (SELECT COUNT(*) FROM russell_candidates c WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL AND ${goalIdeaSql('c')}) AS unjudged_goal,
+        (SELECT MIN(c.created_at) FROM russell_candidates c WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL AND ${goalIdeaSql('c')}) AS oldest_unjudged_goal,
+        (SELECT COUNT(*) FROM russell_candidates c WHERE c.state = 'QUEUED' AND c.judgment LIKE '%"missionSpec"%' AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id)) AS compiled_never_launched,
+        (SELECT COUNT(*) FROM russell_candidates c WHERE c.state = 'QUEUED' AND c.judgment LIKE '%"missionSpec"%' AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id) AND ${goalIdeaSql('c')}) AS compiled_never_launched_goal`,
+  ).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error) }));
+  console.log(`EVAL_QUEUE ${JSON.stringify(queue)}`);
   console.log(`EVAL_READ ${run} ${projects.length} case(s)`);
 }
 
