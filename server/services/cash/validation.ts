@@ -2229,10 +2229,13 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
  */
 /** The dive lanes written through `writeEvidenceAnswer` rather than the plain fact write below (see the apply loop). */
 export const WRITER_FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
+  /*
+   * Only the hours: market size, current demand and the fulfiller are
+   * `FIELD_BY_LANE`'s, written by the apply loop below with its own rules
+   * (a demand sign dated by its source, a price in the route's period), so
+   * each field has one writer.
+   */
   effort: 'hours',
-  buyer_volume: 'buyerVolume',
-  current_demand: 'buyingEvidence',
-  fulfiller: 'fulfillment',
 });
 
 export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
