@@ -414,13 +414,22 @@ async function deriveLayerUnmemoized(layerId: string): Promise<LayerDerivation> 
   // One stat per document: the store is consulted, not assumed. The presence of
   // every document is resolved before anything filters on it — an asynchronous
   // predicate inside `filter` keeps every element, because a promise is truthy.
-  const presence = new Map(
-    await Promise.all(
-      documents.map(
-        async (document) => [document.id, await documentPresence(document)] as const,
+  //
+  // Asked by folder first (`prefetchExistence`), so a layer of a thousand
+  // documents is one or two listings rather than a keyed listing per document
+  // queued at once on the store's four-slot existence gate. Outside a memo —
+  // an audit brief, a plan read of one layer — that burst is what starved every
+  // other storage reader on 2026-11-25. Inside a recompute's memo it joins it.
+  const presence = await withExistenceMemo(async () => {
+    await prefetchExistence(documents.map((document) => storageKeyOf(document)));
+    return new Map(
+      await Promise.all(
+        documents.map(
+          async (document) => [document.id, await documentPresence(document)] as const,
+        ),
       ),
-    ),
-  );
+    );
+  });
   const presentDocuments = documents.filter(
     (document) => presence.get(document.id)?.present === true,
   );
