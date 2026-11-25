@@ -99,7 +99,8 @@ import { latestReadingFor, refreshPositionEvidence, separateInvestigationsSenten
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
-import { isRouteOpening, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
+import { isRouteOpening, routeGoalOf, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
+import { linkWorkstream } from '../../repos/register.ts';
 import { readMoneyFigures } from './figures.ts';
 import { MAX_COLUMN_CENTS } from './answers.ts';
 
@@ -1208,6 +1209,29 @@ export async function startValidations(input: {
   projectId: string;
   limit?: number;
 }): Promise<StartedValidation[]> {
+  /*
+   * One pass per project at a time in this process, the next after the last.
+   * Two callers start dives: the tick's project walk (`operate`) and the goal
+   * search the moment it files a goal's routes (`routeProposal.ts`). Each
+   * reads "eligible" before it writes PENDING, so two at once could both
+   * capture an idea for one opening; queued, the second reads the first's row.
+   */
+  const previous = startingFor.get(input.projectId) ?? Promise.resolve([]);
+  const run = previous.then(() => startValidationsNow(input));
+  const held: Promise<StartedValidation[]> = run.catch(() => []);
+  startingFor.set(input.projectId, held);
+  void held.then(() => {
+    if (startingFor.get(input.projectId) === held) startingFor.delete(input.projectId);
+  });
+  return run;
+}
+
+const startingFor = new Map<string, Promise<StartedValidation[]>>();
+
+async function startValidationsNow(input: {
+  projectId: string;
+  limit?: number;
+}): Promise<StartedValidation[]> {
   const mode = await getCashMode(input.projectId);
   if (!mode) return [];
   /*
@@ -1521,6 +1545,27 @@ export async function startValidations(input: {
       });
     });
     if (!moved) continue;
+    /*
+     * A route's dive is its goal's own research, so it is linked to the goal
+     * and every reader of "a live goal's ideas" — judging, launching, the
+     * packet and work-item queues (`goals/goalWork.ts`) — ranks it with the
+     * goal's work. Production, 2026-11-25: a route opening has no goal round
+     * and its goal link is a SOURCE, which those readers exclude, so its dive
+     * would have queued behind 24,672 unjudged ideas judged one per tick.
+     */
+    const routeGoal = routeGoalOf(opportunity);
+    if (routeGoal) {
+      await linkWorkstream({
+        workstreamId: routeGoal,
+        kind: 'CANDIDATE',
+        ref: candidate.id,
+        relation: 'PURSUES',
+        label: 'route deep dive',
+        detail: { opportunityId: opportunity.id, origin: 'ROUTE_DIVE' },
+        recordedBy: 'BRAIN',
+        recordedByUserId: null,
+      }).catch(() => null);
+    }
     if (otherOptional) otherStarted += 1;
     out.push({ opportunityId: opportunity.id, candidateId: candidate.id, stage });
   }

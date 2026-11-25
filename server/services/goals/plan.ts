@@ -36,7 +36,8 @@
 import { notePlanEffects } from '../knowledge/apply.ts';
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
-import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
+import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink, workstreamEventsOfKind } from '../../repos/register.ts';
+import { isRouteOpening } from '../../domain/routeOrigin.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { recordPathwayAsk } from '../cash/answers.ts';
 // A plan is a reading: it asks whether an action is granted and performs none, so
@@ -398,6 +399,13 @@ export interface PlanReading {
    * limits bind them and the operator reaches their buyers first.
    */
   sales: MarketTest[];
+  /**
+   * Openings that would be sold but are researched first: a route Brain
+   * proposed whose price is still the proposal's hypothesis and whose deep
+   * dive has not settled (`researchBeforeSale`). Each says why it waits.
+   * Absent on readings that sell nothing.
+   */
+  researchFirst?: { opportunityId: string; title: string; reason: string }[];
   /**
    * The quant engine's combined plan (§79): each opening's customer demand
    * estimated from verified evidence, and the combination most likely to reach
@@ -2928,6 +2936,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   };
   const adopted = plan.adoption.source === 'RECONSTRUCTED' ? new Set(acceptance.candidate?.opportunityIds ?? []) : null;
   const sales = policy === 'SQUEEZE' && !infeasible ? await salesFor(considered, model.portfolio, byIdOf(model), target, adopted) : [];
+  const researchFirst = policy === 'SQUEEZE' && !infeasible ? heldForResearch(considered, byIdOf(model)) : [];
   exemptSales(goal.id, sales.map((one) => one.opportunityId));
   const legacyNext = goalNextStep({
     policy,
@@ -3067,6 +3076,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     marketTests,
     executionPolicy: policy,
     sales,
+    ...(researchFirst.length > 0 ? { researchFirst } : {}),
     portfolio: model.portfolio,
     ...unpricedForPlan(model.arrangementSelection?.unpriced, lead),
     lead: leadOf(lead, lead ? (models.get(lead.key) ?? null) : null, model.arrangementsInScope ?? null),
@@ -4803,6 +4813,30 @@ function byIdOf(model: { considered: ModelledOpportunity[] }): Map<string, Model
 const SELLABLE: ReadonlySet<ValidationStage> = new Set(['C_MARKET_TEST_READY', 'D_BUYER_VALIDATED', 'E_COMMITTED']);
 
 /**
+ * Why an opening is researched before it is sold, or null when it may be sold.
+ *
+ * A route Brain proposed for a goal (`routeProposal.ts`) carries the model's
+ * hypotheses — buyer, offer, price — as RECOMMENDATION facts, and its deep
+ * dive is what tests them. Until that dive has settled and while its price is
+ * still not something a source or a buyer established, offering it would be
+ * selling a guess. Production, 2026-11-25: fresh goals recorded "Selling …
+ * now" for six unresearched routes each, while no dive on any of them had
+ * started. A buyer's agreement, or a price from evidence, ends the wait. Pure.
+ */
+export function researchBeforeSale(one: Pick<ModelledOpportunity, 'opportunity' | 'price' | 'agreed'>): string | null {
+  const o = one.opportunity;
+  if (!isRouteOpening(o) || o.validationSettledAt || one.agreed) return null;
+  if (one.price.provenance === 'EVIDENCE' || one.price.provenance === 'HISTORICAL') return null;
+  const dive =
+    o.validationState === 'PENDING' || o.validationState === 'RUNNING'
+      ? 'its deep dive is under way'
+      : o.validationState === 'NEEDS_PERSON'
+        ? 'its deep dive is waiting on a person'
+        : 'its deep dive has not started yet';
+  return `research first: its buyer, offer and price are the route proposal's hypotheses (the price is ${one.price.provenance}, not evidence), and ${dive}`;
+}
+
+/**
  * What a SQUEEZE goal sells now (owner, 2026-11-06): every opening a
  * responsible offer can be made on, ranked by what it adds to the whole goal —
  * a member of the quant engine's best combination first, then the cash its
@@ -4841,7 +4875,7 @@ async function salesFor(
     return target.daysLeft !== null && earliest !== null && earliest > target.daysLeft && d !== undefined && d.revenue.p90 <= 0;
   };
   const ranked = considered
-    .filter((one) => SELLABLE.has(one.stage) && !isArrangementId(one.opportunityId) && byId.has(one.opportunityId) && !outsideLimits(one.opportunityId))
+    .filter((one) => SELLABLE.has(one.stage) && !isArrangementId(one.opportunityId) && byId.has(one.opportunityId) && !outsideLimits(one.opportunityId) && !researchBeforeSale(byId.get(one.opportunityId)!))
     .sort(
       (a, b) =>
         Number(best.has(b.opportunityId)) - Number(best.has(a.opportunityId)) ||
@@ -4852,6 +4886,18 @@ async function salesFor(
   const out: MarketTest[] = [];
   for (const one of ranked) {
     out.push({ opportunityId: one.opportunityId, title: one.title, potentialReach: one.potentialReach, test: await saleFor(byId.get(one.opportunityId)!, target, one.potentialReach) });
+  }
+  return out;
+}
+
+/** The openings `salesFor` would rank but holds for research first, each with why. Pure. */
+export function heldForResearch(considered: readonly ConsideredOpening[], byId: ReadonlyMap<string, ModelledOpportunity>): { opportunityId: string; title: string; reason: string }[] {
+  const out: { opportunityId: string; title: string; reason: string }[] = [];
+  for (const one of considered) {
+    if (!SELLABLE.has(one.stage) || isArrangementId(one.opportunityId)) continue;
+    const modelled = byId.get(one.opportunityId);
+    const reason = modelled ? researchBeforeSale(modelled) : null;
+    if (reason) out.push({ opportunityId: one.opportunityId, title: one.title, reason });
   }
   return out;
 }
@@ -5005,7 +5051,9 @@ function saleBlocker(missing: { send: string[]; collect: string[] }): string {
  * before the goal would pursue a sale.
  */
 async function pursueSales(goal: Workstream, reading: PlanReading): Promise<void> {
-  if (reading.executionPolicy !== 'SQUEEZE' || reading.sales.length === 0) return;
+  if (reading.executionPolicy !== 'SQUEEZE') return;
+  await holdForResearch(goal, reading.researchFirst ?? []);
+  if (reading.sales.length === 0) return;
   const links = await listLinks(goal.id);
   for (const sale of reading.sales) {
     if (links.some((one) => one.kind === 'OPPORTUNITY' && one.ref === sale.opportunityId && one.relation === 'PURSUES')) continue;
@@ -5015,6 +5063,34 @@ async function pursueSales(goal: Workstream, reading: PlanReading): Promise<void
       kind: 'GOAL_SALE_PURSUED',
       summary: `Selling "${sale.title.slice(0, 120)}" now: ${sale.test.blocker ? `waiting on ${sale.test.blocker.slice(0, 160)}` : 'Brain sends the offer'}.`.slice(0, 400),
       detail: { opportunityId: sale.opportunityId, potentialReach: sale.potentialReach, by: sale.test.by, blocker: sale.test.blocker },
+      actorRef: 'BRAIN',
+    });
+  }
+}
+
+/** The goal event that says a sale waits for its research, once per opening until it is sold. */
+export const SALE_WAITS_FOR_RESEARCH = 'GOAL_SALE_WAITS_FOR_RESEARCH';
+
+/**
+ * Record, once per opening, why a sale waits for research, and stop pursuing a
+ * sale an earlier reading linked before this rule held (the PURSUES link is
+ * superseded with the reason, never deleted). Idempotent by the goal's events.
+ */
+async function holdForResearch(goal: Workstream, held: readonly { opportunityId: string; title: string; reason: string }[]): Promise<void> {
+  if (held.length === 0) return;
+  const links = await listLinks(goal.id);
+  const said = new Set(
+    (await workstreamEventsOfKind(goal.id, SALE_WAITS_FOR_RESEARCH, new Date(0).toISOString(), 500)).map((one) => String(one.detail['opportunityId'] ?? '')),
+  );
+  for (const one of held) {
+    const pursued = links.filter((link) => link.kind === 'OPPORTUNITY' && link.ref === one.opportunityId && link.relation === 'PURSUES');
+    for (const link of pursued) await supersedeLink(link.id, one.reason.slice(0, 300));
+    if (said.has(one.opportunityId) && pursued.length === 0) continue;
+    await recordWorkstreamEvent({
+      workstreamId: goal.id,
+      kind: SALE_WAITS_FOR_RESEARCH,
+      summary: `Not selling "${one.title.slice(0, 120)}" yet: ${one.reason}.`.slice(0, 400),
+      detail: { opportunityId: one.opportunityId, reason: one.reason, stoppedPursuing: pursued.length > 0 },
       actorRef: 'BRAIN',
     });
   }

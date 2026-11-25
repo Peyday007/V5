@@ -26,7 +26,7 @@
  *
  * Nothing here is a new scheduler or a new model path (rule 6). The models are
  * the operator's (`modelsFor`), ordered and asked exactly as the committee's
- * specialists are (`challengerModels`, `chatFor`, `firstJson`); the cadence is
+ * specialists are (`challengerModels`, `chatFor`; the reply read by `routesJson`); the cadence is
  * the goal search pass that already runs when a goal has no accepted plan
  * (`plan.ts` `widenGoalSearch`), bounded by the goal's own recorded events:
  * at most one ask per `ROUTE_PROPOSAL_EVERY_MS` and at most `ROUTES_PER_DAY`
@@ -39,7 +39,7 @@ import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
 import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { goalRoutePrefix, routeRecordId, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
-import { chatFor, firstJson, type ChatFn } from '../cheap/modelBench.ts';
+import { chatFor, type ChatFn } from '../cheap/modelBench.ts';
 import { challengerModels } from '../operator/decisions.ts';
 import { getWorkstream, linkWorkstream, recordWorkstreamEvent, workstreamEventsOfKind } from '../../repos/register.ts';
 import { createOpportunity, opportunitiesWithRecordPrefix, updateOpportunity } from '../../repos/cashPortfolio.ts';
@@ -55,16 +55,31 @@ import { readTarget, type TargetReading } from './target.ts';
 
 /** The workstream event every proposal pass records on the goal, filed or not. */
 export const ROUTE_EVENT = 'GOAL_ROUTES_PROPOSED';
-/** A goal's routes are asked for at most once in this long. */
+/** A goal's routes are asked for at most once in this long after an ask a model answered. */
 export const ROUTE_PROPOSAL_EVERY_MS = 6 * 60 * 60_000;
+/**
+ * After an ask no model answered with routes, the next is this soon — the
+ * failure was the models', not the goal's, and a goal with no routes has no
+ * plan to research. Production, 2026-11-25: a fresh goal's one ask timed out
+ * on the GPU model and was unparseable on the free one, and it was next asked
+ * six hours later.
+ */
+export const ROUTE_RETRY_AFTER_FAILURE_MS = 30 * 60_000;
+/** Failed asks per goal in any 24 hours; past it the ordinary interval applies. */
+export const ROUTE_FAILED_ASKS_PER_DAY = 6;
 /** Routes asked for in one proposal. */
 export const ROUTES_PER_ASK = 6;
 /** Routes filed for one goal in any 24 hours. */
 export const ROUTES_PER_DAY = 6;
-/** One model's longest turn at proposing. */
-export const ROUTE_ATTEMPT_MS = 90_000;
-/** All the models' turns together end inside this. */
-export const ROUTE_BUDGET_MS = 150_000;
+/**
+ * One model's longest turn at proposing. Six whole routes are a few thousand
+ * tokens from a reasoning model, and the GPU model's answer was cut off by the
+ * earlier 90 s ("The operation was aborted due to timeout", production
+ * 2026-11-25). The pass never waits on it: the ask runs in the background.
+ */
+export const ROUTE_ATTEMPT_MS = 240_000;
+/** All the models' turns together end inside this: each turn is given what is left, at most `ROUTE_ATTEMPT_MS`. */
+export const ROUTE_BUDGET_MS = 360_000;
 /** Goals whose routes are being asked for at once, across the process. */
 export const ROUTE_MAX_IN_FLIGHT = 2;
 
@@ -163,6 +178,97 @@ export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): stri
   ]
     .filter(Boolean)
     .join('\n\n');
+}
+
+/** The balanced JSON value starting at `start` (an object or an array), or null when it never closes. */
+function balancedAt(text: string, start: number): string | null {
+  const stack: string[] = [];
+  let inString = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inString) {
+      if (ch === '\\') i += 1;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{' || ch === '[') stack.push(ch === '{' ? '}' : ']');
+    else if (ch === '}' || ch === ']') {
+      if (stack.pop() !== ch) return null;
+      if (stack.length === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+function parsed(segment: string | null): unknown {
+  if (segment === null) return undefined;
+  try {
+    return JSON.parse(segment) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The route list a parsed JSON value carries: `{routes: [...]}` in any letter case, a bare array, or one route. */
+function routeList(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) return value.some((one) => one && typeof one === 'object') ? value : null;
+  if (!value || typeof value !== 'object') return null;
+  const obj = value as Record<string, unknown>;
+  for (const [key, inner] of Object.entries(obj)) {
+    if (/^routes?$/i.test(key) && Array.isArray(inner)) return inner;
+  }
+  if (typeof obj['payer'] === 'string' && typeof obj['offer'] === 'string') return [obj];
+  return null;
+}
+
+/**
+ * The routes in a model's reply, read as tolerantly as the reply is written.
+ *
+ * Production, 2026-11-25: the free model answered and its reply was refused as
+ * "no parseable routes" — the reader took only the first `{…}` in the text and
+ * only under a lower-case `routes` key. Now: fenced or bare, a top-level array,
+ * `Routes`, prose around it or a stray brace before it, and an answer cut off
+ * mid-list keeps every route it completed. Each route is still checked against
+ * every limit by `parseRoutes`; nothing here makes a figure up. Pure.
+ */
+export function routesJson(text: string): { routes: unknown[] } | null {
+  const cleaned = text.replace(/```[a-zA-Z]*\s*/g, '').replace(/```/g, '').trim();
+  if (!cleaned) return null;
+  const whole = routeList(parsed(cleaned));
+  if (whole) return { routes: whole };
+  let tries = 0;
+  // Routes written one object at a time, outside any list ("1. {…} 2. {…}").
+  const singles: unknown[] = [];
+  for (let i = 0; i < cleaned.length && tries < 60; i += 1) {
+    const ch = cleaned[i];
+    if (ch !== '{' && ch !== '[') continue;
+    tries += 1;
+    const segment = balancedAt(cleaned, i);
+    const value = parsed(segment);
+    const list = routeList(value);
+    if (!list || segment === null) continue;
+    const single = !Array.isArray(value) && list.length === 1 && list[0] === value;
+    if (!single) return { routes: list };
+    singles.push(value);
+    i += segment.length - 1;
+  }
+  if (singles.length > 0) return { routes: singles };
+  // Cut off mid-list: every complete object after the `routes` key is a route the model finished.
+  const key = /"routes"\s*:\s*\[/i.exec(cleaned);
+  if (!key) return null;
+  const salvaged: unknown[] = [];
+  let i = key.index + key[0].length;
+  while (i < cleaned.length) {
+    const open = cleaned.indexOf('{', i);
+    if (open < 0) break;
+    const segment = balancedAt(cleaned, open);
+    if (segment === null) break;
+    const value = parsed(segment);
+    if (value && typeof value === 'object') salvaged.push(value);
+    i = open + segment.length;
+  }
+  return salvaged.length > 0 ? { routes: salvaged } : null;
 }
 
 /**
@@ -302,19 +408,47 @@ export interface RouteDeps {
   clock?: () => number;
   /** The proved deliverables; production: the capability frame (`executionFrame`). */
   delivers?: (projectId: string, currency: string) => Promise<string[]>;
+  /** Start the project's deep dives once routes are filed; production: `startValidations`. */
+  startDives?: (projectId: string) => Promise<{ opportunityId: string }[]>;
 }
 
 export type RouteOutcome =
   | { kind: 'NOT_DUE'; reason: string }
   | { kind: 'NO_MODEL'; reason: string }
   | { kind: 'NO_ANSWER'; reason: string }
-  | { kind: 'PROPOSED'; filed: string[]; existing: string[]; rejected: { title: string; why: string }[]; model: string };
+  | { kind: 'PROPOSED'; filed: string[]; existing: string[]; rejected: { title: string; why: string }[]; model: string; dived: string[] };
 
-async function operatorChats(deps: RouteDeps): Promise<{ label: string; chat: ChatFn }[]> {
+/**
+ * Whether a goal's routes may be asked for now, from its own recorded asks
+ * (newest first). After an ask a model answered: once per
+ * `ROUTE_PROPOSAL_EVERY_MS`. After one no model answered (NO_ANSWER): again
+ * after `ROUTE_RETRY_AFTER_FAILURE_MS`, at most `ROUTE_FAILED_ASKS_PER_DAY` in
+ * any day, then the ordinary interval. NO_MODEL is configuration, not a
+ * failed answer, and waits the ordinary interval. Pure.
+ */
+export function routeAskDue(asks: readonly { createdAt: string; detail: Record<string, unknown> }[], now: Date): { due: true } | { due: false; reason: string } {
+  const last = asks[0];
+  if (!last) return { due: true };
+  const since = now.getTime() - Date.parse(last.createdAt);
+  const failed = last.detail['outcome'] === 'NO_ANSWER';
+  const failedToday = asks.filter((one) => one.detail['outcome'] === 'NO_ANSWER' && now.getTime() - Date.parse(one.createdAt) < DAY).length;
+  const wait = failed && failedToday < ROUTE_FAILED_ASKS_PER_DAY ? ROUTE_RETRY_AFTER_FAILURE_MS : ROUTE_PROPOSAL_EVERY_MS;
+  if (since >= wait) return { due: true };
+  return {
+    due: false,
+    reason: failed
+      ? `routes were last asked for at ${last.createdAt} and no model answered (${failedToday} failed ask(s) today); asked again ${Math.round(wait / 60_000)} minutes after`
+      : `routes were last asked for at ${last.createdAt}`,
+  };
+}
+
+async function operatorChats(deps: RouteDeps, timeoutMs: () => number): Promise<{ label: string; chat: ChatFn }[]> {
   const models = await (deps.models ?? (async () => (await import('../operator/run.ts')).modelsFor()))().catch(() => [] as OperatorModel[]);
   return challengerModels(models).map((model) => ({
     label: model.label,
-    chat: chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, deps.fetchImpl ?? fetch, ROUTE_ATTEMPT_MS),
+    // Each turn is given what the budget has left, never more than one attempt's bound.
+    chat: (messages, tools, maxTokens) =>
+      chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, deps.fetchImpl ?? fetch, timeoutMs())(messages, tools, maxTokens),
   }));
 }
 
@@ -452,8 +586,9 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   if (!target || target.achieved) return { kind: 'NOT_DUE', reason: 'no target still open' };
   const gate = await discoveryAllowed(target.projectId);
   if (!gate.allowed || !gate.mode) return { kind: 'NOT_DUE', reason: gate.reason ?? 'the project is not searching' };
-  const recent = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - ROUTE_PROPOSAL_EVERY_MS).toISOString(), 1);
-  if (recent.length > 0) return { kind: 'NOT_DUE', reason: `routes were last asked for at ${recent[0]!.createdAt}` };
+  const asks = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - Math.max(DAY, ROUTE_PROPOSAL_EVERY_MS)).toISOString(), 50);
+  const due = routeAskDue(asks, now);
+  if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
   const read = await routeContext(goal, target, input.heldTitles ?? [], deps);
   if (!read) return { kind: 'NOT_DUE', reason: 'no time or money left to plan for' };
   const filedToday = read.routes.filter((one) => now.getTime() - Date.parse(one.createdAt) < DAY).length;
@@ -462,15 +597,15 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
 
   const record = (summary: string, detail: Record<string, unknown>) =>
     recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail, actorRef: 'BRAIN' });
-  const chats = await (deps.chats ?? (() => operatorChats(deps)))().catch(() => []);
+  const clock = deps.clock ?? Date.now;
+  const deadline = clock() + ROUTE_BUDGET_MS;
+  const chats = await (deps.chats ?? (() => operatorChats(deps, () => Math.max(5_000, Math.min(ROUTE_ATTEMPT_MS, deadline - clock())))))().catch(() => []);
   if (chats.length === 0) {
     const reason = 'no operator model is configured, so no route was proposed from the objective';
     await record(`Routes: none proposed — ${reason}.`, { outcome: 'NO_MODEL', reason });
     return { kind: 'NO_MODEL', reason };
   }
   const prompt = routePrompt(read.ctx);
-  const clock = deps.clock ?? Date.now;
-  const deadline = clock() + ROUTE_BUDGET_MS;
   const failures: string[] = [];
   let parsed: { routes: ProposedRoute[]; rejected: { title: string; why: string }[]; model: string } | null = null;
   for (const { label, chat } of chats) {
@@ -487,7 +622,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       failures.push(`${label}: ${r.error.slice(0, 80)}`);
       continue;
     }
-    const one = parseRoutes(firstJson(r.content), read.ctx);
+    const one = parseRoutes(routesJson(r.content), read.ctx);
     if (one.routes.length === 0 && one.rejected.length === 0) {
       failures.push(`${label}: no parseable routes`);
       continue;
@@ -516,27 +651,71 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     `Routes: ${filed.length} proposed from the objective and filed as openings${existing.length ? `, ${existing.length} already held` : ''}${parsed.rejected.length ? `, ${parsed.rejected.length} rejected for breaking a limit` : ''}.`,
     { outcome: 'PROPOSED', model: parsed.model, filed, existing, rejected: parsed.rejected, refutedShown: read.ctx.refuted.length },
   );
-  return { kind: 'PROPOSED', filed, existing, rejected: parsed.rejected, model: parsed.model };
+  /*
+   * The routes' deep dives start now, inside the project's dive room, rather
+   * than when the tick's serial project walk next reaches this project.
+   * Production, 2026-11-25: nine fresh goals held six route openings each and
+   * no dive had started 75 minutes later; the walk that would start them had
+   * been running for 38 minutes and these projects were last in it.
+   */
+  let dived: string[] = [];
+  if (filed.length > 0) {
+    const start = deps.startDives ?? (async (projectId: string) => (await import('../cash/validation.ts')).startValidations({ projectId }));
+    dived = (await start(target.projectId).catch(() => [])).map((one) => one.opportunityId);
+  }
+  return { kind: 'PROPOSED', filed, existing, rejected: parsed.rejected, model: parsed.model, dived };
 }
 
 const inFlight = new Map<string, Promise<RouteOutcome | null>>();
+/** Goals waiting for a place, in the order they asked: each asks when one frees. */
+const waiting = new Map<string, { heldTitles: readonly string[]; deps: RouteDeps; resolve: (outcome: RouteOutcome | null) => void; ask: Promise<RouteOutcome | null> }>();
 
-/**
- * From the goal search pass: ask in the background (the pass never waits on a
- * model), at most one ask per goal and `ROUTE_MAX_IN_FLIGHT` across the
- * process. Returns the ask, or null when one could not start, for a caller
- * that wants to wait. Never throws.
- */
-export function armRouteProposal(goalId: string, heldTitles: readonly string[], now: Date, deps: RouteDeps = {}): Promise<RouteOutcome | null> | null {
-  const running = inFlight.get(goalId);
-  if (running) return running;
-  if (inFlight.size >= ROUTE_MAX_IN_FLIGHT) return null;
-  const run = proposeGoalRoutes({ goalId, now, heldTitles }, deps)
+/** Tests: every ask running or waiting in this process, settled. */
+export async function settleRouteAsks(): Promise<void> {
+  while (inFlight.size > 0 || waiting.size > 0) {
+    await Promise.all([...inFlight.values(), ...[...waiting.values()].map((one) => one.ask)]);
+  }
+}
+
+function startAsk(goalId: string, heldTitles: readonly string[], now: Date | null, deps: RouteDeps): Promise<RouteOutcome | null> {
+  const run = proposeGoalRoutes({ goalId, ...(now ? { now } : {}), heldTitles }, deps)
     .catch((error: unknown) => {
       console.warn(`goal ${goalId}: route proposal: ${String((error as Error)?.message ?? error)}`);
       return null;
     })
-    .finally(() => inFlight.delete(goalId));
+    .finally(() => {
+      inFlight.delete(goalId);
+      const next = waiting.entries().next();
+      if (!next.done) {
+        const [nextId, held] = next.value;
+        waiting.delete(nextId);
+        // Asked when its place frees, so it reads its own clock then.
+        void startAsk(nextId, held.heldTitles, null, held.deps).then(held.resolve);
+      }
+    });
   inFlight.set(goalId, run);
   return run;
+}
+
+/**
+ * From the goal search pass: ask in the background (the pass never waits on a
+ * model), at most one ask per goal and `ROUTE_MAX_IN_FLIGHT` across the
+ * process. A goal that finds every place taken waits for the next one in the
+ * order it asked, rather than being turned away until its next plan read.
+ * Production, 2026-11-25: twelve goals created together, two places, and two
+ * of the goals had no route ask recorded 70 minutes later. Returns the ask
+ * (waiting included), for a caller that wants to wait. Never throws.
+ */
+export function armRouteProposal(goalId: string, heldTitles: readonly string[], now: Date, deps: RouteDeps = {}): Promise<RouteOutcome | null> {
+  const running = inFlight.get(goalId);
+  if (running) return running;
+  const queued = waiting.get(goalId);
+  if (queued) return queued.ask;
+  if (inFlight.size < ROUTE_MAX_IN_FLIGHT) return startAsk(goalId, heldTitles, now, deps);
+  let resolve: (outcome: RouteOutcome | null) => void = () => undefined;
+  const ask = new Promise<RouteOutcome | null>((done) => {
+    resolve = done;
+  });
+  waiting.set(goalId, { heldTitles, deps, resolve, ask });
+  return ask;
 }
