@@ -74,7 +74,7 @@ import {
   plainLayerName,
   readDealDispatch,
 } from '../server/services/russell/dealDispatch.ts';
-import { SLOT_FILL_PER_TICK, tick } from '../server/services/russell/loop.ts';
+import { SLOT_FILL_MAX_PER_TICK, SLOT_FILL_PER_TICK, tick } from '../server/services/russell/loop.ts';
 import { claimCycle, completeCycle, pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
 import {
   askHuman,
@@ -2820,38 +2820,51 @@ describe('the loop starts work, bounded', () => {
     expect((await getCandidate(captured.candidate!.id))!.state).toBe('QUEUED');
   });
 
-  it('fills free research slots a few at a time, and leaves the rest queued rather than dropping them (§98)', async () => {
+  it('fills free research slots up to the per-tick bound, and leaves the rest queued rather than dropping them (§98)', async () => {
+    const waiting = SLOT_FILL_MAX_PER_TICK + 2;
     await createGoal({
       projectId,
       ownerUserId: userId,
       createdByUserId: userId,
       name: 'acceptance',
       allowedWork: ['RESEARCH'],
-      maxMissions: 10,
-      maxFragments: 10,
-      maxConcurrent: 10,
+      maxMissions: waiting + 5,
+      maxFragments: waiting + 5,
+      maxConcurrent: waiting + 5,
       maxProbes: 1,
     });
-    const states = ['Florida', 'California', 'Texas', 'Ohio', 'Iowa', 'Utah'];
+    const states = [
+      'Florida', 'California', 'Texas', 'Ohio', 'Iowa', 'Utah', 'Nevada', 'Oregon', 'Maine', 'Idaho', 'Alaska',
+      'Hawaii', 'Kansas', 'Montana', 'Vermont', 'Wyoming', 'Georgia', 'Alabama', 'Arizona', 'Colorado', 'Delaware',
+      'Illinois', 'Indiana', 'Kentucky', 'Louisiana', 'Maryland', 'Michigan', 'Minnesota', 'Missouri', 'Nebraska',
+      'Oklahoma', 'Virginia', 'Wisconsin', 'Tennessee',
+    ].slice(0, waiting);
+    expect(states).toHaveLength(waiting);
     const ids: string[] = [];
-    for (const state of states) ids.push(await queuedWithSpec(`establish the ${state} broker licence position`));
+    for (const state of states) {
+      const id = await queuedWithSpec(`establish the ${state} broker licence position`);
+      // Distinct titles: one title twice is a duplicate the backlog pass retires.
+      await getDb().run(`UPDATE russell_candidates SET title = ? WHERE id = ?`, [`Licensing in ${state}`, id]);
+      ids.push(id);
+    }
 
-    // Free slots are filled, up to the per-tick fill, not one a tick.
+    // Free slots are filled, not trickled: past the floor, up to the bound.
     const report = await tick('instance-a');
-    expect(report.launched).toHaveLength(SLOT_FILL_PER_TICK);
+    expect(report.launched.length).toBeGreaterThanOrEqual(SLOT_FILL_PER_TICK);
+    expect(report.launched.length).toBeLessThanOrEqual(SLOT_FILL_MAX_PER_TICK);
     expect(report.bounded).toBe(true);
 
-    // The one that did not go is preserved rather than decided against, so the
-    // next tick starts it — which is the property that makes a bound a pacing
-    // mechanism instead of a way to lose work.
+    // The ones that did not go are preserved rather than decided against, so
+    // the next tick starts them — which is the property that makes a bound a
+    // pacing mechanism instead of a way to lose work.
     const next = await tick('instance-a');
-    expect(next.launched).toHaveLength(states.length - SLOT_FILL_PER_TICK);
+    expect(report.launched.length + next.launched.length).toBe(waiting);
     expect(report.launched).not.toContain(next.launched[0]);
 
-    const missions = await listMissions({ projectId });
-    expect(missions).toHaveLength(states.length);
+    const missions = await listMissions({ projectId, limit: waiting + 10 });
+    expect(missions).toHaveLength(waiting);
     expect(new Set(missions.map((m) => m.candidateId))).toEqual(new Set(ids));
-  });
+  }, 120_000);
 
   it('starts no more than the grant\u2019s free slots allow', async () => {
     await createGoal({

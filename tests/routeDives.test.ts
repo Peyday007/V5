@@ -28,7 +28,11 @@ import { getOpportunity, opportunitiesWithRecordPrefix } from '../server/repos/c
 import { listLinks, workstreamEventsOfKind } from '../server/repos/register.ts';
 import { startValidations } from '../server/services/cash/validation.ts';
 import { goalRoutePrefix } from '../server/domain/routeOrigin.ts';
-import { goalIdeaSql, goalProjectsFirst, liveGoalProjectIds } from '../server/services/goals/goalWork.ts';
+import { GOAL_TIER_NONE, goalFirstSql, goalIdeaSql, goalProjectsFirst, liveGoalProjectIds } from '../server/services/goals/goalWork.ts';
+import { createCandidate } from '../server/repos/russellCandidates.ts';
+import { createNeed } from '../server/repos/cashPortfolio.ts';
+import { pauseGoal } from '../server/repos/goals.ts';
+import { unjudgedGoalIdeas } from '../server/services/russell/loop.ts';
 import { heldForResearch, readGoalPlan, researchBeforeSale, SALE_WAITS_FOR_RESEARCH } from '../server/services/goals/plan.ts';
 import {
   armRouteProposal,
@@ -107,6 +111,34 @@ describe("a goal's routes dive when they are filed", () => {
     expect(link?.relation).toBe('PURSUES');
     const tier = await getDb().all<{ id: string }>(`SELECT c.id FROM russell_candidates c WHERE ${goalIdeaSql('c')}`);
     expect(tier.map((one) => one.id)).toContain(dived.candidateId);
+  });
+
+  it('a route dive with no link of its own, and the questions raised about its opening, are the goal’s work; the dive goes first', async () => {
+    // Production 2026-11-25: dives started before the dive link existed, and every
+    // narrow question about a route opening, sat unjudged in the untargeted tier.
+    const { deps } = replying(JSON.stringify({ routes: [ROUTE_A, ROUTE_B] }));
+    const outcome = await proposeGoalRoutes({ goalId, now }, deps);
+    if (outcome.kind !== 'PROPOSED') throw new Error('not proposed');
+    const dived = (await getOpportunity(outcome.dived[0]!))!;
+    await getDb().run(`DELETE FROM workstream_links WHERE workstream_id = ? AND kind = 'CANDIDATE'`, [goalId]);
+    const question = await createCandidate({ projectId, title: 'Who signs for bookkeeping', statement: 'who at a dental practice signs for bookkeeping spend' });
+    await getDb().run(`UPDATE russell_candidates SET created_at = ? WHERE id = ?`, ['2026-01-01T00:00:00.000Z', question.id]);
+    await createNeed({
+      projectId, opportunityId: dived.id, blockedAction: 'qualify the opening', whyItMatters: 'the buyer', recommendedPath: 'research',
+      setupEffort: 'none', nextStep: 'ask', completionCondition: 'answered', candidateId: question.id, requestKey: 'causal-test-signer',
+    });
+    const tier = async (id: string) =>
+      Number((await getDb().get<{ k: number }>(`SELECT ${goalFirstSql('c')} AS k FROM russell_candidates c WHERE c.id = ?`, [id]))!.k);
+    expect(await tier(dived.candidateId!)).toBe(2);
+    expect(await tier(question.id)).toBe(3);
+    // Older though the question is, the goal's judging takes the dive first.
+    const picked = (await unjudgedGoalIdeas(1)).map((one) => one.id);
+    expect(picked).toEqual([dived.candidateId]);
+
+    // A paused goal's openings are nobody's goal work.
+    await pauseGoal(goalId, 'not now');
+    expect(await tier(dived.candidateId!)).toBe(GOAL_TIER_NONE);
+    expect(await tier(question.id)).toBe(GOAL_TIER_NONE);
   });
 
   it('two callers starting dives at once capture one idea per opening', async () => {

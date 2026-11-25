@@ -51,7 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
-import { goalFirstSql, goalIdeaSql, goalProjectsFirst, liveGoalProjectIds } from '../goals/goalWork.ts';
+import { GOAL_TIER_NONE, goalFirstSql, goalIdeaSql, goalProjectsFirst, liveGoalProjectIds } from '../goals/goalWork.ts';
 import {
   claimCycle,
   completeCycle,
@@ -175,6 +175,10 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 /** How often the loop wakes when nothing else has woken it. */
 /** Fresh ideas one launch pass may start into free research slots (§98). */
 export const SLOT_FILL_PER_TICK = 5;
+/** At most this many a launch pass, past `SLOT_FILL_PER_TICK` only while `LAUNCH_FILL_BUDGET_MS` lasts. */
+export const SLOT_FILL_MAX_PER_TICK = 30;
+/** How long one launch pass keeps filling free slots past the floor. */
+export const LAUNCH_FILL_BUDGET_MS = 30_000;
 
 export const RUSSELL_TICK_MS = 30_000;
 
@@ -1966,17 +1970,35 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * database judged about one idea every thirteen minutes, and the goal's
        * dives waited behind nine of its own older questions.
        */
-      const goalIdeas = await unjudgedGoalIdeas(GOAL_JUDGMENTS_PER_TICK);
+      /*
+       * And past the floor, while the tick's judging budget lasts. Production,
+       * 2026-11-25 06:00–09:05Z: 5 goal ideas a tick judged 16–30 every ten
+       * minutes while twelve fresh goals' route dives and questions arrived by
+       * the hundred, and the live goal tier's unjudged backlog stood at 624
+       * (oldest 04:03Z) with every dive still CAPTURED. Judging spends nothing
+       * and launches stay bounded by each grant, so the bound that matters is
+       * the tick's time; under database pressure only the floor is judged.
+       */
+      const goalMax = databasePressure().state === 'SHEDDING' ? GOAL_JUDGMENTS_PER_TICK : GOAL_JUDGMENTS_MAX_PER_TICK;
+      const goalIdeas = await unjudgedGoalIdeas(goalMax);
       // The cycle's own count still goes to whatever is next, so other work is not starved behind the goal's.
       const goalIds = new Set(goalIdeas.map((one) => one.id));
       const ordinary = (await unjudged(cycle.maxLaunchesPerCycle + goalIdeas.length))
         .filter((one) => !goalIds.has(one.id))
         .slice(0, cycle.maxLaunchesPerCycle);
-      for (const candidate of [...goalIdeas, ...ordinary]) {
-        const outcome = await judgeCandidate(candidate.id);
-        if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
-        else if (outcome.ok) report.planning.push(candidate.id);
+      const judgeOne = async (id: string) => {
+        const outcome = await judgeCandidate(id);
+        if (outcome.answeredByArchive) report.answeredByArchive.push(id);
+        else if (outcome.ok) report.planning.push(id);
+      };
+      const started = Date.now();
+      let judgedGoal = 0;
+      for (const candidate of goalIdeas) {
+        if (judgedGoal >= GOAL_JUDGMENTS_PER_TICK && Date.now() - started >= GOAL_JUDGING_BUDGET_MS) break;
+        await judgeOne(candidate.id);
+        judgedGoal += 1;
       }
+      for (const candidate of ordinary) await judgeOne(candidate.id);
     });
 
     /*
@@ -2798,13 +2820,24 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * first because they fit their own grant's free slots — which is the
        * number the capacity reader reports, so the two cannot disagree.
        */
-      const fill = Math.min(SLOT_FILL_PER_TICK, launchable.filter((entry) => entry.fitsFreeSlot).length);
+      /*
+       * Past the floor, while the tick's launch budget lasts (production
+       * 2026-11-25 06:00–09:05Z: 5–10 missions launched every ten minutes,
+       * one fill a tick, while the capacity reader counted 43–56 fitting
+       * ideas sample after sample). Every slot it can take is a free one in
+       * the idea's own grant; `reserve` still refuses past a ceiling.
+       */
+      const fillMax = databasePressure().state === 'SHEDDING' ? SLOT_FILL_PER_TICK : SLOT_FILL_MAX_PER_TICK;
+      const fill = Math.min(fillMax, launchable.filter((entry) => entry.fitsFreeSlot).length);
       const limit = Math.max(cycle.maxLaunchesPerCycle, fill);
+      const launchStarted = Date.now();
       let started = 0;
       let followOns = 0;
       for (const entry of launchable) {
         if (entry.followOnOfMissionId && followOns >= cycle.maxLaunchesPerCycle) continue;
-        if (started >= limit) {
+        const overBudget =
+          started >= Math.max(cycle.maxLaunchesPerCycle, SLOT_FILL_PER_TICK) && Date.now() - launchStarted >= LAUNCH_FILL_BUDGET_MS;
+        if (started >= limit || overBudget) {
           // The bound stopped the tick, and the rest stay queued for the next
           // one. Preserved rather than dropped: a candidate that lost a race for
           // a slot has not been decided against.
@@ -3139,6 +3172,19 @@ export async function nextLaunchable(limit: number): Promise<
    * marked and put first; everything else keeps its old order behind them, so
    * an idea refused for another reason (already researched, a spent ceiling)
    * is still reached and answered. `reserve` remains the guarantee.
+   *
+   * **Among the ideas that fit, each project's best goes before any project's
+   * second**, live-goal work ahead of the rest (production 2026-11-25,
+   * 08:15-08:53Z: RESEARCH_SLOTS read "43-56 launchable idea(s) have a free
+   * slot in their own project's grant" sample after sample, with 819 judged
+   * goal ideas never launched and 5-10 missions started every ten minutes).
+   * The order across fitting ideas was the Brain-wide rank — goal tier, then
+   * priority — and a launch pass starts only so many of them, so a goal with a
+   * deeper backlog of better-ranked ideas (price questions and rounds, refilled
+   * every plan read) takes a tick's launches while another goal's dives wait
+   * for that backlog to empty. Slots are per project, so one project's rank
+   * says nothing about another's; the turn each project gets within one tick
+   * is what decides whether a goal waits on someone else's.
    */
   const projects = await launchableByProject();
   const budgets = projects.filter((one) => one.free > 0);
@@ -3178,6 +3224,8 @@ export async function nextLaunchable(limit: number): Promise<
            FROM ${LAUNCHABLE_CANDIDATES}
        ) w
       ORDER BY CASE WHEN w.rn <= w.budget THEN 0 ELSE 1 END,
+               CASE WHEN w.k_goal < ${GOAL_TIER_NONE} THEN 0 ELSE 1 END,
+               w.rn,
                w.k_goal, w.k_priority, w.k_ordinal, w.k_created, w.k_seq
       LIMIT ?`,
     [...budgetParams, Math.max(1, limit)],
@@ -3889,16 +3937,36 @@ async function retirePlanningDefect(input: {
  * have been excluded from being judged for ever, which is the opposite of what
  * it was written to do.
  */
-/** An approved goal's own ideas judged per tick on top of the cycle's own count. */
+/** An approved goal's own ideas judged per tick on top of the cycle's own count: the floor. */
 export const GOAL_JUDGMENTS_PER_TICK = 5;
+/** At most this many a tick, past the floor only while `GOAL_JUDGING_BUDGET_MS` lasts. */
+export const GOAL_JUDGMENTS_MAX_PER_TICK = 40;
+/** How long one tick keeps judging a live goal's ideas past the floor. */
+export const GOAL_JUDGING_BUDGET_MS = 20_000;
 
-/** The goal's own unjudged ideas, oldest first. */
-async function unjudgedGoalIdeas(limit: number): Promise<{ id: string }[]> {
+/**
+ * A live goal's unjudged ideas, one project's turn at a time.
+ *
+ * Oldest-first across the Brain used to mean the goal with the longest backlog
+ * was judged first and every newer goal waited for it to empty: a fresh goal's
+ * route dives, created hours after another goal's hundreds of questions, came
+ * last however few they were. Each project's oldest unjudged goal idea now
+ * goes before any project's second (ties by age, so the turn rotates), the
+ * goal's own tier order inside a project.
+ */
+export async function unjudgedGoalIdeas(limit: number): Promise<{ id: string }[]> {
   return getDb().all<{ id: string }>(
-    `SELECT c.id FROM russell_candidates c
-      WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL AND ${goalIdeaSql('c')}
-      ORDER BY c.created_at, c.rowid
-      LIMIT ?`,
+    `SELECT w.id FROM (
+       SELECT c.id, c.created_at AS k_created, c.rowid AS k_seq,
+              ROW_NUMBER() OVER (
+                PARTITION BY c.project_id
+                ORDER BY ${goalFirstSql('c')}, c.created_at, c.rowid
+              ) AS rn
+         FROM russell_candidates c
+        WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL AND ${goalIdeaSql('c')}
+     ) w
+     ORDER BY w.rn, w.k_created, w.k_seq
+     LIMIT ?`,
     [Math.max(0, limit)],
   );
 }
