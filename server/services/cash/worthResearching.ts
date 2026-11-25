@@ -39,7 +39,7 @@ import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerd
 import { listWorkstreams } from '../../repos/register.ts';
 import { readTarget } from '../goals/target.ts';
 import { tooSmallForGoals } from '../goals/materiality.ts';
-import { EXCLUSION_CLASSES, excludedBy, goalExclusions, type ExclusionClass } from './exclusions.ts';
+import { excludedBy, exclusionLabel, goalExclusions, type ExclusionClass } from './exclusions.ts';
 
 /**
  * Hosts whose pages are individual freelance-marketplace listings.
@@ -286,7 +286,7 @@ export async function notWorthResearching(
       const text = `${opportunity.title} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''} ${sourceUrl ?? ''}`;
       const hits = goals.map((one) => excludedBy(text, one.exclusions));
       if (hits.every((hit) => hit !== null)) {
-        const label = EXCLUSION_CLASSES[hits[0]!].label;
+        const label = exclusionLabel(hits[0]!);
         return { kind: 'SCREENED_OUT', reason: 'EXCLUDED_BY_GOAL', detail: `it is ${label}, which the goal's owner excluded`, limit: label };
       }
     }

@@ -70,10 +70,63 @@ export function exclusionsIn(text: string | null | undefined): ExclusionClass[] 
   return EXCLUSION_KEYS.filter((key) => out.has(key));
 }
 
-/** The first excluded class some text falls in, or null. */
-export function excludedBy(text: string | null | undefined, classes: readonly ExclusionClass[]): ExclusionClass | null {
+/**
+ * The class a stored or passed value names: its key, or its label as a prompt
+ * shows it. Null for anything else.
+ *
+ * Production, 2026-11-25: the route proposer handed `excludedBy` the owner's
+ * exclusions as labels ("domain-name speculation and resale"), and indexing
+ * `EXCLUSION_CLASSES` with a label threw `Cannot read properties of undefined
+ * (reading 'matches')` — every route ask of the goal whose owner excluded
+ * something failed (wst_7b4f…, seven times in the day's logs). Every lookup
+ * goes through here, so a value the vocabulary does not hold can neither crash
+ * a caller nor pass for an exclusion that excludes nothing.
+ */
+export function exclusionClassOf(value: string): ExclusionClass | null {
+  if (Object.prototype.hasOwnProperty.call(EXCLUSION_CLASSES, value)) return value as ExclusionClass;
+  return EXCLUSION_KEYS.find((key) => EXCLUSION_CLASSES[key].label === value) ?? null;
+}
+
+/** Values no exclusion class answers to, each reported once per process. */
+const reportedUnrecognised = new Set<string>();
+export function unrecognisedExclusions(values: readonly string[]): string[] {
+  const unknown = values.filter((value) => exclusionClassOf(value) === null);
+  for (const value of unknown) {
+    if (reportedUnrecognised.has(value)) continue;
+    reportedUnrecognised.add(value);
+    console.warn(`exclusions: "${value.slice(0, 120)}" is not an exclusion class Brain recognises; it is kept as the owner's words and matched as text`);
+  }
+  return unknown;
+}
+
+/** A class's label, or a label that says the value was not recognised. */
+export function exclusionLabel(value: string): string {
+  const key = exclusionClassOf(value);
+  return key ? EXCLUSION_CLASSES[key].label : `unrecognised exclusion "${value}"`;
+}
+
+/**
+ * Whether text falls in a value no class answers to: the value is the owner's
+ * own words, so text that contains them is left out rather than allowed.
+ */
+function namesUnrecognised(text: string, value: string): boolean {
+  const words = value.toLowerCase().replace(/^unrecognised exclusion "|"$/g, '').trim();
+  return words.length >= 3 && text.toLowerCase().includes(words);
+}
+
+/**
+ * The first excluded class some text falls in, or null. A value that names no
+ * class (`exclusionClassOf`) is reported and matched as the owner's words
+ * (`namesUnrecognised`), and returned as given when the text contains them.
+ */
+export function excludedBy(text: string | null | undefined, classes: readonly string[]): string | null {
   if (!text) return null;
-  return classes.find((key) => EXCLUSION_CLASSES[key].matches.test(text)) ?? null;
+  unrecognisedExclusions(classes);
+  for (const value of classes) {
+    const key = exclusionClassOf(value);
+    if (key ? EXCLUSION_CLASSES[key].matches.test(text) : namesUnrecognised(text, value)) return key ?? value;
+  }
+  return null;
 }
 
 /**
@@ -91,7 +144,7 @@ export function commonTo(goals: ReadonlyArray<{ exclusions: readonly ExclusionCl
 /** A sentence for a research question, naming what to leave out. */
 export function exclusionSentence(classes: readonly ExclusionClass[]): string {
   if (classes.length === 0) return '';
-  return ` Leave out ${classes.map((key) => EXCLUSION_CLASSES[key].label).join(' and ')}: the goal's owner excluded them.`;
+  return ` Leave out ${classes.map((key) => exclusionLabel(key)).join(' and ')}: the goal's owner excluded them.`;
 }
 
 /**
