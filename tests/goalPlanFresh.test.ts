@@ -31,6 +31,8 @@ import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { claimRunSlot } from '../server/services/scenario/isolate.ts';
+import { pauseGoal, resumeGoal } from '../server/repos/goals.ts';
+import { readProbe } from '../server/services/selfmodel/capabilities.ts';
 import { advanceGoalPlans, listReadings, orderGoalsForPlanPass, planDue, PLAN_REFRESH_MS, PLAN_STALE_MAX_MS, skipRuledOutRefresh } from '../server/services/goals/plan.ts';
 
 const MINUTE = 60_000;
@@ -180,6 +182,29 @@ describe('GOAL.PLAN_FRESH through advanceGoalPlans: the pass offers its one read
     expect((await advanceGoalPlans(new Date(now.getTime() + MINUTE_MS), { maxReads: 1 })).read).toBe(1);
     expect(await newest(tail)).toBeGreaterThan(seeded.tail);
     expect(await newest(front)).toBe(seeded.front);
+  });
+
+  it('review F2: the probe and the pass agree on "live" — a paused goal is neither re-read nor owed a fresh plan', async () => {
+    const running = await goalReadAgo('running', 110);
+    const paused = await goalReadAgo('paused', 110);
+    expect(await pauseGoal(paused, 'operator pause')).toBe(true);
+    const seeded = { running: await newest(running), paused: await newest(paused) };
+
+    // The pass spends nothing on the paused goal and reads the running one.
+    expect((await advanceGoalPlans(now)).read).toBe(1);
+    expect(await newest(running)).toBeGreaterThan(seeded.running);
+    expect(await newest(paused)).toBe(seeded.paused);
+    const runs = await getDb().all<{ label: string }>(`SELECT label FROM scenario_runs WHERE label IN (?, ?)`, [`goal ${running}`, `goal ${paused}`]);
+    expect(runs.map((r) => r.label)).toEqual([`goal ${running}`]);
+
+    // Before the fix the probe counted the paused goal as live and read 1/2 however often the pass ran: the bar was unreachable.
+    const to = new Date(Date.now() + MINUTE_MS).toISOString();
+    const reading = await readProbe('GOAL_PLAN_FRESH', new Date(Date.parse(to) - TWO_HOURS).toISOString(), to);
+    expect({ ok: reading.ok, total: reading.total }).toEqual({ ok: 1, total: 1 });
+
+    // Resumed, it is live again and owed a fresh plan.
+    expect(await resumeGoal(paused)).toBe(true);
+    expect((await readProbe('GOAL_PLAN_FRESH', new Date(Date.parse(to) - TWO_HOURS).toISOString(), to)).total).toBe(2);
   });
 });
 

@@ -28,6 +28,7 @@ import {
 import { classifyFreeLaneFailure, WEAKNESS_MIN_COUNT, type Weakness } from '../../domain/improvement.ts';
 import { BRAIN_PROJECT_SLUG } from '../../domain/binPurpose.ts';
 import { readMetric } from '../improvement/scoreboard.ts';
+import { LIVE_GOAL_SQL } from '../goals/live.ts';
 
 const HOUR = 3_600_000;
 const n = (value: number | string | null | undefined): number => Number(value ?? 0);
@@ -281,11 +282,15 @@ export async function readProbe(probe: Probe, from: string, to: string): Promise
   }
 }
 
-/** Live goals with a target, not yet due-passed: the goals a plan is owed to. */
+/**
+ * Live goals (`LIVE_GOAL_SQL`, the plan pass's own definition: a paused goal is
+ * deliberately not re-read, so it is not owed a fresh plan), not yet due-passed:
+ * the goals a plan is owed to.
+ */
 async function liveTargetGoals(to: string): Promise<{ id: string; projectId: string | null }[]> {
   const rows = await getDb().all<{ id: string; target_project_id: string | null }>(
     `SELECT id, target_project_id FROM workstreams
-      WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL
+      WHERE ${LIVE_GOAL_SQL}
         AND (due_at IS NULL OR due_at > ?)
       ORDER BY created_at DESC LIMIT 20`,
     [to],

@@ -125,6 +125,7 @@ import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 import { blockerResolutions, type Resolution } from './resolution.ts';
 import { effectiveDueAtOfRow } from '../../domain/executionWindow.ts';
+import { isLiveGoal } from './live.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -6338,7 +6339,7 @@ export async function advanceGoalPlans(
   // When each unpaused goal's plan was last read: its last stored reading, the
   // last scenario run a stored reading references, or this process's own read.
   // Two grouped reads for the pass, so the order costs no per-goal query.
-  const live = goals.filter((row) => !row.paused_at).map((row) => row.id);
+  const live = goals.filter(isLiveGoal).map((row) => row.id);
   const lastStored = new Map<string, number>();
   if (live.length > 0) {
     const marks = live.map(() => '?').join(', ');
@@ -6370,7 +6371,7 @@ export async function advanceGoalPlans(
     // A paused goal keeps its outcome on the record and spends nothing: no
     // re-read, no search round, no construction (an operator PAUSE must stop
     // the planning and discovery spend, not only the queue's priority).
-    if (pausedAt) continue;
+    if (!isLiveGoal({ paused_at: pausedAt })) continue;
     if (options.maxReads !== undefined && read >= options.maxReads) continue;
     const fingerprint = async (): Promise<string | null> => (projectId ? planInputsFingerprint(projectId, id) : null);
     const inputs = since && now.getTime() - since >= PLAN_EVIDENCE_FLOOR_MS && now.getTime() - since < PLAN_REFRESH_MS ? await fingerprint() : null;
