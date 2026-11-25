@@ -365,6 +365,17 @@ async function stall(): Promise<void> {
   await q('gap_authorized_24h', `SELECT COUNT(*) AS n, MAX(o.unresolved_gap_authorized_at) AS last FROM research_orchestrations o WHERE o.unresolved_gap_authorized_at >= ?`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
   await q('cycle', `SELECT generation, state, last_ran_at, SUBSTR(COALESCE(last_error, ''), 1, 600) AS last_error FROM russell_cycle LIMIT 1`);
   await q('filed_needs', `SELECT nd.id, nd.state, nd.request_key, nd.opportunity_id, nd.updated_at FROM cash_needs nd WHERE nd.candidate_id IN (SELECT m.candidate_id FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp})`, [like]);
+  // What `parkStoppedMissions` selects (its WHERE and ORDER), and the head of its window.
+  await q('park_window', `SELECT m.state, COALESCE(o.unresolved_gap_policy, '-') AS gap, CASE WHEN o.project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval' ELSE 'other' END AS cls,
+      CASE WHEN EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED') THEN 1 ELSE 0 END AS acc_frag,
+      COUNT(*) AS n, MIN(m.updated_at) AS oldest, MAX(m.updated_at) AS newest
+     FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id
+    WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN') AND o.status = 'NEEDS_HUMAN' GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`);
+  await q('park_head', `SELECT m.id, m.state, m.updated_at, COALESCE(o.unresolved_gap_policy, '-') AS gap, o.current_pass, SUBSTR(COALESCE(o.failure_reason, ''), 1, 120) AS why
+     FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id
+    WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN') AND o.status = 'NEEDS_HUMAN'
+    ORDER BY CASE WHEN m.state = 'NEEDS_HUMAN' THEN 1 ELSE 0 END, m.updated_at LIMIT 6`);
+  await q('park_events_6h', `SELECT e.event_type, COUNT(*) AS n, MAX(e.created_at) AS last FROM project_events e WHERE e.created_at >= ? AND e.event_type IN ('RUSSELL_MISSION_FAILED', 'RUSSELL_MISSION_PARKED', 'RUSSELL_ROUTINE_DECISION', 'RUSSELL_HUMAN_REQUESTED') GROUP BY 1`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]);
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 
