@@ -718,8 +718,9 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   const room = ROUTES_PER_DAY - filedToday;
   if (room <= 0) return { kind: 'NOT_DUE', reason: `${filedToday} routes were filed for this goal in the last day` };
 
+  // The ask is stamped at the moment it was judged due, the same clock the next due check reads it against.
   const record = (summary: string, detail: Record<string, unknown>) =>
-    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail, actorRef: 'BRAIN' });
+    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail, actorRef: 'BRAIN', at: now.toISOString() });
   const clock = deps.clock ?? Date.now;
   const deadline = clock() + ROUTE_BUDGET_MS;
   const chats = await (deps.chats ?? (() => operatorChats(deps, () => Math.max(5_000, Math.min(ROUTE_ATTEMPT_MS, deadline - clock())))))().catch(() => []);
