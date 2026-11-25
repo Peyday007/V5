@@ -39,7 +39,7 @@ import { getOrchestration, LANE_SHORT_FRAGMENT_SQL } from '../../repos/research.
 import { listGoals } from '../../repos/russellAuthority.ts';
 import { answerHumanRequest, getHumanRequest, getMission } from '../../repos/russellMissions.ts';
 import type { RussellHumanRequest, ResearchOrchestration } from '../../domain/types.ts';
-import { NEEDS_HUMAN_CHOICES } from './needsHuman.ts';
+import { JUDGE_ROUND_STALL_PREFIX, NEEDS_HUMAN_CHOICES } from './needsHuman.ts';
 
 /** How long a card waits before Brain answers it, so repair passes go first. */
 export const ROUTINE_DECISION_GRACE_MS = 10 * 60_000;
@@ -293,6 +293,14 @@ export type StandingFiling =
   | { decided: false; because: DeclinedBecause; reason: string; status?: string };
 
 /**
+ * How long a judge park waits for a corrected round that cannot start before
+ * the standing grant decides it RECORD_GAPS instead (`fileWithGapsUnderStandingGrant`).
+ * Two hours: past a database's shedding spells and a round or two finishing,
+ * and well short of the day production's parks waited.
+ */
+export const JUDGE_ROUND_WAIT_MS = 2 * 3_600_000;
+
+/**
  * The one decide-and-file step (§80): file a stopped packet's audited report
  * with its unresolved questions named, under the project's live standing
  * grant, recorded against the grant's owner.
@@ -331,10 +339,35 @@ export async function fileWithGapsUnderStandingGrant(input: {
     };
   }
   const { assessJudgeRound } = await import('../research/judgeRound.ts');
+  const nowMs = input.nowMs ?? Date.now();
+  let why = input.why;
   if ((await assessJudgeRound(orchestration)).kind === 'RESUME') {
-    return { decided: false, because: 'JUDGE_ROUND_RESUMING', reason: 'Brain is about to run a corrected round on it' };
+    /*
+     * A corrected round defers the decision only while one can actually start.
+     *
+     * Production 2026-11-25 18:40Z (`planningEval stall --run all`): 71 judge
+     * parks read RESUME — 31 of them evaluation goals' — while 16 resumed
+     * rounds, the oldest from 11-21, sat RESEARCHING behind the search-bound
+     * free lane and held all 12 of the resume pass's live slots, so nothing
+     * had resumed since 10:02Z. Every pass here declined them as "about to be
+     * resumed", and so did every pass after: their audited reports and
+     * accepted claims reached no plan, the oldest for a day. A park that has
+     * waited `JUDGE_ROUND_WAIT_MS` with no round able to start is filed now
+     * with the judge's follow-ups named as its unresolved gaps; one that can
+     * start still waits for the resume pass, which takes it this tick.
+     */
+    const { judgeRoundStall } = await import('./needsHuman.ts');
+    const stall = await judgeRoundStall();
+    const waited = nowMs - Date.parse(orchestration.updatedAt);
+    if (!stall || !(waited >= JUDGE_ROUND_WAIT_MS)) {
+      return { decided: false, because: 'JUDGE_ROUND_RESUMING', reason: 'Brain is about to run a corrected round on it' };
+    }
+    why =
+      `the judge asked for more research, and for ${Math.round(waited / 60_000)} minutes no corrected round could start ` +
+      `(${stall.slice(JUDGE_ROUND_STALL_PREFIX.length).replace(/^ — /, '')}), so its audited report is filed with the judge's ` +
+      'follow-up questions named as unresolved gaps rather than held for a round that does not come';
   }
-  const now = new Date(input.nowMs ?? Date.now()).toISOString();
+  const now = new Date(nowMs).toISOString();
   const grant = (await listGoals(orchestration.projectId)).find(
     (goal) => goal.state === 'ACTIVE' && (!goal.expiresAt || goal.expiresAt > now),
   );
@@ -347,7 +380,7 @@ export async function fileWithGapsUnderStandingGrant(input: {
     return { decided: false, because: 'GRANT_OWNER_UNRESOLVED', reason: 'the grant owner cannot be resolved' };
   }
 
-  const reason = `Decided by Brain under the standing research grant “${grant.name}” (${grant.id}): ${input.why}.`;
+  const reason = `Decided by Brain under the standing research grant “${grant.name}” (${grant.id}): ${why}.`;
   const { authorizeUnresolvedGaps } = await import('../research/gapPolicy.ts');
   const authorized = await authorizeUnresolvedGaps({
     orchestrationId: orchestration.id,
