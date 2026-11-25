@@ -152,6 +152,15 @@ async function read(): Promise<void> {
       `SELECT o.status AS state, COUNT(*) AS n FROM research_orchestrations o WHERE o.project_id = ? GROUP BY o.status ORDER BY n DESC`,
       [project.id],
     );
+    // What the goal's own loop recorded: route proposals and why, and the dives its openings started.
+    const goalEvents = await getDb().all<{ kind: string; summary: string; created_at: string }>(
+      `SELECT kind, summary, created_at FROM workstream_events WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 25`,
+      [goal.id],
+    );
+    const cashEvents = await getDb().all<{ kind: string; n: number }>(
+      `SELECT kind, COUNT(*) AS n FROM cash_events WHERE project_id = ? GROUP BY kind ORDER BY n DESC LIMIT 20`,
+      [project.id],
+    ).catch(() => []);
     const plan = reading && !('error' in reading) ? reading : null;
     const report = plan ? planningReportLines(planningReport(plan as never, goal.dueAt ?? null)) : [];
     const out = {
@@ -168,6 +177,8 @@ async function read(): Promise<void> {
         : null,
       openings: cards,
       research,
+      goalEvents: goalEvents.map((e) => ({ at: e.created_at, kind: e.kind, summary: e.summary.slice(0, 300) })),
+      cashEvents,
     };
     console.log(`EVAL_CASE ${kase} ${JSON.stringify(out)}`);
   }
