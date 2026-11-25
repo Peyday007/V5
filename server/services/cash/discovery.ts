@@ -1156,7 +1156,13 @@ export async function openGoalDiscovery(input: {
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(t.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
-  if ((await roundsStillResearching(mine)) >= liveCap) return null;
+  /*
+   * Rounds that never launched hold no slot of the lens search
+   * (`roundsHoldingSlots`): production 2026-11-25 read 0 of 20 goals short of
+   * a recommendable plan opening a round, the live cap full of stalled rounds.
+   * Constructed rounds keep their own rule (`openConstructedRound`).
+   */
+  if ((await roundsHoldingSlots(mine, now, liveCap)) >= liveCap) return null;
   /*
    * The fixed angles are a starting point, not the whole map: Brain's own
    * industry map (`industry_nodes`, filled from classification systems and
@@ -1450,12 +1456,40 @@ export const UNLAUNCHED_YIELDS_AFTER_MS = 60 * 60 * 1000;
  * `UNLAUNCHED_YIELDS_AFTER_MS`: a healthy tick launches one within minutes, so
  * such a round is queued for the research grant and researches nothing.
  */
-export async function staleUnlaunchedRounds(rounds: readonly CashDiscoveryRound[], now: string): Promise<number> {
-  const waiting = rounds.filter((one) => one.state === 'OPEN' && Date.parse(now) - Date.parse(one.openedAt) >= UNLAUNCHED_YIELDS_AFTER_MS);
+export async function staleUnlaunchedRounds(rounds: readonly CashDiscoveryRound[], now: string, after: number = UNLAUNCHED_YIELDS_AFTER_MS): Promise<number> {
+  const waiting = rounds.filter((one) => one.state === 'OPEN' && Date.parse(now) - Date.parse(one.openedAt) >= after);
   if (waiting.length === 0) return 0;
   const missions = await missionsForRounds(waiting.map((one) => one.candidateId));
   return waiting.filter((one) => !missions.get(one.candidateId)?.latest).length;
 }
+
+/**
+ * How many of these rounds hold a slot of a live cap of `cap`: those still
+ * researching (`roundsStillResearching`), less those that never launched
+ * (`staleUnlaunchedRounds`, past `STALLED_ROUND_YIELDS_AFTER_MS`) — queued
+ * for the research grant, researching nothing.
+ *
+ * Until 2026-11-25 only a price re-ask was let past such rounds, so a goal
+ * whose rounds waited on the grant held its whole cap with research that was
+ * not running and opened nothing: production read 0 of 20 goals short of a
+ * recommendable plan opening a round in the window ("live cap full of stalled
+ * rounds"). A goal's lens rounds now count slots this way. At most `cap` of them yield, so a goal never holds more than twice
+ * its cap open however long the grant stays shut, and the grant's own cap
+ * still decides every launch. A round with a mission keeps its slot.
+ */
+export async function roundsHoldingSlots(rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<number> {
+  const researching = await roundsStillResearching(rounds);
+  if (researching === 0) return 0;
+  return researching - Math.min(await staleUnlaunchedRounds(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS), Math.max(0, cap));
+}
+
+/**
+ * How long a goal round may wait with no mission before its slot is given to
+ * the next lens (`roundsHoldingSlots`). Longer than a price re-ask's hour: an
+ * ordinary lens round is not one answer from the plan, so it waits out several
+ * grant cycles before another is asked beside it.
+ */
+export const STALLED_ROUND_YIELDS_AFTER_MS = 6 * 60 * 60 * 1000;
 
 /** How long after its last round settled an arrangement may be re-asked for its missing price. */
 export const PRICE_REASK_AFTER_MS = 6 * 60 * 60 * 1000;
