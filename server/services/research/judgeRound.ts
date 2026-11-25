@@ -46,7 +46,7 @@ import {
   transitionMission,
   withdrawRequest,
 } from '../../repos/russellMissions.ts';
-import { binForOrchestration, ownerDirectedPacketIdsSql, regrantBinAttempts, reopenNeedsHumanBin } from '../../repos/bins.ts';
+import { binForOrchestration, liveGoalPacketIdsSql, ownerDirectedPacketIdsSql, regrantBinAttempts, reopenNeedsHumanBin } from '../../repos/bins.ts';
 import { parseJson } from '../../repos/util.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { AuditGap, ResearchOrchestration } from '../../domain/types.ts';
@@ -437,13 +437,15 @@ export async function liveJudgeRoundCap(): Promise<number> {
 
 /**
  * The packets parked on a judge's PATCH or MORE_RESEARCH, in the order the resume pass takes them:
- * the owner's directed goal first, then oldest park first. Without the first key a goal's packet
+ * the owner's directed goal first, then any other approved, live goal's packets
+ * (`liveGoalPacketIdsSql`), then oldest park first. Without the goal keys a goal's packet
  * parked today waited behind every older park for one of the few live slots (92 parked, ~10 live
- * on 2026-11-24) while it was the critical path of the only goal the owner set.
+ * on 2026-11-24) while it was the critical path of a goal the owner set.
  */
 export async function judgeParkedPacketIds(): Promise<string[]> {
   const rows = await getDb().all<{ id: string; owned: number }>(
-    `SELECT id, CASE WHEN id IN (${ownerDirectedPacketIdsSql()}) THEN 0 ELSE 1 END AS owned
+    `SELECT id, CASE WHEN id IN (${ownerDirectedPacketIdsSql()}) THEN 0
+                     WHEN id IN (${liveGoalPacketIdsSql()}) THEN 1 ELSE 2 END AS owned
        FROM research_orchestrations
       WHERE status = 'NEEDS_HUMAN' AND verdict IN ('PATCH', 'MORE_RESEARCH') AND audit_id IS NOT NULL
       ORDER BY owned ASC, updated_at ASC LIMIT 200`,

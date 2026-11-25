@@ -32,6 +32,9 @@ import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSessio
 import { normalizeSessionRef, sameProviderSession, sessionSpellings } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
 import { classifyBinPurpose, OWNER_DIRECTED_GOAL_IDS, type PurposeDecision } from '../domain/binPurpose.ts';
+import { goalLinksLiveSql, goalPacketIdsSql, LIVE_GOAL_IDS_SQL, liveGoalPacketIdsSql } from '../services/goals/goalWork.ts';
+
+export { liveGoalPacketIdsSql };
 import { repositoryIdOf } from '../services/bins/routing.ts';
 import { observeConnectorArrival } from '../services/fleet/connectorBinding.ts';
 import { chargesToAuth, connectorHealth } from '../services/fleet/connectorHealth.ts';
@@ -1667,25 +1670,40 @@ export function purposeAdmitsSql(prefix: string): string {
  * selects nothing.
  */
 export function ownerDirectedPacketIdsSql(): string {
-  const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
-  if (ids.length === 0) return 'SELECT NULL WHERE 1 = 0';
-  const list = ids.map((id) => `'${id}'`).join(', ');
-  const live = `gl.workstream_id IN (${list}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
-  return (
-    `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'PACKET' AND gl.ref IS NOT NULL` +
-    ` UNION SELECT gm.orchestration_id FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
-    ` WHERE ${live} AND gl.kind = 'MISSION' AND gm.orchestration_id IS NOT NULL` +
-    ` UNION SELECT gm.orchestration_id FROM workstream_links gl JOIN russell_missions gm ON gm.candidate_id = gl.ref` +
-    ` WHERE ${live} AND gl.kind = 'CANDIDATE' AND gm.orchestration_id IS NOT NULL`
-  );
+  const goals = ownerDirectedGoalIdsSql();
+  return goals === null ? 'SELECT NULL WHERE 1 = 0' : goalPacketIdsSql(goals);
 }
 
 export function ownerDirectedGoalBinSql(prefix: string): string {
-  const outer = prefix === '' ? 'bins.' : prefix;
+  const goals = ownerDirectedGoalIdsSql();
+  return goals === null ? '(1 = 0)' : goalBinSql(prefix, goals);
+}
+
+/** The owner-directed goals as an id list for `IN (…)`, or null when there is none. */
+function ownerDirectedGoalIdsSql(): string | null {
   const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
-  if (ids.length === 0) return '(1 = 0)';
-  const list = ids.map((id) => `'${id}'`).join(', ');
-  const live = `gl.workstream_id IN (${list}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
+  return ids.length === 0 ? null : ids.map((id) => `'${id}'`).join(', ');
+}
+
+/**
+ * A bin any approved, live goal reaches, by `ownerDirectedGoalBinSql`'s
+ * resolution. Boolean, never NULL, no parameters. An ordering key only: it
+ * never admits a bin brain-only mode holds back (`purposeAdmitsSql` keeps the
+ * owner's one exception), so it moves the goal's work ahead of untargeted
+ * backlog without widening who may run it.
+ */
+export function liveGoalBinSql(prefix: string): string {
+  return goalBinSql(prefix, LIVE_GOAL_IDS_SQL);
+}
+
+/** An `ORDER BY` key over `bins`: 0 for a bin a live goal reaches, 1 otherwise. */
+export function liveGoalBinFirstSql(prefix: string): string {
+  return `CASE WHEN ${liveGoalBinSql(prefix)} THEN 0 ELSE 1 END`;
+}
+
+function goalBinSql(prefix: string, goals: string): string {
+  const outer = prefix === '' ? 'bins.' : prefix;
+  const live = goalLinksLiveSql(goals);
   // A mission the goal links directly (by its id) or through its candidate (by `candidate_id`), as `goals/model.ts` reads them.
   const missions = (column: 'bin_id' | 'orchestration_id'): string =>
     `SELECT gm.${column} FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
@@ -1693,7 +1711,7 @@ export function ownerDirectedGoalBinSql(prefix: string): string {
     ` UNION SELECT gm.${column} FROM workstream_links gl JOIN russell_missions gm ON gm.candidate_id = gl.ref` +
     ` WHERE ${live} AND gl.kind = 'CANDIDATE' AND gm.${column} IS NOT NULL`;
   return (
-    `((${outer}orchestration_id IS NOT NULL AND ${outer}orchestration_id IN (${ownerDirectedPacketIdsSql()}))` +
+    `((${outer}orchestration_id IS NOT NULL AND ${outer}orchestration_id IN (${goalPacketIdsSql(goals)}))` +
     ` OR (${outer}factory_campaign_id IS NOT NULL AND ${outer}factory_campaign_id IN (` +
     `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'CAMPAIGN' AND gl.ref IS NOT NULL))` +
     ` OR ${outer}id IN (${missions('bin_id')}))`
@@ -1988,7 +2006,7 @@ export async function listDispatchableBinHeads(
   const rows = await getDb().all<BinRow>(
     `SELECT ${BIN_HEAD_COLUMNS} FROM bins
       WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
-      ORDER BY priority DESC, created_at, rowid
+      ORDER BY priority DESC, ${liveGoalBinFirstSql('')}, created_at, rowid
       LIMIT ?`,
     [now, now, now, now, Math.min(500, Math.max(1, limit))],
   );
@@ -2014,7 +2032,7 @@ export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
   const rows = await getDb().all<BinRow>(
     `SELECT * FROM bins
       WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
-      ORDER BY priority DESC, created_at, rowid
+      ORDER BY priority DESC, ${liveGoalBinFirstSql('')}, created_at, rowid
       LIMIT ?`,
     [now, now, now, now, Math.min(500, Math.max(1, limit))],
   );
@@ -2146,7 +2164,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
           ${familyClause.sql}
           ${recoveryOnly ? 'AND id = ?' : ''}
           ${passedOver.length > 0 ? `AND id NOT IN (${passedOver.map(() => '?').join(', ')})` : ''}
-        ORDER BY priority DESC, ${STAGE_RANK_SQL}, created_at, rowid
+        ORDER BY priority DESC, ${liveGoalBinFirstSql('')}, ${STAGE_RANK_SQL}, created_at, rowid
         LIMIT 25`,
       [...(recoveryOnly ? [...params, recoveryOnly] : params), ...passedOver],
     );

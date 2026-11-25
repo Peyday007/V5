@@ -67,6 +67,77 @@ export function goalPriceQuestionOf(idea: { title: string; statement: string }):
   return ref && buyer ? { ref, buyer } : null;
 }
 
+/**
+ * Every approved, live goal, as one uncorrelated sub-select: a goal a person
+ * set with a target (`target_metric`, written only through `domain/goals.ts`
+ * by its owner), and not archived, paused or cancelled. The one reading of "a
+ * live goal" the research order composes — launch and judging here
+ * (`goalIdeaSql`), the shared queue (`servesGoalSearch`), bins
+ * (`liveGoalBinSql`) and parked packets (`judgeParkedPacketIds`) — so a paused
+ * goal's research drops back into the ordinary order by the same decision that
+ * holds its bins. No parameters.
+ */
+export const LIVE_GOAL_IDS_SQL =
+  'SELECT lg.id FROM workstreams lg WHERE lg.target_metric IS NOT NULL' +
+  ' AND lg.archived_at IS NULL AND lg.paused_at IS NULL AND lg.cancelled_at IS NULL';
+
+/**
+ * The ideas any approved, live goal links — the idea itself, or a mission it
+ * links — read the way the goal model resolves its work (`goals/model.ts`).
+ *
+ * Production 2026-11-24: the goals created 11-19 each in their own project
+ * (`wst_db2e2e0e…`, `wst_fa4761…`, …) carried 13–15 research bins READY at
+ * 0/5 for five days while ~914 ideas waited Brain-wide. Their research is
+ * linked to the goal, not filed under a `goal-…` round bucket, so no goal tier
+ * recognised it: it launched, was judged and was claimed in the same order as
+ * untargeted backlog discovery. Every live goal's linked research is now goal
+ * work, in every order that already puts goal work first. No parameters.
+ */
+export function liveGoalCandidateIdsSql(): string {
+  const live = goalLinksLiveSql(LIVE_GOAL_IDS_SQL);
+  return (
+    `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'CANDIDATE' AND gl.ref IS NOT NULL` +
+    ` UNION SELECT gm.candidate_id FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
+    ` WHERE ${live} AND gl.kind = 'MISSION' AND gm.candidate_id IS NOT NULL`
+  );
+}
+
+/** A goal's live, pursuing links, aliased `gl`. `goals` is an id list or an uncorrelated sub-select. */
+export function goalLinksLiveSql(goals: string): string {
+  return `gl.workstream_id IN (${goals}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
+}
+
+/**
+ * The packets these goals reach — linked directly, or through a mission the
+ * goal links by id or by candidate — as one uncorrelated sub-select
+ * (`repos/bins.ts` explains why it is never correlated). No parameters.
+ */
+export function goalPacketIdsSql(goals: string): string {
+  const live = goalLinksLiveSql(goals);
+  return (
+    `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'PACKET' AND gl.ref IS NOT NULL` +
+    ` UNION SELECT gm.orchestration_id FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
+    ` WHERE ${live} AND gl.kind = 'MISSION' AND gm.orchestration_id IS NOT NULL` +
+    ` UNION SELECT gm.orchestration_id FROM workstream_links gl JOIN russell_missions gm ON gm.candidate_id = gl.ref` +
+    ` WHERE ${live} AND gl.kind = 'CANDIDATE' AND gm.orchestration_id IS NOT NULL`
+  );
+}
+
+/** The packets any approved, live goal reaches. No parameters. */
+export function liveGoalPacketIdsSql(): string {
+  return goalPacketIdsSql(LIVE_GOAL_IDS_SQL);
+}
+
+/**
+ * A boolean over a `work_items` row (no alias): its packet serves an approved,
+ * live goal. The shared queue's tie-break inside one priority, so every
+ * claimant — the free lane and a Routine alike — takes a goal's research before
+ * untargeted backlog at the same priority. No parameters.
+ */
+export function liveGoalWorkItemSql(): string {
+  return `(orchestration_id IS NOT NULL AND orchestration_id IN (${liveGoalPacketIdsSql()}))`;
+}
+
 /** A boolean SQL expression over a `russell_candidates` row aliased `c`; true for the goal's own ideas. No parameters. */
 export function goalIdeaSql(c: string): string {
   return `(${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
@@ -80,7 +151,8 @@ export function goalIdeaSql(c: string): string {
                     WHERE gr3.bucket_id LIKE 'goal-%' AND gn.state = 'OPEN' AND gn.candidate_id IS NOT NULL)
     OR ${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
                     WHERE gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL
-                      AND (gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' OR ${planQuestionSql('gp')})))`;
+                      AND (gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' OR ${planQuestionSql('gp')}))
+    OR ${c}.id IN (${liveGoalCandidateIdsSql()}))`;
 }
 
 /** A boolean SQL expression: this idea is one of a goal's own search rounds (`goal-…` bucket). No parameters. */
