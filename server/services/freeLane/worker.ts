@@ -993,24 +993,13 @@ export function hostClass(url: string): 'official' | 'reference' | 'commercial' 
   return 'commercial';
 }
 
-/**
- * How `ask` asks. `shape`, when given, judges a reply that parsed: `miss`
- * returns why it is not the answer wanted (or null when it is), and `repair`
- * words the next ask from that reason. Either way a reply costs at most the two
- * calls `ask` makes; a shape miss is not a reason for the caller to ask again.
- */
-interface AskOptions {
-  json?: boolean;
-  shape?: { miss: (parsed: Record<string, unknown>) => string | null; repair: (why: string) => string };
-}
-
 async function ask(
   completer: Completer,
   config: LaneConfig,
   model: string,
   prompt: string,
   onFail: (why: string) => void = () => undefined,
-  options: AskOptions = {},
+  options: { json?: boolean } = {},
 ): Promise<Record<string, unknown> | null> {
   let asked = prompt;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1028,15 +1017,7 @@ async function ask(
       continue;
     }
     const parsed = firstJson(text);
-    if (parsed) {
-      // A reply that parsed in the wrong shape spends this loop's next attempt,
-      // told what it held — never a second loop of its own.
-      const miss = options.shape?.miss(parsed) ?? null;
-      if (miss === null) return parsed;
-      onFail(miss);
-      asked = options.shape!.repair(miss);
-      continue;
-    }
+    if (parsed) return parsed;
     const shape = replyShape(text);
     onFail(`no JSON in a ${text.length}-character reply: ${shape}`);
     // An empty reply says nothing and is asked again as it was; a reply with words is told what was wrong.
@@ -1680,7 +1661,7 @@ export function meteredIo(
 }
 
 /** `ask` for one item, recording why on the item when the model gives nothing usable. */
-async function askFor(ctx: Ctx, prompt: string, options: AskOptions = {}): Promise<Record<string, unknown> | null> {
+async function askFor(ctx: Ctx, prompt: string, options: { json?: boolean } = {}): Promise<Record<string, unknown> | null> {
   return ask(
     ctx.completer,
     ctx.config,
@@ -2352,62 +2333,6 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
   );
 }
 
-/** A list whose every entry is an object. */
-const objectList = (value: unknown): value is Record<string, unknown>[] =>
-  Array.isArray(value) && value.length > 0 && value.every((one) => one && typeof one === 'object' && !Array.isArray(one));
-
-/**
- * The fragments a RESEARCH_PLAN reply proposed, wherever a JSON answer put them,
- * or null. Pure.
- *
- * Production, 2026-11-24: auto/best-coding had 5 of 5 RESEARCH_PLAN answers
- * refused as "the model returned no usable JSON" — the default reason, recorded
- * whenever `plan` found no top-level `fragments` list, including on a reply that
- * parsed. A model answers `{"plan":{"fragments":[…]}}`, or a bare list (which
- * `firstJson` reads as `{claims:[…]}`). Those are the same proposal, and read as
- * one; nothing is invented, and `brain_propose_fragments` judges every fragment
- * exactly as before.
- */
-export function planFragmentsOf(raw: Record<string, unknown>): { fragments: Record<string, unknown>[]; rationale?: string } | null {
-  const rationaleOf = (from: Record<string, unknown>): { rationale?: string } =>
-    typeof from['rationale'] === 'string' ? { rationale: from['rationale'] } : {};
-  if (objectList(raw['fragments'])) return { fragments: raw['fragments'], ...rationaleOf(raw) };
-  // A bare list, read by `firstJson` as claims, whose entries ask questions.
-  const keys = Object.keys(raw);
-  if (keys.length === 1 && objectList(raw['claims']) && raw['claims'].every((one) => 'question' in one)) {
-    return { fragments: raw['claims'] };
-  }
-  // One level of wrapping: {"plan": {"fragments": […]}} or {"proposal": […fragments]}.
-  const wrapped = keys.filter((key) => key !== 'rationale');
-  if (wrapped.length === 1) {
-    const inner = raw[wrapped[0]!];
-    if (objectList(inner) && inner.every((one) => 'question' in one)) return { fragments: inner, ...rationaleOf(raw) };
-    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
-      const nested = inner as Record<string, unknown>;
-      if (objectList(nested['fragments'])) return { fragments: nested['fragments'], ...rationaleOf(nested), ...rationaleOf(raw) };
-    }
-  }
-  return null;
-}
-
-/**
- * Why a RESEARCH_PLAN reply that parsed proposed no fragments, naming what it
- * held and quoting what it sent, bounded and with credentials removed. Pure.
- *
- * The 2026-11-24 incident recorded only "the model returned no usable JSON":
- * no row kept a word of the five replies, so a fix could only be aimed at a
- * guessed shape. The reason is what the incident report quotes as "what the
- * model sent", so it carries the reply itself, and the next fix is aimed at it.
- */
-export function planMissReason(raw: Record<string, unknown>): string {
-  const fragments = raw['fragments'];
-  const held = Array.isArray(fragments)
-    ? `a "fragments" list of ${fragments.length} entr${fragments.length === 1 ? 'y' : 'ies'} that are not all objects`
-    : `keys ${JSON.stringify(Object.keys(raw).slice(0, 8))}`;
-  const sent = redactCredentials(redactSecrets(JSON.stringify(raw).replace(/\s+/g, ' '))).slice(0, 160);
-  return `the reply parsed but proposed no fragments: it held ${held}, and a plan needs a top-level "fragments" list of objects; it sent ${sent}`.slice(0, 400);
-}
-
 async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {
   const orchestration = (assignment['orchestration'] ?? {}) as Record<string, unknown>;
   const schema = schemaForModel('brain_propose_fragments');
@@ -2422,30 +2347,13 @@ async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<bool
     'together answer it. Each fragment asks one answerable question, states its geography, timeframe, ' +
     'population and definitions, and declares the evidence lanes that would settle it and what counts ' +
     `as complete. Reply with one JSON object matching: ${JSON.stringify(schema)}`;
-  /*
-   * A reply that parsed but proposed no fragments is told so, with what it held,
-   * on `ask`'s own second attempt — the same prompt again is the same reply
-   * again (temperature 0). Until 22981c4 it failed under the default "no usable
-   * JSON"; that commit re-asked through a second `ask`, so one item could cost
-   * four model calls. The judgement now lives inside the one loop: two at most.
-   */
-  const raw = await askFor(ctx, prompt, {
-    json: true,
-    shape: {
-      miss: (parsed) => (planFragmentsOf(parsed) ? null : planMissReason(parsed)),
-      repair: (why) =>
-        `${prompt}\n\nYour previous reply ${why.replace(/^the reply /, '')}. Reply again with ONLY one JSON ` +
-        'object whose top-level "fragments" key is the list of fragment objects: no prose, no code fence, no wrapping key.',
-    },
-  });
-  const read = raw ? planFragmentsOf(raw) : null;
-  if (!read) return false;
+  const answer = await askFor(ctx, prompt);
+  if (!answer || !Array.isArray(answer['fragments'])) return false;
   const ok = await submitWithRepair(
     ctx,
     'brain_propose_fragments',
-    read,
+    answer,
     (error, previous) => `${prompt}\n\nBrain refused your previous answer: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 6000)}\nCorrect it.`,
-    (answer) => planFragmentsOf(answer) ?? answer,
   );
   if (ok) await complete(ctx, 'free lane: fragments proposed');
   return ok;
