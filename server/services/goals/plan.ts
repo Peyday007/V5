@@ -6404,6 +6404,22 @@ export async function advanceGoalPlans(
     // re-read, no search round, no construction (an operator PAUSE must stop
     // the planning and discovery spend, not only the queue's priority).
     if (pausedAt) continue;
+    /*
+     * A goal with no route and a last route ask that yielded none is asked
+     * again on any pass, whatever this pass reads or widens. The ask was armed
+     * only from `widenGoalSearch`, which runs only after a read that wants more
+     * openings or a top-up with spare surfaces and a reading held in this
+     * process — so after a restart, under a read cap or while the scenario slot
+     * was busy, nothing armed it. Production, 2026-11-25: a goal whose ask
+     * failed at 04:07 had none recorded by 06:50, 40 minutes after a deploy.
+     * In the background and bounded by the goal's own record (`routeAskDue`).
+     */
+    {
+      const heldNow = lastReadings.get(id);
+      if (heldNow?.acceptance.status !== 'ACCEPTED' && !heldNow?.target.achieved) {
+        armRouteProposal(id, heldNow?.considered.map((one) => one.title) ?? [], now, {}, { retryOnly: true });
+      }
+    }
     if (options.maxReads !== undefined && read >= options.maxReads) continue;
     const last = await getDb().get<{ at: string | null }>(
       `SELECT MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?`,
