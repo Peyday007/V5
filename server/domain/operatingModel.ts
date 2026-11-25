@@ -131,7 +131,8 @@ const BROKERED = new RegExp(
     'broker(?:age|ed|ing|s)?',
     'referr(?:al|als|ing)',
     'refer (?:them|it|buyers|customers)',
-    'commission',
+    // A fee, never a licence: "a commissioned notary" holds a commission and brokers nothing (2026-11-24, r40).
+    'commission(?!ed\\b)',
     "finder'?s fee",
     'subcontract(?:ed|or|ors|ing)?',
     'independent (?:contractor|installer|crew|supplier|provider|cleaner|mover)s?',
@@ -169,6 +170,16 @@ const COORDINATES =
 /** A recorded fulfiller that is a third party rather than the owner or Brain. */
 const THIRD_PARTY_FULFILLER =
   /\b(?:contractor|subcontractor|supplier|vendor|partner|installer|crew|printer|manufacturer|wholesaler|provider|company|agency|studio|dropship)s?\b/i;
+/**
+ * A recorded fulfiller named as a licensed or regulated professional ("a commissioned
+ * notary signing agent", "Licensed electrician (quoted)"): somebody who holds a licence
+ * the owner does not claim, so a third party. Before, only business nouns (contractor,
+ * supplier, company) counted, and a regulated service performed by licensed
+ * professionals read as the owner's physical work and was dropped (2026-11-24, r40).
+ */
+const LICENSED_PARTY =
+  /\b(?:licensed|licenced|commissioned|certified|registered|accredited|bonded|board[- ]certified|credentialed)\b|\b(?:notar(?:y|ies)(?: public)?|signing agents?|attorneys?|lawyers?|solicitors?|paralegals?|cpas?|accountants?|enrolled agents?|appraisers?|inspectors?|electricians?|plumbers?|surveyors?|nurses?|physicians?|pharmacists?|interpreters?|translators?|brokers?|realtors?|agents? of record)\b/i;
+
 const OWNER_OR_BRAIN = /\b(?:brain|owner|me|myself|we|us|our team|a person|peyton)\b/i;
 
 /**
@@ -244,7 +255,7 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
   // Who the fulfiller is reads on the party it names, never on the words describing it (`fulfillerParty`).
   const party = fulfillerParty(fulfiller);
   const ownFulfiller = fulfiller !== '' && OWNER_OR_BRAIN.test(party) && !THIRD_PARTY_FULFILLER.test(fulfiller);
-  const thirdParty = fulfiller && THIRD_PARTY_FULFILLER.test(fulfiller) && !OWNER_OR_BRAIN.test(party);
+  const thirdParty = fulfiller && (THIRD_PARTY_FULFILLER.test(fulfiller) || LICENSED_PARTY.test(party)) && !OWNER_OR_BRAIN.test(party);
   const gig = words.match(OWNER_AS_GIG_WORKER)?.[0] ?? null;
   /*
    * A listing that recruits drivers or movers is a gig the operator would do
@@ -300,4 +311,18 @@ export function breaksOperatingModel(fit: OperatingFit): boolean {
  */
 export function sprintGoalLine(objective: string, lead = 'This is for'): string {
   return `${lead} a short cash sprint whose goal is: ${objective} ${OPERATING_MODEL_SENTENCE}`;
+}
+
+/**
+ * The licensed act an opening's words name, or null (2026-11-24 investigation, r40):
+ * a notarization, a signing, an inspection, a legal or tax filing made for a client.
+ * A regulated opening is evaluated with its licence as a constraint on who fulfils
+ * it — never dropped for being regulated (§105, and `cash/exclusions.ts`: a regulated
+ * role is assessed, not excluded). Matched on the words, never a model's judgment. Pure.
+ */
+const LICENSED_ACT =
+  /\b(?:notar(?:y|ies|ization|isation|ize|ise|ial)(?:\s+(?:public|signing|services?|acts?))?|loan[- ]signings?|signing agents?|apostilles?|(?:licen[cs]e|licen[cs]ing|commission|certification|permit|bond) (?:is )?required|(?:licensed|licenced|commissioned|certified|bonded) (?:[a-z-]+ ){0,2}(?:notar(?:y|ies)|agents?|professionals?|electricians?|plumbers?|inspectors?|appraisers?|brokers?|accountants?|attorneys?|interpreters?|translators?)|home inspections?|real[- ]estate appraisals?|legal representation|tax (?:return )?preparation|(?:electrical|plumbing|gas) work)\b/i;
+
+export function licensedActIn(text: string | null | undefined): string | null {
+  return text?.match(LICENSED_ACT)?.[0] ?? null;
 }

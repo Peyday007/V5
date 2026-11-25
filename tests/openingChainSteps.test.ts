@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { planIntegrity } from '../server/domain/planIntegrity.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import { COLLECTION_COST, openingMember, openingMembers, type OpeningChainMember } from '../server/services/goals/arrangementSteps.ts';
-import { planSteps, stepAsNextTest, type MarketTest, type PlanReading, type PlanStep } from '../server/services/goals/plan.ts';
+import { missingTransactionStages, planSteps, soleChainMember, stepAsNextTest, type MarketTest, type PlanReading, type PlanStep } from '../server/services/goals/plan.ts';
 import type { Reconstruction } from '../server/services/goals/reconstruction.ts';
 import { integrityInput } from '../server/services/goals/planIntegrityInput.ts';
 import { declaredInventory, type CapabilityInventory } from '../server/services/goals/stepExecutor.ts';
@@ -270,5 +270,45 @@ describe('a reconstruction that sells several openings', () => {
 
   it('a member the plan holds no facts for keeps the plan\'s one sale and one collection', () => {
     expect(build([a]).map((x) => x.label)).toEqual(["Sell the plan's openings", 'Collect payment']);
+  });
+});
+
+/*
+ * 2026-11-24 investigation (r28, r30): a startable plan read one step, "Establish
+ * buyers who have actually agreed", with no delivery and no collection, because
+ * the sale it measures was not among the reading's sales.
+ */
+describe('selling to measure is still a whole transaction', () => {
+  const measure = { link: 'CONVERSION' as const, test: 'Offer it to its reachable buyers for an actual sale or deposit.', by: 'BRAIN' as const, blocker: null };
+  const lone = member({ id: 'opp_m', title: 'Compliance filing pack', fulfils: { by: 'BRAIN', capability: 'PRODUCE_SPREADSHEET' } });
+  const build = (members: OpeningChainMember[], lead: string[] | null = null) =>
+    planSteps({ adoption, reconstruction: null, sales: [], nextTest: measure, permissionsMissing: [], capabilities: connected(), daysLeft: 30, members: new Map(members.map((m) => [m.id, m])), lead });
+
+  it('a lone "sell to measure" step on the plan\'s one opening is sequenced offer → deliver → collect', () => {
+    const s = build([lone]);
+    expect(s.map((x) => x.stage?.stage)).toEqual(['OFFER', 'DELIVER', 'COLLECT']);
+    expect(s[0]!.label).toBe('Sell "Compliance filing pack"');
+    expect(s[0]!.detail).toContain('actual sale or deposit');
+    expect(missingTransactionStages(s)).toEqual([]);
+    expect(integrity(s)).toEqual([]);
+  });
+
+  it('with no opening to sequence, the selling step names the stages it lacks', () => {
+    const s = build([]);
+    expect(s.map((x) => x.stage?.stage)).toEqual(['OFFER']);
+    expect(missingTransactionStages(s)).toEqual(['deliver', 'collect payment']);
+    expect(s[0]!.detail).toMatch(/Not yet a whole transaction: the plan holds no step to deliver or collect payment/);
+  });
+
+  it('several openings and no lead is no choice the steps make; a lead decides', () => {
+    const other = member({ id: 'opp_n', title: 'Second offer', fulfils: { by: 'BRAIN', capability: 'PRODUCE_SPREADSHEET' } });
+    expect(soleChainMember(new Map([lone, other].map((m) => [m.id, m])), null)).toBeNull();
+    expect(soleChainMember(new Map([lone, other].map((m) => [m.id, m])), ['opp_n'])?.id).toBe('opp_n');
+    expect(soleChainMember(new Map([[lone.id, lone]]), ['opp_absent'])).toBeNull();
+  });
+
+  it('a search that sells nothing lacks nothing; a sale lacking collection says so', () => {
+    expect(missingTransactionStages([{ stage: { stage: 'RESEARCH', costSource: 'NOT_SPENT' }, executor: null }] as never)).toEqual([]);
+    expect(missingTransactionStages([{ stage: { stage: 'OFFER', costSource: 'MODEL' } }, { stage: { stage: 'DELIVER', costSource: 'MODEL' } }] as never)).toEqual(['collect payment']);
   });
 });

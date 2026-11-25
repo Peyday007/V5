@@ -323,10 +323,18 @@ function buyerCounts(text: string, pattern: RegExp): Array<{ at: number; n: numb
     const sentence = sentenceAt(text, at);
     if (SPREAD_ACROSS_BEFORE.test(text.slice(sentence.start, at))) continue;
     const n = toInt(m[1]!);
-    if (n > 0 && n < 50_000_000) out.push({ at, n });
+    if (n > 0 && n < MAX_BUYERS) out.push({ at, n });
   }
   return out;
 }
+
+/**
+ * The most buyers one count may state. A consumer marketplace publishes its buyers
+ * in the tens of millions ("96 million active buyers"); before, a cap of 50 million
+ * read such a count as no count, and the market as unsized (2026-11-24
+ * investigation, r38). A rate's own counts keep their tighter bound.
+ */
+const MAX_BUYERS = 2_000_000_000;
 
 /** The sentence around a position: the text between the nearest sentence breaks. */
 function sentenceAt(text: string, at: number): { start: number; text: string } {
@@ -411,12 +419,76 @@ function readRates(text: string, buyerWords: string, buyerCount: RegExp): Stated
  * belongs to. Pure; every figure keeps its value.
  */
 function publishedCount(text: string): string {
+  const scale: Record<string, number> = { billion: 1_000_000_000, million: 1_000_000, thousand: 1_000, b: 1_000_000_000, m: 1_000_000, k: 1_000 };
   return text
-    .replace(/(\d+(?:\.\d+)?)\s*(million|thousand)\b/gi, (_, n: string, unit: string) =>
-      Math.round(Number(n) * (unit.toLowerCase() === 'million' ? 1_000_000 : 1_000)).toLocaleString('en-US'))
+    .replace(/(\d+(?:\.\d+)?)\s*(billion|million|thousand)\b/gi, (_, n: string, unit: string) =>
+      Math.round(Number(n) * scale[unit.toLowerCase()]!).toLocaleString('en-US'))
+    // A published shorthand: "96.5M active buyers", "1.2B users", "40k members" (r38).
+    .replace(/(?<![$£€\w.,])(\d+(?:\.\d+)?)(M|B|k|K)\b/g, (_, n: string, unit: string) =>
+      Math.round(Number(n) * scale[unit.toLowerCase()]!).toLocaleString('en-US'))
+    // "monthly active users" says how often they use the platform, never how often each buys.
+    .replace(/\b(?:daily|weekly|monthly|yearly|annual)\s+(active|unique)\b/gi, '$1')
     .replace(/\bU\.S\.(?=\s)/g, 'US')
     .replace(/\b501\s*\(c\)\s*\(\d{1,2}\)/gi, 'tax-exempt')
     .replace(/\((?:[a-z0-9]{1,3})\)/gi, '');
+}
+
+/** Plural nouns that are never a population of buyers, as a pattern's alternatives. */
+const NOT_BUYERS_LIST = `${NOT_A_BUYER_NOUN.source.replace(/^\^\(\?:|\)\$$/g, '')}|${RATE_NOUNS}|sellers|vendors|suppliers|providers|competitors|results|pages|followers|views|listings|posts|ads|visits|visitors|clicks|downloads|reviews|years|months|weeks|days|hours|dollars|times|miles`;
+/**
+ * A plural noun that names who holds a licence or enters a market — a person or an
+ * organisation ("notaries", "carriers", "electricians", "agencies", "LLCs") — never
+ * a thing registered to somebody ("2,100 kayaks are registered" counts kayak owners
+ * only for a payer of kayak owners, `payerHeldWords`), nor what is sold, done or measured.
+ */
+const POPULATION_NOUN = `(?!(?:${NOT_BUYERS_LIST})\\b)(?:[A-Za-z&'’-]*(?:ers|ors|ists|ants|ents|ies|ians|ees|ives)|LLCs|LLPs|corporations|entities|startups|ventures)`;
+const LICENSING = 'licensed|licenced|registered|certified|commissioned|accredited|permitted|bonded|chartered|credentialed|board-certified|practicing|practising';
+// A licence names its holder; a registration may be a thing's (a boat's, a vehicle's), so it is not one.
+const LICENCE_NOUNS = 'licenses|licences|permits|authorities|certifications|charters|commissions|credentials|endorsements';
+const LICENSED_COUNTS: readonly RegExp[] = [
+  // "12,400 licensed notaries", "3,100 licensed residential builders"
+  new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,2}?(?:${LICENSING})\\s+(?:[A-Za-z&'’-]+\\s+){0,3}?${POPULATION_NOUN}\\b`, 'gi'),
+  // "12,000 notaries (are) commissioned in Ohio", "3,000 carriers are registered"
+  new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,3}?${POPULATION_NOUN}\\s+(?:(?:are|were|is)\\s+)?(?:currently\\s+|now\\s+|actively\\s+)?(?:${LICENSING})\\b`, 'gi'),
+  // "6,500 active liquor licences": one holder per licence
+  new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(?:${LICENCE_NOUNS})\\b`, 'gi'),
+];
+const CREATED = 'granted|issued|formed|registered|licensed|licenced|filed|opened|incorporated|founded|launched|started|created|certified|commissioned|approved|admitted|added|chartered|permitted|established|born|enrolled|join|joins|joined|sign up|signs up|signed up|arrive|arrives';
+const CADENCE = `(?:every|each|a|per)\\s+(day|week|month|quarter|year)`;
+// A flow is of entrants, or of the licences that admit them (one holder each).
+const ENTRANT = `(?:${POPULATION_NOUN}|${LICENCE_NOUNS})`;
+const NEW_THINGS = `new(?:ly\\s+[a-z-]+)?\\s+(?:[A-Za-z&'’-]+\\s+){0,4}?(${ENTRANT})\\b`;
+const FLOWS: readonly RegExp[] = [
+  // "4,000 new authorities (are granted) every month", "4,000 authorities are granted every month"
+  new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:${NEW_THINGS}|(?:[A-Za-z&'’-]+\\s+){0,4}?(${ENTRANT})\\s+(?:are|were|is|get|gets)\\s+(?:newly\\s+)?(?:${CREATED})\\b)[^.;!?\\d]{0,60}?\\b${CADENCE}\\b`, 'gi'),
+  // "each month, about 1,500 new LLCs are formed"
+  new RegExp(`\\b${CADENCE},?\\s+(?:(?:about|around|roughly|some|over|nearly|approximately|more than)\\s+)?${COUNT}\\s+${NEW_THINGS}`, 'gi'),
+];
+
+/** The buyers a stated flow of new entrants brings inside the window, the smallest flow taken; null when none is stated. */
+function readFlow(text: string, window: number): VolumeReading | null {
+  let best: VolumeReading | null = null;
+  for (const [i, pattern] of FLOWS.entries()) {
+    for (const m of text.matchAll(pattern)) {
+      const [count, noun, period] = i === 0 ? [m[1]!, m[2] ?? m[3]!, m[4]!] : [m[2]!, m[3]!, m[1]!];
+      const at = (m.index ?? 0) + m[0]!.indexOf(count);
+      if (SUPPLYING_AFTER.test(text.slice((m.index ?? 0) + m[0]!.length))) continue;
+      if (SPREAD_ACROSS_BEFORE.test(text.slice(sentenceAt(text, at).start, at))) continue;
+      const n = toInt(count);
+      const days = PERIOD_DAYS[period.toLowerCase()]!;
+      const buyers = Math.floor((n * window) / days);
+      if (!(n > 0 && n < MAX_BUYERS) || buyers < 1) continue;
+      if (best && best.deals <= buyers) continue;
+      best = {
+        deals: buyers,
+        buyers,
+        everyDays: null,
+        counted: 'BUYERS',
+        basis: `${n} new ${noun.toLowerCase()} a ${period.toLowerCase()} are stated, so ${buyers} arrive as buyers in ${window} days, one purchase each`,
+      };
+    }
+  }
+  return best;
 }
 
 /** Read the deals a market can take inside `windowDays`, or null when no number is stated. */
@@ -448,7 +520,26 @@ export function readVolume(raw: string, windowDays: number, payer: string | null
     }
   }
 
+  /*
+   * A flow of new entrants ("about 4,000 new authorities are granted every month",
+   * "1,500 new LLCs are formed each month") is a population of buyers who arrive
+   * through the window: N × window ÷ period of them, each a buyer once. Before, a
+   * flow read as no count at all, or as a stock of buyers each buying on the
+   * flow's cadence (2026-11-24 investigation: licence flows read as unsized).
+   */
+  const flow = readFlow(text, window);
+  if (flow) return flow;
+
   let counts = buyerCounts(text, buyerCount).map((c) => c.n);
+  /*
+   * A count of licensed, registered or certified entities ("12,400 licensed
+   * notaries in the state", "3,000 carriers are registered", "6,500 active liquor
+   * licences") counts the holders of the licence, one buyer each, whatever the
+   * noun: a register is a published buyer population (2026-11-24 investigation).
+   * Read only when no buyer word counted anything, so every reading the
+   * vocabulary already made is unchanged; the supply side is still refused.
+   */
+  if (counts.length === 0) counts = [...LICENSED_COUNTS].flatMap((pattern) => buyerCounts(text, pattern)).map((c) => c.n);
   /*
    * A count whose own sentence goes on to say each of them buys ("About 800 active Detroit
    * investors are listed on BiggerPockets; each buys one") counts buyers whatever its noun:
