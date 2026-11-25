@@ -2427,7 +2427,13 @@ export async function modelOpportunity(
     }
   } else {
     const range = fact('revenueRange');
-    const figures = range ? readMoneyFigures(range.value, currency).filter((one) => !one.perUnit) : [];
+    /*
+     * One billing period's price is a whole-deal figure (decisive-10 d09,
+     * 2026-11-25): "$29 per truck per month" is what one small carrier pays a
+     * month, as `priceContradiction` already reads it. Refusing it left a
+     * researched subscription with no price at all.
+     */
+    const figures = range ? readMoneyFigures(range.value, currency).filter((one) => !one.perUnit || one.perPeriod) : [];
     if (range && figures.length > 0) {
       const values = figures.map((one) => one.cents / 100).sort((a, b) => a - b);
       const p = kindToProvenance(range);
@@ -2466,7 +2472,19 @@ export async function modelOpportunity(
       : inferOr(knowledge, 'daysToCash', opportunity, now, unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days'));
 
   const costFact = fact('directCosts');
-  const costFigures = costFact ? readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit) : [];
+  /*
+   * A cost stated as paid once (a setup, a template review, a licence fee "as a
+   * one-time cost") is money tied up before the first deal, never a cost of
+   * every deal (decisive-10 d07, 2026-11-25: a $1,500 one-time contract review
+   * read as each $400 deal losing money). It is read as the capital when no
+   * capital is published, and the per-deal cost stays what research says.
+   */
+  const oneTimeCost = !!costFact && ONE_TIME_COST.test(costFact.value) && !PER_DEAL_COST.test(costFact.value);
+  const costFigures = costFact && !oneTimeCost ? readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit) : [];
+  if (oneTimeCost && opportunity.peakFundingCents === null && capitalFigures.length === 0) {
+    const setup = readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit);
+    if (setup.length > 0) capital = known(Math.max(...setup.map((one) => one.cents)) / 100, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'a one-time setup cost paid before the first deal');
+  }
   const statedFree = !!costFact && costFact.kind !== 'RECOMMENDATION' && costFigures.length === 0 && statesNoCost(costFact.value);
   const directCost =
     costFigures.length > 0
@@ -3433,3 +3451,8 @@ export function statesNoCost(text: string): boolean {
   if (/\b(?:paid|premium|upgrade|tiers?|plans? (?:start|from))\b/i.test(t)) return false;
   return /\b(?:no|zero|without)\s+(?:[\w-]+\s+){0,2}?(?:fees?|costs?|charges?|commissions?|subscriptions?|investment|upfront payment)\b|\bfree (?:to (?:join|sign up|register|apply|list|use)|of charge)\b|\b(?:costs?|charges?) nothing\b|\bis free\b/i.test(t);
 }
+
+/** A cost the source says is paid once, not per deal. */
+const ONE_TIME_COST = /\b(?:one[- ]time|one[- ]off|set[- ]?up (?:cost|fee)|start[- ]?up cost|upfront (?:cost|fee)|initial (?:cost|investment|fee))\b/i;
+/** A cost the source says recurs with every deal or period. */
+const PER_DEAL_COST = /\bper (?:deal|order|job|project|sale|unit|item|lead|call|client|customer|month|year|hour)\b|\beach (?:deal|order|job|project|sale|month)\b/i;
