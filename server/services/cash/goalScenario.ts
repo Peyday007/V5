@@ -2884,11 +2884,26 @@ export function repeatsForRunRate(
   volume: string | null,
 ): boolean {
   if (recurringRevenue(price, opportunity.title)) return true;
-  if (opportunity.opportunitySignal === 'RECURRING_OUTSOURCED_WORK') return true;
+  /*
+   * A recurring pattern of outsourced work is many buyers each outsourcing it,
+   * not one buyer paying again: resume writing is a steady pattern of job
+   * seekers who each buy once. The signal alone never makes a run-rate
+   * (objectiveRehearsal 5K-MRR, 2026-11-25); a stated repeat purchase does.
+   */
   if (!volume) return false;
   const read = readVolume(volume, 30, opportunity.payer, opportunity.industry ?? null);
-  return !!read && read.everyDays !== null && read.everyDays <= 92;
+  /*
+   * The cadence must be a purchase's, not an arrival's: "40 restaurants open
+   * each month" is a stream of new buyers who each buy once, and counting it
+   * as repeat revenue built a monthly run-rate on one-off resale
+   * (objectiveRehearsal 5K-MRR, 2026-11-25). Only a buyer stated to pay, buy,
+   * order or renew on that cadence repeats.
+   */
+  return !!read && read.everyDays !== null && read.everyDays <= 92 && REPEAT_PURCHASE.test(volume);
 }
+
+/** A buyer's own purchase stated on a cadence: "each pays monthly", "they reorder every week". */
+const REPEAT_PURCHASE = /\b(?:each|they|every one|all)\b[^.;]{0,40}?\b(?:pays?|paid|buys?|orders?|reorders?|renews?|subscribes?|purchases?|books?|retains?)\b|\b(?:pays?|buys?|orders?|reorders?|renews?|purchases?|books?)\s+(?:again\s+)?(?:monthly|weekly|quarterly|every|each|once a|twice a)\b|\b(?:repeat|recurring|retainer|subscription)\b/i;
 
 /** What the goal's scope reads of a held opening: its industry, whether its price recurs, and its own stated days to cash. */
 export interface HeldTerms {

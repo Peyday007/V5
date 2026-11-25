@@ -9,8 +9,9 @@ describe('a route that repeats counts toward a monthly run-rate', () => {
   it('reads a per-period price as recurring, as before', () => {
     expect(repeatsForRunRate(o(null), '$300 a month', null)).toBe(true);
   });
-  it('reads a recurring-outsourced pattern as recurring, whatever one transaction is called', () => {
-    expect(repeatsForRunRate(o('RECURRING_OUTSOURCED_WORK'), '$45 flat fee per request', null)).toBe(true);
+  it('never reads a pattern of many buyers each buying once as a run-rate', () => {
+    expect(repeatsForRunRate(o('RECURRING_OUTSOURCED_WORK'), '$45 flat fee per request', null)).toBe(false);
+    expect(repeatsForRunRate(o('RECURRING_OUTSOURCED_WORK'), '$14,000 a lot', '30 liquidation auctions a month are listed; 40 restaurants open each month.')).toBe(false);
   });
   it('reads a stated repeat purchase in the market evidence as recurring', () => {
     expect(repeatsForRunRate(o('ACTIVE_BUYER_DEMAND'), '$45 per request', 'About 1,600 personal injury law firms each order records every month.')).toBe(true);
