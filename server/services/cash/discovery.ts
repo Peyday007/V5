@@ -1169,7 +1169,9 @@ export async function openGoalDiscovery(input: {
    * retired only once a lens to ask in its place has been chosen, below.
    */
   const replaceStalled = (await roundsHoldingSlots(mine, now, liveCap)) >= liveCap;
-  if (replaceStalled && (await staleUnlaunchedRounds(mine, now, STALLED_ROUND_YIELDS_AFTER_MS)) <= liveCap) return null;
+  // Only a lens round gives its place to a lens: constructed rounds keep their own share (`openConstructedRound`).
+  const lensRounds = mine.filter((one) => !isConstructedRound(one, prefix));
+  if (replaceStalled && !(await stalledPastYield(lensRounds, now, liveCap))) return null;
   /*
    * The fixed angles are a starting point, not the whole map: Brain's own
    * industry map (`industry_nodes`, filled from classification systems and
@@ -1250,7 +1252,7 @@ export async function openGoalDiscovery(input: {
   const choice = choices[0];
   if (!choice) return null;
   // The chosen lens has no OPEN round, so the round retired here is never the one asked next.
-  if (replaceStalled && !(await retireOldestStalledRound(t.projectId, mine, now, liveCap))) return null;
+  if (replaceStalled && !(await retireOldestStalledRound(t.projectId, lensRounds, now, liveCap))) return null;
   const { lens, id, history, next } = choice;
   const origins: OpportunityOrigin[] = [lens.origin];
   const seedKeys = lens.seedKey ? [lens.seedKey] : [];
@@ -1489,19 +1491,48 @@ async function unlaunchedRoundsPast(rounds: readonly CashDiscoveryRound[], now: 
  * whose rounds waited on the grant held its whole cap with research that was
  * not running and opened nothing: production read 0 of 20 goals short of a
  * recommendable plan opening a round in the window ("live cap full of stalled
- * rounds"). A goal's lens rounds now count slots this way. At most `cap` of them yield, so a goal never holds more than twice
+ * rounds"). A goal's lens rounds now count slots this way, while the grant
+ * is full. At most `cap` of them yield, so a goal never holds more than twice
  * its cap open however long the grant stays shut, and the grant's own cap
  * still decides every launch. A round with a mission keeps its slot.
  */
 export async function roundsHoldingSlots(rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<number> {
   const researching = await roundsStillResearching(rounds);
   if (researching === 0) return 0;
+  /*
+   * Only while the research grant's slots are all held. That is the one state
+   * in which a goal round past its stall threshold is still OPEN: with a slot
+   * free, the discovery pass that runs before every goal pass retires it
+   * (`expireUnlaunchedGoalRound`, after `UNLAUNCHED_GOAL_ROUND_MS`) and its slot
+   * is free by the ordinary rule. Yielding in any other state would answer a
+   * reading production cannot reach, and let a goal open past rounds the
+   * harvest is about to retire (review F3, 2026-11-25).
+   */
+  const projectId = rounds[0]?.projectId;
+  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
+  if (!projectId || (await researchMissionSlotsFull(projectId).catch(() => null)) !== true) return researching;
   return researching - Math.min(await staleUnlaunchedRounds(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS), Math.max(0, cap));
 }
 
 /**
- * Retire the oldest stalled round of a goal whose stalled rounds have used up
- * their yield (`roundsHoldingSlots`), so the next lens takes its place.
+ * Whether these rounds have more stalled rounds than their yield covers, in
+ * the one state a stalled round survives the discovery pass: the research
+ * grant's slots all held (`roundsHoldingSlots`). With a slot free the
+ * discovery pass retires them itself (`expireUnlaunchedGoalRound`).
+ */
+async function stalledPastYield(rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<boolean> {
+  if ((await staleUnlaunchedRounds(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS)) <= Math.max(0, cap)) return false;
+  const projectId = rounds[0]?.projectId;
+  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
+  return !!projectId && (await researchMissionSlotsFull(projectId).catch(() => null)) === true;
+}
+
+/**
+ * Retire the oldest stalled lens round of a goal whose stalled lens rounds
+ * have used up their yield (`roundsHoldingSlots`), so the next lens takes its
+ * place. One for one, and never a constructed round: replacing one of those
+ * with a lens would let lens rounds grow past twice the cap while
+ * construction reopens inside its own share.
  *
  * The yield alone bounded a goal at twice its cap and then stopped it for
  * good: a goal whose rounds stalled from a cause that persisted (the research
@@ -1512,13 +1543,14 @@ export async function roundsHoldingSlots(rounds: readonly CashDiscoveryRound[], 
  * `expireUnlaunchedGoalRound` retires one — its idea REJECTED first, guarded on
  * the state read, so it can never launch beside the round asked in its place;
  * the round closed ABANDONED, which is no evidence about its lens (§53, §65),
- * so the lens is asked again after its cool-off. Nothing is deleted, nothing
+ * so the lens is asked again after its cool-off. Only while the grant is full
+ * (`stalledPastYield`): with a slot free the discovery pass retires them. Nothing is deleted, nothing
  * is launched, and the grant's own cap still decides every launch. A round
  * with a mission, or not yet stalled, is never touched.
  */
 async function retireOldestStalledRound(projectId: string, rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<boolean> {
+  if (!(await stalledPastYield(rounds, now, cap))) return false;
   const stalled = await unlaunchedRoundsPast(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS);
-  if (stalled.length <= Math.max(0, cap)) return false;
   for (const round of stalled) {
     const candidate = await getCandidate(round.candidateId);
     if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) continue;
