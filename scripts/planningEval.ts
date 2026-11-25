@@ -20,6 +20,11 @@
  *       Where each goal's research stops between a launched mission and an
  *       EVIDENCE fact: missions, packets, fragments, work items, claims, and the
  *       free lane's queue and leases Brain-wide. Read-only.
+ *   retire --run R
+ *       Cancels every goal of an evaluation run whose answers have already been
+ *       used, through the ordinary cancel decision: research, attempts and
+ *       results are all kept, `reinstate` continues them, and the run stops
+ *       competing with fresh runs for the shared research queue.
  *   update --goal G --objective-b64 <words>
  *       A mid-course change in the owner's words, applied through the same
  *       writer the owner's own change uses.
@@ -122,6 +127,21 @@ async function update(): Promise<void> {
   if (!result.ok) fail(`not changed: ${result.reason}`);
   await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_TARGET_LIMITS_SET', summary: `The owner changed the limits mid-course: "${text.slice(0, 300)}"`, actorRef: 'planning-evaluation' });
   console.log(`EVAL update ${goalId}: limits now capital=${reading.capitalCeiling ?? 'unchanged'} hours=${reading.hoursCeiling ?? 'unchanged'}`);
+}
+
+async function retire(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const { cancel } = await import('../server/services/goals/decide.ts');
+  const prefix = `Planning evaluation ${run} `;
+  const projects = new Set((await listProjects()).filter((one) => one.name.startsWith(prefix)).map((one) => one.id));
+  let done = 0;
+  for (const goal of await listWorkstreams()) {
+    if (!goal.projectId || !projects.has(goal.projectId)) continue;
+    const result = await cancel(goal.id, `Evaluation run ${run} retired: its answers were used to develop Brain, so it no longer measures unfamiliar goals.`, `planning-evaluation:${run}`);
+    if (result.ok) done += 1;
+    console.log(`EVAL retire ${run} ${goal.id}: ${result.ok ? 'cancelled' : result.reason}`);
+  }
+  console.log(`EVAL retire ${run}: ${done} goal(s) cancelled across ${projects.size} project(s)`);
 }
 
 async function read(): Promise<void> {
@@ -332,6 +352,7 @@ try {
   else if (command === 'read') await read();
   else if (command === 'update') await update();
   else if (command === 'stall') await stall();
+  else if (command === 'retire') await retire();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
 } finally {
