@@ -13,9 +13,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
-import { getCashMode } from '../server/repos/cashMode.ts';
+import { cashEventsOfKindInProject, getCashMode } from '../server/repos/cashMode.ts';
+import { applyResearchAnswers, PATHWAY_ROUND_ASKED } from '../server/services/cash/answers.ts';
 import { createOpportunity, getOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
-import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { cardFact, recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { createNode } from '../server/repos/industry.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
@@ -294,7 +295,7 @@ describe('arrangements Brain constructs from what it knows', () => {
     await sector('Veterinary care', { buyer: 'Independent veterinary clinics', bottleneck: 'After-hours phone coverage', supply: 'Remote answering services' });
     // The held opening's payer is the map's buyer: its price is that population's own evidence, so the
     // constructed estimates carry a value (an arrangement never borrows another buyer's price: PRICE-POOL).
-    await opening({ title: 'One small report', priceCents: 20_000, play: false, signal: 'PAID_TASK_OR_CONTRACT', payer: 'Independent veterinary clinics' });
+    const held = await opening({ title: 'One small report', priceCents: 20_000, play: false, signal: 'PAID_TASK_OR_CONTRACT', payer: 'Independent veterinary clinics' });
     const id = await goal(600_000);
     await advanceGoalPlans(now);
     const first = (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-mx-`));
@@ -318,6 +319,14 @@ describe('arrangements Brain constructs from what it knows', () => {
     const statement = (await getCandidate(opened[0]!))!.statement;
     expect(statement).toMatch(/Brain constructed a transaction from evidence it already holds: Sell the same deliverable to the population of buyers like this one/);
     expect(statement).toMatch(/opportunity_signal/);
+    // The round records which opening and field asked, and its finished research fills that opening's card (P1 break point 5).
+    const [asked] = await cashEventsOfKindInProject(projectId, PATHWAY_ROUND_ASKED);
+    expect(asked).toMatchObject({ opportunityId: held.id, detail: { candidateId: opened[0], gap: 'ONE_BUYER', field: 'buyerVolume' } });
+    const [volume] = await finishedMission(opened[0]!, [
+      { claim: 'The state veterinary board lists 900 independent veterinary clinics; each orders after-hours reports monthly.', signal: 'RECURRING_OUTSOURCED_WORK', sourceUrl: 'https://example.test/vet-board' },
+    ]);
+    expect((await applyResearchAnswers(projectId)).pathways).toEqual([{ opportunityId: held.id, field: 'buyerVolume', claimId: volume, candidateId: opened[0] }]);
+    expect(await cardFact(held.id, 'buyerVolume')).toMatchObject({ kind: 'EVIDENCE', claimId: volume });
     // Its turn is spent: the next construction is an arrangement's again.
     const after: string[] = [];
     expect(await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS, after)).toHaveLength(0);

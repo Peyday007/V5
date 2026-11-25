@@ -554,7 +554,8 @@ export interface BrainCapabilities {
 
 /** The words that name each deliverable label's work. A label with no entry is never matched. */
 const DELIVERS_WORDS: Record<string, RegExp> = {
-  'business document': /\b(?:articles?|blog(?:s| posts?)?|copy(?:writing)?|content|ebooks?|white ?papers?|reports?|newsletters?|documents?|proposals?|guides?)\b/i,
+  // Document types, never subjects: what is written, not what it is about (2026-11-25: résumés, CVs and letters added).
+  'business document': /\b(?:articles?|blog(?:s| posts?)?|copy(?:writing)?|content|ebooks?|white ?papers?|reports?|newsletters?|documents?|proposals?|guides?|r[eé]sum[eé]s?|cvs?|cover letters?|letters?|grant applications?|manuals?|handbooks?|sops?|policies|checklists?)\b/i,
   spreadsheet: /\b(?:spreadsheets?|excel|google sheets|financial models?|budget templates?)\b/i,
   presentation: /\b(?:slides?|decks?|presentations?|powerpoint)\b/i,
   'data operations': /\b(?:data entry|datasets?|data cleaning|lead lists?|list building|data enrichment)\b/i,

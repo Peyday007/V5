@@ -210,6 +210,7 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     opportunitySignal: isOpportunitySignal(row.opportunity_signal)
       ? row.opportunity_signal
       : null,
+    route: row.route ?? null,
     monetizationMethod: isMonetizationMethod(row.monetization_method)
       ? row.monetization_method
       : null,
@@ -963,6 +964,8 @@ export async function abandonRunningPasses(orchestrationId: string, error: strin
 // ---------------------------------------------------------------------------
 
 export interface InsertClaimInput {
+  /** The route the claim is about, as the worker named it (migration 163/154). */
+  route?: string | null;
   /** Whether the worker could actually read the source. Defaults to RETRIEVED. */
   retrievalState?: RetrievalState;
   orchestrationId: string;
@@ -1076,7 +1079,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
       await db.run(
         `INSERT INTO research_claims (id, orchestration_id, fragment_id, pass_id, pass_key, claim,
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
-           evidence_locator, evidence_lane, opportunity_signal, monetization_method, closes_on,
+           evidence_locator, evidence_lane, opportunity_signal, monetization_method, closes_on, route,
            structural_finding,
            structural_subject, structural_qualifier, structural_amount_cents,
            labor_finding, labor_subject, labor_qualifier, labor_rate_cents,
@@ -1094,7 +1097,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at,
            measurement_method, sample_size, limitations, valid_until, invalidated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?)`,
@@ -1104,6 +1107,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.opportunitySignal ?? null,
           input.monetizationMethod ?? null,
           input.closesOn ?? null,
+          input.route ?? null,
           input.structuralFinding ?? null, input.structuralSubject ?? null,
           input.structuralQualifier ?? null, input.structuralAmountCents ?? null,
           input.laborFinding ?? null, input.laborSubject ?? null,
@@ -1871,6 +1875,7 @@ export async function signalledClaims(input: {
              AND ((c.source_date LIKE '____-__-__%' AND c.source_date < ?)
                   OR (c.source_date LIKE '____-__' AND c.source_date < ?)
                   OR (c.source_date LIKE '____' AND c.source_date < ?))
+             AND COALESCE(c.evidence_lane, '') <> 'demand_pattern'
              AND (COALESCE(c.opportunity_signal, '') IN (${pointSignals.map(() => '?').join(', ')})
                   OR (c.opportunity_signal IS NULL AND COALESCE(c.evidence_lane, '') = ?)))`
     : '';
@@ -1886,7 +1891,7 @@ export async function signalledClaims(input: {
    */
   const staleAt = input.staleBefore ? new Date(input.staleBefore) : null;
   const isStale = (claim: ResearchClaim): boolean =>
-    staleAt !== null && claim.opportunitySignal !== null &&
+    staleAt !== null && claim.opportunitySignal !== null && claim.evidenceLane !== 'demand_pattern' &&
     observationExpiry({ signal: claim.opportunitySignal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays: 0, now: staleAt }).stale;
   /*
    * Paged until `limit` claims survive the checks below, not one window.

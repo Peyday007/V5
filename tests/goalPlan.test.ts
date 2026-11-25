@@ -646,6 +646,18 @@ describe('how the money actually arrives (2026-10-28)', () => {
     }
   });
 
+  it('reads a service sold to those who compete as a sale, never as an award (planner residuals, 2026-11-25)', async () => {
+    const { isCompetitiveAward } = await import('../server/services/cash/goalScenario.ts');
+    // The buyer pays for the work whether or not it wins: a writer's retainer, an estimator's takeoff.
+    for (const title of ['Grant research and application retainer', 'Quantity takeoff and bid estimate', 'RFP response writing for small agencies', 'Monthly bid alerts for electricians']) {
+      expect(isCompetitiveAward({ title, source: null, buyingSignal: null }), title).toBe(false);
+    }
+    // An award to the seller stays one, even beside a service word elsewhere.
+    for (const title of ['City RFP for grant writing services', 'County tender: records scanning', 'State grant for workforce training']) {
+      expect(isCompetitiveAward({ title, source: null, buyingSignal: null }), title).toBe(true);
+    }
+  });
+
   it('does not count a big award as reach, and keeps looking rather than resting on it', async () => {
     await oneOff({ title: 'Federal RFP for records digitization', priceCents: 13_502_000, days: null });
     const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;

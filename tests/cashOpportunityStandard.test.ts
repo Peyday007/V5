@@ -70,7 +70,7 @@ import {
 import { createRun } from '../server/repos/runs.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { cashPosition } from '../server/services/cash/money.ts';
-import { FIELD_BY_LANE } from '../server/services/cash/validation.ts';
+import { FIELD_BY_LANE, WRITER_FIELD_BY_LANE } from '../server/services/cash/validation.ts';
 import { COLUMN } from '../server/services/cash/answers.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { cashReadiness } from '../server/services/cash/readiness.ts';
@@ -760,7 +760,7 @@ describe('what this change was not allowed to touch', () => {
     // And every lane the validation profile declares resolves to a card field,
     // or a worker's accepted claim would land nowhere.
     const profile = profileFor('RUSSELL_CASH_VALIDATION_V1')!;
-    for (const lane of profile.lanes) expect(FIELD_BY_LANE[lane.id]).toBeTruthy();
+    for (const lane of profile.lanes) expect(FIELD_BY_LANE[lane.id] ?? WRITER_FIELD_BY_LANE[lane.id]).toBeTruthy();
   });
 
   it('counts accounts and execution surfaces as two different numbers', async () => {

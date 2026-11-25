@@ -31,7 +31,7 @@ import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import { normalizeSessionRef, sameProviderSession, sessionSpellings } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
-import { classifyBinPurpose, OWNER_DIRECTED_GOAL_IDS, type PurposeDecision } from '../domain/binPurpose.ts';
+import { classifyBinPurpose, ownerDirectedGoalIdsSql as ownerDirectedGoalIdsFromRows, type PurposeDecision } from '../domain/binPurpose.ts';
 import { goalLinksLiveSql, goalPacketIdsSql, LIVE_GOAL_IDS_SQL, liveGoalPacketIdsSql } from '../services/goals/goalWork.ts';
 
 export { liveGoalPacketIdsSql };
@@ -1679,10 +1679,13 @@ export function ownerDirectedGoalBinSql(prefix: string): string {
   return goals === null ? '(1 = 0)' : goalBinSql(prefix, goals);
 }
 
-/** The owner-directed goals as an id list for `IN (…)`, or null when there is none. */
+/**
+ * The owner-directed goals for `IN (…)`: every live goal a person owns and set
+ * a target for, read from rows (§119), never a hard-coded list. One
+ * uncorrelated set, so it is never null.
+ */
 function ownerDirectedGoalIdsSql(): string | null {
-  const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
-  return ids.length === 0 ? null : ids.map((id) => `'${id}'`).join(', ');
+  return ownerDirectedGoalIdsFromRows();
 }
 
 /**

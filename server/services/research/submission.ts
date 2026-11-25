@@ -108,6 +108,7 @@ export async function recordFragmentClaims(input: {
         evidenceLocator: claim.evidenceLocator ?? null,
         evidenceLane: claim.evidenceLane ?? null,
         opportunitySignal: claim.opportunitySignal ?? null,
+        route: claim.route ?? null,
         /*
          * And how the source says money would be made from that opening.
          *
@@ -237,7 +238,17 @@ export async function recordFragmentClaims(input: {
         // somebody had read it. The gate's whole unresolved-retrieval path was
         // unreachable from the worker path because of this one missing line.
         retrievalState: claim.retrievalState ?? 'RETRIEVED',
-        retrievedAt: claim.retrievedAt ?? null,
+        /*
+         * A claim the worker read is read no later than it is filed
+         * (decisive-10, 2026-11-25): an undated live page — a fleet
+         * partner page showing tomorrow's jobs, a payout table — arrived with
+         * neither a page date nor a retrieval time, so its buying signal was
+         * refused as undated on 6 of 10 fresh goals although somebody had just
+         * read it. The filing time is when it was observed at the latest; it
+         * says nothing about when the page was written, and a claim whose
+         * source nobody could read gets no date.
+         */
+        retrievedAt: claim.retrievedAt ?? ((claim.retrievalState ?? 'RETRIEVED') === 'RETRIEVED' ? new Date().toISOString() : null),
         confidence: claim.confidence,
         validationState: validated.validationState,
         validationDetail: validated.validationDetail,

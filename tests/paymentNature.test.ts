@@ -158,3 +158,13 @@ describe('funding programmes and paying-out payers stay out of revenue goals (fr
     expect(payerPaysOut('Dental practices')).toBe(false);
   });
 });
+
+describe('a funder word that names a trade is the trade (planner residuals, 2026-11-25)', () => {
+  it('reads foundation-repair contractors as buyers paying for a deliverable, and a foundation as a funder', async () => {
+    const { readPriceEvidence } = await import('../server/domain/paymentNature.ts');
+    const offer = { title: 'Exclusive homeowner leads', offerScope: 'Exclusive homeowner leads' };
+    expect(readPriceEvidence('$1500 a month', { ...offer, payer: 'Roofers and foundation-repair contractors' }).counts).toBe(true);
+    expect(readPriceEvidence('$1500 a month', { ...offer, payer: 'Foundation repair contractors' }).counts).toBe(true);
+    expect(readPriceEvidence('$1500 a month', { ...offer, payer: 'The Kresge Foundation' })).toMatchObject({ direction: 'PAYOUT', counts: false });
+  });
+});

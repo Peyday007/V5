@@ -67,6 +67,7 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
+import { joinRouteEvidence } from './routeEvidence.ts';
 import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
@@ -1070,6 +1071,28 @@ async function foundByRounds(candidateIds: string[]): Promise<string[]> {
   return rows.map((one) => one.title);
 }
 
+/**
+ * The owner's own words as the brief of a goal's search (2026-11-25).
+ *
+ * A goal's round asked "which lawful ways could bring this operation $N" and
+ * named the Cash Mode sprint's standing objective, never the goal's: a request
+ * to "start a resume-writing service", one "selling something to restaurants",
+ * one in a stated city or one that rules out cold email reached the researcher
+ * as "any way at all, in any market". The words are quoted, never interpreted:
+ * where they name a business, an industry, a kind of buyer, a place or a
+ * condition, the researcher is told that is the brief; where they name none, the
+ * lens's own angle decides as before. Pure.
+ */
+export function ownerBrief(objective: string | null | undefined): string {
+  const words = (objective ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
+  if (!words) return '';
+  return (
+    `The owner asked, in their own words: "${words.slice(0, 600)}". Where those words name a business, an ` +
+    'industry, a kind of buyer, a place, a way of working or something to avoid, that is the brief: report ' +
+    'ways inside it first, respect every limit and condition it states, and only then look further. '
+  );
+}
+
 export async function openGoalDiscovery(input: {
   goal: { id: string; title: string };
   target: {
@@ -1256,6 +1279,7 @@ export async function openGoalDiscovery(input: {
     input.goal.id,
     input.goal.title,
     methodFirst +
+    ownerBrief(goalRow?.intent ?? input.goal.title) +
     `Looking at ${lens.angle} — in any market or industry, and as one opening or several running at once — ` +
       `which lawful ways could bring this operation ${amount} more of ` +
       `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held}${elsewhere} ${capital} ${resources} ${pace} ` +
@@ -1285,7 +1309,8 @@ export async function openGoalDiscovery(input: {
     mode,
     bucket,
     next,
-    statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, commonTo(await liveGoalLimits(t.projectId, new Date().toISOString()))),
+    // Framed by the goal it serves, in the owner's own words — not the sprint's standing objective (2026-11-25).
+    statement: questionFor(bucket, input.goal.title || mode.objective, next, history, heldLines, frame, commonTo(await liveGoalLimits(t.projectId, new Date().toISOString()))),
     origins,
     seedKeys,
     ...(lens.openWorld ? { openWorld: lens.openWorld } : {}),
@@ -2068,6 +2093,8 @@ export async function harvest(input: {
   });
 
   const out: Harvested[] = [];
+  /** What Brain has proved it produces here (`executionFrame`), read once, for the route join. */
+  let delivers: readonly string[] | undefined;
 
   for (const entry of signalled) {
     if (out.length >= limit) break;
@@ -2104,7 +2131,9 @@ export async function harvest(input: {
      * opening: production modelled an April 2026 Coachella resale price on
      * 2026-11-14 because nothing gave it an end.
      */
-    const timing = observationExpiry({ signal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays, now });
+    // A demand_pattern claim is, by its lane, a pattern across dated examples: it does not expire like one
+    // request, whichever signal the worker named (2026-11-25: a dated consumer pattern was dropped as stale).
+    const timing = observationExpiry({ signal: claim.evidenceLane === 'demand_pattern' ? 'RECURRING_OUTSOURCED_WORK' : signal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays, now });
     if (timing.stale) continue;
 
     const context = roundByOrchestration.get(entry.orchestrationId) ?? (await settledRoundFor(entry.orchestrationId));
@@ -2143,7 +2172,8 @@ export async function harvest(input: {
       // from the source's sentence, which is kept whole as the buying signal.
       title: openingTitle({
         signal,
-        population: claim.population,
+        // The route the worker named is what this opening is; the fragment's population is only its scope.
+        population: claim.route ?? claim.population,
         deliverable: context?.bucket.deliverable ? DELIVERABLE_LABEL[context.bucket.deliverable] : null,
         publisher: claim.sourcePublisher,
         sourceUrl: claim.sourceUrl,
@@ -2207,6 +2237,21 @@ export async function harvest(input: {
       signal_observed_at: timing.observedAt,
     });
 
+    /*
+     * The rest of the route, from the same answer (trace break points 1–3,
+     * 2026-11-25). The claims the same fragment established beside this one —
+     * who pays, the price, how buyers are reached, who does the work, what it
+     * costs, how many buyers there are, when the money settles — are written
+     * onto this opening's card as evidence, by lane, instead of being left for
+     * ten separate missions to establish again. A twin is a linked record of an
+     * opening that already has its own card, so it is not joined.
+     */
+    delivers ??= (await executionFrame(input.projectId, mode.currency).catch(() => null))?.delivers ?? [];
+    const joined = twin ? { written: [] } : await joinRouteEvidence({ opportunity: withSignal ?? created, claim, orchestrationId: entry.orchestrationId, fragmentId: entry.fragmentId, delivers }).catch((error) => {
+      console.warn(`route evidence join failed for ${created.id}: ${String((error as Error)?.message ?? error)}`);
+      return { written: [] };
+    });
+
     const missionId = await missionFor(entry.orchestrationId);
     await recordCashEvent({
       projectId: input.projectId,
@@ -2224,6 +2269,7 @@ export async function harvest(input: {
         fragmentId: entry.fragmentId,
         missionId,
         sourceUrl: claim.sourceUrl,
+        routeFields: joined.written.map((one) => one.field),
       },
     });
 

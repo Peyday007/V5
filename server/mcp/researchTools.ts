@@ -30,6 +30,7 @@
  * `tools/list` for a caller who may not use it, because a list that varies by
  * principal is a permission oracle.
  */
+import { routeName } from '../services/research/schema.ts';
 import crypto from 'node:crypto';
 import { RETRIEVAL_STATES } from '../domain/types.ts';
 import type {
@@ -1552,6 +1553,15 @@ const submitClaimsTool: McpTool = {
                 'the table would not produce. It lowers no bar: the claim passes the same gate ' +
                 'as every other.',
             },
+            route: {
+              type: 'string',
+              description:
+                'Optional. When the claim is about one way money could be made — a kind of buyer ' +
+                'paying for one thing — name that way in a few words ("Michigan dental practices · ' +
+                'HIPAA risk assessment") and give exactly the same name on every claim about it: ' +
+                'its signal, its price, how its buyers are reached, who fulfils it, its cost, how ' +
+                'many such buyers exist and when they pay. Brain joins those parts into one route.',
+            },
             opportunity_signal: {
               type: 'string',
               enum: [...OPPORTUNITY_SIGNALS],
@@ -1987,6 +1997,8 @@ const submitClaimsTool: McpTool = {
          * claims are and is not a deficiency.
          */
         opportunitySignal: optionalSignal(row, where),
+        // The way this claim is about, named identically on every claim about it (`routeEvidence.ts`).
+        route: routeName(row['route']),
         /*
          * And how it says money would be made from that opening, where the
          * source says something the method table would not have produced.

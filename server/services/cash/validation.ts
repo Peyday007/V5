@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { writeEvidenceAnswer } from './answers.ts';
 import { latestScreens, laneConfig, screenOpening, type ScreenOutput } from '../cheap/lane.ts';
 import { closedBy } from './closing.ts';
 import {
@@ -2226,6 +2227,17 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
  * Never from a `NEGATIVE_EXISTENCE` claim: a documented absence of a route is
  * a finding, and it is the opposite of access.
  */
+/** The dive lanes written through `writeEvidenceAnswer` rather than the plain fact write below (see the apply loop). */
+export const WRITER_FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
+  /*
+   * Only the hours: market size, current demand and the fulfiller are
+   * `FIELD_BY_LANE`'s, written by the apply loop below with its own rules
+   * (a demand sign dated by its source, a price in the route's period), so
+   * each field has one writer.
+   */
+  effort: 'hours',
+});
+
 export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   contact_mode: 'access',
 });
@@ -2383,6 +2395,19 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
          * a statement nobody classified, recorded as a *possible* disqualifier
          * that blocks qualification and says so — never as clear.
          */
+        /*
+         * The route lanes, and the hours, go through the one research answer writer
+         * (`writeEvidenceAnswer`, 2026-11-25): a dated demand sign keeps its date, stated
+         * hours reach the column the plan reads, and a count reaches the card the planner's
+         * volume reader parses. An absence answers none of them.
+         */
+        const routeField = claim.claimType === 'NEGATIVE_EXISTENCE' ? undefined : WRITER_FIELD_BY_LANE[lane];
+        if (routeField) {
+          if (await writeEvidenceAnswer({ opportunity: (await getOpportunity(opportunity.id)) ?? opportunity, field: routeField, claim, needId: null })) {
+            out.push({ opportunityId: opportunity.id, field: routeField, claimId: claim.id });
+          }
+          continue;
+        }
         const classifying = await declares(claim.fragmentId);
         if (claim.claimType !== 'NEGATIVE_EXISTENCE') {
           if (lane === RULED_OUT_LANE) {
@@ -2644,11 +2669,20 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
      * proposal made mid-dive would stand over the better one the finished dive
      * would have made.
      */
-    if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED') {
+    const fact = await cardFactMap(opportunity.id);
+    /*
+     * Or no dive has started, and the harvest assembled the route from the
+     * answer that found it (`routeEvidence.ts`, 2026-11-25): its payer is
+     * already gated evidence, so the capture thesis is composed from facts that
+     * are on the card exactly as a finished dive's would be — and waiting for a
+     * dive to re-establish them left every such route SIGNAL, outside the plan.
+     * A dive in flight still holds every proposal back.
+     */
+    const assembled = !opportunity.validationState && fact('payer')?.kind === 'EVIDENCE';
+    if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED' && !assembled) {
       continue;
     }
 
-    const fact = await cardFactMap(opportunity.id);
     const price = fact('revenueRange');
     const costs = fact('directCosts');
     const payer = fact('payer');

@@ -274,5 +274,19 @@ export function readSettlementDays(text: string): number | null {
   if (stated !== null) return stated;
   if (/(?:^|[^\d.])0\s*(?:business\s*)?days?\b/i.test(text)) return 0;
   if (/\b(?:same[- ]day|paid (?:at|on) checkout|at (?:the )?checkout|on the day of (?:the )?sale)\b/i.test(text)) return 0;
+  /*
+   * A payout schedule stated by its period is a term (decisive-10, 2026-11-25):
+   * "Lugg pays out at the end of every workday", "paid weekly", "monthly
+   * payouts around the 10th". The longest wait the schedule allows is read —
+   * a day for a daily payout, seven for a weekly one, and a month plus the
+   * stated lag for a monthly one — because the unfavourable end is the one a
+   * deadline must survive.
+   */
+  if (/\bpa(?:ys?|id|youts?)\b[^.;]{0,40}?\b(?:daily|every (?:work|business )?day|each (?:work|business )?day|end of (?:every|each) (?:work|business )?day|nightly)\b|\b(?:daily|nightly) (?:payouts?|payments?|pay)\b/i.test(text)) return 1;
+  if (/\bpa(?:ys?|id|youts?)\b[^.;]{0,40}?\b(?:weekly|every week|each week)\b|\bweekly (?:payouts?|payments?|pay|invoic\w*)\b|\binvoiced weekly\b/i.test(text)) return 7;
+  if (/\bpa(?:ys?|id|youts?)\b[^.;]{0,40}?\b(?:monthly|every month|each month|once a month)\b|\bmonthly (?:payouts?|payments?)\b/i.test(text)) {
+    const lag = /\b(?:around|by|on) the (\d{1,2})(?:st|nd|rd|th)\b/i.exec(text);
+    return 30 + (lag ? Number(lag[1]) : 0);
+  }
   return null;
 }

@@ -26,7 +26,9 @@ function fakeModel(answer: Record<string, unknown> | string): ObjectiveInterpret
   return out;
 }
 
-const VAN = "I want a side income of $2,500/mo within the next few months; I've got a van and about $700.";
+// "I've got a van and about $700" is now read directly as $700 of capital, so the
+// unplaced example states the figure with nothing the reader can place it by.
+const VAN = 'I want a side income of $2,500/mo within the next few months; a van in the driveway, $700 tops.';
 const RENT = 'Need $1,200 for rent on the first of next month.';
 const COVER = 'The side business should cover my $1,900 rent each month within 90 days.';
 
@@ -46,7 +48,7 @@ describe('applyAssist: only what the words bear out', () => {
     const o = applyAssist(read(VAN), { kind: 'CASH', amount: 2500, monthly: true, capitalCeiling: 700, resources: ['a van'] }, NOW, 'test:model');
     expect(o).toMatchObject({ amount: 2500, recurring: 'MONTHLY', capitalCeiling: 700 });
     expect(o.unread).toEqual([]);
-    expect(o.assisted).toEqual({ model: 'test:model', fields: ['capitalCeiling'], rejected: [] });
+    expect(o.assisted).toEqual({ model: 'test:model', fields: ['capitalCeiling', 'resources'], rejected: [] });
   });
   it('reads a deadline whose phrase is quoted from the words', () => {
     const o = applyAssist(read(RENT), { kind: 'CASH', amount: 1200, deadline: '2026-12-01', deadlinePhrase: 'on the first of next month' }, NOW, 'm');
@@ -123,10 +125,10 @@ describe('createGoal with a second reading', () => {
     if (!made.ok) return;
     expect(model.calls).toBe(1);
     expect(made.goal.target).toMatchObject({ amountCents: 250_000, currency: 'USD', capitalCeilingCents: 70_000, resources: 'a van' });
-    expect(made.reading.assisted).toMatchObject({ model: 'test:model', fields: ['capitalCeiling'] });
+    expect(made.reading.assisted).toMatchObject({ model: 'test:model', fields: ['capitalCeiling', 'resources'] });
     const events = await listWorkstreamEvents(made.goal.id);
     const set = events.find((e) => e.kind === 'GOAL_TARGET_SET' && e.summary.startsWith('Target:'))!;
-    expect(set.detail).toMatchObject({ assisted: { fields: ['capitalCeiling'] } });
+    expect(set.detail).toMatchObject({ assisted: { fields: ['capitalCeiling', 'resources'] } });
     expect(set.summary).toMatch(/second reading/);
   });
 

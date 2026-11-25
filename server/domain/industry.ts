@@ -521,6 +521,34 @@ export function namesABuyerPopulation(name: string | null | undefined): boolean 
   return namesABuyer(text) && !isOneOrganisation(text) && !isOneOrganisation(subjectOf(text));
 }
 
+/** A clause's own verb: a name holding one is a statement about something, not the thing ("committee companies do not pay"). */
+const CLAUSE_VERB = /\b(?:is|are|was|were|isn['’]t|aren['’]t|wasn['’]t|weren['’]t|do|does|did|don['’]t|doesn['’]t|didn['’]t|cannot|can['’]t|won['’]t|wouldn['’]t|shouldn['’]t|will|would|should|must|not)\b(?!-)/i;
+/** Longer than this, a part name is a sentence about the part rather than its name. */
+const PART_NAME_WORDS = 16;
+
+/**
+ * Whether a supply or need part names a kind of supplier or a need
+ * (production 2026-11-24: a FULFILMENT_SOURCE filed from a claim's
+ * structural_subject read "ad agencies, broadcasters, distributors, investors
+ * … committee companies do not pay", became an arrangement's supply, and the
+ * plan set's fulfilment signature was that sentence's sorted word bag). The
+ * `namesABuyerPopulation` pattern for the other two sides of a trade: a name
+ * that is a sentence's leftovers or a party nobody knows (`namesABuyer`), a
+ * clause with its own verb, a list of three or more kinds, or a name longer
+ * than a name is refused. One named supplier is allowed — a supply part may be
+ * one firm, where a buyer population may not. A closed set of rules, never a
+ * reading (§8). Pure.
+ */
+export function namesAMarketPart(name: string | null | undefined): boolean {
+  const text = bareName(name);
+  if (!namesABuyer(text)) return false;
+  if (text.split(/\s+/).length > PART_NAME_WORDS) return false;
+  if (CLAUSE_VERB.test(text)) return false;
+  // A sentence's full stop inside the name, or a list of three or more kinds ("ad agencies, broadcasters, distributors").
+  if (/[.!?]\s+\S/.test(text) || (text.match(/,/g) ?? []).length >= 2) return false;
+  return true;
+}
+
 /**
  * The subject of a buyer name written as a sentence: the words before a
  * spaced dash, a colon, a semicolon or a parenthesis, and before the first

@@ -170,6 +170,49 @@ describe('readVolume: the supply side and web counts are never buyers', () => {
 });
 
 /*
+ * Market sizes stated as a licensed population, a count of licences, a flow of new
+ * licences, another listed kind of the payer, or a consumer platform's hundreds of millions
+ * (planner residuals, 2026-11-25). Synthetic texts in the shapes research publishes, not any
+ * case's own words.
+ */
+describe('readVolume: a licensed population is the payer when it is the payer’s kind', () => {
+  it('counts a population an authority licenses when it shares the payer’s kind', () => {
+    expect(readVolume('The state board licenses about 310 veterinary and animal-boarding clinics in the three counties.', 30, 'Veterinary practices in the tri-county area'))
+      .toMatchObject({ buyers: 310, counted: 'BUYERS' });
+  });
+
+  it('counts licences in a registry by the holder the sentence names', () => {
+    expect(readVolume("The state's electrician registry holds over 12,000 active licences.", 30, 'Small electricians and their office staff'))
+      .toMatchObject({ buyers: 12000 });
+  });
+
+  it('reads new licences a period as new buyers in the window, and never that period as a purchase frequency', () => {
+    expect(readVolume('The agency grants about 300 new food-truck permits every month, mostly to single-truck operators.', 60, 'Food-truck operators with one or two trucks'))
+      .toMatchObject({ buyers: 600, deals: 600, everyDays: null });
+  });
+
+  it('counts another kind of buyer the payer lists, and the sites a payer is reached at', () => {
+    expect(readVolume('The county lists about 900 landscapers.', 30, 'Small plumbers, landscapers and cleaners')).toMatchObject({ buyers: 900 });
+    expect(readVolume('The metro area has about 1,400 warehouses.', 30, 'Workers at warehouses, garages and laundromats')).toMatchObject({ buyers: 1400 });
+  });
+
+  it('reads a consumer platform’s hundreds of millions, and a "monthly" count as a count, not a frequency', () => {
+    expect(readVolume('The marketplace serves more than 300 million monthly shoppers.', 60, 'Marketplace shoppers')).toMatchObject({ buyers: 300_000_000, everyDays: null });
+  });
+
+  it.each([
+    // a licensed population that is not the payer's kind
+    ['The city issues about 5,000 food-truck permits a year.', 'Dental office managers'],
+    // licensed sellers competing with the offer
+    ['The state licenses 300 staffing agencies that offer the same service.', 'Staffing agencies hiring nurses'],
+    // a count with no licensing act at all
+    ['The software ships with 40,000 seats.', 'Software resellers'],
+  ])('%s → not a licensed buyer count', (text, payer) => {
+    expect(readVolume(text, 30, payer)).toBeNull();
+  });
+});
+
+/*
  * 2026-11-24 investigation §3, residuals on supplied routes: a market stated as a
  * register of licensed entities, as a flow of new entrants, or as a consumer
  * marketplace's published user count read as unsized.
