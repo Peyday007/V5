@@ -81,6 +81,32 @@ export const LIVE_GOAL_IDS_SQL =
   'SELECT lg.id FROM workstreams lg WHERE lg.target_metric IS NOT NULL' +
   ' AND lg.archived_at IS NULL AND lg.paused_at IS NULL AND lg.cancelled_at IS NULL';
 
+/** The projects an approved, live goal targets — the same reading of "a live goal" as `LIVE_GOAL_IDS_SQL`. */
+export async function liveGoalProjectIds(): Promise<Set<string>> {
+  const rows = await getDb().all<{ project_id: string }>(
+    `SELECT DISTINCT lg.target_project_id AS project_id FROM workstreams lg
+      WHERE lg.target_metric IS NOT NULL AND lg.target_project_id IS NOT NULL
+        AND lg.archived_at IS NULL AND lg.paused_at IS NULL AND lg.cancelled_at IS NULL`,
+  );
+  return new Set(rows.map((row) => row.project_id));
+}
+
+/**
+ * The tick's walk over projects, a live goal's projects first and the newest of
+ * them first; every other project after, in the order it was given. Pure.
+ *
+ * The walk is serial and was in creation order, so the newest projects came
+ * last. Production, 2026-11-25: twelve evaluation goals created at 03:29Z each
+ * in its own project, a walk that had not settled 38 minutes after it started,
+ * and no route opening dived in any of them at 04:45Z while 43 dives started in
+ * older projects. Every project is still walked on every pass; only who waits
+ * for whom within one pass changes.
+ */
+export function goalProjectsFirst<T extends { id: string; createdAt: string }>(projects: readonly T[], goalProjects: ReadonlySet<string>): T[] {
+  const goal = projects.filter((one) => goalProjects.has(one.id)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return [...goal, ...projects.filter((one) => !goalProjects.has(one.id))];
+}
+
 /**
  * The ideas any approved, live goal links — the idea itself, or a mission it
  * links — read the way the goal model resolves its work (`goals/model.ts`).

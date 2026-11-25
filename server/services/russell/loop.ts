@@ -51,7 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
-import { goalFirstSql, goalIdeaSql } from '../goals/goalWork.ts';
+import { goalFirstSql, goalIdeaSql, goalProjectsFirst, liveGoalProjectIds } from '../goals/goalWork.ts';
 import {
   claimCycle,
   completeCycle,
@@ -2112,7 +2112,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
           await openFeedShortlist({ projectId: target, spare });
         }
       });
-      for (const project of await listProjects()) {
+      // A live goal's projects first, newest first (`goalProjectsFirst`): the walk is serial and long.
+      const walk = goalProjectsFirst(await listProjects(), await liveGoalProjectIds().catch(() => new Set<string>()));
+      for (const project of walk) {
         // The five kernels start new questions; under database pressure they
         // wait (`db/pressure.ts`). Discovery does not stop under pressure: its
         // opening is one insert per bucket per day and its harvest files work

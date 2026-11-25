@@ -206,8 +206,11 @@ describe('a proposed route is researched as one unit', () => {
     expect((await whyNotDiving(editing)).kind).toBe('ELIGIBLE');
 
     await registerResearchSurfaces(projectId, 4);
-    const started = await startValidations({ projectId });
-    const mine = started.find((one) => one.opportunityId === editing.id);
+    // Filing may already have started it inside the room's floor; the next pass starts the rest.
+    await startValidations({ projectId });
+    const after = (await getOpportunity(editing.id))!;
+    const startedRow = await getDb().get<{ detail: string }>("SELECT detail FROM cash_events WHERE opportunity_id = ? AND kind = 'CASH_VALIDATION_STARTED'", [editing.id]);
+    const mine = after.candidateId && startedRow ? { candidateId: after.candidateId, stage: (JSON.parse(startedRow.detail) as { stage: string }).stage } : undefined;
     expect(mine, 'the route dive started').toBeDefined();
     expect(mine!.stage).toBe('FULL');
     const statement = (await getCandidate(mine!.candidateId))!.statement;
