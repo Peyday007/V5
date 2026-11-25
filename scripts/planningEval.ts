@@ -152,6 +152,14 @@ async function read(): Promise<void> {
       `SELECT o.status AS state, COUNT(*) AS n FROM research_orchestrations o WHERE o.project_id = ? GROUP BY o.status ORDER BY n DESC`,
       [project.id],
     );
+    // Where the goal's research actually is: missions, fragments and queued work by state, so a
+    // read can tell research that is waiting for a slot from research that never started.
+    const stateCounts = async (sql: string) => getDb().all<{ state: string; n: number }>(sql, [project.id]).catch(() => []);
+    const researchState = {
+      missions: await stateCounts(`SELECT state, COUNT(*) AS n FROM russell_missions WHERE project_id = ? GROUP BY state ORDER BY n DESC`),
+      fragments: await stateCounts(`SELECT status AS state, COUNT(*) AS n FROM research_fragments WHERE project_id = ? GROUP BY status ORDER BY n DESC`),
+      work: await stateCounts(`SELECT state, COUNT(*) AS n FROM work_items WHERE project_id = ? GROUP BY state ORDER BY n DESC`),
+    };
     // What the goal's own loop recorded: route proposals and why, and the dives its openings started.
     const goalEvents = await getDb().all<{ kind: string; summary: string; created_at: string }>(
       `SELECT kind, summary, created_at FROM workstream_events WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 25`,
@@ -177,6 +185,7 @@ async function read(): Promise<void> {
         : null,
       openings: cards,
       research,
+      researchState,
       goalEvents: goalEvents.map((e) => ({ at: e.created_at, kind: e.kind, summary: e.summary.slice(0, 300) })),
       cashEvents,
     };
