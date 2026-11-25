@@ -68,7 +68,17 @@ export interface MoneyFigure {
    * (`$200 a month per site`).
    */
   perPeriod?: boolean;
+  /**
+   * The unit a per-unit figure names, in the source's own words (`email`,
+   * `recipient`, `thousand board feet`), when it names one after `per`, `/`,
+   * `a`, `each` or `for each`. Absent when nothing names it (`$5 each`,
+   * `hourly`): a unit is read, never supplied.
+   */
+  unit?: string;
 }
+
+/** The words a per-unit figure names as its unit, stopping at the first word that starts a new phrase. */
+const UNIT_NAMED = /^\s*(?:\/\s*|per\s+|an?\s+|each\s+|for\s+(?:each|every|one|a|an)\s+)((?!(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding)\b)[a-z][\w-]*(?:\s+(?!(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding|is|are|was|were)\b)[a-z][\w-]*){0,2})/i;
 
 /** A scale word after a figure, which this module refuses rather than applies. */
 const SCALE_WORD = /^\s*(?:thousand|million|billion|trillion|bn|mn|mm|m|k)\b/i;
@@ -168,7 +178,7 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
   });
   // The rest of a range after its low end: `to $0.05`, `-$0.05`, `– 0.05 USD`.
   const anyMark = markers.map(escape).join('|');
-  const rangeTail = new RegExp(`^\\s*(?:to|through|-|–|—)\\s*(?:${anyMark})?\\s?(?:${number})(?:\\s?(?:${anyMark})\\b)?`, 'i');
+  const rangeTail = new RegExp(`^\\s*(?:to|through|-|–|—)\\s*(?:${anyMark})?\\s?(?:${number})(?:\\s?(?:${anyMark})\\b)?\\+?`, 'i');
 
   const found: MoneyFigure[] = [];
   const seen = new Set<number>();
@@ -202,12 +212,16 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
        * cleaning job priced at USD 0.01). The low end takes the unit the range
        * states.
        */
-      const range = rangeTail.exec(rest);
-      const unit = range ? rest.slice(range[0].length) : rest;
+      // An open upper end (`$250+ per person`) states the same unit.
+      const open = rest.startsWith('+') ? rest.slice(1) : rest;
+      const range = rangeTail.exec(open);
+      const unit = range ? open.slice(range[0].length) : open;
       const perParticipant = PER_PARTICIPANT.test(unit);
       const perMeasure = PER_MEASURE.test(unit);
       const perPeriod = !perParticipant && !perMeasure && PER_PERIOD.test(unit);
-      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || perMeasure || perPeriod || PER_UNIT.test(unit), ...(perParticipant ? { perParticipant } : {}), ...(perMeasure ? { perMeasure } : {}), ...(perPeriod ? { perPeriod } : {}) });
+      const perUnit = perParticipant || perMeasure || perPeriod || PER_UNIT.test(unit);
+      const named = perUnit ? UNIT_NAMED.exec(unit)?.[1]?.toLowerCase() : undefined;
+      found.push({ cents, currency: code, text: match[0].trim(), perUnit, ...(perParticipant ? { perParticipant } : {}), ...(perMeasure ? { perMeasure } : {}), ...(perPeriod ? { perPeriod } : {}), ...(named ? { unit: named } : {}) });
     }
   }
   return found.sort((a, b) => a.cents - b.cents);
