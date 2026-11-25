@@ -99,7 +99,7 @@ import { latestReadingFor, refreshPositionEvidence, separateInvestigationsSenten
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
-import { isRouteOpening, routeGoalOf, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
+import { BUYER_PROBLEM_FIELD, COMPARABLE_DEMAND_FIELD, COMPARABLE_SPEND_FIELD, DECISIVE_UNKNOWN_FIELD, isRouteOpening, routeGoalOf, ROUTE_SEARCHES_FIELD, ROUTE_STAGE_FIELD, routeStageOf } from '../../domain/routeOrigin.ts';
 import { linkWorkstream } from '../../repos/register.ts';
 import { readMoneyFigures } from './figures.ts';
 import { MAX_COLUMN_CENTS } from './answers.ts';
@@ -794,6 +794,34 @@ export function routeValidationQuestion(
   const lanes = (stillOpen ?? [])
     .map((field) => LANE_FOR_FIELD[field])
     .filter((lane): lane is string => Boolean(lane));
+  if (routeStageOf(fact(ROUTE_STAGE_FIELD)?.value) === 'SCOUT') {
+    /*
+     * A scouted direction (research-informed routes, 2026-11-25): nothing is
+     * priced yet, and the question is short and ordered — the one fact most
+     * likely to kill it first, so a dead direction costs one question, then
+     * what the proposer needs to build a priced route from evidence.
+     */
+    const problem = clip(fact(BUYER_PROBLEM_FIELD)?.value);
+    const decisive = clip(fact(DECISIVE_UNKNOWN_FIELD)?.value, 300);
+    const spend = clip(fact(COMPARABLE_SPEND_FIELD)?.value, 160);
+    return (
+      `Brain is checking a direction for an owner's goal before pricing anything: ${payer}` +
+      (problem ? `, who ${problem.replace(/^(they|who)\s+/i, '')}` : '') +
+      `, might buy "${offer}"` +
+      (channel ? `, reached through ${channel}` : '') +
+      (fulfiller ? `, delivered by ${fulfiller}` : '') +
+      '. It is a hypothesis; check it from published sources and say plainly where they refute it. ' +
+      (decisive ? `Check first the fact most likely to rule it out: ${decisive}. ` : '') +
+      'If a published fact rules the direction out, submit that one fact in the ruled_out lane with its source and stop. ' +
+      'Otherwise, briefly, each in its own lane: what buyers of this kind pay today for this or a comparable offer, as a figure with its source and date (price_evidence)' +
+      (spend ? ` — the proposer expects ${spend}, which is not evidence` : '') +
+      '; a dated sign from the last few months that buyers of this kind spend on or seek comparable offers (comparable_demand), or ask for this very offer (current_demand); ' +
+      'the published way a supplier reaches them (contact_mode); who could deliver it and what that costs (fulfiller, cost_evidence); ' +
+      'how and when such buyers pay (timing); and how many such buyers exist, as a sourced count (buyer_volume). ' +
+      (searches ? `Searches likely to find this: ${searches}. ` : '') +
+      'A competitor’s price is evidence of what comparable buyers pay, not that anybody would pay us; say which it is. Where nothing published answers a lane, say so with where you looked.'
+    );
+  }
   return (
     `Brain proposed this commercial route for an owner's goal, and it is a hypothesis that no ` +
     `published source has established yet: sell "${offer}" to ${payer}` +
@@ -810,7 +838,9 @@ export function routeValidationQuestion(
     'figure with its date and whether it is per month or once (price_evidence); how many such ' +
     'buyers exist, as a sourced count of buyers rather than a market’s money size ' +
     '(buyer_volume); a dated sign that buyers want it now — a posting, request, tender, review or ' +
-    'announcement from the last few months, with its date (current_demand); who can fulfil it — a ' +
+    'announcement from the last few months, with its date (current_demand), or, where nobody asks ' +
+    'for this exact offer, a dated sign that buyers of this kind spend on comparable offers now ' +
+    '(comparable_demand); who can fulfil it — a ' +
     'named supplier, subcontractor, platform or tool — and what that costs per sale (fulfiller, ' +
     'cost_evidence); and when the money arrives, from published payment or settlement terms ' +
     '(timing). ' +
@@ -2281,6 +2311,13 @@ export const WRITER_FIELD_BY_LANE: Readonly<Record<string, string>> = Object.fre
    * each field has one writer.
    */
   effort: 'hours',
+  /*
+   * A dated sign that buyers of this kind spend on comparable offers now: the
+   * evidence a new offer rests on before anybody has asked for it by name.
+   * Written by the one research writer, which refuses it undated, into its own
+   * field — never the buying signal for this exact offer.
+   */
+  comparable_demand: COMPARABLE_DEMAND_FIELD,
 });
 
 export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.freeze({

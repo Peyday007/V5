@@ -908,6 +908,40 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
 const DAY = 86_400_000;
 
 /**
+ * Whether buyers want this now (research-informed routes, 2026-11-25). A fresh,
+ * dated buying signal for this very offer is VERIFIED demand. Where nobody has
+ * asked for this exact offer — a new offer Brain created from a real market
+ * need — a fresh, dated sign that buyers of this kind spend on comparable
+ * offers now establishes the link as COMPARABLE demand, and the basis says so:
+ * it is demand for the market, not proof that these buyers want this offer,
+ * which stays the conversion test's to show. An undated or stale sign of either
+ * kind is not demand. Pure.
+ */
+export function currentDemandCheck(one: Pick<ModelledOpportunity, 'opportunity' | 'comparableDemand'>, signalFresh: boolean, now: Date): LinkCheck {
+  const o = one.opportunity;
+  if (o.buyingSignal && signalFresh) return { link: 'CURRENT_DEMAND', ok: true, basis: `VERIFIED: signal dated ${o.signalObservedAt!.slice(0, 10)}` };
+  const comparable = one.comparableDemand ?? null;
+  const observed = comparable?.observedAt ? Date.parse(comparable.observedAt) : Number.NaN;
+  const comparableFresh = Number.isFinite(observed) && now.getTime() - observed <= RECOMMENDATION_POLICY.demandFreshDays * DAY;
+  if (comparable && comparableFresh) {
+    return {
+      link: 'CURRENT_DEMAND',
+      ok: true,
+      basis: `COMPARABLE: buyers of this kind spend on comparable offers now (dated ${comparable.observedAt!.slice(0, 10)}: ${comparable.text.slice(0, 100)}); demand for this exact offer is not verified`,
+    };
+  }
+  return {
+    link: 'CURRENT_DEMAND',
+    ok: false,
+    basis: o.buyingSignal
+      ? 'the buying signal is undated or older than the policy allows'
+      : comparable
+        ? 'the comparable-demand sign is undated or older than the policy allows'
+        : 'no buying signal recorded',
+  };
+}
+
+/**
  * Agreed money that rests on a contested price (planningReliability round 10,
  * adaptation): the card's price is contradicted by a filed price fact
  * (`priceContradiction`), and the agreements were read at more a deal than the
@@ -935,7 +969,7 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
   const settles = settlesState(one, target);
   return [
     { link: 'REACHABLE_BUYER', ok: !!o.reachableChannel && !!o.payer, basis: o.reachableChannel ? `reach: ${o.reachableChannel.slice(0, 80)}` : 'nobody has established how to reach the buyer' },
-    { link: 'CURRENT_DEMAND', ok: !!(o.buyingSignal && fresh), basis: o.buyingSignal ? (fresh ? `signal dated ${o.signalObservedAt!.slice(0, 10)}` : 'the buying signal is undated or older than the policy allows') : 'no buying signal recorded' },
+    currentDemandCheck(one, !!fresh, now),
     {
       link: 'OFFER_AND_PRICE',
       // A price counts only when buyers are shown to pay it: a source, this

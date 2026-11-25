@@ -15,7 +15,7 @@
  *     project's other goals.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { freshProject, researchedFindings } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate, discoveryAllowed } from '../server/services/cash/lifecycle.ts';
@@ -93,7 +93,7 @@ async function goalWith(where: { projectId: string; ownerId: string }, objective
 
 function stub(routes: unknown[]): RouteDeps {
   const chat: ChatFn = async () => ({ content: JSON.stringify({ routes }), toolCalls: [], ms: 1, completionTokens: 1, error: null });
-  return { chats: async () => [{ label: 'stub', chat }], delivers: async () => [], startDives: async () => [] };
+  return { chats: async () => [{ label: 'stub', chat }], claims: researchedFindings, delivers: async () => [], startDives: async () => [] };
 }
 
 describe("a goal's offer of the requester's labour binds that goal only", () => {

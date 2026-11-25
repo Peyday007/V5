@@ -18,7 +18,7 @@
  *     turned away silently.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { freshProject, researchedFindings } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createProject } from '../server/repos/projects.ts';
@@ -86,7 +86,7 @@ function replying(...contents: string[]): { deps: Omit<RouteDeps, 'startDives'>;
     n += 1;
     return { content, toolCalls: [], ms: 1, completionTokens: 1, error: null };
   };
-  return { asked: () => n, deps: { chats: async () => [{ label: 'stub', chat }], delivers: async () => ['spreadsheet'] } };
+  return { asked: () => n, deps: { chats: async () => [{ label: 'stub', chat }], claims: researchedFindings, delivers: async () => ['spreadsheet'] } };
 }
 
 const routes = () => opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
@@ -271,7 +271,7 @@ describe('goals that find every proposal place taken', () => {
       asked += 1;
       return slow(...args);
     };
-    const deps: RouteDeps = { chats: async () => [{ label: 'slow', chat: counting }], delivers: async () => [], startDives: async () => [] };
+    const deps: RouteDeps = { chats: async () => [{ label: 'slow', chat: counting }], claims: researchedFindings, delivers: async () => [], startDives: async () => [] };
     // A second goal in a project of its own, so two asks hold both places.
     const other = await createProject({ name: `Route dives second ${projectId.slice(-6)}` });
     const owner = await createUser({ email: `route-dives-b-${other.id.slice(-6)}@example.com`, displayName: 'Owner B', password: 'a-long-enough-password', isBrainAdmin: true });

@@ -14,7 +14,7 @@
  *     as one question, and its answers reach the card fields the planner reads.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { freshProject, researchedFindings } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
@@ -89,7 +89,7 @@ function stub(answer: unknown = ANSWER): { deps: RouteDeps; prompts: string[] } 
     if (/strategist/.test(String((messages[0] as { content: string }).content))) prompts.push(String((messages[1] as { content: string }).content));
     return { content: JSON.stringify(answer), toolCalls: [], ms: 1, completionTokens: 1, error: null };
   };
-  return { prompts, deps: { chats: async () => [{ label: 'stub', chat }], delivers: async () => ['spreadsheet'] } };
+  return { prompts, deps: { chats: async () => [{ label: 'stub', chat }], claims: researchedFindings, delivers: async () => ['spreadsheet'] } };
 }
 
 const routes = () => opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
@@ -107,7 +107,9 @@ describe('a goal is given whole routes from its objective', () => {
     // The prompt carries the owner's own words verbatim, the limits and Brain's proved deliverables, and no industry template.
     expect(prompts[0]).toContain('Collect 3000 dollars of settled cash within 30 days using at most $500');
     expect(prompts[0]).toMatch(/must settle inside \d+ day/);
-    expect(prompts[0]).toMatch(/no two routes may share a buyer type/i);
+    // No count of buyer kinds or routes is forced (owner, 2026-11-25): only as many as the evidence supports.
+    expect(prompts[0]).not.toMatch(/no two routes may share a buyer type/i);
+    expect(prompts[0]).toMatch(/no count of buyer kinds/i);
     expect(prompts[0]).toMatch(/ownerFit/);
     expect(prompts[0]).toMatch(/at most \$500 may be tied up/);
     expect(prompts[0]).toMatch(/within \d+ day/);
@@ -182,13 +184,13 @@ describe('a goal is given whole routes from its objective', () => {
     expect(events[0]!.summary).toMatch(/no operator model is configured/);
   });
 
-  it('drops a route with no owner fit, and a second route to the same buyer type', () => {
+  it('drops a route with no owner fit, and keeps a second, different offer to the same kind of buyer', () => {
     const ctx: RouteContext = { objective: 'I speak Spanish and live in Seattle', currency: 'USD', remaining: 3000, daysLeft: 30, capitalLimit: null, hoursLimit: null, resources: null, industry: null, recurring: false, exclusions: [], delivers: [], held: [], refuted: [] };
     const base = ANSWER.routes[1]!;
     const { routes: kept, rejected } = parseRoutes({ routes: [{ ...base, ownerFit: undefined }, base, { ...base, offer: 'Show notes', title: 'Show notes' }] }, ctx);
-    expect(kept).toHaveLength(1);
+    expect(kept.map((one) => one.title)).toEqual([base.title, 'Show notes']);
     expect(rejected.map((one) => one.why).join(' | ')).toMatch(/does not say how it uses or respects/);
-    expect(rejected.map((one) => one.why).join(' | ')).toMatch(/same buyer type/);
+    expect(rejected.map((one) => one.why).join(' | ')).not.toMatch(/same buyer type/);
   });
 
   it('rejects a route needing more owner hours than the limit allows', () => {

@@ -60,6 +60,7 @@
  *     person's own answer outranks a proposal permanently.
  */
 import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
+import { COMPARABLE_DEMAND_FIELD } from '../../domain/routeOrigin.ts';
 import { openingOwnerLabour } from '../goals/ownerLabour.ts';
 import { citableClaims } from '../../repos/research.ts';
 import { getMission } from '../../repos/russellMissions.ts';
@@ -454,7 +455,16 @@ export async function writeEvidenceAnswer(input: {
    * was dropped — CURRENT_DEMAND stayed open on 9 of 10 fresh goals.
    */
   const column = COLUMN[input.field] ?? (input.field === 'buyingEvidence' ? 'buying_signal' : undefined);
-  const engineOnly = !column && (NEED_RESEARCHABLE_ENGINE_FIELDS as readonly string[]).includes(input.field);
+  /*
+   * Comparable demand (research-informed routes, 2026-11-25): a dated sign that
+   * buyers of this kind spend on, or seek, offers comparable to this one now.
+   * It is evidence about the market, never the buying signal for this exact
+   * offer, so it is a card fact of its own with no column, and like the buying
+   * signal it is no evidence without the date its source prints.
+   */
+  const comparable = input.field === COMPARABLE_DEMAND_FIELD;
+  if (comparable && !(input.claim.sourceDate ?? input.claim.retrievedAt)) return false;
+  const engineOnly = !column && (comparable || (NEED_RESEARCHABLE_ENGINE_FIELDS as readonly string[]).includes(input.field));
   if (!column && !engineOnly) return false;
 
   const existing = await cardFact(input.opportunity.id, input.field);

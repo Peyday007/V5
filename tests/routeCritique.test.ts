@@ -17,7 +17,7 @@
  *   - with no readable critique the single pass stands, unranked.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { freshProject, researchedFindings } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
@@ -138,18 +138,30 @@ function scripted(proposals: unknown[], critiques: unknown[]): { deps: RouteDeps
     if (answer === undefined) return { content: '', toolCalls: [], ms: 1, completionTokens: 0, error: 'the model timed out' };
     return { content: typeof answer === 'string' ? answer : JSON.stringify(answer), toolCalls: [], ms: 1, completionTokens: 1, error: null };
   };
-  return { asked, deps: { chats: async () => [{ label: 'stub', chat }], delivers: async () => [], startDives: async () => [] } };
+  return { asked, deps: { chats: async () => [{ label: 'stub', chat }], claims: researchedFindings, delivers: async () => [], startDives: async () => [] } };
 }
 
 const routes = () => opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
 const lastEvent = async () => (await workstreamEventsOfKind(goalId, ROUTE_EVENT, new Date(0).toISOString(), 5))[0]!;
 
 describe('a proposal is critiqued, replaced where it fails and ranked', () => {
-  it('drops a digital-product menu, asks once for replacements naming what failed, and files ranked routes', async () => {
+  it('keeps one well-founded route without asking for more to reach a count', async () => {
     const fails = (index: number, rule: string) => ({ index, verdict: 'DROP', scores: { OWNER_FIT: 0, [rule]: 1 }, failed: ['OWNER_FIT', rule], why: 'ignores the owner\'s Spanish, van and Columbus for a product that fits anyone' });
     const { deps, asked } = scripted(
-      [{ owner: OWNER, routes: MENU }, { routes: LOCAL }],
+      [{ owner: OWNER, routes: MENU }],
       [{ owner: OWNER, reviews: [fails(1, 'CHANNEL'), fails(2, 'CHANNEL'), fails(3, 'CAPITAL'), { index: 4, verdict: 'KEEP', scores: { OWNER_FIT: 5, WINDOW: 5, CHANNEL: 4, FULFILLER: 4, PRICE: 4, CAPITAL: 5, MARKET: 4 }, why: 'uses the Spanish locally, paid on delivery' }], ranking: [4] }],
+    );
+    expect(await proposeGoalRoutes({ goalId, now: new Date() }, deps)).toMatchObject({ kind: 'PROPOSED', critique: 'CRITIQUED' });
+    expect(asked.proposer).toHaveLength(1);
+    expect((await routes()).map((one) => one.title)).toEqual(['Spanish-English menu translation']);
+    expect(((await lastEvent()).detail['critique'] as CritiqueRecord)).toMatchObject({ replacementsAsked: false, replacements: 0 });
+  });
+
+  it('drops a digital-product menu, asks once for replacements naming what failed when none survives, and files ranked routes', async () => {
+    const fails = (index: number, rule: string) => ({ index, verdict: 'DROP', scores: { OWNER_FIT: 0, [rule]: 1 }, failed: ['OWNER_FIT', rule], why: 'ignores the owner\'s Spanish, van and Columbus for a product that fits anyone' });
+    const { deps, asked } = scripted(
+      [{ owner: OWNER, routes: MENU.slice(0, 3) }, { routes: [...LOCAL, MENU[3]] }],
+      [{ owner: OWNER, reviews: [fails(1, 'CHANNEL'), fails(2, 'CHANNEL'), fails(3, 'CAPITAL')], ranking: [] }],
     );
     const outcome = await proposeGoalRoutes({ goalId, now: new Date() }, deps);
     expect(outcome).toMatchObject({ kind: 'PROPOSED', critique: 'CRITIQUED' });
@@ -157,24 +169,24 @@ describe('a proposal is critiqued, replaced where it fails and ranked', () => {
     // The owner facts the proposer read reach the critic.
     expect(asked.critic[0]).toMatch(/OWNER PROFILE[^\n]*fluent Spanish[^\n]*a cargo van[^\n]*Columbus, Ohio/);
     expect(asked.critic[0]).toMatch(/1\. \{"title":"Market research reports"/);
-    // One replacement ask, naming what failed and what is kept.
+    // One replacement ask, naming what failed.
     expect(asked.proposer).toHaveLength(2);
     expect(asked.proposer[1]).toMatch(/FAILED REVIEW[\s\S]*Market research reports: the critique dropped it \(fails OWNER_FIT, CHANNEL\)/);
-    expect(asked.proposer[1]).toMatch(/KEPT[^\n]*Spanish-English menu translation/);
 
     const filed = await routes();
     expect(filed.map((one) => one.title).sort()).toEqual(['Spanish document interpreting online', 'Spanish-English menu translation', 'Weekend van moves']);
     const rankOf = async (title: string) => routeRankOf((await cardFact(filed.find((one) => one.title === title)!.id, ROUTE_RANK_FIELD))?.value);
-    expect(await rankOf('Spanish-English menu translation')).toBe(1);
-    expect(await rankOf('Weekend van moves')).toBe(2);
-    expect(await rankOf('Spanish document interpreting online')).toBe(3);
-    expect((await cardFact(filed.find((one) => one.title === 'Spanish-English menu translation')!.id, ROUTE_RANK_FIELD))!.kind).toBe('RECOMMENDATION');
+    // Replacements nobody critiqued are ranked in the order they came.
+    expect(await rankOf('Weekend van moves')).toBe(1);
+    expect(await rankOf('Spanish document interpreting online')).toBe(2);
+    expect(await rankOf('Spanish-English menu translation')).toBe(3);
+    expect((await cardFact(filed.find((one) => one.title === 'Weekend van moves')!.id, ROUTE_RANK_FIELD))!.kind).toBe('RECOMMENDATION');
 
     const event = await lastEvent();
     const critique = event.detail['critique'] as CritiqueRecord;
-    expect(critique).toMatchObject({ outcome: 'CRITIQUED', model: 'stub', replacementsAsked: true, replacements: 2 });
-    expect(critique.ranking).toEqual(['Spanish-English menu translation', 'Weekend van moves', 'Spanish document interpreting online']);
-    expect(critique.reviews.map((one) => one.verdict)).toEqual(['DROP', 'DROP', 'DROP', 'KEEP']);
+    expect(critique).toMatchObject({ outcome: 'CRITIQUED', model: 'stub', replacementsAsked: true, replacements: 3 });
+    expect(critique.ranking).toEqual(['Weekend van moves', 'Spanish document interpreting online', 'Spanish-English menu translation']);
+    expect(critique.reviews.map((one) => one.verdict)).toEqual(['DROP', 'DROP', 'DROP']);
     expect(event.detail['owner']).toMatchObject({ location: 'Columbus, Ohio' });
     expect((event.detail['rejected'] as RejectedRoute[]).filter((one) => one.rule === 'CRITIQUE')).toHaveLength(3);
     expect(event.summary).toMatch(/3 rejected \(3 failed the critique\), ranked by a critique/);

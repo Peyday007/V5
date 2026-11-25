@@ -15,7 +15,7 @@
  *     held, no read in the pass and no search widened.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { freshProject, researchedFindings } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
@@ -84,7 +84,7 @@ function stub(answer: unknown): { deps: RouteDeps; prompts: string[] } {
     if (/strategist/.test(String((messages[0] as { content: string }).content))) prompts.push(String((messages[1] as { content: string }).content));
     return { content: JSON.stringify(answer), toolCalls: [], ms: 1, completionTokens: 1, error: null };
   };
-  return { prompts, deps: { chats: async () => [{ label: 'stub', chat }], delivers: async () => [], startDives: async () => [] } };
+  return { prompts, deps: { chats: async () => [{ label: 'stub', chat }], claims: researchedFindings, delivers: async () => [], startDives: async () => [] } };
 }
 
 describe("a recurring goal's routes are held to its limits in the goal's own units", () => {

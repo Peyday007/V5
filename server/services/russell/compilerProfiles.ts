@@ -567,6 +567,16 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
       necessity: 'CONDITIONAL',
     },
     {
+      id: 'comparable_demand',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A dated sign that buyers of this kind spend on, or seek, offers comparable to this one now — ' +
+        'a competitor’s recent orders, reviews or listings, a published spending figure, a posted ' +
+        'request for something similar — quoted with the date the source prints. It is evidence about ' +
+        'the market, not that anybody wants this exact offer; say which comparable offer it is about.',
+      necessity: 'CONDITIONAL',
+    },
+    {
       id: 'fulfiller',
       evidenceKind: 'SPECIFIC_INSTANCE',
       description:

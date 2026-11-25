@@ -413,3 +413,20 @@ export function deletePhysicalFile(document: Document): void {
 export function readDataFile(relativePath: string): Buffer {
   return fs.readFileSync(path.resolve(DATA_ROOT, relativePath));
 }
+
+/**
+ * Three read findings a goal's research holds, for a route test that exercises
+ * the priced-route step of the research-informed loop (`routeProposal.ts`):
+ * with fewer, a goal's first ask scouts directions instead
+ * (`tests/researchInformedRoutes.test.ts`). None is cited, so nothing is filed
+ * from them.
+ */
+export async function researchedFindings(): Promise<import('../server/domain/types.ts').ResearchClaim[]> {
+  const one = (n: number, text: string) =>
+    ({ id: `clm_helper_${n}`, claim: text, sourceUrl: `https://example.org/finding-${n}`, sourceTitle: null, sourcePublisher: `Source ${n}`, sourceDate: '2026-11-01', evidenceLane: 'price_evidence', retrievedAt: '2026-11-20T00:00:00Z' }) as unknown as import('../server/domain/types.ts').ResearchClaim;
+  return [
+    one(1, 'Buyers of this kind are published as paying for comparable services this season.'),
+    one(2, 'A public directory lists several hundred such buyers in the owner’s area.'),
+    one(3, 'Comparable suppliers publish payment on completion or within a week.'),
+  ];
+}
