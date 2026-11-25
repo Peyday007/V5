@@ -1071,6 +1071,28 @@ async function foundByRounds(candidateIds: string[]): Promise<string[]> {
   return rows.map((one) => one.title);
 }
 
+/**
+ * The owner's own words as the brief of a goal's search (2026-11-25).
+ *
+ * A goal's round asked "which lawful ways could bring this operation $N" and
+ * named the Cash Mode sprint's standing objective, never the goal's: a request
+ * to "start a resume-writing service", one "selling something to restaurants",
+ * one in a stated city or one that rules out cold email reached the researcher
+ * as "any way at all, in any market". The words are quoted, never interpreted:
+ * where they name a business, an industry, a kind of buyer, a place or a
+ * condition, the researcher is told that is the brief; where they name none, the
+ * lens's own angle decides as before. Pure.
+ */
+export function ownerBrief(objective: string | null | undefined): string {
+  const words = (objective ?? '').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '');
+  if (!words) return '';
+  return (
+    `The owner asked, in their own words: "${words.slice(0, 600)}". Where those words name a business, an ` +
+    'industry, a kind of buyer, a place, a way of working or something to avoid, that is the brief: report ' +
+    'ways inside it first, respect every limit and condition it states, and only then look further. '
+  );
+}
+
 export async function openGoalDiscovery(input: {
   goal: { id: string; title: string };
   target: {
@@ -1257,6 +1279,7 @@ export async function openGoalDiscovery(input: {
     input.goal.id,
     input.goal.title,
     methodFirst +
+    ownerBrief(goalRow?.intent ?? input.goal.title) +
     `Looking at ${lens.angle} — in any market or industry, and as one opening or several running at once — ` +
       `which lawful ways could bring this operation ${amount} more of ` +
       `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held}${elsewhere} ${capital} ${resources} ${pace} ` +
@@ -1286,7 +1309,8 @@ export async function openGoalDiscovery(input: {
     mode,
     bucket,
     next,
-    statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, commonTo(await liveGoalLimits(t.projectId, new Date().toISOString()))),
+    // Framed by the goal it serves, in the owner's own words — not the sprint's standing objective (2026-11-25).
+    statement: questionFor(bucket, input.goal.title || mode.objective, next, history, heldLines, frame, commonTo(await liveGoalLimits(t.projectId, new Date().toISOString()))),
     origins,
     seedKeys,
     ...(lens.openWorld ? { openWorld: lens.openWorld } : {}),
