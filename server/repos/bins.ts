@@ -31,7 +31,7 @@ import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import { normalizeSessionRef, sameProviderSession, sessionSpellings } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
-import { classifyBinPurpose, OWNER_DIRECTED_GOAL_IDS, type PurposeDecision } from '../domain/binPurpose.ts';
+import { classifyBinPurpose, ownerDirectedGoalIdsSql, type PurposeDecision } from '../domain/binPurpose.ts';
 import { repositoryIdOf } from '../services/bins/routing.ts';
 import { observeConnectorArrival } from '../services/fleet/connectorBinding.ts';
 import { chargesToAuth, connectorHealth } from '../services/fleet/connectorHealth.ts';
@@ -1667,10 +1667,7 @@ export function purposeAdmitsSql(prefix: string): string {
  * selects nothing.
  */
 export function ownerDirectedPacketIdsSql(): string {
-  const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
-  if (ids.length === 0) return 'SELECT NULL WHERE 1 = 0';
-  const list = ids.map((id) => `'${id}'`).join(', ');
-  const live = `gl.workstream_id IN (${list}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
+  const live = `gl.workstream_id IN (${ownerDirectedGoalIdsSql()}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
   return (
     `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'PACKET' AND gl.ref IS NOT NULL` +
     ` UNION SELECT gm.orchestration_id FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
@@ -1682,10 +1679,7 @@ export function ownerDirectedPacketIdsSql(): string {
 
 export function ownerDirectedGoalBinSql(prefix: string): string {
   const outer = prefix === '' ? 'bins.' : prefix;
-  const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
-  if (ids.length === 0) return '(1 = 0)';
-  const list = ids.map((id) => `'${id}'`).join(', ');
-  const live = `gl.workstream_id IN (${list}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
+  const live = `gl.workstream_id IN (${ownerDirectedGoalIdsSql()}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
   // A mission the goal links directly (by its id) or through its candidate (by `candidate_id`), as `goals/model.ts` reads them.
   const missions = (column: 'bin_id' | 'orchestration_id'): string =>
     `SELECT gm.${column} FROM workstream_links gl JOIN russell_missions gm ON gm.id = gl.ref` +
