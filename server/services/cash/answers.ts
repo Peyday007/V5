@@ -65,7 +65,7 @@ import { getMission } from '../../repos/russellMissions.ts';
 import { missionsForRounds } from '../russell/roundMissions.ts';
 import { getOpportunity, listOpportunities, updateOpportunity } from '../../repos/cashPortfolio.ts';
 import { listNeeds } from '../../repos/cashPortfolio.ts';
-import { recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   cardFact,
   cardFactMap,
@@ -197,6 +197,8 @@ export interface UnansweredResearch {
 export interface ResearchApplication {
   applied: AppliedAnswer[];
   unanswered: UnansweredResearch[];
+  /** Pathway construction rounds' answers put on the opening that asked (`applyPathwayAnswers`). */
+  pathways?: PathwayAnswer[];
 }
 
 function clamp(text: string, max: number): string {
@@ -393,6 +395,9 @@ export async function applyResearchAnswers(projectId: string): Promise<ResearchA
       claimId: claim.id,
     });
   }
+  // A pathway construction's round asked with no need: its answers return to the opening that asked (§93).
+  const pathways = await applyPathwayAnswers(projectId);
+  if (pathways.length > 0) out.pathways = pathways;
   return out;
 }
 
@@ -412,6 +417,32 @@ async function applyOne(input: {
   field: string;
   need: CashNeed;
   claim: ResearchClaim;
+}): Promise<boolean> {
+  if (!(await writeEvidenceAnswer({ opportunity: input.opportunity, field: input.field, claim: input.claim, needId: input.need.id }))) return false;
+  await closeNeed({
+    needId: input.need.id,
+    to: 'RESOLVED',
+    resolution: `Established by research: ${clamp(input.claim.claim, 200)}`,
+    actorUserId: BRAIN,
+    verifiedBy: 'BRAIN_READ_THE_ROW',
+  });
+  return true;
+}
+
+/**
+ * Write one gated claim as the evidence for one card field of one opening: the
+ * column where the field has one (a money field through `figureFor`, the buying
+ * signal with its date), the EVIDENCE card fact and its event. The one writer a
+ * research answer goes through, whether a need asked for it (`applyOne`) or a
+ * pathway construction's round did (`applyPathwayAnswers`). False when the
+ * field has nowhere to go, an earlier answer outranks it (`mayReplace`), or a
+ * money field's claim states no figure.
+ */
+export async function writeEvidenceAnswer(input: {
+  opportunity: CashOpportunity;
+  field: string;
+  claim: ResearchClaim;
+  needId: string | null;
 }): Promise<boolean> {
   const column = COLUMN[input.field];
   const engineOnly = !column && (NEED_RESEARCHABLE_ENGINE_FIELDS as readonly string[]).includes(input.field);
@@ -453,7 +484,7 @@ async function applyOne(input: {
     kind: 'EVIDENCE',
     value,
     claimId: input.claim.id,
-    needId: input.need.id,
+    needId: input.needId,
     decidedBy: BRAIN,
   });
 
@@ -466,19 +497,97 @@ async function applyOne(input: {
     detail: {
       field: input.field,
       claimId: input.claim.id,
-      needId: input.need.id,
+      needId: input.needId,
       sourceUrl: input.claim.sourceUrl,
     },
   });
-
-  await closeNeed({
-    needId: input.need.id,
-    to: 'RESOLVED',
-    resolution: `Established by research: ${clamp(input.claim.claim, 200)}`,
-    actorUserId: BRAIN,
-    verifiedBy: 'BRAIN_READ_THE_ROW',
-  });
   return true;
+}
+
+/**
+ * The row a pathway construction's round writes when it opens (§93): which
+ * held opening asked, and for which of its card fields. A pathway round's
+ * bucket is keyed by a hash of the opening and the gap (`pathwayRoundKey`,
+ * goals/plan.ts), which names neither, so without this row its answers came
+ * back only as new, unrelated openings and the opening that asked never had
+ * its gap filled (production trace 2026-11-24, break point 5).
+ */
+export const PATHWAY_ROUND_ASKED = 'CASH_PATHWAY_ROUND_ASKED';
+
+export interface PathwayAsk {
+  projectId: string;
+  opportunityId: string;
+  /** The card field the construction's move fills; null asks for no one field, and nothing is applied. */
+  field: string | null;
+  gap: string;
+  candidateId: string;
+  bucketId: string;
+}
+
+/** Record which opening and field a pathway construction's round asks for. */
+export async function recordPathwayAsk(ask: PathwayAsk): Promise<void> {
+  await recordCashEvent({
+    projectId: ask.projectId,
+    opportunityId: ask.opportunityId,
+    kind: PATHWAY_ROUND_ASKED,
+    actorRef: BRAIN,
+    summary: `A pathway construction asks the world for this opening's ${ask.field ?? ask.gap.toLowerCase()}.`,
+    detail: { field: ask.field, gap: ask.gap, candidateId: ask.candidateId, bucketId: ask.bucketId },
+  });
+}
+
+export interface PathwayAnswer {
+  opportunityId: string;
+  field: string;
+  claimId: string;
+  candidateId: string;
+}
+
+/**
+ * Put a finished pathway round's accepted claims on the opening that asked,
+ * at the field it asked for, through `writeEvidenceAnswer` — the writer a need's
+ * answer passes (a sourced, accepted claim; a money field only from a stated
+ * figure; never over a person's answer or earlier evidence). Derived from
+ * rows on every tick like `applyResearchAnswers`: an ask whose field is
+ * already evidence is skipped before any mission is read, so a replay writes
+ * nothing twice. A claim that names buyers (`opportunity_signal`) is tried
+ * first, because the round's question asks for exactly that claim to carry
+ * one; the harvest still files it as an opening of its own as well.
+ */
+export async function applyPathwayAnswers(projectId: string): Promise<PathwayAnswer[]> {
+  const out: PathwayAnswer[] = [];
+  const asks = new Map<string, { opportunityId: string; field: string; bucketId: string }>();
+  for (const event of await cashEventsOfKindInProject(projectId, PATHWAY_ROUND_ASKED)) {
+    const detail = event.detail as { field?: unknown; candidateId?: unknown; bucketId?: unknown };
+    if (!event.opportunityId || typeof detail.field !== 'string' || typeof detail.candidateId !== 'string') continue;
+    asks.set(detail.candidateId, { opportunityId: event.opportunityId, field: detail.field, bucketId: typeof detail.bucketId === 'string' ? detail.bucketId : '' });
+  }
+  if (asks.size === 0) return out;
+  const pending: string[] = [];
+  for (const [candidateId, ask] of asks) {
+    if (!mayReplace(await cardFact(ask.opportunityId, ask.field), 'EVIDENCE')) continue;
+    pending.push(candidateId);
+  }
+  if (pending.length === 0) return out;
+  const missions = await missionsForRounds(pending);
+  for (const candidateId of pending) {
+    const ask = asks.get(candidateId)!;
+    const mission = missions.get(candidateId)?.latest ?? null;
+    if (!mission || mission.state !== 'DONE' || !mission.orchestrationId) continue;
+    const opportunity = await getOpportunity(ask.opportunityId);
+    if (!opportunity || opportunity.projectId !== projectId || opportunity.duplicateOfId) continue;
+    const claims = (await Promise.all((missions.get(candidateId)?.orchestrationIds ?? []).map((id) => citableClaims(id))))
+      .flat()
+      .filter((claim) => claim.sourceUrl !== null && claim.claimType !== 'NEGATIVE_EXISTENCE');
+    const ordered = [...claims.filter((claim) => claim.opportunitySignal), ...claims.filter((claim) => !claim.opportunitySignal)];
+    for (const claim of ordered) {
+      if (await writeEvidenceAnswer({ opportunity, field: ask.field, claim, needId: null })) {
+        out.push({ opportunityId: opportunity.id, field: ask.field, claimId: claim.id, candidateId });
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 export interface ProposedTerm {

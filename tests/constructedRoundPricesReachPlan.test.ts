@@ -182,14 +182,33 @@ describe('B1g: a constructed round files against the buyer the plan reads, from 
     expect(pool.decisions.find((one) => one.claimId === priced)?.candidate?.buyer?.id).toBe(buyerId);
   });
 
-  it('(a) refuses, naming the population, when the map holds no buyer type the plan would read for it — and invents none', async () => {
+  it('(a) maps a population the map does not hold yet (mapAskedPopulation) and files against it, so the plan reads it for that demand (P1 break point 6)', async () => {
     const { orchestrationId, fragmentId } = await openArrangementRound();
     await unmapped({ version: 1, arrangement: { demand: { name: 'Regional dental chains', from: 'REVERSE', ref: 'x' } } });
+    const [priced] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece for a 10,000-home EDDM run, total $4,675.']);
+    // The dry run reports the population to map, and maps nothing.
+    const decision = (await backfillCandidates(projectId)).decisions.find((one) => one.claimId === priced)!;
+    expect(decision.reason).toBeNull();
+    expect(decision.candidate?.buyer).toBeNull();
+    expect(decision.candidate?.askedPopulation?.name).toBe('Regional dental chains');
+    expect((await getDb().get<{ n: number }>("SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ? AND name = 'Regional dental chains'", [projectId]))!.n).toBe(0);
+    // The writer maps it, established by the claim, and files against it.
+    const filed = await backfillClaimFacts(projectId);
+    const node = await getDb().get<{ id: string; kind: string; source_claim_id: string }>("SELECT id, kind, source_claim_id FROM industry_nodes WHERE project_id = ? AND name = 'Regional dental chains'", [projectId]);
+    expect(node).toMatchObject({ kind: 'BUYER_TYPE', source_claim_id: priced });
+    expect(filed.filed.map((one) => one.segment)).toEqual([`map_${node!.id}`]);
+    const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
+    expect(read.priced.map((one) => one.lineage)).toContainEqual([`claim:${priced}`]);
+  });
+
+  it('(a) refuses, naming it, a demand that is no buyer population — and invents none', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    await unmapped({ version: 1, arrangement: { demand: { name: 'therefore an unidentified individual', from: 'REVERSE', ref: 'x' } } });
     const [priced] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece.']);
     const decision = (await backfillCandidates(projectId)).decisions.find((one) => one.claimId === priced)!;
     expect(decision.candidate).toBeNull();
     expect(decision.reason).toMatch(/plan reads no fact/);
-    expect(decision.unmatchedBuyer).toBe('Regional dental chains');
+    expect(decision.unmatchedBuyer).toBe('therefore an unidentified individual');
     const nodesBefore = (await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ?', [projectId]))!.n;
     expect((await backfillClaimFacts(projectId)).filed).toEqual([]);
     expect((await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ?', [projectId]))!.n).toBe(nodesBefore);
