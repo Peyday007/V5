@@ -675,7 +675,19 @@ export function readVolume(raw: string, windowDays: number, payer: string | null
    * Read only when no buyer word counted anything, so every reading the
    * vocabulary already made is unchanged; the supply side is still refused.
    */
-  if (counts.length === 0) counts = [...LICENSED_COUNTS].flatMap((pattern) => buyerCounts(text, pattern)).map((c) => c.n);
+  /*
+   * With a payer named, a register counts only when it shares the payer's kind
+   * (merge of the two licence readers, 2026-11-25): "5,000 food-truck permits"
+   * is not a market of dental office managers. Without a payer the register is
+   * read as before.
+   */
+  const payerKinds = payer ? kindWords(payer) : null;
+  const ofPayer = (at: number): boolean => {
+    if (!payerKinds || payerKinds.size === 0) return true;
+    const near = kindWords(text.slice(at, at + 100).replace(/^\S+\s*/, 'x '));
+    return [...near].some((w) => payerKinds.has(w));
+  };
+  if (counts.length === 0) counts = [...LICENSED_COUNTS].flatMap((pattern) => buyerCounts(text, pattern)).filter((c) => ofPayer(c.at)).map((c) => c.n);
   /*
    * A count whose own sentence goes on to say each of them buys ("About 800 active Detroit
    * investors are listed on BiggerPockets; each buys one") counts buyers whatever its noun:
