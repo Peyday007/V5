@@ -724,6 +724,16 @@ export async function dispatchTick(
           const retryAfterMs = fit.sessionClearsAt
             ? Math.max(30_000, Date.parse(fit.sessionClearsAt) - Date.now())
             : NO_CLAIMABLE_WORK_DEFER_MS;
+          /*
+           * The wait is the bin's, not only this intent's. Deferring the intent
+           * alone left the bin passing `FIREABLE_SQL`, so the watchdog's
+           * `idleCounts`, the Factory line reading and the candidate pages all
+           * counted it as executable work beside free capacity for the whole
+           * wait — the recorded IDLE_CAPACITY class. The same fire backoff the
+           * refire guard uses: the assigner ignores it, so an arriving session
+           * may still take the bin; only starting another one waits.
+           */
+          await deferBinFires(bin.id, retryAfterMs);
           await markDispatchDeferred(intent.id, {
             refusal: 'NO_ELIGIBLE_AUDIT_SESSION',
             message:
