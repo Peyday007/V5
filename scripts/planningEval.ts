@@ -5,6 +5,7 @@
  * openings, research or ledger leak into another's plan.
  *
  *   create --run R --case C --objective-b64 <base64 of the owner's words>
+ *   create --run R --batch-b64 <base64 of a JSON list of {case, text}>
  *       Creates project "Planning evaluation R C" and the goal from the words,
  *       read by the one objective reader (`createGoal`). The goal is set by the
  *       Brain's enabled administrator — there must be exactly one — because a
@@ -63,8 +64,17 @@ function clip(value: unknown, depth = 0): unknown {
 
 async function create(): Promise<void> {
   const run = safeId(flag('run'), '--run');
-  const kase = safeId(flag('case'), '--case');
-  const objective = words(flag('objective-b64'));
+  const batch = flag('batch-b64');
+  if (batch) {
+    // Several requests at once: base64 of a JSON list of {case, text}.
+    const items = JSON.parse(Buffer.from(batch, 'base64').toString('utf8')) as { case: string; text: string }[];
+    for (const item of items) await createOne(run, safeId(item.case, 'case'), item.text.replace(/\s+/g, ' ').trim());
+    return;
+  }
+  await createOne(run, safeId(flag('case'), '--case'), words(flag('objective-b64')));
+}
+
+async function createOne(run: string, kase: string, objective: string): Promise<void> {
   const name = projectName(run, kase);
   const existing = (await listProjects()).find((one) => one.name === name);
   if (existing) {
@@ -80,7 +90,10 @@ async function create(): Promise<void> {
   const r = result.reading;
   console.log(`  read ${r.kind}${r.amount !== null ? ` ${r.amount} ${r.currency ?? '?'}` : ''}${r.deadline ? ` by ${r.deadline}` : ''}${r.capitalCeiling !== null ? ` capital<=${r.capitalCeiling}` : ''}${r.hoursCeiling !== null ? ` hours<=${r.hoursCeiling}` : ''}`);
   for (const u of r.unread) console.log(`  unread ${u}`);
-  if (!result.ok) fail(`goal not created for ${kase}: ${result.reason}`);
+  if (!result.ok) {
+    console.log(`EVAL ${run} ${kase} project=${project.id} goal=none REFUSED ${result.reason}`);
+    return;
+  }
   console.log(`EVAL ${run} ${kase} project=${project.id} goal=${result.goal.id}`);
 }
 
@@ -89,7 +102,7 @@ async function update(): Promise<void> {
   const text = words(flag('objective-b64'));
   const goal = (await listWorkstreams()).find((one) => one.id === goalId);
   if (!goal) fail(`no goal ${goalId}`);
-  const { readObjective } = await import('../server/services/goals/objective.ts');
+  const { readObjective } = await import('../server/services/industry/construction/intent.ts');
   const { setTargetLimits } = await import('../server/services/goals/target.ts');
   const reading = readObjective(text, new Date());
   if (!goal.target) fail('the goal has no target to change');
@@ -129,7 +142,7 @@ async function read(): Promise<void> {
       cards.push({
         id: o.id, title: o.title, mechanism: o.mechanism, state: o.state, payer: o.payer, price: o.priceCents === null ? null : o.priceCents / 100,
         channel: o.reachableChannel, signal: o.buyingSignal, fulfiller: o.fulfillmentOwner, validation: o.validationState,
-        facts: facts.filter((f) => !f.supersededAt).slice(0, 25).map((f) => ({ field: f.field, kind: f.kind, value: f.value.slice(0, 300) })),
+        facts: facts.slice(0, 25).map((f) => ({ field: f.field, kind: f.kind, value: f.value.slice(0, 300) })),
       });
     }
     const research = await getDb().all<{ state: string; n: number }>(
