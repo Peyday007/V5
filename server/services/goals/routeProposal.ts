@@ -49,11 +49,27 @@ import type { OperatorModel } from '../../domain/operator.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
 import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
-import { goalRoutePrefix, routeRecordId, ROUTE_RANK_FIELD, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
+import {
+  BUYER_PROBLEM_FIELD,
+  COMPARABLE_DEMAND_FIELD,
+  COMPARABLE_SPEND_FIELD,
+  DECISIVE_UNKNOWN_FIELD,
+  goalRoutePrefix,
+  ROUTE_GROUNDS_FIELD,
+  routeRecordId,
+  ROUTE_RANK_FIELD,
+  ROUTE_SEARCHES_FIELD,
+  ROUTE_STAGE_FIELD,
+  routeStageOf,
+  SUPERSEDED_PREFIX,
+  type RouteStage,
+} from '../../domain/routeOrigin.ts';
+import type { ResearchClaim } from '../../domain/types.ts';
 import { chatFor, type ChatFn } from '../cheap/modelBench.ts';
 import { challengerModels } from '../operator/decisions.ts';
 import { getWorkstream, linkWorkstream, recordWorkstreamEvent, workstreamEventsOfKind } from '../../repos/register.ts';
-import { createOpportunity, opportunitiesWithRecordPrefix, updateOpportunity } from '../../repos/cashPortfolio.ts';
+import { createOpportunity, getOpportunity, opportunitiesWithRecordPrefix, transitionOpportunity, updateOpportunity } from '../../repos/cashPortfolio.ts';
+import { claimsByIds, projectEvidenceClaims } from '../../repos/research.ts';
 import { cardFactsFor, recordRecommendationFact } from '../../repos/cashCardFacts.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
@@ -127,6 +143,70 @@ export interface ProposedRoute {
   /** How the route uses or respects what the owner said they have, can do, where they are and what they refuse. */
   ownerFit: string;
   searches: { price: string[]; demand: string[]; volume: string[] };
+  /**
+   * Which of this route's figures rest on a finding research holds
+   * (`RouteFinding`), by the claim id the reply cited; a field absent is the
+   * model's estimate. Filed as EVIDENCE facts from the claims themselves
+   * (`groundRoute`), never from the model's restatement of them.
+   */
+  grounds: RouteGrounds;
+}
+
+/** The figures a route can rest on a finding for, and the card field each one is filed as. */
+export const GROUND_FIELDS = {
+  channel: 'access',
+  price: 'price',
+  volume: 'buyerVolume',
+  cost: 'directCosts',
+  settlement: 'timeToFirstCash',
+  fulfiller: 'fulfillment',
+  demand: 'buyingEvidence',
+} as const;
+export type GroundKey = keyof typeof GROUND_FIELDS;
+export interface RouteGrounds {
+  /** Claim id per grounded figure. */
+  claims: Partial<Record<GroundKey, string>>;
+  /**
+   * Whether the demand finding shows buyers wanting this very offer (EXACT) or
+   * buyers of this kind spending on comparable offers now (COMPARABLE). A new
+   * offer rests on comparable demand; only a finding about this exact offer is
+   * verified demand for it, and the two are filed in different fields.
+   */
+  demandScope: 'EXACT' | 'COMPARABLE' | null;
+}
+
+/**
+ * One sourced finding the goal's research holds, as the proposer and its
+ * critic are shown it: an accepted claim whose source was read. `ref` is the
+ * short name the prompt uses ("F3"); the claim id is what is filed.
+ */
+export interface RouteFinding {
+  ref: string;
+  claimId: string;
+  lane: string | null;
+  text: string;
+  source: string;
+  date: string | null;
+}
+/** Findings shown to one proposal, newest first. */
+export const FINDINGS_SHOWN = 40;
+/** A goal with fewer findings than this scouts directions before it proposes priced routes. */
+export const FINDINGS_FOR_ROUTES = 3;
+/** New findings since the last ask that make a fresh, grounded ask due without waiting the ordinary interval. */
+export const NEW_FINDINGS_FOR_REASK = 3;
+/** Scouted directions asked for in one pass: the cheap first step, so each is one short question. */
+export const DIRECTIONS_PER_ASK = 5;
+
+/** A direction research scouted, and what it found: the proposer's memory of what it already learned. */
+export interface ScoutedDirection {
+  title: string;
+  payer: string;
+  offer: string;
+  decisiveUnknown: string;
+  /** Refs of findings filed on it. */
+  findings: string[];
+  /** Why research ruled it out, when it did. */
+  refutedBy: string | null;
 }
 
 /** What the prompt is built from. Every field is a row or a limit, never prose Brain wrote. */
@@ -157,6 +237,10 @@ export interface RouteContext {
   today?: string;
   /** Whether this goal's own words offer the requester's labour or assets (`ownerLabourOffer`); absent reads as not offered. */
   ownerLabour?: OwnerLabour | null;
+  /** What research has established for this goal so far (`routeFindings`); absent or empty before any. */
+  findings?: RouteFinding[];
+  /** The directions scouted for this goal and what their research found. */
+  scouted?: ScoutedDirection[];
 }
 
 const num = (v: unknown): number | null => {
@@ -221,6 +305,8 @@ export const ROUTE_RULES = {
   PRICE: 'the price is anchored to what this kind of buyer typically pays for this today; commodity work is priced at its market rate, never far above it; the buyer count is built from the bottom up (a place, a directory, a marketplace category), never a top-down guess',
   CAPITAL: "the capital is read as the owner gave it: a small budget rules out spend-heavy channels; a large one may fund inventory, equipment or paid labour where that is what earns the money; few owner hours rule out labour-per-unit work that does not scale; a recurring target needs recurring billing",
   MARKET: 'the market exists and is buying now, in this season; no invented or dead markets',
+  EVIDENCE:
+    "every figure that cites a finding says what that finding says, for buyers like these; a route a finding contradicts is not proposed again in another wording; with findings available, a route resting on none of them is weaker than one that rests on them; demand shown only for comparable offers is comparable demand, never proof that buyers want this exact offer",
 } as const;
 export type RouteRule = keyof typeof ROUTE_RULES;
 
@@ -257,8 +343,38 @@ function limitLines(ctx: RouteContext): string[] {
   ].filter(Boolean);
 }
 
+/** The findings, as the prompt lists them: "F3 [price_evidence] text (source, date)". Pure. */
+export function findingLines(findings: readonly RouteFinding[]): string[] {
+  return findings.map((one) => `${one.ref}${one.lane ? ` [${one.lane}]` : ''} ${one.text} (${one.source}${one.date ? `, ${one.date.slice(0, 10)}` : ''})`);
+}
+
+/** What was scouted and what research found on each: supported, refuted, or still open. Pure. */
+export function scoutedLines(scouted: readonly ScoutedDirection[]): string[] {
+  return scouted.map((one) =>
+    one.refutedBy
+      ? `${one.title} (${one.payer}; ${one.offer}) — RULED OUT: ${one.refutedBy}`
+      : one.findings.length
+        ? `${one.title} (${one.payer}; ${one.offer}) — research found ${one.findings.join(', ')}; it asked first: ${one.decisiveUnknown}`
+        : `${one.title} (${one.payer}; ${one.offer}) — not answered yet; it asks first: ${one.decisiveUnknown}`,
+  );
+}
+
+/** The research-informed part of a route ask: what was found, what was scouted, and how to use both. Pure. */
+function evidenceSections(ctx: RouteContext): string[] {
+  const findings = ctx.findings ?? [];
+  const scouted = ctx.scouted ?? [];
+  if (findings.length === 0 && scouted.length === 0) return [];
+  return [
+    findings.length
+      ? `FINDINGS — what research has established for this goal, each from a source that was read (cite by ref; they are the only facts here):\n- ${findingLines(findings).join('\n- ')}`
+      : '',
+    scouted.length ? `DIRECTIONS ALREADY SCOUTED for this goal, and what their research found:\n- ${scoutedLines(scouted).join('\n- ')}` : '',
+    'BUILD FROM THE FINDINGS. Start from the real buyer problems, the spending on comparable offers, the reachable channels, the fulfilment options, the costs and the payment terms the findings show, and design routes that use them. A new offer may rest on comparable demand: buyers of this kind shown paying for comparable things now. For every figure, say in "grounds" which finding supports it (its ref), or null where it is your estimate; never cite a finding for a figure it does not state. Set demandScope COMPARABLE when the demand finding is about comparable offers and EXACT only when it shows buyers asking for this very offer. Where a finding contradicts a direction or a route, do not restate it in other words: say in "rethink" what the evidence teaches about the buyer, the offer, the price or the channel, and change the approach accordingly.',
+  ].filter(Boolean);
+}
+
 const ROUTE_SHAPE = (currency: string) =>
-  `{"title":"short name","buyerKind":one of ${JSON.stringify(BUYER_KINDS)},"mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${currency} (per month when billed monthly),"priceAnchor":"what this kind of buyer typically pays for this today, and where that is seen","monthly":true|false,"channel":"how buyers are reached, and why it yields paying buyers inside the window on the stated budget","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it, named, and what they cost","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"capital":number tied up before the first payment,"ownerHoursPerDeal":number of the owner's own hours per sale (for a route billed monthly, per buyer per month),"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"how that count was built, from the bottom up","assumptions":"what this route assumes that research must check","ownerFit":"which of the owner's stated skills, assets, location, time or refusals it uses or respects","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]}}`;
+  `{"title":"short name","buyerKind":one of ${JSON.stringify(BUYER_KINDS)},"mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${currency} (per month when billed monthly),"priceAnchor":"what this kind of buyer typically pays for this today, and where that is seen","monthly":true|false,"channel":"how buyers are reached, and why it yields paying buyers inside the window on the stated budget","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it, named, and what they cost","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"capital":number tied up before the first payment,"ownerHoursPerDeal":number of the owner's own hours per sale (for a route billed monthly, per buyer per month),"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"how that count was built, from the bottom up","assumptions":"what this route assumes that research must check","ownerFit":"which of the owner's stated skills, assets, location, time or refusals it uses or respects","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]},"grounds":{"channel":"F#"|null,"price":"F#"|null,"volume":"F#"|null,"cost":"F#"|null,"settlement":"F#"|null,"fulfiller":"F#"|null,"demand":"F#"|null,"demandScope":"EXACT"|"COMPARABLE"|null}}`;
 
 /**
  * The prompt. The owner's own words lead, and the model reads them first into
@@ -276,16 +392,166 @@ export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): stri
     ctx.today ? `DATE: ${calendarLine(ctx.today)}` : '',
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `FEASIBILITY (every route must pass every one):\n- ${Object.values(ROUTE_RULES).join('\n- ')}`,
-    `STEP 2 — ROUTES. Propose ${k} concrete, different commercial routes built from the owner profile, each able to collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers pay today, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and how many such buyers exist. Spread the routes across genuinely different kinds of buyer — use at least three of ${BUYER_KINDS.join(', ')} where the owner's words allow it — and at least three different mechanisms; no two routes may share a buyer type. When the owner names a place, an asset or a hands-on skill, and the target is small or the window short, buyers near them (households and local businesses, reached directly) are usually the fastest money — the in-person work done by the owner where this goal's words offer it, otherwise by a local provider the owner books and pays, as the operating rule above allows: consider them before anything sold to the whole internet. A route that would fit any request equally — a report, an audit, a template, a dashboard, a course or an "AI" product offered to everyone — is a poor route unless the owner's own words point to it. Each route says in ownerFit which of the owner's stated facts it uses.`,
+    ...evidenceSections(ctx),
+    `STEP 2 — ROUTES. Propose up to ${k} concrete commercial routes built from the owner profile${(ctx.findings ?? []).length ? ' and the findings' : ''}, each able to collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers pay today, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and how many such buyers exist. Propose only as many as are genuinely worth researching: one well-founded route is better than several weak ones, routes differ where the owner's means and the evidence point different ways, and no count of buyer kinds (${BUYER_KINDS.join(', ')}) or mechanisms is required. When the owner names a place, an asset or a hands-on skill, and the target is small or the window short, buyers near them (households and local businesses, reached directly) are usually the fastest money — the in-person work done by the owner where this goal's words offer it, otherwise by a local provider the owner books and pays, as the operating rule above allows: consider them before anything sold to the whole internet. A route that would fit any request equally — a report, an audit, a template, a dashboard, a course or an "AI" product offered to everyone — is a poor route unless the owner's own words point to it. Each route says in ownerFit which of the owner's stated facts it uses.`,
     `WHAT BRAIN ITSELF PROVABLY PRODUCES (one possible fulfilment, never the reason for a route; performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use OWNER or SUBCONTRACTOR routes'}.`,
     ctx.held.length ? `ALREADY HELD for this goal (propose different routes): ${ctx.held.slice(0, 20).join(' | ')}` : '',
     ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not propose these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
     'Reply with exactly one JSON object and nothing else:',
-    `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"routes":[${ROUTE_SHAPE(ctx.currency)}]}`,
-    'Figures are your estimates and will be researched; never present them as facts.',
+    `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"rethink":"what the findings and scouted directions taught, in one or two sentences, or null","routes":[${ROUTE_SHAPE(ctx.currency)}]}`,
+    'A figure is a fact only where a finding states it; every other figure is your estimate and will be researched — never present it as a fact.',
   ]
     .filter(Boolean)
     .join('\n\n');
+}
+
+/** One direction worth checking before anything is priced: the scouting step of the loop. */
+export interface ProposedDirection {
+  key: string;
+  title: string;
+  buyerKind: BuyerKind | null;
+  mechanism: CashMechanism;
+  industry: string;
+  payer: string;
+  /** The buyer's problem or need, as Brain reasons it — a hypothesis research checks. */
+  problem: string;
+  offer: string;
+  /** What such buyers already pay for comparable things, as Brain expects it: never a figure filed as a price. */
+  comparableSpend: string;
+  channel: string;
+  performer: Performer;
+  fulfiller: string;
+  brainDeliverable: string | null;
+  /** The one unknown most likely to rule it out: what its research asks first. */
+  decisiveUnknown: string;
+  ownerFit: string;
+  assumptions: string;
+  searches: { price: string[]; demand: string[]; volume: string[] };
+}
+
+const DIRECTION_SHAPE = `{"title":"short name","buyerKind":one of ${JSON.stringify(BUYER_KINDS)},"mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the kind of buyer","problem":"the real problem or need these buyers have that they already spend money on","offer":"what would be sold, from the owner's means","comparableSpend":"what such buyers already pay for comparable things, as you expect it (to be checked)","channel":"how they could be reached inside the window","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who could deliver it","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","decisiveUnknown":"the single fact most likely to rule this direction out, which research should check first","ownerFit":"which of the owner's stated skills, assets, location, time or refusals it uses","assumptions":"what else it assumes","searches":{"price":["searches that would show what such buyers pay for comparable offers"],"demand":["... that they spend on or seek this now"],"volume":["... how many such buyers there are"]}}`;
+
+/**
+ * The scouting ask: directions, not routes. Before anything is priced, the
+ * model names the buyer problems the owner's means could answer, what such
+ * buyers already spend on, how they could be reached and delivered to, and the
+ * one unknown that would kill each — and states no price, count or cost as
+ * known, because nothing yet stands behind one. Each direction's research asks
+ * that unknown first (`validation.ts` `routeValidationQuestion`), so a dead
+ * direction costs one short question, and the priced routes are proposed from
+ * what came back (`routePrompt` with `findings`). Pure.
+ */
+export function directionPrompt(ctx: RouteContext, k: number = DIRECTIONS_PER_ASK): string {
+  return [
+    `THE OWNER'S OWN WORDS (verbatim — they lead; every skill, asset, place, amount of time and refusal in them binds every direction): ${ctx.objective}`,
+    'STEP 1 — READ THE OWNER. Before any direction, write in "owner" what those words say about: skills, assets, location, hours, capital and refusals. Write "not stated" for anything the words do not say; never invent it.',
+    ctx.today ? `DATE: ${calendarLine(ctx.today)}` : '',
+    `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
+    `FEASIBILITY (a direction must be able to pass these once researched):\n- ${RULE_KEYS.filter((rule) => rule !== 'PRICE' && rule !== 'EVIDENCE').map((rule) => ROUTE_RULES[rule]).join('\n- ')}`,
+    ...evidenceSections(ctx),
+    `STEP 2 — DIRECTIONS TO CHECK. Nothing has been researched for this goal yet, so do not price anything. Name up to ${k} directions worth one short piece of research each: a kind of buyer with a real problem or need they already spend money on, the offer that would answer it from the owner's own means, what such buyers already pay for comparable things (your expectation, to be checked — never a figure stated as known), how they could be reached inside the window, who could deliver it, and the single unknown most likely to rule it out. Name fewer when fewer are genuinely different; no spread of buyer kinds or business models is required. A direction that would fit any request equally (a report, an audit, a template, a course or an "AI" product offered to everyone) is a poor one unless the owner's words point to it.`,
+    `WHAT BRAIN ITSELF PROVABLY PRODUCES (one possible fulfilment, never the reason for a direction; performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use OWNER or SUBCONTRACTOR directions'}.`,
+    ctx.held.length ? `ALREADY HELD for this goal (name different directions): ${ctx.held.slice(0, 20).join(' | ')}` : '',
+    ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not name these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
+    'Reply with exactly one JSON object and nothing else:',
+    `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"directions":[${DIRECTION_SHAPE}]}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * The directions in a model's reply, each held to the limits a direction can
+ * already be held to before it is priced: a whole description, a mechanism
+ * Brain records, a proved deliverable when Brain performs it, the owner's
+ * physical work only where the goal offers it, the owner's exclusions, a stated
+ * owner fit and a decisive unknown. Pure.
+ */
+export function parseDirections(text: string, ctx: RouteContext): { directions: ProposedDirection[]; rejected: RejectedRoute[] } {
+  const directions: ProposedDirection[] = [];
+  const rejected: RejectedRoute[] = [];
+  let raw: unknown[] = [];
+  for (const obj of objectsIn(text)) {
+    const list = Object.entries(obj).find(([key, v]) => /^(directions?|routes?)$/i.test(key) && Array.isArray(v))?.[1] as unknown[] | undefined;
+    if (list) {
+      raw = list;
+      break;
+    }
+  }
+  for (const item of raw.slice(0, DIRECTIONS_PER_ASK * 2)) {
+    if (!item || typeof item !== 'object') continue;
+    const r = item as Record<string, unknown>;
+    const title = str(r['title'], 120);
+    const payer = str(r['payer'], 200);
+    const offer = str(r['offer'], 300);
+    const channel = str(r['channel'], 200);
+    const problem = str(r['problem'], 300);
+    const decisiveUnknown = str(r['decisiveUnknown'], 300);
+    const name = title ?? offer ?? '(untitled)';
+    const reject = (why: string, rule: RouteRejectionRule) => rejected.push({ title: name, why, rule });
+    if (!title || !payer || !offer || !channel || !problem || !decisiveUnknown) {
+      reject('a direction needs a title, a payer, a problem, an offer, a channel and a decisive unknown', 'INCOMPLETE');
+      continue;
+    }
+    const mechanism = str(r['mechanism'], 40)?.toUpperCase();
+    if (!mechanism || !(CASH_MECHANISMS as readonly string[]).includes(mechanism)) {
+      reject(`mechanism "${mechanism ?? ''}" is not one Brain records`, 'MECHANISM');
+      continue;
+    }
+    const performerRaw = str(r['performer'], 20)?.toUpperCase();
+    const performer: Performer = (PERFORMERS as readonly string[]).includes(performerRaw ?? '') ? (performerRaw as Performer) : 'SUBCONTRACTOR';
+    const delivered = str(r['brainDeliverable'], 60);
+    const brainDeliverable = performer === 'BRAIN' ? (ctx.delivers.find((one) => one.toLowerCase() === (delivered ?? '').toLowerCase()) ?? null) : null;
+    if (performer === 'BRAIN' && !brainDeliverable) {
+      reject('Brain performs it, but it is none of the deliverables Brain has proved', 'BRAIN_DELIVERABLE');
+      continue;
+    }
+    const fulfiller = str(r['fulfiller'], 200) ?? (performer === 'BRAIN' ? `Brain (${brainDeliverable})` : performer === 'OWNER' ? 'The owner' : 'A subcontractor to be named');
+    const industry = str(r['industry'], 80) ?? 'unspecified';
+    const fit = operatingFit(operatingFactsOf({ title, offerScope: offer, fulfillmentOwner: performer === 'OWNER' ? 'The owner, personally' : fulfiller, mechanism }));
+    if (breaksOperatingModel(fit, ctx.ownerLabour ?? null)) {
+      reject(`needs the owner's physical work: ${fit.because}`, 'PHYSICAL');
+      continue;
+    }
+    const excluded = excludedBy(`${title} ${payer} ${offer} ${industry}`, ctx.exclusions as never);
+    if (excluded) {
+      reject(`the owner excluded ${EXCLUSION_CLASSES[excluded].label}`, 'EXCLUDED');
+      continue;
+    }
+    const ownerFit = str(r['ownerFit'], 300);
+    if (!ownerFit) {
+      reject("it does not say how it uses or respects the owner's stated skills, assets, location and refusals", 'OWNER_FIT');
+      continue;
+    }
+    // Its own key space: the priced route research builds from it, to the same buyer and offer, is filed beside it, not refused as held.
+    const key = routeKey(`scouted ${payer}`, offer);
+    if (directions.some((one) => one.key === key)) {
+      reject('the same buyer and offer as another direction in this answer', 'DUPLICATE');
+      continue;
+    }
+    const searches = (r['searches'] && typeof r['searches'] === 'object' ? r['searches'] : {}) as Record<string, unknown>;
+    const kind = str(r['buyerKind'], 40)?.toUpperCase().replace(/[^A-Z]+/g, '_');
+    directions.push({
+      key,
+      title,
+      buyerKind: (BUYER_KINDS as readonly string[]).includes(kind ?? '') ? (kind as BuyerKind) : null,
+      mechanism: mechanism as CashMechanism,
+      industry,
+      payer,
+      problem,
+      offer,
+      comparableSpend: str(r['comparableSpend'], 240) ?? '',
+      channel,
+      performer,
+      fulfiller,
+      brainDeliverable,
+      decisiveUnknown,
+      ownerFit,
+      assumptions: str(r['assumptions'], 400) ?? '',
+      searches: { price: strs(searches['price'], 4), demand: strs(searches['demand'], 4), volume: strs(searches['volume'], 4) },
+    });
+  }
+  return { directions, rejected };
 }
 
 /** The balanced JSON value starting at `start` (an object or an array), or null when it never closes. */
@@ -538,10 +804,6 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       reject('the same buyer and offer as another route in this answer', 'DUPLICATE');
       continue;
     }
-    if (routes.some((one) => routeKey(one.payer, '') === routeKey(payer, ''))) {
-      reject('the same buyer type as another route in this answer', 'DUPLICATE');
-      continue;
-    }
     const searches = (r['searches'] && typeof r['searches'] === 'object' ? r['searches'] : {}) as Record<string, unknown>;
     const kind = str(r['buyerKind'], 40)?.toUpperCase().replace(/[^A-Z]+/g, '_');
     routes.push({
@@ -568,9 +830,31 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       assumptions: str(r['assumptions'], 400) ?? '',
       ownerFit,
       searches: { price: strs(searches['price'], 4), demand: strs(searches['demand'], 4), volume: strs(searches['volume'], 4) },
+      grounds: groundsOf(r['grounds'], ctx.findings ?? []),
     });
   }
   return { routes, rejected };
+}
+
+/**
+ * The findings a route's reply cited for its figures, by claim id: only refs
+ * the prompt actually showed survive, so a model cannot cite a source nobody
+ * read. Pure.
+ */
+export function groundsOf(value: unknown, findings: readonly RouteFinding[]): RouteGrounds {
+  const out: RouteGrounds = { claims: {}, demandScope: null };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  const raw = value as Record<string, unknown>;
+  const byRef = new Map(findings.map((one) => [one.ref.toUpperCase(), one.claimId] as const));
+  for (const key of Object.keys(GROUND_FIELDS) as GroundKey[]) {
+    const cited = str(raw[key], 40);
+    const ref = cited ? /F\d+/i.exec(cited)?.[0]?.toUpperCase() : undefined;
+    const claimId = ref ? byRef.get(ref) : undefined;
+    if (claimId) out.claims[key] = claimId;
+  }
+  const scope = str(raw['demandScope'], 20)?.toUpperCase();
+  if (out.claims.demand) out.demandScope = scope === 'EXACT' ? 'EXACT' : 'COMPARABLE';
+  return out;
 }
 
 /** What the owner's words say, as a model read them: the profile every route must use. */
@@ -699,18 +983,22 @@ export function critiqueJson(text: string, routeCount: number): RouteCritique | 
 
 /** The critic's prompt: the owner's words, their profile, the limits and rules, and the routes, numbered. Pure. */
 export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute[], owner: OwnerProfile | null): string {
+  const refOf = new Map((ctx.findings ?? []).map((one) => [one.claimId, one.ref] as const));
   const listed = routes.map((route, i) => {
-    const { key: _key, searches: _searches, ...rest } = route;
-    return `${i + 1}. ${JSON.stringify(rest)}`;
+    const { key: _key, searches: _searches, grounds, ...rest } = route;
+    const cited = Object.entries(grounds.claims).map(([field, claimId]) => `${field}: ${refOf.get(claimId) ?? '?'}`);
+    return `${i + 1}. ${JSON.stringify(rest)}${cited.length ? ` — cites ${cited.join(', ')}${grounds.demandScope ? ` (demand ${grounds.demandScope})` : ''}` : ' — cites no finding'}`;
   });
   return [
     `THE OWNER'S OWN WORDS (verbatim): ${ctx.objective}`,
+    (ctx.findings ?? []).length ? `FINDINGS research holds for this goal (check each route's cited figures against them; a route they contradict is dropped):\n- ${findingLines(ctx.findings!).join('\n- ')}` : '',
+    (ctx.scouted ?? []).length ? `DIRECTIONS ALREADY SCOUTED, and what research found:\n- ${scoutedLines(ctx.scouted!).join('\n- ')}` : '',
     owner ? `OWNER PROFILE (as the proposer read those words; correct it in "owner" where it misreads them): ${ownerProfileLine(owner)}` : 'OWNER PROFILE: none was given; read the words above yourself and write it in "owner".',
     ctx.today ? `DATE: ${calendarLine(ctx.today)}` : '',
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `RULES (score each route 0–5 on each; ${CRITIQUE_FAIL_SCORE} or less is a failure):\n${RULE_KEYS.map((rule) => `- ${rule}: ${ROUTE_RULES[rule]}`).join('\n')}`,
     `ROUTES PROPOSED:\n${listed.join('\n')}`,
-    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first.",
+    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first, and between two close ones, the one more of whose figures rest on findings.",
     'Reply with exactly one JSON object and nothing else:',
     `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"reviews":[{"index":1,"verdict":"KEEP"|"REPAIR"|"DROP","scores":{${RULE_KEYS.map((rule) => `"${rule}":0-5`).join(',')}},"failed":["rule names it fails"],"why":"one sentence","repair":{"field":"new value"}|null}],"ranking":[indices of kept or repaired routes, best first]}`,
   ]
@@ -757,7 +1045,8 @@ export function applyCritique(routes: readonly ProposedRoute[], critique: RouteC
         dropped.push({ title: route.title, why: `its repair${failing} broke a limit: ${again.rejected[0]?.why ?? 'unreadable'}`.slice(0, 400), rule: 'CRITIQUE' });
         return;
       }
-      kept = again.routes[0];
+      // A repair changes fields the critic named; the findings the route cited stay with it.
+      kept = { ...again.routes[0], grounds: route.grounds };
     }
     const score = RULE_KEYS.reduce((sum, rule) => sum + (review.scores[rule] ?? 0), 0);
     survivors.push({ route: kept, index: i + 1, score, why: review.why, repaired: kept !== route });
@@ -791,6 +1080,10 @@ export interface RouteDeps {
   delivers?: (projectId: string, currency: string) => Promise<string[]>;
   /** Start the project's deep dives once routes are filed; production: `startValidations`. */
   startDives?: (projectId: string) => Promise<{ opportunityId: string }[]>;
+  /** The project's gated, sourced claims, newest first; production: `projectEvidenceClaims`. */
+  claims?: (projectId: string) => Promise<ResearchClaim[]>;
+  /** File one cited claim as a route's EVIDENCE fact; production: `writeEvidenceAnswer`. */
+  writeEvidence?: (input: { opportunity: CashOpportunity; field: string; claim: ResearchClaim; needId: string | null }) => Promise<boolean>;
 }
 
 export type RouteOutcome =
@@ -828,11 +1121,20 @@ export function askYieldedNothing(detail: Record<string, unknown>): boolean {
 export function routeAskDue(
   asks: readonly { createdAt: string; detail: Record<string, unknown> }[],
   now: Date,
-  options: { retryOnly?: boolean } = {},
-): { due: true } | { due: false; reason: string } {
+  options: { retryOnly?: boolean; findings?: number } = {},
+): { due: true; onFindings?: boolean } | { due: false; reason: string } {
   const last = asks[0];
   if (!last) return { due: true };
   const since = now.getTime() - Date.parse(last.createdAt);
+  /*
+   * Research came back: the next ask reasons from it now rather than at the
+   * ordinary interval. The research-informed loop's step — what research
+   * found reaches the proposer and its critic before the next routes are
+   * chosen — waits only out the short retry spacing.
+   */
+  // An ask recorded before the loop counted findings says nothing about what was new since; it waits the ordinary interval.
+  const seen = typeof last.detail['findingsSeen'] === 'number' ? (last.detail['findingsSeen'] as number) : Number.POSITIVE_INFINITY;
+  if (options.findings !== undefined && options.findings - seen >= NEW_FINDINGS_FOR_REASK && since >= ROUTE_RETRY_AFTER_FAILURE_MS) return { due: true, onFindings: true };
   const failed = askYieldedNothing(last.detail);
   if (options.retryOnly && !failed) return { due: false, reason: `routes were last asked for at ${last.createdAt} and that ask yielded routes or found no model` };
   const failedToday = asks.filter((one) => askYieldedNothing(one.detail) && now.getTime() - Date.parse(one.createdAt) < DAY).length;
@@ -856,19 +1158,78 @@ async function operatorChats(deps: RouteDeps, timeoutMs: () => number): Promise<
   }));
 }
 
-/** The goal's own route openings, and those research or a person refuted or stopped. */
-async function goalRoutes(projectId: string, goalId: string): Promise<{ all: CashOpportunity[]; refuted: { title: string; why: string }[] }> {
+/** Whether an opening was archived because a grounded route replaced it — a step of the loop, not a refutation. */
+export const supersededOpening = (one: Pick<CashOpportunity, 'state' | 'archivedReason'>): boolean =>
+  one.state === 'ARCHIVED' && (one.archivedReason ?? '').startsWith(SUPERSEDED_PREFIX);
+
+/**
+ * The goal's own route openings; those research or a person refuted or
+ * stopped, with the evidence that did it; and the directions it scouted with
+ * what their research found — what the next ask reasons from.
+ */
+async function goalRoutes(
+  projectId: string,
+  goalId: string,
+  findings: readonly RouteFinding[] = [],
+): Promise<{ all: CashOpportunity[]; refuted: { title: string; why: string }[]; scouted: ScoutedDirection[]; liveScouts: CashOpportunity[]; scoutIds: Set<string> }> {
   const all = await opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
   const refuted: { title: string; why: string }[] = [];
+  const scouted: ScoutedDirection[] = [];
+  const liveScouts: CashOpportunity[] = [];
+  const scoutIds = new Set<string>();
+  const refOf = new Map(findings.map((one) => [one.claimId, one.ref] as const));
   for (const one of all) {
-    if (one.state === 'ARCHIVED' || one.state === 'DECLINED') {
+    const facts = await cardFactsFor(one.id);
+    const factOf = (field: string) => facts.find((fact) => fact.field === field && fact.value.trim()) ?? null;
+    const stage = routeStageOf(factOf(ROUTE_STAGE_FIELD)?.value);
+    const ruledOut = factOf(DISQUALIFIED_FIELD);
+    const stopped = (one.state === 'ARCHIVED' || one.state === 'DECLINED') && !supersededOpening(one);
+    if (stopped) {
       refuted.push({ title: one.title, why: `${one.state === 'ARCHIVED' ? 'stopped' : 'declined'}${(one.archivedReason ?? one.declinedReason) ? `: ${(one.archivedReason ?? one.declinedReason)!.slice(0, 160)}` : ''}` });
-      continue;
+    } else if (ruledOut) {
+      refuted.push({ title: one.title, why: `research found it ruled out: ${ruledOut.value.slice(0, 160)}` });
     }
-    const ruledOut = (await cardFactsFor(one.id)).find((fact) => fact.field === DISQUALIFIED_FIELD && fact.value.trim());
-    if (ruledOut) refuted.push({ title: one.title, why: `research found it ruled out: ${ruledOut.value.slice(0, 160)}` });
+    if (stage !== 'SCOUT') continue;
+    scoutIds.add(one.id);
+    if (!stopped && !supersededOpening(one) && !ruledOut) liveScouts.push(one);
+    scouted.push({
+      title: one.title,
+      payer: one.payer ?? '',
+      offer: one.offerScope ?? '',
+      decisiveUnknown: factOf(DECISIVE_UNKNOWN_FIELD)?.value ?? '',
+      findings: [...new Set(facts.filter((fact) => fact.kind === 'EVIDENCE' && fact.claimId && refOf.has(fact.claimId)).map((fact) => refOf.get(fact.claimId!)!))],
+      refutedBy: ruledOut ? ruledOut.value.slice(0, 200) : stopped ? (one.archivedReason ?? one.declinedReason ?? 'stopped').slice(0, 200) : null,
+    });
   }
-  return { all, refuted };
+  return { all, refuted, scouted, liveScouts, scoutIds };
+}
+
+/**
+ * What research has established for a goal, as the proposer is shown it: the
+ * project's gated claims whose source was read, newest first, near-duplicates
+ * once, each given a short ref. Pure.
+ */
+export function findingsOf(claims: readonly ResearchClaim[], max: number = FINDINGS_SHOWN): RouteFinding[] {
+  const seen = new Set<string>();
+  const out: RouteFinding[] = [];
+  for (const claim of claims) {
+    const text = claim.claim.replace(/\s+/g, ' ').trim();
+    if (text.length < 25 || !claim.sourceUrl) continue;
+    const norm = text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 160);
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    let source = claim.sourcePublisher ?? claim.sourceTitle ?? '';
+    if (!source) {
+      try {
+        source = new URL(claim.sourceUrl).hostname.replace(/^www\./, '');
+      } catch {
+        source = claim.sourceUrl.slice(0, 60);
+      }
+    }
+    out.push({ ref: `F${out.length + 1}`, claimId: claim.id, lane: claim.evidenceLane, text: text.slice(0, 280), source: source.slice(0, 80), date: claim.sourceDate ?? claim.retrievedAt ?? null });
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 /**
@@ -887,15 +1248,18 @@ export function ownerWords(goal: { title: string; intent?: string | null }): str
 }
 
 /** The context a goal's routes are proposed in, read from its rows. */
-export async function routeContext(goal: Workstream, target: TargetReading, heldTitles: readonly string[], deps: RouteDeps = {}): Promise<{ ctx: RouteContext; routes: CashOpportunity[] } | null> {
+export async function routeContext(goal: Workstream, target: TargetReading, heldTitles: readonly string[], deps: RouteDeps = {}): Promise<{ ctx: RouteContext; routes: CashOpportunity[]; liveScouts: CashOpportunity[]; scoutIds: Set<string> } | null> {
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return null;
   const delivers = await (deps.delivers ?? (async (projectId: string, currency: string) => (await executionFrame(projectId, currency))?.delivers ?? []))(target.projectId, target.currency).catch(() => [] as string[]);
   const exclusions = await goalExclusions(goal).catch(() => []);
-  const { all, refuted } = await goalRoutes(target.projectId, goal.id);
+  const findings = findingsOf(await (deps.claims ?? ((projectId: string) => projectEvidenceClaims(projectId, FINDINGS_SHOWN * 3)))(target.projectId).catch(() => [] as ResearchClaim[]));
+  const { all, refuted, scouted, liveScouts, scoutIds } = await goalRoutes(target.projectId, goal.id, findings);
   const live = all.filter((one) => one.state !== 'ARCHIVED' && one.state !== 'DECLINED').map((one) => one.title);
   const capitalCents = target.capitalBeforeProofCents ?? target.capitalCeilingCents ?? target.scope?.capitalStatedCents ?? target.scope?.capitalAssumed?.cents ?? null;
   return {
     routes: all,
+    liveScouts,
+    scoutIds,
     ctx: {
       objective: ownerWords(goal),
       currency: target.currency,
@@ -912,12 +1276,24 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
       delivers,
       held: [...new Set([...live, ...heldTitles])],
       refuted,
+      findings,
+      scouted,
     },
   };
 }
 
 /** One route, filed as one goal-scoped opening with RECOMMENDATION facts only. Returns its id. */
-async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: string, ownerUserId: string, route: ProposedRoute, model: string, place: { rank: number; of: number; why: string } | null): Promise<string> {
+async function fileRoute(
+  goal: Workstream,
+  target: TargetReading,
+  cashModeId: string,
+  ownerUserId: string,
+  route: ProposedRoute,
+  model: string,
+  place: { rank: number; of: number; why: string } | null,
+  deps: RouteDeps = {},
+  known: ReadonlyMap<string, ResearchClaim> = new Map(),
+): Promise<string> {
   const kind = DELIVERABLE_KINDS.find((one) => DELIVERABLE_LABEL[one] === route.brainDeliverable);
   const created = await createOpportunity({
     projectId: target.projectId,
@@ -965,11 +1341,13 @@ async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: st
     ...(route.priceAnchor ? [['priceAnchor', route.priceAnchor] as [string, string]] : []),
     // The critique's place for it among this ask's routes: what the plan prefers before any route is researched.
     ...(place ? [[ROUTE_RANK_FIELD, `${place.rank} of ${place.of}${place.why ? `: ${place.why}` : ''}`] as [string, string]] : []),
+    [ROUTE_STAGE_FIELD, 'ROUTE'],
   ];
   for (const [field, value] of facts) {
     if (!value.trim()) continue;
     await recordRecommendationFact({ projectId: target.projectId, opportunityId: id, field, value: value.slice(0, 600), basis, assumptions, uncertainty });
   }
+  await groundRoute(id, route, deps, known);
   await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: id, relation: 'SOURCE', label: 'proposed route', detail: { origin: 'ROUTE_PROPOSAL', key: route.key }, recordedBy: 'BRAIN', recordedByUserId: null });
   await recordCashEvent({
     projectId: target.projectId,
@@ -982,12 +1360,128 @@ async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: st
   return id;
 }
 
+/**
+ * The route's cited findings, filed as its EVIDENCE: each cited claim through
+ * the same writer a deep dive's answer goes through (`writeEvidenceAnswer`), so
+ * the card states what the source says — its words and its figure, never the
+ * model's restatement — and every rule that writer keeps (a money field needs a
+ * figure, a demand sign needs a date, a person's fact is never replaced) holds
+ * here too. Demand a finding shows only for comparable offers is filed as
+ * `comparableDemand`, never as the buying signal for this exact offer. A cited
+ * figure the writer refuses stays Brain's estimate. Returns the fields filed.
+ */
+export async function groundRoute(opportunityId: string, route: Pick<ProposedRoute, 'grounds'>, deps: RouteDeps = {}, known: ReadonlyMap<string, ResearchClaim> = new Map()): Promise<string[]> {
+  const cited = Object.entries(route.grounds.claims) as [GroundKey, string][];
+  if (cited.length === 0) return [];
+  // The claims the proposer was shown are already read; any other is read from its row.
+  const missing = [...new Set(cited.map(([, id]) => id))].filter((id) => !known.has(id));
+  const claims = new Map([...known, ...(missing.length ? await claimsByIds(missing).catch(() => [] as ResearchClaim[]) : []).map((one) => [one.id, one] as const)]);
+  const write = deps.writeEvidence ?? (async (input: Parameters<NonNullable<RouteDeps['writeEvidence']>>[0]) => (await import('../cash/answers.ts')).writeEvidenceAnswer(input));
+  const filed: string[] = [];
+  for (const [key, claimId] of cited) {
+    const claim = claims.get(claimId);
+    const opportunity = await getOpportunity(opportunityId);
+    if (!claim || !opportunity) continue;
+    const field = key === 'demand' && route.grounds.demandScope !== 'EXACT' ? COMPARABLE_DEMAND_FIELD : GROUND_FIELDS[key];
+    if (await write({ opportunity, field, claim, needId: null }).catch(() => false)) filed.push(field);
+  }
+  const all = Object.entries(route.grounds.claims).map(([key, claimId]) => `${key}: ${claimId}${key === 'demand' && route.grounds.demandScope ? ` (${route.grounds.demandScope})` : ''}`);
+  const opportunity = await getOpportunity(opportunityId);
+  if (opportunity) {
+    await recordRecommendationFact({
+      projectId: opportunity.projectId,
+      opportunityId,
+      field: ROUTE_GROUNDS_FIELD,
+      value: `Cited findings: ${all.join('; ')}. Filed as evidence: ${filed.join(', ') || 'none'}.`.slice(0, 600),
+      basis: "The route proposer's citations, checked against the claims research holds.",
+      assumptions: 'A cited figure the evidence writer refused stays the proposal’s estimate.',
+      uncertainty: 'A comparable finding is evidence about the market, not about this exact offer.',
+    });
+  }
+  return filed;
+}
+
+/** One scouted direction, filed as a goal-scoped opening with no price, count or cost: only what research must check. */
+async function fileDirection(goal: Workstream, target: TargetReading, cashModeId: string, ownerUserId: string, direction: ProposedDirection, model: string): Promise<string> {
+  const kind = DELIVERABLE_KINDS.find((one) => DELIVERABLE_LABEL[one] === direction.brainDeliverable);
+  const created = await createOpportunity({
+    projectId: target.projectId,
+    cashModeId,
+    ownerUserId,
+    title: direction.title,
+    mechanism: direction.mechanism,
+    currency: target.currency,
+    industry: direction.industry,
+    source: 'Brain direction to scout for a goal (a hypothesis to check before anything is priced; no published source yet)',
+    externalRecordId: routeRecordId(goal.id, direction.key),
+    requiredCapabilities: kind ? [deliverableCapabilityId(kind)] : [],
+  });
+  const id = created.id;
+  await updateOpportunity(id, {
+    payer: direction.payer,
+    offer_scope: direction.offer,
+    reachable_channel: direction.channel,
+    fulfillment_owner: direction.performer === 'BRAIN' ? null : direction.performer === 'OWNER' ? 'The owner, personally' : direction.fulfiller,
+  });
+  const basis = `Brain's scouting direction for goal ${goal.id} (model ${model}), reasoned from the objective and the owner's limits; nothing priced, nothing published behind it.`;
+  const assumptions = `${direction.assumptions || 'The buyer problem and the comparable spending are expectations.'} Owner fit: ${direction.ownerFit}`.slice(0, 800);
+  const uncertainty = 'Not researched yet: its first question is its decisive unknown.';
+  const facts: [string, string][] = [
+    [ROUTE_STAGE_FIELD, 'SCOUT'],
+    ['payer', direction.payer],
+    ['offer', direction.offer],
+    ['access', direction.channel],
+    ['fulfillment', direction.performer === 'BRAIN' ? `Brain produces it: ${direction.brainDeliverable}.` : `${direction.fulfiller}.`],
+    [BUYER_PROBLEM_FIELD, direction.problem],
+    [COMPARABLE_SPEND_FIELD, direction.comparableSpend],
+    [DECISIVE_UNKNOWN_FIELD, direction.decisiveUnknown],
+    [ROUTE_SEARCHES_FIELD, [...direction.searches.price, ...direction.searches.demand, ...direction.searches.volume].join('; ')],
+  ];
+  for (const [field, value] of facts) {
+    if (!value.trim()) continue;
+    await recordRecommendationFact({ projectId: target.projectId, opportunityId: id, field, value: value.slice(0, 600), basis, assumptions, uncertainty });
+  }
+  await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: id, relation: 'SOURCE', label: 'scouted direction', detail: { origin: 'ROUTE_PROPOSAL', stage: 'SCOUT', key: direction.key }, recordedBy: 'BRAIN', recordedByUserId: null });
+  await recordCashEvent({
+    projectId: target.projectId,
+    opportunityId: id,
+    kind: 'CASH_ROUTE_PROPOSED',
+    actorRef: 'BRAIN',
+    summary: `Brain named a direction to check for a goal before pricing anything: ${direction.title}. Its research asks first: ${direction.decisiveUnknown}`.slice(0, 400),
+    detail: { goalId: goal.id, key: direction.key, model, stage: 'SCOUT', performer: direction.performer, buyerKind: direction.buyerKind },
+  });
+  return id;
+}
+
+/**
+ * Scouted directions a grounded proposal replaced: archived as superseded (not
+ * refuted — their findings are the project's and the routes were built from
+ * them), so the plan weighs the priced routes rather than unpriced guesses.
+ */
+async function supersedeScouts(scouts: readonly CashOpportunity[], filedTitles: readonly string[]): Promise<number> {
+  let n = 0;
+  for (const one of scouts) {
+    const moved = await transitionOpportunity({
+      id: one.id,
+      from: ['DISCOVERED', 'EVIDENCE_CARD'],
+      to: 'ARCHIVED',
+      archivedReason: `${SUPERSEDED_PREFIX} its research informed the routes proposed next (${filedTitles.slice(0, 4).join('; ')})`.slice(0, 400),
+    }).catch(() => false);
+    if (moved) n += 1;
+  }
+  return n;
+}
+
 const PROPOSER_SYSTEM =
   "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
 const CRITIC_SYSTEM =
   "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.";
-/** Routes a critique must leave standing; with fewer, replacements are asked for once. */
-export const ROUTES_MIN_SURVIVING = 3;
+/**
+ * Routes a critique must leave standing; with fewer, replacements are asked for once. One: a
+ * critique that keeps one well-grounded route has answered, and asking for more only to reach a
+ * count is the forced variety the evidence did not support.
+ */
+export const ROUTES_MIN_SURVIVING = 1;
 
 /** What the critique pass did, as the goal's record keeps it. */
 export interface CritiqueRecord {
@@ -1073,8 +1567,8 @@ async function critiqueAndRevise(
       }
       rejected.push(...more.rejected);
       for (const route of more.routes) {
-        if (ranked.some((one) => one.route.key === route.key || routeKey(one.route.payer, '') === routeKey(route.payer, ''))) {
-          rejected.push({ title: route.title, why: 'a replacement to the same buyer as a route the critique kept', rule: 'DUPLICATE' });
+        if (ranked.some((one) => one.route.key === route.key)) {
+          rejected.push({ title: route.title, why: 'a replacement with the same buyer and offer as a route the critique kept', rule: 'DUPLICATE' });
           continue;
         }
         ranked.push({ route, rank: ranked.length + 1, score: null, why: 'a replacement asked for after the critique, ranked after the routes it kept', repaired: false });
@@ -1110,24 +1604,46 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   if (goal.pausedAt) return { kind: 'NOT_DUE', reason: 'the goal is paused' };
   // The goal's own record first: it is the cheap answer on most passes, and the target is read only when an ask is due.
   const asks = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - Math.max(DAY, ROUTE_PROPOSAL_EVERY_MS)).toISOString(), 50);
-  const due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true });
+  // How much research the goal's project holds now: new findings make a fresh, grounded ask due.
+  const claimsOf = deps.claims ?? ((projectId: string) => projectEvidenceClaims(projectId, FINDINGS_COUNTED));
+  const claims = goal.projectId ? await claimsOf(goal.projectId).catch(() => [] as ResearchClaim[]) : [];
+  const due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, findings: claims.length });
   if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
   const target = await readTarget(goal, now);
   if (!target || target.achieved) return { kind: 'NOT_DUE', reason: 'no target still open' };
   const gate = await discoveryAllowed(target.projectId);
   if (!gate.allowed || !gate.mode) return { kind: 'NOT_DUE', reason: gate.reason ?? 'the project is not searching' };
-  const read = await routeContext(goal, target, input.heldTitles ?? [], deps);
+  const read = await routeContext(goal, target, input.heldTitles ?? [], { ...deps, claims: async () => claims });
   if (!read) return { kind: 'NOT_DUE', reason: 'no time or money left to plan for' };
-  if (input.retryOnly && read.routes.some((one) => one.state !== 'ARCHIVED' && one.state !== 'DECLINED')) {
+  const liveRoutes = read.routes.filter((one) => one.state !== 'ARCHIVED' && one.state !== 'DECLINED');
+  if (input.retryOnly && !due.onFindings && liveRoutes.length > 0) {
     return { kind: 'NOT_DUE', reason: 'the goal already holds live routes; the search pass asks on the ordinary interval' };
   }
-  const filedToday = read.routes.filter((one) => now.getTime() - Date.parse(one.createdAt) < DAY).length;
-  const room = ROUTES_PER_DAY - filedToday;
+  const findings = read.ctx.findings ?? [];
+  /*
+   * Which step of the loop this ask is. With too little research to reason
+   * from and nothing priced yet, Brain scouts: directions, no figures, each
+   * asking its decisive unknown first. Once research has come back — or the
+   * goal already holds priced routes — it proposes routes from the findings.
+   * While its scouted directions are still being researched, it waits for them
+   * rather than guessing again, until the ordinary interval has passed.
+   */
+  const pricedLive = liveRoutes.filter((one) => !read.scoutIds.has(one.id));
+  const enoughFindings = findings.length >= FINDINGS_FOR_ROUTES;
+  if (!enoughFindings && read.liveScouts.length > 0 && !due.onFindings) {
+    const last = asks[0];
+    if (last && now.getTime() - Date.parse(last.createdAt) < ROUTE_PROPOSAL_EVERY_MS) {
+      return { kind: 'NOT_DUE', reason: `${read.liveScouts.length} scouted direction(s) are being researched; routes are proposed from what they find` };
+    }
+  }
+  const stage: RouteStage = !enoughFindings && pricedLive.length === 0 && read.liveScouts.length === 0 ? 'SCOUT' : 'ROUTE';
+  const filedToday = read.routes.filter((one) => !read.scoutIds.has(one.id) && now.getTime() - Date.parse(one.createdAt) < DAY).length;
+  const room = stage === 'SCOUT' ? DIRECTIONS_PER_ASK : ROUTES_PER_DAY - filedToday;
   if (room <= 0) return { kind: 'NOT_DUE', reason: `${filedToday} routes were filed for this goal in the last day` };
 
   // The ask is stamped at the moment it was judged due, the same clock the next due check reads it against.
   const record = (summary: string, detail: Record<string, unknown>) =>
-    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail, actorRef: 'BRAIN', at: now.toISOString() });
+    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail: { ...detail, stage, findingsSeen: claims.length, findingsShown: findings.length }, actorRef: 'BRAIN', at: now.toISOString() });
   const clock = deps.clock ?? Date.now;
   const deadline = clock() + ROUTE_BUDGET_MS;
   const chats = await (deps.chats ?? (() => operatorChats(deps, () => Math.max(5_000, Math.min(ROUTE_ATTEMPT_MS, deadline - clock())))))().catch(() => []);
@@ -1137,11 +1653,59 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     return { kind: 'NO_MODEL', reason };
   }
   read.ctx.today = now.toISOString().slice(0, 10);
-  const prompt = routePrompt(read.ctx);
   const failures: string[] = [];
   const ask = (chat: ChatFn, system: string, content: string, maxTokens: number) =>
     chat([{ role: 'system', content: system }, { role: 'user', content }], undefined, maxTokens).catch((error: unknown) => ({ content: '', error: String((error as Error)?.message ?? error) }));
-  let parsed: { routes: ProposedRoute[]; rejected: RejectedRoute[]; model: string; owner: OwnerProfile | null } | null = null;
+  const startDives = async (): Promise<string[]> => {
+    const start = deps.startDives ?? (async (projectId: string) => (await import('../cash/validation.ts')).startValidations({ projectId }));
+    return (await start(target.projectId).catch(() => [])).map((one) => one.opportunityId);
+  };
+
+  if (stage === 'SCOUT') {
+    const prompt = directionPrompt(read.ctx);
+    let got: { directions: ProposedDirection[]; rejected: RejectedRoute[]; model: string; owner: OwnerProfile | null } | null = null;
+    for (const { label, chat } of chats) {
+      if (deadline - clock() < 5_000) break;
+      const r = await ask(chat, PROPOSER_SYSTEM, prompt, 3500);
+      if (r.error) {
+        failures.push(`${label}: ${r.error.slice(0, 80)}`);
+        continue;
+      }
+      const one = parseDirections(r.content, read.ctx);
+      if (one.directions.length === 0 && one.rejected.length === 0) {
+        failures.push(`${label}: no parseable directions`);
+        continue;
+      }
+      got = { ...one, model: label, owner: ownerProfileOf(r.content) };
+      break;
+    }
+    if (!got) {
+      const reason = `no model answered with directions (${failures.join('; ').slice(0, 240) || 'out of time'})`;
+      await record(`Routes: none proposed — ${reason}.`, { outcome: 'NO_ANSWER', reason });
+      return { kind: 'NO_ANSWER', reason };
+    }
+    const existingKeys = new Set(read.routes.map((one) => (one.externalRecordId ?? '').slice(goalRoutePrefix(goal.id).length)));
+    const filed: string[] = [];
+    const existing: string[] = [];
+    for (const direction of got.directions) {
+      if (existingKeys.has(direction.key)) {
+        existing.push(direction.title);
+        continue;
+      }
+      if (filed.length >= room) break;
+      filed.push(await fileDirection(goal, target, gate.mode.id, gate.mode.ownerUserId, direction, got.model));
+      existingKeys.add(direction.key);
+    }
+    await record(
+      `Routes: ${filed.length} direction(s) named to scout before anything is priced${existing.length ? `, ${existing.length} already held` : ''}${got.rejected.length ? `, ${got.rejected.length} rejected (${rejectionSummary(got.rejected)})` : ''}; each one's research asks its decisive unknown first.`,
+      { outcome: 'PROPOSED', model: got.model, filed, existing, rejected: got.rejected, rejectedByRule: rejectionCounts(got.rejected), owner: got.owner, directions: got.directions.map((one) => ({ title: one.title, decisiveUnknown: one.decisiveUnknown })) },
+    );
+    const dived = filed.length > 0 ? await startDives() : [];
+    return { kind: 'PROPOSED', filed, existing, rejected: got.rejected, model: got.model, dived, critique: 'SKIPPED' };
+  }
+
+  const prompt = routePrompt(read.ctx);
+  let parsed: { routes: ProposedRoute[]; rejected: RejectedRoute[]; model: string; owner: OwnerProfile | null; rethink: string | null } | null = null;
   for (const { label, chat } of chats) {
     if (deadline - clock() < 5_000) break;
     const r = await ask(chat, PROPOSER_SYSTEM, prompt, 4000);
@@ -1154,7 +1718,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       failures.push(`${label}: no parseable routes`);
       continue;
     }
-    parsed = { ...one, model: label, owner: ownerProfileOf(r.content) };
+    parsed = { ...one, model: label, owner: ownerProfileOf(r.content), rethink: rethinkOf(r.content) };
     break;
   }
   if (!parsed) {
@@ -1164,8 +1728,10 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   }
   const reviewed = await critiqueAndRevise(read.ctx, parsed, chats, ask, () => deadline - clock());
   const rejected = [...parsed.rejected, ...reviewed.rejected];
+  const claimById = new Map(claims.map((one) => [one.id, one] as const));
   const existingKeys = new Set(read.routes.map((one) => (one.externalRecordId ?? '').slice(goalRoutePrefix(goal.id).length)));
   const filed: string[] = [];
+  const filedTitles: string[] = [];
   const existing: string[] = [];
   for (const one of reviewed.ranked) {
     if (existingKeys.has(one.route.key)) {
@@ -1174,12 +1740,20 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     }
     if (filed.length >= room) break;
     const place = reviewed.critique.outcome === 'CRITIQUED' ? { rank: one.rank, of: reviewed.ranked.length, why: one.why } : null;
-    filed.push(await fileRoute(goal, target, gate.mode.id, gate.mode.ownerUserId, one.route, parsed.model, place));
+    filed.push(await fileRoute(goal, target, gate.mode.id, gate.mode.ownerUserId, one.route, parsed.model, place, deps, claimById));
+    filedTitles.push(one.route.title);
     existingKeys.add(one.route.key);
+  }
+  // The directions whose research informed these routes step aside for them; their findings stay the project's.
+  const superseded = filed.length > 0 ? await supersedeScouts(read.liveScouts, filedTitles) : 0;
+  const grounded = reviewed.ranked.filter((one) => filedTitles.includes(one.route.title) && Object.keys(one.route.grounds.claims).length > 0).length;
+  // What the evidence taught, kept where the goal's learning is kept, so the next ask and a reader both have it.
+  if (parsed.rethink && (read.ctx.refuted.length > 0 || (read.ctx.scouted ?? []).some((one) => one.refutedBy))) {
+    await recordOperatorLearningSafe(goal.id, parsed.rethink, read.ctx.refuted.map((one) => `${one.title}: ${one.why}`).join(' | '));
   }
   // Each rejected route keeps its rule and reason in the detail, and the summary counts them by rule, so a later read shows why.
   await record(
-    `Routes: ${filed.length} proposed from the objective and filed as openings${existing.length ? `, ${existing.length} already held` : ''}${rejected.length ? `, ${rejected.length} rejected (${rejectionSummary(rejected)})` : ''}${reviewed.critique.outcome === 'CRITIQUED' ? ', ranked by a critique' : `; no critique (${reviewed.critique.reason ?? 'unavailable'})`}.`,
+    `Routes: ${filed.length} proposed${findings.length ? ` from ${findings.length} research finding(s)` : ' from the objective'} and filed as openings${grounded ? ` (${grounded} citing findings)` : ''}${existing.length ? `, ${existing.length} already held` : ''}${rejected.length ? `, ${rejected.length} rejected (${rejectionSummary(rejected)})` : ''}${reviewed.critique.outcome === 'CRITIQUED' ? ', ranked by a critique' : `; no critique (${reviewed.critique.reason ?? 'unavailable'})`}${superseded ? `; ${superseded} scouted direction(s) superseded` : ''}.`,
     {
       outcome: 'PROPOSED',
       model: parsed.model,
@@ -1190,6 +1764,9 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       refutedShown: read.ctx.refuted.length,
       owner: reviewed.owner,
       critique: reviewed.critique,
+      grounded,
+      superseded,
+      rethink: parsed.rethink,
     },
   );
   /*
@@ -1199,12 +1776,25 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
    * no dive had started 75 minutes later; the walk that would start them had
    * been running for 38 minutes and these projects were last in it.
    */
-  let dived: string[] = [];
-  if (filed.length > 0) {
-    const start = deps.startDives ?? (async (projectId: string) => (await import('../cash/validation.ts')).startValidations({ projectId }));
-    dived = (await start(target.projectId).catch(() => [])).map((one) => one.opportunityId);
-  }
+  const dived = filed.length > 0 ? await startDives() : [];
   return { kind: 'PROPOSED', filed, existing, rejected, model: parsed.model, dived, critique: reviewed.critique.outcome };
+}
+
+/** Claims counted to tell whether research has come back since the last ask. */
+export const FINDINGS_COUNTED = FINDINGS_SHOWN * 5;
+
+/** The "rethink" a reply carries: what the evidence taught, or null. Pure. */
+export function rethinkOf(text: string): string | null {
+  for (const obj of objectsIn(text)) {
+    const value = str(obj['rethink'], 600);
+    if (value && !/^(null|none|n\/a)$/i.test(value)) return value;
+  }
+  return null;
+}
+
+async function recordOperatorLearningSafe(goalId: string, lesson: string, evidence: string): Promise<void> {
+  const { recordOperatorLearning } = await import('../../repos/operator.ts');
+  await recordOperatorLearning({ goalId, runId: null, lesson: `Route rethink: ${lesson}`, evidence: evidence.slice(0, 2000) || 'research findings on this goal' }).catch(() => undefined);
 }
 
 const inFlight = new Map<string, Promise<RouteOutcome | null>>();

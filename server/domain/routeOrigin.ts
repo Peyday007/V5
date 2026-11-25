@@ -52,3 +52,36 @@ export function routeRankOf(value: string | null | undefined): number | null {
   const n = m ? Number(m[1]) : Number.NaN;
   return Number.isInteger(n) && n >= 1 ? n : null;
 }
+
+/**
+ * The card fact that says which step of the research-informed loop a route
+ * opening is (a RECOMMENDATION): `SCOUT` — a direction Brain wants checked
+ * before it prices anything, filed with no price, count or cost; `ROUTE` — a
+ * route built from what research found, whose sourced figures are EVIDENCE
+ * facts resting on the claims it cited. An opening without it predates the
+ * loop and is read as a ROUTE.
+ */
+export const ROUTE_STAGE_FIELD = 'routeStage';
+export type RouteStage = 'SCOUT' | 'ROUTE';
+/** The stage a `ROUTE_STAGE_FIELD` value states; ROUTE when it states none. Pure. */
+export function routeStageOf(value: string | null | undefined): RouteStage {
+  return (value ?? '').trim().toUpperCase().startsWith('SCOUT') ? 'SCOUT' : 'ROUTE';
+}
+
+/** The one unknown most likely to rule a scouted direction out: what its research asks first (a RECOMMENDATION). */
+export const DECISIVE_UNKNOWN_FIELD = 'decisiveUnknown';
+/** The buyer's problem or need a direction answers, as Brain reasoned it (a RECOMMENDATION). */
+export const BUYER_PROBLEM_FIELD = 'buyerProblem';
+/** What such buyers already pay for comparable things, as Brain expects it before research (a RECOMMENDATION). */
+export const COMPARABLE_SPEND_FIELD = 'comparableSpend';
+/**
+ * The card fact of a dated sign that buyers of this kind spend on, or seek,
+ * offers comparable to this one now — EVIDENCE about the market, never about
+ * this exact offer. `buyingEvidence` stays the sign that buyers want this very
+ * offer; the plan reads the two apart (`plan.ts` CURRENT_DEMAND).
+ */
+export const COMPARABLE_DEMAND_FIELD = 'comparableDemand';
+/** Which of a route's figures research sourced, and from which claims (a RECOMMENDATION, for a reader). */
+export const ROUTE_GROUNDS_FIELD = 'routeGrounds';
+/** The archive reason prefix of a scouted direction a grounded route replaced: not a refutation. */
+export const SUPERSEDED_PREFIX = 'superseded:';

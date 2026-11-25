@@ -1176,6 +1176,28 @@ export async function sourceUrlsForProject(projectId: string): Promise<Map<strin
 }
 
 /**
+ * The gated, sourced evidence a project holds, newest first, at most `limit`:
+ * every accepted claim with a source that was actually read. This is what a
+ * goal's research has established so far — discovery rounds, deep dives and
+ * path questions alike — and what its route proposer reasons from
+ * (`goals/routeProposal.ts` `routeFindings`). An unread source is not a
+ * finding.
+ */
+export async function projectEvidenceClaims(projectId: string, limit: number): Promise<ResearchClaim[]> {
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.source_url IS NOT NULL
+        AND COALESCE(c.retrieval_state, 'RETRIEVED') = 'RETRIEVED'
+      ORDER BY c.created_at DESC, c.id DESC
+      LIMIT ?`,
+    [projectId, Math.max(1, Math.trunc(limit))],
+  );
+  return rows.map(mapClaim);
+}
+
+/**
  * Gated UNIT_ECONOMIC claims of a project with a declared figure that no
  * construction fact names yet, by id after `afterId`, at most `limit` (F3
  * back-fill). Any orchestration, not only a kernel round's: what research

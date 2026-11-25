@@ -110,3 +110,58 @@ Goals workflow with an administrator's `--admin` identity.
    spent); grade all ten with the independent grader (`GRADER-BRIEF.md`).
 3. Production decisive test: create the 10 goals in production (operator path or
    Goals workflow `create` with `--admin`), watch research complete, grade.
+
+## 6. Brain-created opportunity audit and the research-informed route loop (2026-11-25, evening)
+
+**Audit (owner's request: which opportunities Brain created vs discovered, and how many are complete).**
+Fresh read of dec1125 at about 16:00Z (serving 74691c7): 55 openings across 10 goals. All 55 are
+Brain-created route proposals; none was discovered as an existing contract or listing. Not one
+carries an EVIDENCE fact. At best 2 of 8 plan links are established (the buyer can be reached, and
+a fulfiller is named). **Complete and credible: 0 / 55.** Research orchestrations had been
+RESEARCHING for 2–4 h on every goal and had filed nothing (reported to the coordinator as a
+blocker).
+
+Where created opportunities could not be completed even with research, as traced in code:
+- Proposals were priced, counted and costed before any research. The critique judged guesses,
+  and research checked them only afterwards.
+- CURRENT_DEMAND accepted only a dated buying signal for the exact offer. A new offer nobody has
+  asked for by name could never establish it, even when buyers of that kind demonstrably spend on
+  comparable offers now. (The price reader already accepts comparable market prices; probed
+  across six industries.)
+- A fixed spread was forced: at least three buyer kinds and three mechanisms, no two routes to
+  one buyer type, and replacements requested until three routes survived.
+
+**The loop (branch `claude/research-informed-routes`):**
+1. **Scout.** With fewer than 3 read findings and nothing priced, the proposer names up to 5
+   directions. Each gives a buyer problem, an offer from the owner's means, the comparable
+   spending it expects, reach, fulfilment, and the one decisive unknown. Each is filed with
+   **no price, count or cost** (`routeStage=SCOUT`).
+2. **Decisive unknown first.** A scout's dive is short and ordered: the fact most likely to kill
+   it comes first, then comparable price, comparable or exact demand, reach, fulfilment, cost,
+   timing and count. A dead direction costs one question.
+3. **Findings reach the proposer and the critic before selection.** The project's gated claims
+   from read sources are listed as F1…Fn, together with each scouted direction's outcome. A fresh
+   ask becomes due as soon as 3 new findings arrive, instead of after the ordinary 6 h.
+4. **Grounded routes.** Every figure cites a finding or is marked as an estimate. Each cited claim
+   is filed as the route's EVIDENCE through `writeEvidenceAnswer`, so the card holds the source's
+   own words and figure and keeps every rule of that writer. The scouted directions that informed
+   a route are archived as *superseded*, not refuted.
+5. **Comparable vs verified demand.** Comparable demand has its own field and dive lane
+   (`comparableDemand` / `comparable_demand`, dated or refused). CURRENT_DEMAND reads
+   `VERIFIED:` for a fresh signal about this exact offer, and `COMPARABLE: … demand for this exact
+   offer is not verified` for comparable demand. CONVERSION stays the market test's to establish.
+6. **No forced variety.** The proposer asks for up to k routes, only as many as the evidence
+   supports. The same-buyer-type rejection is removed. Replacements are requested only when no
+   route survives.
+7. **Rethink.** Ruled-out directions are shown with the evidence that ruled them out. The reply's
+   `rethink` is recorded as a goal-scoped operator learning, and the next ask must change
+   approach rather than restate.
+
+Tests: `tests/researchInformedRoutes.test.ts` (11), with the existing route suites updated to the
+new rules.
+
+Not done in this change:
+- Knowledge-library facts (Census counts by industry and geography) are not yet fed into the
+  findings.
+- Cross-goal lessons are kept goal-scoped. Generalising them across goals would leak between
+  evaluation goals that share request text, so it waits for a fresh-request design.

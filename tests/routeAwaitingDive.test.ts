@@ -11,6 +11,7 @@
  *   - once a dive has settled without a price buyers are shown to pay, the
  *     arithmetic stands again: the same openings read NOT_VIABLE.
  */
+import { researchedFindings } from './helpers.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -55,7 +56,7 @@ beforeEach(async () => {
   await settleRouteAsks();
   await getDb().run('DELETE FROM workstream_events WHERE kind = ?', [ROUTE_EVENT]);
   const chat: ChatFn = async () => ({ content: JSON.stringify({ routes: [route(0), route(1), route(2)] }), toolCalls: [], ms: 1, completionTokens: 1, error: null });
-  const filed = await proposeGoalRoutes({ goalId }, { chats: async () => [{ label: 'stub', chat }], delivers: async () => [], startDives: async () => [] });
+  const filed = await proposeGoalRoutes({ goalId }, { chats: async () => [{ label: 'stub', chat }], claims: researchedFindings, delivers: async () => [], startDives: async () => [] });
   if (filed.kind !== 'PROPOSED' || filed.filed.length !== 3) throw new Error(`routes not filed: ${JSON.stringify(filed)}`);
 });
 

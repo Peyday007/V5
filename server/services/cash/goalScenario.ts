@@ -39,6 +39,8 @@ import { readTrialVolume, readVolume } from './volume.ts';
 import { acquisitionOf } from '../goals/pathways.ts';
 import { frontierTiers } from './shared.ts';
 import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
+import { claimsByIds } from '../../repos/research.ts';
+import { COMPARABLE_DEMAND_FIELD } from '../../domain/routeOrigin.ts';
 import { STRUCTURES } from './properties.ts';
 import { COMPETITIVE_AWARD } from './paymentTiming.ts';
 import { PROVIDER_PAYOUT_DAYS } from './money.ts';
@@ -214,6 +216,12 @@ export interface ModelledOpportunity {
    * an order rate (which counts deals made, not prospects) or is not established.
    */
   prospects?: number | null;
+  /**
+   * A dated sign that buyers of this kind spend on comparable offers now
+   * (`COMPARABLE_DEMAND_FIELD`), as EVIDENCE: demand for the market, not for
+   * this exact offer. The plan's CURRENT_DEMAND link accepts it and says so.
+   */
+  comparableDemand?: { text: string; observedAt: string | null } | null;
   /** A live agreement already recorded for this opportunity. */
   agreed: boolean;
   /** What those agreements are worth, in major units: money a buyer has already agreed to. */
@@ -2703,7 +2711,19 @@ export async function modelOpportunity(
     fulfilledBy,
     columns: Object.fromEntries((Object.keys(CARD_COLUMN_FACT) as CardColumn[]).map((column) => [column, kindToProvenance(fact(CARD_COLUMN_FACT[column])).provenance])),
     competitiveAward: agreements.length === 0 && isCompetitiveAward(opportunity),
+    comparableDemand: await comparableDemandOf(fact(COMPARABLE_DEMAND_FIELD)),
   };
+}
+
+/**
+ * A comparable-demand fact as the plan reads it: what it says and the date its
+ * source prints, from the claim it rests on. Only EVIDENCE counts — Brain's
+ * expectation of comparable spending is not a sign of demand.
+ */
+async function comparableDemandOf(fact: CashCardFact | null): Promise<{ text: string; observedAt: string | null } | null> {
+  if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId) return null;
+  const [claim] = await claimsByIds([fact.claimId]).catch(() => []);
+  return { text: fact.value, observedAt: claim?.sourceDate ?? claim?.retrievedAt ?? null };
 }
 
 /**
