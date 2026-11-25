@@ -174,6 +174,7 @@ async function read(): Promise<void> {
   console.log(`EVAL_READ ${run} ${projects.length} case(s)`);
 }
 
+console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
   if (command === 'create') await create();
