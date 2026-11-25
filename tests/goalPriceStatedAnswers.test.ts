@@ -37,20 +37,25 @@ describe('the price a claim states per a named unit', () => {
     expect(statedUnitPrice('The study costs $25,000 in total.')).toBeNull();
     expect(statedUnitPrice('Boxes sell for $5 each.')).toBeNull();
     expect(statedUnitPrice('$40 per box, or $900 per pallet')).toEqual({ low: 40, high: 40, unit: 'box' });
+    // A rate per hour or word is not a purchase; a unit stops before the phrase after it.
+    expect(statedUnitPrice('Assistants charge $10 per hour.')).toBeNull();
+    expect(statedUnitPrice('a volume-weighted $328 per MBF over the last quarter')).toEqual({ low: 328, high: 328, unit: 'mbf' });
   });
 });
 
 describe('a card price filed from a rate is withdrawn', () => {
   const card = 'what this buyer pays per unit of work, as published: Agencies charge $0.01 to $0.05 per email for list cleaning';
-  it('supersedes a card-filed price the claim states only per unit with an ASSUMPTION', () => {
-    const meaning = rederivedMeaning({ key: 'price_per_unit', low: 0.01, high: 0.01, status: 'OBSERVED', measures: card }, 'Agencies charge $0.01 to $0.05 per email for list cleaning', undefined);
+  it('supersedes a card-filed price with an ASSUMPTION once the card took that claim back as its price', () => {
+    const meaning = rederivedMeaning({ key: 'price_per_unit', low: 0.01, high: 0.01, status: 'OBSERVED', measures: card, cardPriceWithdrawn: true }, 'Agencies charge $0.01 to $0.05 per email for list cleaning', undefined);
     expect(meaning).toMatchObject({ key: 'price_per_unit', amount: 0.01, status: 'ASSUMPTION' });
     // Withdrawn once: the ASSUMPTION is not withdrawn again.
-    expect(rederivedMeaning({ key: 'price_per_unit', low: 0.01, high: 0.01, status: 'ASSUMPTION', measures: card }, 'Agencies charge $0.01 to $0.05 per email', undefined)).toBeNull();
+    expect(rederivedMeaning({ key: 'price_per_unit', low: 0.01, high: 0.01, status: 'ASSUMPTION', measures: card, cardPriceWithdrawn: true }, 'Agencies charge $0.01 to $0.05 per email', undefined)).toBeNull();
+    // A rate per the unit of work nothing took back stands.
+    expect(rederivedMeaning({ key: 'price_per_unit', low: 300, high: 300, status: 'OBSERVED', measures: 'what this buyer pays per unit of work, as published: x' }, 'Independent restaurants pay $300 to $450 per grease trap cleaning.', undefined)).toBeNull();
   });
 
   it('leaves a card price the claim states for one purchase, and an answer to a price question', () => {
-    expect(rederivedMeaning({ key: 'price_per_unit', low: 2500, high: 2500, status: 'OBSERVED', measures: 'what this buyer pays per unit of work, as published: x' }, 'The study is priced at $2,500 in total.', undefined)).toBeNull();
+    expect(rederivedMeaning({ key: 'price_per_unit', low: 2500, high: 2500, status: 'OBSERVED', measures: 'what this buyer pays per unit of work, as published: x', cardPriceWithdrawn: true }, 'The study is priced at $2,500 in total.', undefined)).toBeNull();
     expect(rederivedMeaning({ key: 'price_per_unit', low: 30, high: 120, status: 'OBSERVED', measures: 'answering Brain’s price question about "x": USD 30–120 per recipient' }, 'budgets range from $30–$120 per recipient', undefined)).toBeNull();
   });
 });

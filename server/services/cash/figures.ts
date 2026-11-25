@@ -78,7 +78,8 @@ export interface MoneyFigure {
 }
 
 /** The words a per-unit figure names as its unit, stopping at the first word that starts a new phrase. */
-const UNIT_NAMED = /^\s*(?:\/\s*|per\s+|an?\s+|each\s+|for\s+(?:each|every|one|a|an)\s+)((?!(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding)\b)[a-z][\w-]*(?:\s+(?!(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding|is|are|was|were)\b)[a-z][\w-]*){0,2})/i;
+const UNIT_STOP = String.raw`(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding|is|are|was|were|over|the|a|an|across|during|within|after|before|under|than|as|that|which|this|these|those|depending|based|vs|versus|via)\b`;
+const UNIT_NAMED = new RegExp(String.raw`^\s*(?:\/\s*|per\s+|an?\s+|each\s+|for\s+(?:each|every|one|a|an)\s+)((?!${UNIT_STOP})[a-z][\w-]*(?:\s+(?!${UNIT_STOP})[a-z][\w-]*){0,2})`, 'i');
 
 /** A scale word after a figure, which this module refuses rather than applies. */
 const SCALE_WORD = /^\s*(?:thousand|million|billion|trillion|bn|mn|mm|m|k)\b/i;
