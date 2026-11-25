@@ -24,7 +24,14 @@ import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { createAccount, createRoutine, bindRoutineWorker } from '../server/repos/fleet.ts';
 import { bindRoutineConnector, ensureConnector, attachClient } from '../server/repos/connectors.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
-import { assignNextBin, createBin, getBin, listDispatchesForBin } from '../server/repos/bins.ts';
+import {
+  assignNextBin,
+  createBin,
+  ensureDispatchIntent,
+  getBin,
+  listDispatchesForBin,
+  markDispatchDeferred,
+} from '../server/repos/bins.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { resetNetworkBlockCache } from '../server/services/dispatch/candidates.ts';
 import { idleCounts } from '../server/services/engineering/watchdog.ts';
@@ -211,5 +218,68 @@ describe('an audit role no surface can take yet', () => {
     const arriving = await createWorker({ name: `arriving-${tag()}`, createdByType: 'SYSTEM', createdById: 'test' });
     const assigned = await assignNextBin({ workerId: arriving.id, projectIds: [projectId] });
     expect(assigned?.bin.id).toBe(binId);
+  });
+});
+
+/**
+ * A capacity wait ends when capacity is free, not when its timestamp runs out.
+ *
+ * The watchdog reading a deferred intent as a wait (above) is classification;
+ * on its own it changes what is counted and fires nothing more. The recorded
+ * class was a dispatch pass that claimed nothing while fourteen surfaces were
+ * eligible and one was active: the one intent had been deferred on a capacity
+ * refusal and its `next_attempt_at` was still ahead. Nothing writes a row when
+ * an activation finishes, so the operator re-arm never saw it.
+ */
+describe('a capacity deferral beside a free surface', () => {
+  async function deferredBin(refusal: string): Promise<string> {
+    const created = await createBin({
+      projectId,
+      kind: 'RESEARCH_PACKET',
+      title: 'a bin deferred on capacity',
+      objective: 'do it',
+      manifest: manifest(),
+      completionContract: 'DETERMINISTIC_UNITS_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+      maxAttempts: 20,
+    });
+    await ensureDispatchIntent((await getBin(created.id))!);
+    const intent = (await listDispatchesForBin(created.id))[0]!;
+    await markDispatchDeferred(intent.id, { refusal, message: 'the fleet was full a moment ago', retryAfterMs: 30 * 60_000 });
+    return created.id;
+  }
+
+  it('is fired in the next tick once a surface could take it, not after its thirty-minute backoff', async () => {
+    await surface('free');
+    const binId = await deferredBin('ACCOUNT_TARGETS_REACHED');
+    // While it waits it is not idle capacity: the watchdog's classification holds.
+    expect((await idleCounts()).executableWork).toBe(0);
+
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.woken).toBe(1);
+    expect(result.fired).toBe(1);
+    expect(fires).toHaveLength(1);
+    expect((await listDispatchesForBin(binId))[0]!.state).toBe('SENT');
+  });
+
+  it('is left waiting when no surface could take it now', async () => {
+    const binId = await deferredBin('ACCOUNT_TARGETS_REACHED');
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.woken).toBe(0);
+    expect(fires).toHaveLength(0);
+    const intent = (await listDispatchesForBin(binId))[0]!;
+    expect(intent.state).toBe('PENDING');
+    expect(Date.parse(intent.nextAttemptAt)).toBeGreaterThan(Date.now() + 20 * 60_000);
+  });
+
+  it('never brings forward a per-bin wait a free surface does not answer', async () => {
+    await surface('free');
+    const binId = await deferredBin('NO_ELIGIBLE_AUDIT_SESSION');
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.woken).toBe(0);
+    expect(fires).toHaveLength(0);
+    expect(Date.parse((await listDispatchesForBin(binId))[0]!.nextAttemptAt)).toBeGreaterThan(Date.now() + 20 * 60_000);
   });
 });

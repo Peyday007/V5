@@ -59,6 +59,8 @@ import {
   BIN_REFIRE_COOLDOWN_MS,
   BIN_REFIRE_LIMIT,
   BIN_REFIRE_WINDOW_MS,
+  DISPATCHABLE_SQL,
+  FIREABLE_SQL,
   binWorkReady,
   claimDispatchIntent,
   deferBinFires,
@@ -76,6 +78,7 @@ import {
   supersedeStaleIntents,
   reopenNoShowDispatches,
   reviveAbandonedNoShowDispatches,
+  workReadySql,
 } from '../../repos/bins.ts';
 import {
   fireConfig,
@@ -90,7 +93,7 @@ import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
 import { rearmStrandedIntents } from './rearm.ts';
-import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
+import { OPERATOR_RESOLVED_ROUTING_REFUSALS, REFUSAL_WAIT, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
   claimRoutineFireSlot,
@@ -182,6 +185,11 @@ export interface TickResult {
    * generation, this says an intent stopped being blocked.
    */
   rearmed: number;
+  /**
+   * Intents waiting out a capacity backoff, or a no-claimable-work recheck,
+   * brought forward because a surface could take them now (`wakeCapacityDeferredIntents`).
+   */
+  woken: number;
   /** Fires nobody answered, put back in the queue or given up on. */
   reopenedNoShows: number;
   abandonedNoShows: number;
@@ -256,6 +264,72 @@ let lastBrainOnlyPass = 0;
 const MODEL_OUTPUT_PASS_MS = 5 * 60_000;
 let lastModelOutputPass = 0;
 
+/**
+ * The deferrals a free surface answers without anybody writing to the fleet.
+ *
+ * Every `CAPACITY` routing refusal (derived from `REFUSAL_WAIT`, so a refusal
+ * added later is classified once, beside its union) and the no-claimable-work
+ * recheck, whose bin `workReadySql` below already re-asks. Not the per-bin waits
+ * — an audit role nobody independent can take (`NO_ELIGIBLE_AUDIT_SESSION`) or
+ * the refire guard — because a free surface does not change those answers, and
+ * those hold the bin's own `dispatch_not_before`, which `FIREABLE_SQL` reads.
+ */
+export const CAPACITY_RESOLVED_KINDS: readonly string[] = [
+  ...(Object.keys(REFUSAL_WAIT) as RoutingRefusal[]).filter((refusal) => REFUSAL_WAIT[refusal] === 'CAPACITY'),
+  'NO_CLAIMABLE_WORK',
+];
+
+/**
+ * Bring forward intents deferred on capacity that a surface could take now.
+ *
+ * Shenango's rule, at this loop's grain: when work waits and a core is idle the
+ * core is granted at the next check, not when a timer the waiting work set
+ * runs out. Bounded by the burst, because no more than that can fire this tick;
+ * each one meets every gate a due intent meets on the way to the fire. One
+ * conditional UPDATE per intent, so two dispatchers bring it forward once.
+ */
+export async function wakeCapacityDeferredIntents(
+  snapshot: Awaited<ReturnType<typeof fleetSnapshot>>,
+  limit: number,
+): Promise<number> {
+  if (snapshot.candidates.length === 0) return 0;
+  const now = new Date().toISOString();
+  const kinds = CAPACITY_RESOLVED_KINDS.map(() => '?').join(', ');
+  const rows = await getDb().all<{ id: string; bin_id: string }>(
+    `SELECT d.id AS id, d.bin_id AS bin_id
+       FROM bin_dispatch d
+       JOIN bins b ON b.id = d.bin_id AND b.lease_generation = d.lease_generation
+      WHERE d.state = 'PENDING' AND d.next_attempt_at > ?
+        AND COALESCE(d.last_error_kind, '') IN (${kinds})
+        AND b.id IN (SELECT bins.id FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')})
+      ORDER BY b.priority DESC, d.next_attempt_at, d.id
+      LIMIT ?`,
+    [now, ...CAPACITY_RESOLVED_KINDS, now, now, now, now, Math.max(1, limit) * 4],
+  );
+  let woken = 0;
+  for (const row of rows) {
+    if (woken >= limit) break;
+    const bin = await getBin(row.bin_id);
+    if (!bin) continue;
+    const decision = routeBin({
+      bin,
+      candidates: snapshot.candidates,
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: snapshot.fleetInFlight,
+      factoryInFlight: snapshot.factoryInFlight,
+      now: new Date().toISOString(),
+    });
+    if (!decision.ok) continue;
+    const changed = await getDb().run(
+      `UPDATE bin_dispatch SET next_attempt_at = ?, updated_at = ?
+        WHERE id = ? AND state = 'PENDING' AND next_attempt_at > ?`,
+      [now, now, row.id, now],
+    );
+    if (changed.changes === 1) woken += 1;
+  }
+  return woken;
+}
+
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
 ): Promise<TickResult> {
@@ -264,6 +338,7 @@ export async function dispatchTick(
   const result: TickResult = {
     superseded: 0,
     rearmed: 0,
+    woken: 0,
     reopenedNoShows: 0,
     abandonedNoShows: 0,
     revivedAbandoned: 0,
@@ -424,6 +499,26 @@ export async function dispatchTick(
       return decision.ok || !waitsForOperator(decision.refusal);
     },
   });
+
+  /*
+   * And bring forward what waits on capacity the fleet now has (late binding).
+   *
+   * The re-arm above answers deferrals an operator's write resolves. A capacity
+   * deferral resolves by itself — an activation finishes, a target frees, a
+   * rate limit lapses — and nothing writes a row when it does, so the intent
+   * sat out its whole timestamp beside the surface that had just come free.
+   * That was the recorded IDLE_CAPACITY class seen from the fire side: "1
+   * executable item(s), 14 eligible surface(s), 1 active against a target of
+   * 12", and the dispatch pass the watchdog asked for each time claimed
+   * nothing, because the one intent's `next_attempt_at` was still ahead.
+   * Counting that bin as waiting (the watchdog's own reading) was correct;
+   * leaving it waiting while a surface was free was not.
+   *
+   * The predicate is `routeBin` itself against this tick's snapshot: an intent
+   * is brought forward only when the fire would route it now, so a fleet still
+   * at target, or a provider still limiting, leaves it exactly where it was.
+   */
+  result.woken = await wakeCapacityDeferredIntents(snapshot, Math.max(1, options.burst ?? DISPATCH_BURST));
 
   /*
    * Put back a fire nobody answered.
