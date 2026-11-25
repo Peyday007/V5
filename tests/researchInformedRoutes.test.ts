@@ -173,6 +173,9 @@ describe('routes from findings', () => {
     // Platform resale and unnamed referral commissions are not routes (dev4, 2026-11-25: six Fiverr/Upwork resale routes).
     expect(prompt).toMatch(/reselling gigs, services or products another platform already sells/);
     expect(prompt).toMatch(/referral commission without a named partner programme/);
+    // A model-generated digital deliverable is not a route without buyers shown paying for exactly that (dev5, 2026-11-25: 6/12 goals).
+    expect(prompt).toMatch(/digital deliverable a model would generate[\s\S]*already shown paying for exactly that/);
+    expect(directionPrompt(ctx())).toMatch(/When the owner states no skill or asset, their capital, time and place are the means/);
   });
 
   it('keeps only cited refs the prompt showed, and reads demand as comparable unless the reply says exact', () => {
