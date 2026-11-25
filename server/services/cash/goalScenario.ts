@@ -2769,6 +2769,29 @@ export function outOfGoalScope(
   return null;
 }
 
+/**
+ * Whether an opening's money repeats, for a goal that counts a monthly run-rate (2026-11-25).
+ *
+ * A price stated per period recurs, as before. So does a route whose evidence is a
+ * recurring pattern of buyers paying (`RECURRING_OUTSOURCED_WORK`, a demand pattern by its
+ * signal's own definition), or whose market evidence states how often each buyer buys
+ * again: a law firm ordering records retrieval per request, a carrier paying a dispatcher per
+ * load, is a monthly run-rate whatever one transaction is called. The decisive-10 readings
+ * excluded every route of three monthly goals as "pays once" on the price's wording alone.
+ * A one-off with no stated repeat still does not move a run-rate. Pure apart from the reader.
+ */
+export function repeatsForRunRate(
+  opportunity: Pick<CashOpportunity, 'title' | 'opportunitySignal' | 'payer' | 'industry'>,
+  price: string | null,
+  volume: string | null,
+): boolean {
+  if (recurringRevenue(price, opportunity.title)) return true;
+  if (opportunity.opportunitySignal === 'RECURRING_OUTSOURCED_WORK') return true;
+  if (!volume) return false;
+  const read = readVolume(volume, 30, opportunity.payer, opportunity.industry ?? null);
+  return !!read && read.everyDays !== null && read.everyDays <= 92;
+}
+
 /** What the goal's scope reads of a held opening: its industry, whether its price recurs, and its own stated days to cash. */
 export interface HeldTerms {
   industry: string | null;
@@ -2899,7 +2922,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   for (const opportunity of live) {
     const fact = await cardFactMap(opportunity.id, opportunity.projectId ?? undefined);
     const ttc = fact('timeToFirstCash')?.value;
-    scoped.set(opportunity.id, { industry: opportunity.industry ?? null, title: opportunity.title, recurring: recurringRevenue(fact('price')?.value ?? null, opportunity.title), days: ttc ? readSettlementDays(ttc) : null, capital: opportunity.peakFundingCents !== null ? opportunity.peakFundingCents / 100 : null });
+    scoped.set(opportunity.id, { industry: opportunity.industry ?? null, title: opportunity.title, recurring: repeatsForRunRate(opportunity, fact('price')?.value ?? null, fact('buyerVolume')?.value ?? null), days: ttc ? readSettlementDays(ttc) : null, capital: opportunity.peakFundingCents !== null ? opportunity.peakFundingCents / 100 : null });
   }
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';

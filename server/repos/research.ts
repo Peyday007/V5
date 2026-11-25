@@ -1875,6 +1875,7 @@ export async function signalledClaims(input: {
              AND ((c.source_date LIKE '____-__-__%' AND c.source_date < ?)
                   OR (c.source_date LIKE '____-__' AND c.source_date < ?)
                   OR (c.source_date LIKE '____' AND c.source_date < ?))
+             AND COALESCE(c.evidence_lane, '') <> 'demand_pattern'
              AND (COALESCE(c.opportunity_signal, '') IN (${pointSignals.map(() => '?').join(', ')})
                   OR (c.opportunity_signal IS NULL AND COALESCE(c.evidence_lane, '') = ?)))`
     : '';
@@ -1890,7 +1891,7 @@ export async function signalledClaims(input: {
    */
   const staleAt = input.staleBefore ? new Date(input.staleBefore) : null;
   const isStale = (claim: ResearchClaim): boolean =>
-    staleAt !== null && claim.opportunitySignal !== null &&
+    staleAt !== null && claim.opportunitySignal !== null && claim.evidenceLane !== 'demand_pattern' &&
     observationExpiry({ signal: claim.opportunitySignal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays: 0, now: staleAt }).stale;
   /*
    * Paged until `limit` claims survive the checks below, not one window.

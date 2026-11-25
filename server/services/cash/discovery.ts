@@ -2131,7 +2131,9 @@ export async function harvest(input: {
      * opening: production modelled an April 2026 Coachella resale price on
      * 2026-11-14 because nothing gave it an end.
      */
-    const timing = observationExpiry({ signal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays, now });
+    // A demand_pattern claim is, by its lane, a pattern across dated examples: it does not expire like one
+    // request, whichever signal the worker named (2026-11-25: a dated consumer pattern was dropped as stale).
+    const timing = observationExpiry({ signal: claim.evidenceLane === 'demand_pattern' ? 'RECURRING_OUTSOURCED_WORK' : signal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays, now });
     if (timing.stale) continue;
 
     const context = roundByOrchestration.get(entry.orchestrationId) ?? (await settledRoundFor(entry.orchestrationId));

@@ -135,10 +135,13 @@ export async function joinRouteEvidence(input: {
     }
   }
 
-  for (const sibling of fragment) {
+  // The establishing claim's own lane first: a signal filed as the price ("$45 flat fee per request") is the
+  // route's price as surely as a sibling's is (decisive-10 d04, 2026-11-25).
+  const own = fragment.find((one) => one.id === input.claim.id) ?? input.claim;
+  for (const sibling of [own, ...fragment.filter((one) => one.id !== input.claim.id)]) {
     const fields = sibling.evidenceLane ? ROUTE_FIELD_BY_LANE[sibling.evidenceLane] : undefined;
     if (!fields) continue;
-    if (!sameRoute(input.claim, sibling, openings)) continue;
+    if (sibling.id !== input.claim.id && !sameRoute(input.claim, sibling, openings)) continue;
     for (const field of fields) {
       if (written.some((one) => one.field === field)) continue;
       if (await writeEvidenceAnswer({ opportunity: input.opportunity, field, claim: sibling, needId: null })) {
