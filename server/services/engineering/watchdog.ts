@@ -14,7 +14,7 @@ import { ADMISSION_REFUSED_WINDOW_MS, DISPATCHABLE_SQL, FIREABLE_SQL, notAdmissi
 import { recordIntervention } from '../../repos/engineering.ts';
 import { idleCheck } from '../../domain/engineering.ts';
 import { capacityReading } from '../fleet/capacity.ts';
-import { dispatchTick } from '../dispatch/loop.ts';
+import { DISPATCHER_DEFERRAL_KINDS, dispatchTick } from '../dispatch/loop.ts';
 
 export const IDLE_RECORD_WINDOW_MS = 10 * 60_000;
 /** A bin the router refused this recently waits on that refusal's named limit, not on idle capacity. */
@@ -25,6 +25,13 @@ export interface IdleReading {
   eligibleCapacity: number;
   activeWork: number;
   safeTarget: number;
+  /**
+   * Work-ready bins left out of `executableWork` because the dispatcher itself
+   * deferred their current intent and its backoff has not run out, by refusal.
+   * A failed fire's backoff is not a deferral and is not here: it is still
+   * executable work (repair-F3).
+   */
+  dispatchWaits: Record<string, number>;
   idle: boolean;
   reason: string;
   intervened: boolean;
@@ -49,16 +56,50 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   // quarantined surfaces were refused 34 times each, and between refusals (outside
   // the unrouted window) they read as "executable work beside a free surface — a
   // fault", which Hermes then cited as a Factory fault and stopped commissioning.
+  //
+  // And a bin whose current intent the dispatcher itself deferred waits on that
+  // deferral until `next_attempt_at` — the column `claimDispatchIntent` reads —
+  // whichever refusal wrote it. Production, 2026-11-24: "1 executable item(s),
+  // 14 eligible surface(s), 1 active against a target of 12: capacity is
+  // unexplainedly idle" in most ten-minute windows. Only `DISPATCH_UNROUTED`
+  // inside a fixed fifteen minutes was excluded, so a routing refusal deferred
+  // for longer, and every deferral that is not a routing refusal at all (an
+  // audit role no surface's next session can take, recorded as
+  // `DISPATCH_DEFERRED`), read as idle capacity and earned a dispatch pass that
+  // could fire nothing. One predicate with the dispatcher, not a second reader.
+  //
+  // Only a *deferral* — a refusal the dispatcher recorded as its own decision to
+  // wait (`DISPATCHER_DEFERRAL_KINDS`) — is excluded. A fire that failed and is
+  // backing off (`AUTH`, `NETWORK`, `NO_SHOW`, …) carries the same future
+  // `next_attempt_at`, but nobody decided that wait: a failed fire beside free
+  // surfaces is a fault, so it stays executable work and keeps earning the idle
+  // record (repair-F3).
   const unroutedSince = new Date(now.getTime() - UNROUTED_WINDOW_MS).toISOString();
-  const executable = await getDb().get<{ n: number | string }>(
-    `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
+  const readyBins = `FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
         AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)
         AND ${notAdmissionRefusedSql('bins.')}
         AND (bins.pinned_routine_id IS NULL OR EXISTS (
           SELECT 1 FROM fleet_routines r JOIN fleet_accounts a ON a.id = r.account_id
-           WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`,
-    [iso, iso, iso, iso, unroutedSince, new Date(now.getTime() - ADMISSION_REFUSED_WINDOW_MS).toISOString()],
+           WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`;
+  const readyParams = [iso, iso, iso, iso, unroutedSince, new Date(now.getTime() - ADMISSION_REFUSED_WINDOW_MS).toISOString()];
+  const deferralKinds = DISPATCHER_DEFERRAL_KINDS.map(() => '?').join(', ');
+  const deferredIntent = `SELECT 1 FROM bin_dispatch d WHERE d.bin_id = bins.id AND d.lease_generation = bins.lease_generation
+          AND d.state = 'PENDING' AND d.next_attempt_at > ? AND d.last_error_kind IN (${deferralKinds})`;
+  const executable = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n ${readyBins} AND NOT EXISTS (${deferredIntent})`,
+    [...readyParams, iso, ...DISPATCHER_DEFERRAL_KINDS],
   );
+  const waits = await getDb().all<{ refusal: string; n: number | string }>(
+    `SELECT d.last_error_kind AS refusal, COUNT(*) AS n
+       FROM bin_dispatch d JOIN bins ON bins.id = d.bin_id AND d.lease_generation = bins.lease_generation
+      WHERE d.state = 'PENDING' AND d.next_attempt_at > ? AND d.last_error_kind IN (${deferralKinds})
+        AND bins.id IN (SELECT bins.id ${readyBins})
+      GROUP BY d.last_error_kind
+      ORDER BY n DESC`,
+    [iso, ...DISPATCHER_DEFERRAL_KINDS, ...readyParams],
+  );
+  const dispatchWaits: Record<string, number> = {};
+  for (const one of waits) dispatchWaits[one.refusal] = Number(one.n);
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",
     [iso],
@@ -70,7 +111,18 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
     eligibleCapacity: eligible,
     activeWork: Number(active?.n ?? 0),
     safeTarget: capacity.target ?? eligible,
+    dispatchWaits,
   };
+}
+
+/** The dispatcher's own deferrals, said in a sentence; empty when there are none. */
+export function describeDispatchWaits(waits: Record<string, number>): string {
+  const entries = Object.entries(waits).filter(([, n]) => n > 0);
+  if (entries.length === 0) return '';
+  const total = entries.reduce((sum, [, n]) => sum + n, 0);
+  return `${total} work-ready bin(s) wait on the dispatcher's own deferral (${entries
+    .map(([refusal, n]) => `${n} ${refusal}`)
+    .join(', ')}) and are fired when it runs out`;
 }
 
 export async function watchIdle(options: { continueWork?: boolean; now?: Date } = {}): Promise<IdleReading> {
@@ -259,6 +311,38 @@ async function researchSlotPool(now: Date): Promise<PoolReading> {
   };
 }
 
+/**
+ * Research slots' continuation: the launch pass's own step, for the ideas that fit a free slot.
+ *
+ * The launch is one pass deep inside the Russell tick, behind every pass before
+ * it, so a slow tick leaves slots free for as long as the tick takes — the
+ * recorded RESEARCH_SLOTS class: "5x launchable idea(s) have a free slot in
+ * their own project's grant" in window after window, recorded with "its own
+ * pass on the next tick" and nothing continued. This is not a second launcher:
+ * it is the same window (`nextLaunchable`, so the reader and the launch cannot
+ * disagree), the same `launch()`, bounded by the same `SLOT_FILL_PER_TICK`, and
+ * `reserve` still refuses anything over a grant's at-once ceiling. `launch()`
+ * derives its idempotency key from the rows, so this racing the tick's own pass
+ * replays rather than starting an idea twice. Follow-ons are left to the tick,
+ * which links them to their parent mission when they start. A refusal is left
+ * where it is: the tick's launch pass is what answers it (parking, reporting).
+ */
+export async function launchIntoFreeSlots(): Promise<string[]> {
+  const { nextLaunchable, SLOT_FILL_PER_TICK } = await import('../russell/loop.ts');
+  const { launch } = await import('../russell/launch.ts');
+  const window = (await nextLaunchable(SLOT_FILL_PER_TICK * 2)).filter(
+    (entry) => entry.fitsFreeSlot && !entry.followOnOfMissionId,
+  );
+  const launched: string[] = [];
+  for (const entry of window) {
+    if (launched.length >= SLOT_FILL_PER_TICK) break;
+    // One idea that throws does not stop the rest; the tick's own pass meets it again.
+    const outcome = await launch({ ...entry.spec, candidateId: entry.candidateId }).catch(() => null);
+    if (outcome?.ok && !outcome.replayed && outcome.mission) launched.push(outcome.mission.id);
+  }
+  return launched;
+}
+
 /** Ideas that could launch now: the launch window's ideas that fit a free slot in their own project's grant. */
 export async function researchSlotsFree(now = new Date()): Promise<number> {
   return (await researchSlotRows(now)).startable;
@@ -286,6 +370,7 @@ async function factoryPool(now: Date): Promise<PoolReading | null> {
 export async function brainUtilization(now = new Date()): Promise<PoolReading[]> {
   const counts = await idleCounts(now);
   const routines = idleCheck(counts);
+  const waits = describeDispatchWaits(counts.dispatchWaits);
   const pools: PoolReading[] = [
     {
       pool: 'ROUTINES',
@@ -293,7 +378,7 @@ export async function brainUtilization(now = new Date()): Promise<PoolReading[]>
       running: counts.activeWork,
       capacity: counts.safeTarget,
       idle: routines.idle,
-      because: routines.reason,
+      because: routines.idle || !waits ? routines.reason : `No unexplained idle: ${waits}.`,
     },
   ];
   const free = await freeLanePool(now).catch(() => null);
@@ -404,8 +489,8 @@ export async function utilizationWithin(
  * which tops up idle slots; the Factory line gets the same guarded dispatch
  * pass, because Factory stage bins are fired by that tick — and the pass runs
  * at most once per call even when routines and the Factory are both idle.
- * Research slots are continued by the Russell loop's own launch pass, so
- * idleness there is recorded with its reason. A pool idle for the same reason
+ * Research slots get the launch pass's own step (`launchIntoFreeSlots`),
+ * because that pass sits deep inside a Russell tick that may take minutes. A pool idle for the same reason
  * is recorded once per window.
  *
  * Production, 2026-11-12: "FACTORY: 1 piece(s) of executable work and 2 free
@@ -436,7 +521,9 @@ export async function watchUtilization(options: { continueWork?: boolean; now?: 
             ? 'one guarded dispatch pass'
             : one.pool === 'FREE_LANE'
               ? "the free lane controller's step, which tops up idle slots"
-              : 'its own pass on the next tick',
+              : one.pool === 'RESEARCH_SLOTS'
+                ? "the launch pass's own step: launch the ideas that fit a free slot in their own project's grant"
+                : 'its own pass on the next tick',
         actorType: 'BRAIN',
         actorId: 'engineering:watchdog',
       });
@@ -453,6 +540,8 @@ export async function watchUtilization(options: { continueWork?: boolean; now?: 
       const { controlStep } = await import('../freeLane/capacity.ts');
       await controlStep();
       continued.push(one.pool);
+    } else if (one.pool === 'RESEARCH_SLOTS') {
+      if ((await launchIntoFreeSlots()).length > 0) continued.push(one.pool);
     }
   }
   return { pools, recorded, continued };

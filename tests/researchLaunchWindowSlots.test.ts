@@ -14,9 +14,10 @@ import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
 import { createProject } from '../server/repos/projects.ts';
+import { listLayers } from '../server/repos/layers.ts';
 import { capture } from '../server/services/russell/judgment.ts';
 import { nextLaunchable } from '../server/services/russell/loop.ts';
-import { brainUtilization, researchSlotsFree } from '../server/services/engineering/watchdog.ts';
+import { brainUtilization, researchSlotsFree, watchUtilization } from '../server/services/engineering/watchdog.ts';
 
 let fullProject = '';
 let freeProject = '';
@@ -94,5 +95,72 @@ describe('ideas the reader calls launchable are in the launch window', () => {
     expect(slots.idle).toBe(false);
     expect(slots.because).toMatch(/at-once ceiling/);
     expect(slots.because).toMatch(/no research grant governs/);
+  });
+});
+
+/**
+ * An idle research pool is continued, not only recorded (§98, rule 9).
+ *
+ * The recorded class: "RESEARCH_SLOTS: 5x launchable idea(s) have a free slot
+ * in their own project's grant" in window after window, each written down with
+ * "its own pass on the next tick" while the launch pass sat behind the rest of
+ * a long Russell tick. The watchdog now takes the launch pass's own step.
+ */
+/** An idea carrying a complete specification, so `launch()` can actually start it. */
+async function launchableIdea(projectId: string, title: string, priority: 'MUST_DO' | 'EXPLORE'): Promise<string> {
+  const id = await idea(projectId, title, priority);
+  const layerId = (await listLayers(projectId))[0]!.id;
+  const missionSpec = {
+    projectId,
+    layerId,
+    visibility: 'SHARED',
+    title,
+    assignment: `Establish ${title} from published sources.`,
+    objective: `Settle ${title} from the primary text.`,
+    whyNow: `The layer names ${title} as open.`,
+    acceptableSources: ['primary sources'],
+    excludedSources: ['secondary summaries'],
+    evidence: ['the passage relied on'],
+    startedBy: { kind: 'PERSON', id: userId },
+    envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+    authorizedBy: userId,
+  };
+  await getDb().run('UPDATE russell_candidates SET judgment = ? WHERE id = ?', [JSON.stringify({ missionSpec }), id]);
+  return id;
+}
+
+describe('the watchdog continues an idle research pool', () => {
+  it('launches the ideas that fit a free slot, and the pool stops reading idle', async () => {
+    // The seeded project, because a launch needs a real layer to put the packet in.
+    await grant(fullProject, 'free', 2);
+    await launchableIdea(fullProject, 'free a', 'MUST_DO');
+    await launchableIdea(fullProject, 'free b', 'MUST_DO');
+    await launchableIdea(fullProject, 'free c', 'EXPLORE');
+    expect(await researchSlotsFree()).toBe(2);
+
+    const result = await watchUtilization({});
+    expect(result.recorded).toContain('RESEARCH_SLOTS');
+    expect(result.continued).toContain('RESEARCH_SLOTS');
+    const missions = await getDb().get<{ n: number | string }>(
+      'SELECT COUNT(*) AS n FROM russell_missions WHERE project_id = ?',
+      [fullProject],
+    );
+    expect(Number(missions?.n ?? 0)).toBe(2);
+    expect(await researchSlotsFree()).toBe(0);
+    const slots = (await brainUtilization()).find((one) => one.pool === 'RESEARCH_SLOTS')!;
+    expect(slots.idle).toBe(false);
+    expect(slots.because).toMatch(/at-once ceiling/);
+  });
+
+  it('starts nothing over a full grant', async () => {
+    await grant(fullProject, 'full', 0);
+    await launchableIdea(fullProject, 'held', 'MUST_DO');
+    const result = await watchUtilization({});
+    expect(result.continued).not.toContain('RESEARCH_SLOTS');
+    const missions = await getDb().get<{ n: number | string }>(
+      'SELECT COUNT(*) AS n FROM russell_missions WHERE project_id = ?',
+      [fullProject],
+    );
+    expect(Number(missions?.n ?? 0)).toBe(0);
   });
 });
