@@ -284,7 +284,8 @@ async function read(): Promise<void> {
  */
 async function stall(): Promise<void> {
   const run = safeId(flag('run'), '--run');
-  const like = `Planning evaluation ${run} %`;
+  // `--run all` reads every evaluation run's goals together.
+  const like = run === 'all' ? 'Planning evaluation %' : `Planning evaluation ${run} %`;
   const q = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
     const rows = await getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }]);
     console.log(`STALL ${label} ${JSON.stringify(rows)}`);
@@ -311,6 +312,15 @@ async function stall(): Promise<void> {
   await q('finished_3h', `SELECT ${cls} AS cls, w.work_type, w.state, COUNT(*) AS n FROM work_items w WHERE w.completed_at >= ? AND w.work_type IN ${types} GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`, [like, since]);
   await q('priority_hist', `SELECT ${cls} AS cls, w.priority, COUNT(*) AS n FROM work_items w WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.work_type IN ${types} GROUP BY 1, 2 ORDER BY 2 DESC, 1 LIMIT 40`, [like, now]);
   await q('claims_3h', `SELECT CASE WHEN o.project_id IN (${ev}) THEN 'eval' ELSE 'other' END AS cls, c.accepted, COUNT(*) AS n FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id WHERE c.created_at >= ? GROUP BY 1, 2`, [like, since]);
+  const runOf = `SUBSTR(p.name, 21, 8)`;
+  await q('by_run_items', `SELECT ${runOf} AS run, w.work_type, w.state, COUNT(*) AS n, MIN(w.created_at) AS first, MAX(w.completed_at) AS done FROM work_items w JOIN projects p ON p.id = w.project_id WHERE p.name LIKE 'Planning evaluation %' AND w.work_type IN ${types} GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`);
+  await q('by_run_claims', `SELECT ${runOf} AS run, c.accepted, COALESCE(c.validation_state, '') AS vs, COUNT(*) AS n, MAX(c.created_at) AS last FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id JOIN projects p ON p.id = o.project_id WHERE p.name LIKE 'Planning evaluation %' GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`);
+  await q('by_run_packets', `SELECT ${runOf} AS run, o.status, COUNT(*) AS n, MAX(o.completed_at) AS done FROM research_orchestrations o JOIN projects p ON p.id = o.project_id WHERE p.name LIKE 'Planning evaluation %' GROUP BY 1, 2 ORDER BY 1, 2`);
+  await q('by_run_fragments', `SELECT ${runOf} AS run, f.status, COUNT(*) AS n FROM research_fragments f JOIN projects p ON p.id = f.project_id WHERE p.name LIKE 'Planning evaluation %' GROUP BY 1, 2 ORDER BY 1, 2`);
+  await q('by_run_missions', `SELECT ${runOf} AS run, m.state, COUNT(*) AS n, MAX(m.writeback_at) AS wb FROM russell_missions m JOIN projects p ON p.id = m.project_id WHERE p.name LIKE 'Planning evaluation %' GROUP BY 1, 2 ORDER BY 1, 2`);
+  await q('rejections', `SELECT SUBSTR(COALESCE(c.rejection_reason, ''), 1, 160) AS why, COUNT(*) AS n FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id JOIN projects p ON p.id = o.project_id WHERE p.name LIKE 'Planning evaluation %' AND c.accepted = 0 GROUP BY 1 ORDER BY n DESC LIMIT 10`);
+  // What the lane did per hour today, eval vs not: fragments finished and leased-then-expired.
+  await q('lane_hourly', `SELECT SUBSTR(w.completed_at, 1, 13) AS hour, CASE WHEN p.name LIKE 'Planning evaluation %' THEN 'eval' ELSE 'other' END AS cls, w.work_type, w.state, COUNT(*) AS n FROM work_items w JOIN projects p ON p.id = w.project_id WHERE w.completed_at >= ? AND w.work_type IN ${types} GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`, [new Date(Date.now() - 10 * 3_600_000).toISOString()]);
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 
