@@ -10,6 +10,11 @@
  * fails on a46ae60. The rest hold the bounds: a fresh unlaunched round and a
  * round with a running mission keep their slots, and stalled rounds yield at
  * most the cap, so a goal never holds more than twice its cap open.
+ *
+ * Repair F2 (steady state): at twice its cap a goal whose rounds kept stalling
+ * opened nothing again, so the failure returned one burst later. Past the
+ * yield the oldest stalled round is now retired for the next lens: the goal
+ * keeps opening rounds for as long as it is short, never above twice its cap.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -126,10 +131,60 @@ describe('a short goal keeps searching past rounds that never launched (CAPABILI
     const { ask, open } = await shortGoal();
     for (let pass = 0; pass < 4 * MAX_LIVE_GOAL_ROUNDS; pass += 1) {
       await age((await open()).map((r) => r.id), 2);
-      if (!(await ask())) break;
+      await ask();
     }
     expect((await open()).length).toBe(2 * MAX_LIVE_GOAL_ROUNDS);
+  });
+
+  it('keeps searching however long its rounds stay stalled: past twice its cap the oldest stalled round gives its place to the next lens', async () => {
+    const { ask, open } = await shortGoal();
+    // A burst fills twice the cap; then the cause persists for many more stall windows.
+    for (let pass = 0; pass < 2 * MAX_LIVE_GOAL_ROUNDS; pass += 1) {
+      await age((await open()).map((r) => r.id), 2);
+      expect(await ask()).not.toBeNull();
+    }
+    expect((await open()).length).toBe(2 * MAX_LIVE_GOAL_ROUNDS);
+    const opened = new Set((await open()).map((r) => r.id));
+    for (let pass = 0; pass < 3 * MAX_LIVE_GOAL_ROUNDS; pass += 1) {
+      const before = await open();
+      await age(before.map((r) => r.id), 2 + pass);
+      // Days pass: lenses retired earlier have served their cool-off and may be asked again.
+      await getDb().run(
+        "UPDATE cash_discovery_rounds SET harvested_at = ? WHERE project_id = ? AND state = 'ABANDONED'",
+        [new Date(Date.now() - 2 * 24 * 3_600_000).toISOString(), projectId],
+      );
+      const oldest = [...(await open())].sort((a, b) => a.openedAt.localeCompare(b.openedAt) || a.id.localeCompare(b.id))[0]!;
+      // Still short, every round stalled: the goal opens a new round rather than stopping.
+      const next = await ask();
+      expect(next).not.toBeNull();
+      const after = await open();
+      // Bounded: never more than twice its cap open.
+      expect(after.length).toBe(2 * MAX_LIVE_GOAL_ROUNDS);
+      for (const r of after) opened.add(r.id);
+      // The oldest stalled round is retired, with its row kept, its idea unable to launch beside its replacement.
+      const retired = (await listRounds(projectId)).find((x) => x.id === oldest.id)!;
+      expect(retired.state).toBe('ABANDONED');
+      const idea = await getDb().get<{ state: string }>('SELECT state FROM russell_candidates WHERE id = ?', [oldest.candidateId]);
+      expect(idea!.state).toBe('REJECTED');
+    }
+    // Every pass asked a round that was not open before.
+    expect(opened.size).toBe(5 * MAX_LIVE_GOAL_ROUNDS);
+    // The retirement is recorded, not silent.
+    const stopped = await getDb().all<{ id: string }>(
+      "SELECT id FROM cash_events WHERE project_id = ? AND kind = 'CASH_DISCOVERY_ROUND_STOPPED'",
+      [projectId],
+    );
+    expect(stopped.length).toBe(3 * MAX_LIVE_GOAL_ROUNDS);
+  });
+
+  it('fresh rounds beside the yielded stalled ones still hold the cap: only past the yield is anything retired', async () => {
+    const { ask, open } = await shortGoal();
+    for (let i = 0; i < MAX_LIVE_GOAL_ROUNDS; i += 1) expect(await ask()).not.toBeNull();
     await age((await open()).map((r) => r.id), 2);
+    for (let i = 0; i < MAX_LIVE_GOAL_ROUNDS; i += 1) expect(await ask()).not.toBeNull();
+    // Cap stalled (yielded) and cap fresh: the fresh ones may still launch, so nothing is retired.
     expect(await ask()).toBeNull();
+    expect((await open()).length).toBe(2 * MAX_LIVE_GOAL_ROUNDS);
+    expect((await listRounds(projectId)).filter((r) => r.state === 'ABANDONED')).toHaveLength(0);
   });
 });

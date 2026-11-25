@@ -1162,7 +1162,14 @@ export async function openGoalDiscovery(input: {
    * a recommendable plan opening a round, the live cap full of stalled rounds.
    * Constructed rounds keep their own rule (`openConstructedRound`).
    */
-  if ((await roundsHoldingSlots(mine, now, liveCap)) >= liveCap) return null;
+  /*
+   * Past the yield the oldest stalled round gives its place to the next lens
+   * (`retireOldestStalledRound`), so a goal whose rounds stall from a cause
+   * that persists keeps searching rather than stopping at twice its cap. It is
+   * retired only once a lens to ask in its place has been chosen, below.
+   */
+  const replaceStalled = (await roundsHoldingSlots(mine, now, liveCap)) >= liveCap;
+  if (replaceStalled && (await staleUnlaunchedRounds(mine, now, STALLED_ROUND_YIELDS_AFTER_MS)) <= liveCap) return null;
   /*
    * The fixed angles are a starting point, not the whole map: Brain's own
    * industry map (`industry_nodes`, filled from classification systems and
@@ -1242,6 +1249,8 @@ export async function openGoalDiscovery(input: {
     .sort((a, b) => a.history.length + fieldPenalty(a.lens) - (b.history.length + fieldPenalty(b.lens)) || a.index - b.index);
   const choice = choices[0];
   if (!choice) return null;
+  // The chosen lens has no OPEN round, so the round retired here is never the one asked next.
+  if (replaceStalled && !(await retireOldestStalledRound(t.projectId, mine, now, liveCap))) return null;
   const { lens, id, history, next } = choice;
   const origins: OpportunityOrigin[] = [lens.origin];
   const seedKeys = lens.seedKey ? [lens.seedKey] : [];
@@ -1457,10 +1466,17 @@ export const UNLAUNCHED_YIELDS_AFTER_MS = 60 * 60 * 1000;
  * such a round is queued for the research grant and researches nothing.
  */
 export async function staleUnlaunchedRounds(rounds: readonly CashDiscoveryRound[], now: string, after: number = UNLAUNCHED_YIELDS_AFTER_MS): Promise<number> {
+  return (await unlaunchedRoundsPast(rounds, now, after)).length;
+}
+
+/** The rounds `staleUnlaunchedRounds` counts, oldest first. */
+async function unlaunchedRoundsPast(rounds: readonly CashDiscoveryRound[], now: string, after: number): Promise<CashDiscoveryRound[]> {
   const waiting = rounds.filter((one) => one.state === 'OPEN' && Date.parse(now) - Date.parse(one.openedAt) >= after);
-  if (waiting.length === 0) return 0;
+  if (waiting.length === 0) return [];
   const missions = await missionsForRounds(waiting.map((one) => one.candidateId));
-  return waiting.filter((one) => !missions.get(one.candidateId)?.latest).length;
+  return waiting
+    .filter((one) => !missions.get(one.candidateId)?.latest)
+    .sort((a, b) => Date.parse(a.openedAt) - Date.parse(b.openedAt) || a.id.localeCompare(b.id));
 }
 
 /**
@@ -1481,6 +1497,61 @@ export async function roundsHoldingSlots(rounds: readonly CashDiscoveryRound[], 
   const researching = await roundsStillResearching(rounds);
   if (researching === 0) return 0;
   return researching - Math.min(await staleUnlaunchedRounds(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS), Math.max(0, cap));
+}
+
+/**
+ * Retire the oldest stalled round of a goal whose stalled rounds have used up
+ * their yield (`roundsHoldingSlots`), so the next lens takes its place.
+ *
+ * The yield alone bounded a goal at twice its cap and then stopped it for
+ * good: a goal whose rounds stalled from a cause that persisted (the research
+ * grant shut, a launch queue never reached) opened nothing again after one
+ * burst — the "live cap full of stalled rounds" failure, one step later. The
+ * bound now holds the newest questions instead of the oldest: past it, one
+ * round unlaunched past `STALLED_ROUND_YIELDS_AFTER_MS` is retired exactly as
+ * `expireUnlaunchedGoalRound` retires one — its idea REJECTED first, guarded on
+ * the state read, so it can never launch beside the round asked in its place;
+ * the round closed ABANDONED, which is no evidence about its lens (§53, §65),
+ * so the lens is asked again after its cool-off. Nothing is deleted, nothing
+ * is launched, and the grant's own cap still decides every launch. A round
+ * with a mission, or not yet stalled, is never touched.
+ */
+async function retireOldestStalledRound(projectId: string, rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<boolean> {
+  const stalled = await unlaunchedRoundsPast(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS);
+  if (stalled.length <= Math.max(0, cap)) return false;
+  for (const round of stalled) {
+    const candidate = await getCandidate(round.candidateId);
+    if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) continue;
+    if (!(await transitionCandidate({ candidateId: round.candidateId, from: candidate.state, to: 'REJECTED' }))) continue;
+    const found = (await listOpportunities({ projectId })).filter((one) => one.discoveryRoundId === round.id).length;
+    if (!(await closeRound({ id: round.id, to: 'ABANDONED', found }))) continue;
+    const cause = abandonedRoundCause({ mission: null, expired: true });
+    await recordCashEvent({
+      projectId,
+      kind: 'CASH_DISCOVERY_ROUND_STOPPED',
+      actorRef: 'BRAIN',
+      summary:
+        `Discovery round ${round.round} of "${round.bucketId}" stopped without finishing (its idea never launched in ` +
+        `${STALLED_ROUND_YIELDS_AFTER_MS / 3_600_000} hours and the goal's stalled rounds had used their yield, so the oldest ` +
+        `gave its place to the next lens), having filed ${found} opening(s). The bucket will be asked again after its cool-off.`,
+      detail: {
+        roundId: round.id,
+        bucketId: round.bucketId,
+        missionId: null,
+        missionState: null,
+        missionAttempt: null,
+        orchestrationId: null,
+        binId: null,
+        terminalReason: null,
+        waitingOn: null,
+        cause,
+        failureClass: abandonedFailureClass(cause),
+        found,
+      },
+    });
+    return true;
+  }
+  return false;
 }
 
 /**
