@@ -315,6 +315,8 @@ export async function recordWorkstreamEvent(input: {
   summary: string;
   detail?: Record<string, unknown>;
   actorRef: string;
+  /** When the event happened, if the caller judged it at a moment of its own; defaults to now. */
+  at?: string;
 }): Promise<WorkstreamEvent> {
   const id = newId('wse');
   await getDb().run(
@@ -327,7 +329,7 @@ export async function recordWorkstreamEvent(input: {
       input.summary,
       toJson(input.detail ?? {}),
       input.actorRef,
-      nowIso(),
+      input.at ?? nowIso(),
     ],
   );
   const row = await getDb().get<WorkstreamEventRow>(`SELECT * FROM workstream_events WHERE id = ?`, [id]);
