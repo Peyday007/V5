@@ -25,6 +25,11 @@ export interface IdleReading {
   eligibleCapacity: number;
   activeWork: number;
   safeTarget: number;
+  /**
+   * Work-ready bins left out of `executableWork` because the dispatcher itself
+   * deferred their current intent and its backoff has not run out, by refusal.
+   */
+  dispatchWaits: Record<string, number>;
   idle: boolean;
   reason: string;
   intervened: boolean;
@@ -49,16 +54,42 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   // quarantined surfaces were refused 34 times each, and between refusals (outside
   // the unrouted window) they read as "executable work beside a free surface — a
   // fault", which Hermes then cited as a Factory fault and stopped commissioning.
+  //
+  // And a bin whose current intent the dispatcher itself deferred waits on that
+  // deferral until `next_attempt_at` — the column `claimDispatchIntent` reads —
+  // whichever refusal wrote it. Production, 2026-11-24: "1 executable item(s),
+  // 14 eligible surface(s), 1 active against a target of 12: capacity is
+  // unexplainedly idle" in most ten-minute windows. Only `DISPATCH_UNROUTED`
+  // inside a fixed fifteen minutes was excluded, so a routing refusal deferred
+  // for longer, and every deferral that is not a routing refusal at all (an
+  // audit role no surface's next session can take, recorded as
+  // `DISPATCH_DEFERRED`), read as idle capacity and earned a dispatch pass that
+  // could fire nothing. One predicate with the dispatcher, not a second reader.
   const unroutedSince = new Date(now.getTime() - UNROUTED_WINDOW_MS).toISOString();
-  const executable = await getDb().get<{ n: number | string }>(
-    `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
+  const readyBins = `FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
         AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)
         AND ${notAdmissionRefusedSql('bins.')}
         AND (bins.pinned_routine_id IS NULL OR EXISTS (
           SELECT 1 FROM fleet_routines r JOIN fleet_accounts a ON a.id = r.account_id
-           WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`,
-    [iso, iso, iso, iso, unroutedSince, new Date(now.getTime() - ADMISSION_REFUSED_WINDOW_MS).toISOString()],
+           WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`;
+  const readyParams = [iso, iso, iso, iso, unroutedSince, new Date(now.getTime() - ADMISSION_REFUSED_WINDOW_MS).toISOString()];
+  const deferredIntent = `SELECT 1 FROM bin_dispatch d WHERE d.bin_id = bins.id AND d.lease_generation = bins.lease_generation
+          AND d.state = 'PENDING' AND d.next_attempt_at > ?`;
+  const executable = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n ${readyBins} AND NOT EXISTS (${deferredIntent})`,
+    [...readyParams, iso],
   );
+  const waits = await getDb().all<{ refusal: string | null; n: number | string }>(
+    `SELECT d.last_error_kind AS refusal, COUNT(*) AS n
+       FROM bin_dispatch d JOIN bins ON bins.id = d.bin_id AND d.lease_generation = bins.lease_generation
+      WHERE d.state = 'PENDING' AND d.next_attempt_at > ?
+        AND bins.id IN (SELECT bins.id ${readyBins})
+      GROUP BY d.last_error_kind
+      ORDER BY n DESC`,
+    [iso, ...readyParams],
+  );
+  const dispatchWaits: Record<string, number> = {};
+  for (const one of waits) dispatchWaits[one.refusal ?? 'BACKOFF'] = Number(one.n);
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",
     [iso],
@@ -70,7 +101,18 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
     eligibleCapacity: eligible,
     activeWork: Number(active?.n ?? 0),
     safeTarget: capacity.target ?? eligible,
+    dispatchWaits,
   };
+}
+
+/** The dispatcher's own deferrals, said in a sentence; empty when there are none. */
+export function describeDispatchWaits(waits: Record<string, number>): string {
+  const entries = Object.entries(waits).filter(([, n]) => n > 0);
+  if (entries.length === 0) return '';
+  const total = entries.reduce((sum, [, n]) => sum + n, 0);
+  return `${total} work-ready bin(s) wait on the dispatcher's own deferral (${entries
+    .map(([refusal, n]) => `${n} ${refusal}`)
+    .join(', ')}) and are fired when it runs out`;
 }
 
 export async function watchIdle(options: { continueWork?: boolean; now?: Date } = {}): Promise<IdleReading> {
@@ -286,6 +328,7 @@ async function factoryPool(now: Date): Promise<PoolReading | null> {
 export async function brainUtilization(now = new Date()): Promise<PoolReading[]> {
   const counts = await idleCounts(now);
   const routines = idleCheck(counts);
+  const waits = describeDispatchWaits(counts.dispatchWaits);
   const pools: PoolReading[] = [
     {
       pool: 'ROUTINES',
@@ -293,7 +336,7 @@ export async function brainUtilization(now = new Date()): Promise<PoolReading[]>
       running: counts.activeWork,
       capacity: counts.safeTarget,
       idle: routines.idle,
-      because: routines.reason,
+      because: routines.idle || !waits ? routines.reason : `No unexplained idle: ${waits}.`,
     },
   ];
   const free = await freeLanePool(now).catch(() => null);
