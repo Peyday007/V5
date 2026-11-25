@@ -27,7 +27,7 @@
 import { describesOneBody, namesOneOrganisation } from '../../domain/industry.ts';
 import { arrangementExclusion, paymentNatureOf, readPriceEvidence } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
-import { breaksOperatingModel, fulfillerParty, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, fulfillerParty, goalOwnerLabour, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactMap } from '../../repos/cashCardFacts.ts';
@@ -3029,6 +3029,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   // What the goal's owner said to leave out (§82): an excluded opening takes no slot, and says why.
   const exclusions = await goalExclusions(input.goal);
   const goalText = [input.goal.title, input.goal.intent, input.goal.outcome ?? ''].join('\n');
+  // This goal's own offer of the requester's labour (§91 note): it lifts the owner-physical refusal for this goal's plan only.
+  const ownerLabour = goalOwnerLabour({ ...input.goal, target: { resources: target.resources } });
   // What the goal's own words confine it to (an industry, recurring revenue): this goal's plan only (§105).
   const scope = target.scope;
   const scoped = new Map<string, HeldTerms>();
@@ -3061,7 +3063,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     }
     // The standing operating rule: a plan never rests on the owner's physical work.
     const fit = operatingFit(operatingFactsOf({ ...opportunity, title: [opportunity.title, opportunity.buyingSignal].filter(Boolean).join(' \n ') }));
-    if (breaksOperatingModel(fit)) {
+    if (breaksOperatingModel(fit, ownerLabour)) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `needs the owner's physical work: ${fit.because}`, ...(tier !== 'SIGNAL' || IN_FLIGHT.has(opportunity.state) ? { rule: 'OWNER_PHYSICAL' as const } : {}) });
       continue;
     }
