@@ -51,7 +51,7 @@
  */
 import { isNonPurchasePayment, nonPurchaseSentence, paymentNatureOf, wrongWayPrice } from '../../domain/paymentNature.ts';
 import { getDb } from '../../db/database.ts';
-import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
 import { claimsByIds, constructedRoundBuckets, goalPriceIdeasOfClaims, structuralClaims, undeclaredGoalPriceClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
@@ -1224,12 +1224,14 @@ export function payerBuyerType(payer: string, nodes: readonly IndustryNode[]): I
  * names (production 2026-11-25: "B2B year-end gift budgets typically range
  * from $30–$120 per recipient", filed in lane `economics` with no declared
  * figure). Read by the one money reader: only USD figures stated per a unit
- * the text names (`MoneyFigure.unit`), and only those of the first unit named,
+ * the text names (`MoneyFigure.unit`) that is not a measure of the work (a
+ * word, an hour), and only those of the first unit named,
  * so two units are never mixed and none is supplied. A range keeps both ends.
  * Null when the claim states no such figure (invariant 39). Pure.
  */
 export function statedUnitPrice(claimText: string): { low: number; high: number; unit: string } | null {
-  const figures = readMoneyFigures(claimText, 'USD').filter((one) => one.cents > 0 && one.perUnit && one.unit);
+  // A rate per a measured quantity of the work (a word, an hour) is never what one purchase costs (`perMeasure`).
+  const figures = readMoneyFigures(claimText, 'USD').filter((one) => one.cents > 0 && one.perUnit && one.unit && !one.perMeasure);
   const unit = figures[0]?.unit;
   if (!unit) return null;
   const same = figures.filter((one) => one.unit === unit).map((one) => one.cents);
@@ -1772,19 +1774,21 @@ const SUPPLY_FILED_KEYS: readonly FactKey[] = ['price_per_unit', 'contractor_rat
  * evidence. Otherwise the B1h rule.
  */
 export function rederivedMeaning(
-  fact: Pick<RecordedFact, 'key' | 'low' | 'high'> & { status?: RecordedFact['status']; measures?: string },
+  fact: Pick<RecordedFact, 'key' | 'low' | 'high'> & { status?: RecordedFact['status']; measures?: string; cardPriceWithdrawn?: boolean },
   claimText: string,
   sides: ArrangementSides | undefined,
 ): { key: FactKey; amount: number; status?: 'ASSUMPTION'; why: string } | null {
   /*
-   * A card's price is what one purchase costs, and a price filed from a card's
-   * price evidence whose claim states that figure only per some unit was a rate
-   * read as a purchase (production 2026-11-25: "Agencies charge $0.01 to $0.05
-   * per email" filed as Digital agencies' price_per_unit 0.01, the card price
-   * `withdrawPricesReadFromARate` takes back). Withdrawn as an ASSUMPTION, which
-   * no plan reads as evidence, exactly as a supply price is.
+   * A price filed from card evidence whose claim the card itself took back as
+   * its price — a rate read as what one purchase costs
+   * (`withdrawPricesReadFromARate`; production 2026-11-25: "Agencies charge
+   * $0.01 to $0.05 per email" filed as Digital agencies' price_per_unit 0.01)
+   * — goes with it. Withdrawn as an ASSUMPTION, which no plan reads as
+   * evidence, exactly as a supply price is. Only on that withdrawal: a rate per
+   * the unit of work a card sells ("$300 to $450 per grease trap cleaning")
+   * stands, because nothing took it back.
    */
-  if (fact.key === 'price_per_unit' && fact.status !== 'ASSUMPTION' && fact.measures?.startsWith(BACKFILL_FIELDS['price']!.measures)) {
+  if (fact.key === 'price_per_unit' && fact.cardPriceWithdrawn === true && fact.status !== 'ASSUMPTION' && fact.measures?.startsWith(BACKFILL_FIELDS['price']!.measures)) {
     const held = Math.round(Math.min(fact.low, fact.high) * 100);
     const stated = readMoneyFigures(claimText, 'USD').filter((one) => one.cents === held);
     if (stated.length > 0 && stated.every((one) => one.perUnit && one.perPeriod !== true)) {
@@ -1847,13 +1851,19 @@ export async function rederiveClaimFacts(projectId: string, batch = REDERIVE_BAT
   }
   const claims = new Map((await claimsByIds([...new Set(scan.map((one) => one.sourceClaimId!))])).map((one) => [one.id, one]));
   const sides = await supplySidesOf(projectId, scan.filter((one) => SUPPLY_FILED_KEYS.includes(one.key)).map((one) => one.sourceClaimId!));
+  // The claims a card took back as its price (`withdrawPricesReadFromARate`): a price filed from one goes too.
+  const withdrawnPrices = new Set(
+    (await cashEventsOfKindInProject(projectId, 'CASH_CARD_FACT_WITHDRAWN'))
+      .filter((one) => one.detail['field'] === 'price' && typeof one.detail['claimId'] === 'string')
+      .map((one) => one.detail['claimId'] as string),
+  );
   let reached = '';
   for (const fact of scan) {
     if (out.length >= batch) break;
     reached = fact.id;
     const claim = claims.get(fact.sourceClaimId!);
     if (!claim || !claim.accepted || !claim.sourceUrl) continue;
-    const meaning = rederivedMeaning(fact, claim.claim, sides.get(claim.id));
+    const meaning = rederivedMeaning({ ...fact, cardPriceWithdrawn: withdrawnPrices.has(claim.id) }, claim.claim, sides.get(claim.id));
     if (meaning === null) continue;
     const { key, amount, status } = meaning;
     const recorded = await recordClaimFact({

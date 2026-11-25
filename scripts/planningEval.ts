@@ -470,7 +470,7 @@ async function stall(): Promise<void> {
  */
 export function probeStatedUnitPrice(text: string): { low: number; high: number; unit: string } | null {
   const num = String.raw`\d[\d.,]*\d|\d`;
-  const stop = '(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding|is|are|was|were)\\b';
+  const stop = '(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding|is|are|was|were|over|the|a|an|across|during|within|after|before|under|than|as|that|which|this|these|those|depending|based|vs|versus|via)\\b';
   const unitRe = new RegExp(String.raw`^\s*(?:\/\s*|per\s+|an?\s+|each\s+|for\s+(?:each|every|one|a|an)\s+)((?!${stop})[a-z][\w-]*(?:\s+(?!${stop})[a-z][\w-]*){0,2})`, 'i');
   const rangeRe = new RegExp(String.raw`^\s*(?:to|through|-|–|—)\s*(?:USD|US\$|\$)?\s?(?:${num})(?:\s?(?:USD|US\$|\$)\b)?\+?`, 'i');
   const found: { cents: number; unit: string }[] = [];
@@ -487,7 +487,7 @@ export function probeStatedUnitPrice(text: string): { low: number; high: number;
       if (rest.startsWith('+')) rest = rest.slice(1);
       const range = rangeRe.exec(rest);
       const unit = unitRe.exec(range ? rest.slice(range[0].length) : rest)?.[1]?.toLowerCase();
-      if (unit) found.push({ cents, unit });
+      if (unit && !/^(?:words?|characters?|chars?|pages?|lines?|hours?|hrs?|hr|minutes?|mins?)$/.test(unit.split(' ')[0]!)) found.push({ cents, unit });
     }
   }
   found.sort((a, b) => a.cents - b.cents);
