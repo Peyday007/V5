@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readPriceEvidence } from '../server/domain/paymentNature.ts';
 import { readSettlementDays } from '../server/services/cash/figures.ts';
-import { statesNoCost } from '../server/services/cash/goalScenario.ts';
+import { isCompetitiveAward, statesNoCost } from '../server/services/cash/goalScenario.ts';
 import { payerNounWords, readVolume } from '../server/services/cash/volume.ts';
 
 /*
@@ -34,5 +34,11 @@ describe('evidence the decisive-10 research filed reaches the plan', () => {
     expect(statesNoCost('Lugg charges fleets no lead fees and no bidding; jobs are first come, first served.')).toBe(true);
     expect(statesNoCost('A free Limited Access registration; paid tiers cost $108 a year.')).toBe(false);
     expect(statesNoCost('Registration requires a company name and address.')).toBe(false);
+  });
+
+  it('reads a service sold to award seekers as a sale, and an award or solicitation as an award', () => {
+    expect(isCompetitiveAward({ title: 'Recurring outsourced work: US nonprofits · outsourced grant prospect research and proposal drafting', source: null, buyingSignal: null })).toBe(false);
+    expect(isCompetitiveAward({ title: 'City RFP for janitorial services', source: null, buyingSignal: null })).toBe(true);
+    expect(isCompetitiveAward({ title: 'Grant program: a state arts council awards $5,000 grants', source: null, buyingSignal: null })).toBe(true);
   });
 });

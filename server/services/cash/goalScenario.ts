@@ -2118,7 +2118,7 @@ export { COMPETITIVE_AWARD };
  * measure" step with no delivery or collection). Only the award word directly followed by
  * a word for a service (optionally after "and <word>") is read this way.
  */
-const AWARD_SERVICE = /\b(?:rfp|rfq|rfi|rfx|tender|solicitation|bids?|bidding|grants?|procurement)(?:\s+and\s+[a-z-]+)?\s+(?:research|writ(?:ing|ers?)|prep(?:aration)?|estimat(?:es?|ing|ion|or|ors)|takeoffs?|consult(?:ing|ancy|ants?)?|support|management|services?|assistance|responses?|retainers?|packages?|help|review|tracking|alerts?|software|tools?|templates?|coaching|training|readiness|strategy|drafting|database|lists?|leads?|monitoring|subscriptions?|reports?)\b/gi;
+const AWARD_SERVICE = /\b(?:rfp|rfq|rfi|rfx|tender|solicitation|bids?|bidding|grants?|procurement)(?:\s+(?:and\s+)?(?!(?:for|to|of|from|by|with|on|in|at|the|a|an|under|via)\b)[a-z-]+){0,2}?\s+(?:research|writ(?:ing|ers?)|prep(?:aration)?|estimat(?:es?|ing|ion|or|ors)|takeoffs?|consult(?:ing|ancy|ants?)?|support|management|services?|assistance|responses?|retainers?|packages?|help|review|tracking|alerts?|software|tools?|templates?|coaching|training|readiness|strategy|drafting|database|lists?|leads?|monitoring|subscriptions?|reports?)\b/gi;
 
 export function isCompetitiveAward(o: { title: string; source: string | null; buyingSignal: string | null; offerScope?: string | null }): boolean {
   const text = [o.title, o.source, o.buyingSignal].filter(Boolean).join(' ').replace(AWARD_SERVICE, ' ');
@@ -2461,7 +2461,15 @@ export async function modelOpportunity(
      * month, as `priceContradiction` already reads it. Refusing it left a
      * researched subscription with no price at all.
      */
-    const figures = range ? readMoneyFigures(range.value, currency).filter((one) => !one.perUnit || one.perPeriod) : [];
+    const whole = range ? readMoneyFigures(range.value, currency).filter((one) => !one.perUnit || one.perPeriod) : [];
+    /*
+     * A price per thing the buyer holds, per period ("$29 per truck per month",
+     * "$8 per driver per month"), is at least what one buyer pays a period:
+     * every buyer holds one. The one-unit figure is the cautious end, and the
+     * range's own top is never scaled up by a fleet size nobody stated.
+     */
+    const perHeld = range && whole.length === 0 ? [...range.value.matchAll(PER_HELD_PER_PERIOD)].map((m) => readMoneyFigures(m[0], currency)[0]).filter((one): one is NonNullable<typeof one> => !!one) : [];
+    const figures = whole.length > 0 ? whole : perHeld;
     if (range && figures.length > 0) {
       const values = figures.map((one) => one.cents / 100).sort((a, b) => a - b);
       const p = kindToProvenance(range);
@@ -3515,3 +3523,6 @@ export function statesNoCost(text: string): boolean {
 const ONE_TIME_COST = /\b(?:one[- ]time|one[- ]off|set[- ]?up (?:cost|fee)|start[- ]?up cost|upfront (?:cost|fee)|initial (?:cost|investment|fee))\b/i;
 /** A cost the source says recurs with every deal or period. */
 const PER_DEAL_COST = /\bper (?:deal|order|job|project|sale|unit|item|lead|call|client|customer|month|year|hour)\b|\beach (?:deal|order|job|project|sale|month)\b/i;
+
+/** A price per thing a buyer holds, per period: "$29 per truck per month". */
+const PER_HELD_PER_PERIOD = /(?:\$|usd\s?)\d[\d,]*(?:\.\d{1,2})?\s+(?:per|a|each)\s+(?:truck|driver|vehicle|seat|user|location|employee|member|device|unit|property|site|store|account)\s+(?:per|a|each)\s+(?:month|year|week|quarter)\b/gi;
