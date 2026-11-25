@@ -396,6 +396,34 @@ async function stall(): Promise<void> {
      FROM project_events e JOIN research_orchestrations o ON e.payload LIKE '%' || o.id || '%'
     WHERE e.event_type = 'RESEARCH_ROUND_RESUMED' AND e.created_at >= ? GROUP BY 1, 2 ORDER BY n DESC`, [new Date(Date.now() - 7 * 24 * 3_600_000).toISOString()]);
   await q('judge_resumed_daily', `SELECT SUBSTR(e.created_at, 1, 10) AS day, COUNT(*) AS n FROM project_events e WHERE e.event_type = 'RESEARCH_ROUND_RESUMED' AND e.created_at >= ? GROUP BY 1 ORDER BY 1`, [new Date(Date.now() - 7 * 24 * 3_600_000).toISOString()]);
+  // Routines: why research bins (goal and evaluation) are or are not dispatchable to an idle routine.
+  try {
+    const bins = await import('../server/repos/bins.ts');
+    const { ownerDirectedGoalIdsSql } = await import('../server/domain/binPurpose.ts');
+    const t = new Date().toISOString();
+    const cls2 = `CASE WHEN b.project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval' ELSE 'other' END`;
+    await q('routine_bins', `SELECT ${cls2} AS cls, b.purpose, b.state,
+        CASE WHEN b.held_by_workstream_id IS NULL THEN 0 ELSE 1 END AS held,
+        CASE WHEN ${bins.purposeAdmitsSql('b.')} THEN 1 ELSE 0 END AS admits,
+        CASE WHEN ${bins.ownerDirectedGoalBinSql('b.')} THEN 1 ELSE 0 END AS owner_dir,
+        CASE WHEN b.attempt_count < b.max_attempts THEN 1 ELSE 0 END AS attempts_left,
+        CASE WHEN ${bins.workReadySql('b.')} THEN 1 ELSE 0 END AS work_ready,
+        CASE WHEN (b.dispatch_not_before IS NULL OR b.dispatch_not_before <= ?) THEN 1 ELSE 0 END AS fireable,
+        CASE WHEN EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = b.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?) THEN 1 ELSE 0 END AS unrouted,
+        COUNT(*) AS n
+       FROM bins b WHERE b.kind = 'RESEARCH_PACKET' AND b.state IN ('READY', 'LEASED')
+      GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ORDER BY n DESC LIMIT 40`, [t, t, t, new Date(Date.now() - 30 * 60_000).toISOString()]);
+    await q('owner_directed_goals', `SELECT COUNT(*) AS n, SUM(CASE WHEN p.name LIKE 'Planning evaluation %' THEN 1 ELSE 0 END) AS eval FROM workstreams w JOIN projects p ON p.id = w.project_id WHERE w.id IN (${ownerDirectedGoalIdsSql()})`);
+    await q('brain_only', `SELECT name, enabled FROM brain_switches`);
+    await q('routine_assignments_24h', `SELECT SUBSTR(e.at, 1, 13) AS hour, b.purpose, ${cls2} AS cls, COUNT(*) AS n FROM bin_events e JOIN bins b ON b.id = e.bin_id WHERE e.event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER') AND e.at >= ? GROUP BY 1, 2, 3 ORDER BY 1 DESC LIMIT 40`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+    await q('unrouted_reasons', `SELECT SUBSTR(COALESCE(e.reason, ''), 1, 200) AS why, COUNT(*) AS n FROM bin_events e WHERE e.event_type = 'DISPATCH_UNROUTED' AND e.at >= ? GROUP BY 1 ORDER BY n DESC LIMIT 10`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]);
+    // Work items done by routines (not the free lane) per hour, by type and state.
+    await q('routine_items_24h', `SELECT SUBSTR(w.completed_at, 1, 13) AS hour, w.work_type, w.state, COUNT(*) AS n FROM work_items w LEFT JOIN workers k ON k.id = w.worker_id
+        WHERE w.completed_at >= ? AND w.work_type IN ${types} AND (k.name IS NULL OR k.name NOT IN ('free-lane-a', 'free-lane-b')) GROUP BY 1, 2, 3 ORDER BY 1 DESC LIMIT 60`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+    await q('workers_24h', `SELECT k.name, w.state, COUNT(*) AS n FROM work_items w JOIN workers k ON k.id = w.worker_id WHERE w.completed_at >= ? AND w.work_type IN ${types} GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+  } catch (error) {
+    console.log(`STALL routine_bins ${JSON.stringify([{ error: String((error as Error)?.message ?? error).slice(0, 300) }])}`);
+  }
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 
