@@ -456,6 +456,19 @@ export interface PlanReading {
   adoption: PlanAdoption;
   /** The adopted plan as an execution sequence (C-8): what, when, at what cost, on what basis, by whom, and what stops it. */
   steps: PlanStep[];
+  /**
+   * The stages of a transaction the steps sell without (`missingTransactionStages`):
+   * empty when the steps offer, deliver and collect, or sell nothing. A plan never
+   * reads as startable end to end without saying what it lacks.
+   */
+  stepsMissing?: TransactionStage[];
+  /**
+   * Steps found but not presented as the plan, and why (`collectsOutsideWindow`):
+   * every collection lands after the goal's deadline. Absent when the steps are the plan.
+   */
+  excludedPlan?: { steps: string[]; reason: string };
+  /** Reach figures withheld as implausible (`withholdImplausibleFigures`), one line each. Absent when none was. */
+  figuresWithheld?: string[];
   /** Arithmetic infeasibility of the goal as stated (C-10), or null. Set iff acceptance is NOT_SUPPORTED. */
   infeasible: InfeasibleConclusion | null;
   /** What failed while this reading was composed, so a thinner reading is never mistaken for a complete one (C-13). */
@@ -647,6 +660,12 @@ export interface PlanStep {
   ownerReason: string | null;
   /** The earlier step this one needs, by `order`, or null. */
   dependsOn: number | null;
+  /**
+   * A delivery step's licence constraint: the licensed act its opening names
+   * (`licensedActIn`), which only a fulfiller holding that licence performs.
+   * Absent where none is named.
+   */
+  licence?: string;
   /** The measurement that invalidates the step, and what then happens. */
   kill: string;
   /**
@@ -2517,6 +2536,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       reconstruction: refusedReconstruction,
       adoption: refusedPlan.adoption,
       steps: refusedSteps,
+      stepsMissing: missingTransactionStages(refusedSteps),
       infeasible: refusedInfeasible,
       degraded,
       ...refusedReadings,
@@ -2911,6 +2931,14 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const steps = infeasible || target.achieved
     ? []
     : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models), reachCost: arrangementReachCost(models.get(lead.key), pathways.pathways) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), members: openingMembers(planOpenings(model), pathways.pathways, model.portfolio?.demand ?? []), lead: leadIdsOf({ acceptance, portfolio: model.portfolio }), ...(adopted ? { adoptedIds: adopted } : {}) });
+  /*
+   * A plan whose every collection lands after the deadline is not presented as
+   * the plan (production baseline, 2026-11-24): it is excluded, with its reason,
+   * and the goal's own next step stands in its place.
+   */
+  const lateCash = collectsOutsideWindow(steps, target.daysLeft);
+  const excludedPlan = lateCash ? { steps: steps.map((one) => one.label), reason: `not presented as the plan: ${lateCash}` } : null;
+  if (lateCash) steps.splice(0, steps.length);
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -2923,7 +2951,12 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   // The header names the leg the steps are written for, so a hypothetical reconstruction's own legs are never read as the plan's (§77).
   const stepsLeg = stepsLegOf(steps, lead, titlesOf(model));
   const hypotheticalNote = plan.adoption.hypothetical ? ` The reconstruction is hypothetical, not the plan: ${plan.adoption.reason}.${stepsLeg ? ` The plan's steps are for ${stepsLeg}.` : ''}` : '';
-  const summary =
+  // No figure the reading cannot stand behind is shown as a reach (production baseline, 2026-11-24).
+  const upsideSentence = acceptance.candidate?.assumedUpside?.sentence ?? null;
+  const withheld = acceptance.status === 'ACCEPTED' ? [] : withholdImplausibleFigures(strategies, acceptance.candidate, target.remainingCents / 100);
+  if (upsideSentence && !acceptance.candidate?.assumedUpside) acceptance = { ...acceptance, sentence: acceptance.sentence.replace(upsideSentence, 'its assumed upside is withheld as implausible') };
+  const presentedNote = `${excludedPlan ? ` The steps found are ${excludedPlan.reason}.` : ''}${withheld.length > 0 ? ` Figures withheld: ${withheld.join('; ')}.` : ''}`;
+  const summaryHead =
     verdict === 'RECOMMENDABLE'
       ? acceptance.sentence
       : infeasible
@@ -2937,6 +2970,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
             : verdict === 'NOT_VIABLE'
               ? `No modelled strategy can work under the current limits: ${chosen?.constraintsFailed[0] ?? 'every one fails a limit'}.${hypotheticalNote}`
               : `Not yet proven. The closest plan is "${chosen?.label}", and what it is missing first is ${CHAIN_LABEL[(chosen?.nextTest ?? legacyNext)?.link ?? 'OFFER_AND_PRICE']}.${hypotheticalNote}`;
+  const summary = `${summaryHead}${presentedNote}`;
   // The adopted plan's first step is the goal's next step, unless an owner's own decision about the goal comes first.
   const ownerDecision = chosen?.nextTest && chosen.nextTest.by === 'PERSON' && chosen.nextTest.link === 'ECONOMICS' ? chosen.nextTest : null;
   const nextTest = infeasible
@@ -3037,6 +3071,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     reconstruction,
     adoption: plan.adoption,
     steps,
+    stepsMissing: missingTransactionStages(steps),
+    ...(excludedPlan ? { excludedPlan } : {}),
+    ...(withheld.length > 0 ? { figuresWithheld: withheld } : {}),
     infeasible,
     degraded,
     ...readings,
@@ -3512,7 +3549,13 @@ export function adoptReconstruction(input: {
         sentence: `if its ${assumedMoves.length} unmeasured assumption(s) hold (${movesOf(assumedMoves, titled).slice(0, 4).join('; ')}) it would reach ${pctOf(r.best.reach)} (p50 ${moneyOf(r.best.settledP50)}): a hypothesis to test by running each one's kill criterion, not evidence`,
       };
   const hypothetical = (reason: string) => ({ adoption: { source: 'BASELINE' as const, hypothetical: true, reason, ...(upside ? { upside } : {}) }, candidate: null });
-  if (flagged) return hypothetical(`the reconstruction is flagged implausible (${flagged.slice(0, 300)}), so its ${pctOf(r.best.reach)} is not adopted`);
+  /*
+   * A reading the critic flags is shown as no figure at all (production baseline,
+   * 2026-11-24: an HVAC deal that "keeps $37,271" on $1 of capital read as the
+   * plan's): the flag says what is wrong, its money figures are withheld, and an
+   * implausible reconstruction carries no upside either.
+   */
+  if (flagged) return { adoption: { source: 'BASELINE', hypothetical: true, reason: `the reconstruction is flagged implausible (${withoutFigures(flagged).slice(0, 300)}), so none of its figures is shown or adopted` }, candidate: null };
   if (!r.best.feasible) return hypothetical(`the reconstruction's strongest plan does not run inside the limits${r.best.why ? ` (${r.best.why})` : ''}`);
   if (real.length === 0) return { adoption: { source: 'BASELINE', hypothetical: false, reason: 'no change the reconstruction tried improves the plan as held materially' }, candidate: null };
   const baseReach = input.baseline?.best?.reach ?? r.baseline.reach;
@@ -4313,7 +4356,7 @@ export function planSteps(input: {
       const beside = steps.length > 0 || built.length > 0;
       if (built.length > 0) built = arrangementOf(steps.length + 2);
       const sells = t.link === 'CONVERSION';
-      steps.push({
+      const establish: PlanStep = {
         order: steps.length + 1,
         // CHAIN_LABEL names the missing link ("an offer and a price"), not an act; a step is something done.
         label: `Establish ${CHAIN_LABEL[t.link]}`,
@@ -4343,7 +4386,21 @@ export function planSteps(input: {
         // Beside a leading arrangement's steps, the goal's own search keeps running in parallel.
         ...(beside ? { kind: sells ? ('VALIDATE' as const) : ('RESEARCH' as const), question: t.test, requires: [], withinLimits: null } : {}),
         stage: sells ? { stage: 'OFFER', costSource: 'NONE_HELD' } : { stage: 'RESEARCH', costSource: 'NOT_SPENT' },
-      });
+      };
+      /*
+       * Selling to measure the close rate is the plan's whole transaction when
+       * nothing else is (2026-11-24 investigation, r28/r30): a startable plan read
+       * one step, "Establish buyers who have actually agreed", with no delivery and
+       * no collection, because the sale it measures was not among the reading's
+       * sales. A selling step that stands alone is sequenced through fulfilment and
+       * collection exactly as a sale is (`openingSteps`), on the plan's lead opening.
+       */
+      const member = sells && !beside ? soleChainMember(input.members ?? null, input.lead ?? null) : null;
+      if (member) {
+        const { order: _order, dependsOn: _dependsOn, ...rest } = establish;
+        steps.push(...openingSteps(member, { currency, daysLeft: input.daysLeft ?? null, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, { ...rest, label: `Sell "${member.title.slice(0, 80)}"` }, steps.length + 1));
+        chained = true;
+      } else steps.push(establish);
     }
     steps.push(...built);
     // A sale's chain runs from day 0 to its collection: read in day order, each step still naming the one it follows (STEPS_SCHEDULED).
@@ -4371,6 +4428,10 @@ export function planSteps(input: {
     const before = steps.filter((one) => one.order < step.order && (one.startDay?.low ?? 0) < low);
     step.dependsOn = before.length > 0 ? before[before.length - 1]!.order : null;
   }
+  // A plan that sells without delivering or collecting says so on its selling step, never silently (2026-11-24 investigation).
+  const lacking = missingTransactionStages(steps);
+  const seller = lacking.length > 0 ? steps.find((one) => one.stage?.stage === 'OFFER' || one.stage?.stage === 'REACH') : undefined;
+  if (seller) seller.detail = `${seller.detail} Not yet a whole transaction: the plan holds no step to ${lacking.join(' or ')} for what it sells; ${lacking.length > 1 ? 'they are' : 'it is'} established before a buyer is asked to pay.`;
   return steps;
 }
 
@@ -4382,6 +4443,111 @@ const LINK_STAGES: Partial<Record<ChainLink, ArrangementStage[]>> = {
   FULFILMENT: ['DELIVER'],
   SETTLES_IN_TIME: ['COLLECT'],
 };
+
+/**
+ * The opening a lone selling step sells: the first lead opening whose facts the
+ * plan holds, or — with no lead named — the one opening the plan holds facts
+ * for. Several openings and no lead is no choice the steps may make: null. Pure.
+ */
+export function soleChainMember(members: ReadonlyMap<string, OpeningChainMember> | null, lead: readonly string[] | null): OpeningChainMember | null {
+  if (!members || members.size === 0) return null;
+  for (const id of lead ?? []) {
+    const m = members.get(openingOfMember(id));
+    if (m) return m;
+  }
+  if ((lead ?? []).length > 0) return null;
+  const found = [...members.values()].filter((m) => !isArrangementId(m.id));
+  return found.length === 1 ? found[0]! : null;
+}
+
+/** The stages of one transaction a startable plan must hold, as a reader names them. */
+export const TRANSACTION_STAGES = ['offer and reach the buyer', 'deliver', 'collect payment'] as const;
+export type TransactionStage = (typeof TRANSACTION_STAGES)[number];
+
+/**
+ * Which stages of a transaction a plan's steps leave out, when they sell at all
+ * (2026-11-24 investigation): a plan that sells must also deliver and collect,
+ * or say that it does not. Steps that sell nothing (research, a decision) are a
+ * search, not a transaction, and lack nothing here. Pure.
+ */
+export function missingTransactionStages(steps: readonly Pick<PlanStep, 'stage' | 'executor'>[]): TransactionStage[] {
+  const op = (s: Pick<PlanStep, 'executor'>) => s.executor?.operation ?? null;
+  const sells = steps.some((s) => s.stage?.stage === 'OFFER' || s.stage?.stage === 'REACH' || op(s) === 'SEND_OFFER' || op(s) === 'REACH_BUYERS');
+  if (!sells) return [];
+  const out: TransactionStage[] = [];
+  if (!steps.some((s) => s.stage?.stage === 'DELIVER' || op(s) === 'BRAIN_PRODUCES' || op(s) === 'SUPPLIER_DELIVERS')) out.push('deliver');
+  if (!steps.some((s) => s.stage?.stage === 'COLLECT' || op(s) === 'COLLECT_PAYMENT')) out.push('collect payment');
+  return out;
+}
+
+/**
+ * How many times what remains a figure may stand before it is no plan's reach on
+ * inputs not all established (production baseline, 2026-11-24, independent judge:
+ * "$3,161,954 toward $1,500"). Two orders of magnitude: a plan whose established
+ * inputs carry it there keeps its figure; one that gets there on swept inputs does not.
+ */
+export const IMPLAUSIBLE_MULTIPLE = 100;
+
+/** Money figures in a text, withheld: a flag says what is wrong without presenting the figure it doubts. Pure. */
+export function withoutFigures(text: string): string {
+  return text.replace(/(?:[$£€]\s?\d+(?:,\d{3})*(?:\.\d+)?(?:\s?[kKmM]\b)?|\b\d+(?:,\d{3})*(?:\.\d+)?\s?(?:USD|EUR|GBP)\b)/g, '[figure withheld]');
+}
+
+/**
+ * The reach figures a reading presents, with every one it cannot stand behind
+ * withheld (production baseline, 2026-11-24): a strategy's or candidate's settled
+ * figure more than `IMPLAUSIBLE_MULTIPLE` × what remains, on a chain not every link
+ * of which is established, is withheld — set to null, and the basis says why. A
+ * figure established inputs carry, and every other figure, is kept unchanged.
+ * Returns what it withheld, one line each. Mutates the strategies and candidate given.
+ */
+export function withholdImplausibleFigures(
+  strategies: StrategyReading[],
+  candidate: PlanAcceptance['candidate'],
+  remaining: number,
+): string[] {
+  if (!(remaining > 0)) return [];
+  const bound = remaining * IMPLAUSIBLE_MULTIPLE;
+  const over = (x: number | null | undefined): x is number => typeof x === 'number' && x > bound;
+  const withheld: string[] = [];
+  const why = (figure: number) => `a settled figure of ${Math.round(figure / remaining)}× what remains, on inputs not all established, is not shown as a reach`;
+  for (const s of strategies) {
+    if (s.chainComplete) continue;
+    const top = Math.max(s.sweep.settledP50 ?? 0, s.sweep.settledP90 ?? 0, s.conservativeSettled ?? 0);
+    if (!over(top)) continue;
+    if (over(s.sweep.settledP50)) s.sweep = { ...s.sweep, settledP50: null };
+    if (over(s.sweep.settledP90)) s.sweep = { ...s.sweep, settledP90: null };
+    if (over(s.conservativeSettled)) s.conservativeSettled = null;
+    s.basis = `${s.basis ? `${s.basis}; ` : ''}figures withheld: ${why(top)}`;
+    withheld.push(`"${s.label.slice(0, 80)}": ${why(top)}`);
+  }
+  if (candidate && over(candidate.settledP50) && (candidate.reachBasis !== 'PROBABILITY' || (candidate.unsupported?.length ?? 0) > 0)) {
+    withheld.push(`the candidate "${candidate.label.slice(0, 80)}": ${why(candidate.settledP50)}`);
+    candidate.settledP50 = null;
+  }
+  if (candidate?.assumedUpside && over(candidate.assumedUpside.settledP50)) {
+    withheld.push(`the candidate's assumed upside: ${why(candidate.assumedUpside.settledP50)}`);
+    delete candidate.assumedUpside;
+  }
+  return withheld;
+}
+
+/**
+ * Why the plan's steps are no plan to present, or null (production baseline,
+ * 2026-11-24: a plan was presented whose only collection landed after the goal's
+ * 21-day window). A plan whose every collection step is scheduled after the
+ * deadline brings no cash inside the window, whatever else it does: it is
+ * excluded, with this reason. A plan with one collection inside the window, or
+ * whose timing nobody established yet, is not. Pure.
+ */
+export function collectsOutsideWindow(steps: readonly Pick<PlanStep, 'stage' | 'arrangement' | 'label' | 'when'>[], daysLeft: number | null): string | null {
+  if (daysLeft === null) return null;
+  const collect = steps.filter((one) => (one.stage ?? one.arrangement)?.stage === 'COLLECT');
+  if (collect.length === 0) return null;
+  if (!collect.every((one) => (one.stage ?? one.arrangement)?.unscheduled === 'AFTER_DEADLINE')) return null;
+  const first = collect[0]!;
+  return `its collection ("${first.label.slice(0, 80)}") ${first.when ? `is ${first.when.replace(/^not scheduled: /, '')}` : `lands after the ${daysLeft} days left`}, so it brings no cash inside the goal's window`;
+}
 
 /** A sale the reading holds, as a step: it starts now, and the model prices no cost for sending it (unestablished, never 0). */
 function saleStep(order: number, sale: MarketTest, detail: string, kill: string, execution: string[], inventory?: CapabilityInventory): PlanStep {

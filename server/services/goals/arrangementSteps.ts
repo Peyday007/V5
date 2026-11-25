@@ -29,6 +29,7 @@
  * decisions are made with.
  */
 import { namesOneOrganisation } from '../../domain/industry.ts';
+import { licensedActIn } from '../../domain/operatingModel.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
 import { PART_ASK, provedDeliverable } from '../cash/construct.ts';
 import { fulfillerIsOwner, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
@@ -664,6 +665,11 @@ export interface OpeningChainMember {
   cash: { span: Day; standing: string } | null;
   /** The rows, claims and card facts each part of the transaction rests on. */
   evidence: { offer: string[]; deliver: string[]; collect: string[] };
+  /**
+   * The licensed act the opening's words name (`licensedActIn`), when one is: a
+   * constraint on who may fulfil it, stated on its delivery step. Absent: none named.
+   */
+  licence?: string | null;
 }
 
 const DELIVERABLE_IDS: ReadonlySet<string> = new Set(DELIVERABLE_CAPABILITIES.map((one) => one.id));
@@ -694,9 +700,11 @@ export function openingMember(
   const held = demand?.costHeld ?? (one.directCost.value !== null ? { low: one.directCost.value, high: one.directCost.value, own: one.directCost.provenance === 'EVIDENCE' } : null);
   const reach = pathway && typeof pathway.acquisitionCost.value === 'number' ? { amount: pathway.acquisitionCost.value, basis: pathway.acquisitionCost.basis } : null;
   const agreed = one.agreedDeals > 0 ? `${o.id}:agreements` : null;
+  const licence = licensedActIn([o.title, o.offerScope, named].filter(Boolean).join(' \n '));
   return {
     id: o.id,
     title: o.title,
+    ...(licence ? { licence } : {}),
     fulfils,
     price: demand?.price ? demand.price.p50 : one.price.value,
     directCost: held ? { low: held.low, high: held.high, standing: held.own ? 'established' : 'estimated, not established' } : null,
@@ -828,6 +836,16 @@ export function openingSteps(m: OpeningChainMember, ctx: OpeningStepContext, off
   const unscheduled: UnscheduledReason = late ? 'AFTER_DEADLINE' : 'NO_MODEL_DAYS';
   const deliverDay: Day | null = cashDay ? { low: sell.low, high: cashDay.high } : null;
   const deliver = fulfilmentStep(m, ctx, deliverDay, offerOrder, startAt + 1, unscheduled);
+  /*
+   * A regulated opening is evaluated, with its licence as a constraint on who
+   * performs it (2026-11-24 investigation, r40: a notary service never reached
+   * the plan): only a fulfiller holding the licence delivers, and the licence is
+   * checked before the first booking.
+   */
+  if (m.licence) {
+    deliver.detail = `${deliver.detail} Licence constraint: "${m.licence}" is a licensed act — it is performed only by a fulfiller who holds that licence, checked on its public register before the first booking; neither Brain nor the owner performs it without one.`;
+    deliver.licence = m.licence;
+  }
   steps.push(deliver);
   const inTime = lands !== null && ctx.daysLeft !== null ? lands.high <= ctx.daysLeft : null;
   steps.push({

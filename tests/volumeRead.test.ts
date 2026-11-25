@@ -106,7 +106,9 @@ describe('readVolume: real stated volume is read', () => {
     expect(payerAgentWords('Roofing contractors')).toEqual(['roofer', 'roofers']);
     expect(payerAgentWords('Companies entering trade-industry awards programmes')).toEqual([]);
     const text = 'The state household-goods register lists 2,400 licensed movers; lead marketplaces report they reorder packs monthly.';
-    expect(readVolume(text, 30)).toBeNull();
+    // Without the payer, "movers" is no buyer word; a register's licensed count is still a population (2026-11-24).
+    expect(readVolume(text.replace('licensed ', ''), 30)).toBeNull();
+    expect(readVolume(text, 30)).toMatchObject({ buyers: 2400, counted: 'BUYERS' });
     expect(readVolume(text, 30, 'Licensed local moving companies')).toMatchObject({ deals: 2400, buyers: 2400, everyDays: 30, counted: 'BUYERS' });
     expect(readVolume(text, 60, 'Licensed local moving companies')).toMatchObject({ deals: 4800, buyers: 2400, everyDays: 30 });
   });
@@ -164,5 +166,52 @@ describe('readVolume: the supply side and web counts are never buyers', () => {
 
   it('still counts a payer that is itself a seller', () => {
     expect(readVolume('The platform has 3,000 active Etsy sellers in the craft category.', 30, 'Etsy sellers')).toMatchObject({ buyers: 3000 });
+  });
+});
+
+/*
+ * 2026-11-24 investigation §3, residuals on supplied routes: a market stated as a
+ * register of licensed entities, as a flow of new entrants, or as a consumer
+ * marketplace's published user count read as unsized.
+ */
+describe('readVolume: registers, flows and published platform counts are sized populations', () => {
+  it.each([
+    ['There are 12,400 licensed notaries in the state.', 12_400],
+    ['There are 12,000 notaries commissioned in Ohio.', 12_000],
+    ['The state has 6,500 active liquor licences.', 6_500],
+    ['The FMCSA register shows 3,000 carriers are registered in Michigan.', 3_000],
+  ])('%s → %i buyers, one purchase each', (text, buyers) => {
+    expect(readVolume(text, 30)).toMatchObject({ buyers, deals: buyers, counted: 'BUYERS', everyDays: null });
+  });
+
+  it.each([
+    ['FMCSA grants about 4,000 new authorities every month.', 30, 4_000],
+    ['About 4,000 new motor carrier authorities are granted every month.', 90, 12_000],
+    ['Roughly 1,500 new LLCs are formed in the county each month.', 14, 700],
+    ['About 900 new restaurant permits are issued every year in the city.', 30, 73],
+    ['Each month, about 1,500 new LLCs are formed in the county.', 30, 1_500],
+  ])('%s → a flow: buyers arriving inside %i days = %i, never a cadence of repeat purchases', (text, window, buyers) => {
+    const reading = readVolume(text, window);
+    expect(reading).toMatchObject({ buyers, deals: buyers, counted: 'BUYERS', everyDays: null });
+    expect(reading!.basis).toContain('arrive as buyers');
+  });
+
+  it.each([
+    ['Etsy reports 96 million active buyers.', 96_000_000],
+    ['Etsy has 96.5M active buyers and 7 million sellers.', 96_500_000],
+    ['Vinted has over 80 million registered members across Europe.', 80_000_000],
+  ])('%s → a consumer marketplace sized from its published count', (text, buyers) => {
+    expect(readVolume(text, 30)).toMatchObject({ buyers, counted: 'BUYERS' });
+  });
+
+  it('reads "monthly active users" as a population, never as each user buying monthly', () => {
+    expect(readVolume('The app has 2.5 million monthly active users.', 90)).toMatchObject({ buyers: 2_500_000, deals: 2_500_000, everyDays: null });
+  });
+
+  it('still refuses a register of sellers, a money figure and a measure', () => {
+    expect(readVolume('40 licensed agencies offering the service compete for these clients.', 30)).toBeNull();
+    expect(readVolume('Permits cost $4,000 every month.', 30)).toBeNull();
+    expect(readVolume('Google shows 2.1M results for licensed movers.', 30)).toBeNull();
+    expect(readVolume('About 4,000 new listings are added every month.', 30)).toBeNull();
   });
 });
