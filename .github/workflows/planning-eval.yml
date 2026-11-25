@@ -28,6 +28,10 @@ on:
         description: 'For update: the goal (wst_...)'
         required: false
         default: ''
+      batch_b64:
+        description: 'For create: base64 of a JSON list of {case, text}'
+        required: false
+        default: ''
       objective_b64:
         description: 'For create/update: the owner''s words, base64-encoded'
         required: false
@@ -56,6 +60,7 @@ jobs:
           E_CASE: ${{ inputs.case }}
           E_GOAL: ${{ inputs.goal }}
           E_OBJECTIVE: ${{ inputs.objective_b64 }}
+          E_BATCH: ${{ inputs.batch_b64 }}
         run: |
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
@@ -63,13 +68,16 @@ jobs:
           for value in "$E_RUN" "$E_CASE" "$E_GOAL"; do
             case "$value" in '') ;; *[!A-Za-z0-9_-]*) echo "::error::Refusing an id that is not letters, digits, underscore or dash."; exit 1 ;; esac
           done
-          case "$E_OBJECTIVE" in '') ;; *[!A-Za-z0-9+/=]*) echo "::error::The objective must be base64."; exit 1 ;; esac
+          for value in "$E_OBJECTIVE" "$E_BATCH"; do
+            case "$value" in '') ;; *[!A-Za-z0-9+/=]*) echo "::error::The objective and batch must be base64."; exit 1 ;; esac
+          done
 
           args="$E_COMMAND"
           [ -n "$E_RUN" ] && args="$args --run $E_RUN"
           [ -n "$E_CASE" ] && args="$args --case $E_CASE"
           [ -n "$E_GOAL" ] && args="$args --goal $E_GOAL"
           [ -n "$E_OBJECTIVE" ] && args="$args --objective-b64 $E_OBJECTIVE"
+          [ -n "$E_BATCH" ] && args="$args --batch-b64 $E_BATCH"
           echo "planningEval $E_COMMAND run=$E_RUN case=$E_CASE goal=$E_GOAL"
 
           script_b64=$(base64 -w0 scripts/planningEval.ts)
