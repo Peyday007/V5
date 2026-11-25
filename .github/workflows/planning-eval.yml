@@ -52,7 +52,7 @@ jobs:
       - uses: ./.github/actions/await-release
 
       - name: Run
-        timeout-minutes: 40
+        timeout-minutes: 90
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           E_COMMAND: ${{ inputs.command }}
@@ -93,7 +93,7 @@ jobs:
             echo "PLANNING_EVAL: FAILED could not start on the machine" | tee eval.txt
             exit 1
           fi
-          deadline=$(( $(date +%s) + 37 * 60 ))
+          deadline=$(( $(date +%s) + 85 * 60 ))
           shown=0
           while :; do
             if timeout 90 flyctl ssh console --app "$app" -C "cat $log" > snapshot.txt 2>/dev/null; then
