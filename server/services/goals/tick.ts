@@ -127,6 +127,16 @@ export interface GoalTickReport {
    * the bins it moved. Null when no decision is recorded, or it was held.
    */
   researchApplied?: ResearchApplication | null;
+  /**
+   * GOAL.PLAN_FRESH, watched from the goal tick (a dead man's switch, after
+   * Healthchecks.io's period-and-grace check): the goal-plan pass runs on its
+   * own, and when it stops — throttled to DEFERRED on every start, or an
+   * abandoned pass still holding its in-flight slot and the scenario slot —
+   * nothing it would write is written, so its silence was read as nothing.
+   * This pass reads the result instead of the runner: each live targeted
+   * goal's latest `goal <id>` scenario run. An error is reported, never thrown.
+   */
+  planFreshness?: PlanFreshnessReading | { error: string };
 }
 
 /** The three decision-history passes, injectable for tests. */
@@ -548,8 +558,129 @@ export async function advanceGoals(options?: { now?: string; memory?: Partial<Me
   report.register = await reconcileRegisterIfDue();
   const now = options?.now ? Date.parse(options.now) : Date.now();
   report.memory = await runMemoryPasses({ ...PRODUCTION_MEMORY, ...(options?.memory ?? {}) }, Number.isFinite(now) ? now : Date.now());
+  const watchAt = Number.isFinite(now) ? now : Date.now();
+  if (options?.now !== undefined || watchAt - lastFreshnessWatch >= PLAN_FRESHNESS_EVERY_MS) {
+    lastFreshnessWatch = watchAt;
+    try {
+      report.planFreshness = await watchPlanFreshness(watchAt);
+    } catch (error) {
+      report.planFreshness = failure(error);
+    }
+  }
 
   return report;
+}
+
+/** The bar GOAL.PLAN_FRESH measures against: a goal scenario run within two hours. */
+export const PLAN_FRESH_PERIOD_MS = 2 * 60 * 60_000;
+/**
+ * Late before it is broken: the planner's own refresh is half-hourly and its
+ * ceiling ninety minutes (`PLAN_STALE_MAX_MS`), so a goal with no run for this
+ * long is one the pass has stopped reaching, and the record says so while
+ * there is still half an hour before the capability reads BROKEN.
+ */
+export const PLAN_LATE_AFTER_MS = 90 * 60_000;
+export const GOAL_PLAN_STALE_EVENT = 'GOAL_PLAN_STALE';
+/** scenario_runs has no index on its label, so the watch reads at most this often (a test's explicit `now` always reads). */
+export const PLAN_FRESHNESS_EVERY_MS = 5 * 60_000;
+let lastFreshnessWatch = 0;
+
+export interface PlanFreshnessReading {
+  /** Live (unpaused, not past due) targeted goals watched. */
+  live: number;
+  /** Of those, with a goal scenario run inside `PLAN_FRESH_PERIOD_MS`. */
+  fresh: number;
+  /** Late or stale goals: no run inside `PLAN_LATE_AFTER_MS`, stalest first. */
+  late: { goalId: string; lastRunAt: string | null; ageMs: number | null; broken: boolean }[];
+  /** Goals whose lateness was recorded on this pass (once per episode). */
+  recorded: string[];
+}
+
+/**
+ * Pure: which live goals are late, from each one's latest goal scenario run.
+ * A goal with no run at all is late from the moment it is live; a run with
+ * an unreadable timestamp counts as none, never as fresh.
+ */
+export function planFreshnessFrom(
+  goals: readonly { id: string }[],
+  lastRunAt: ReadonlyMap<string, string | null>,
+  nowMs: number,
+): Omit<PlanFreshnessReading, 'recorded'> {
+  let fresh = 0;
+  const late: PlanFreshnessReading['late'] = [];
+  for (const goal of goals) {
+    const at = lastRunAt.get(goal.id) ?? null;
+    const parsed = at ? Date.parse(at) : Number.NaN;
+    const ageMs = Number.isFinite(parsed) ? Math.max(0, nowMs - parsed) : null;
+    if (ageMs !== null && ageMs < PLAN_FRESH_PERIOD_MS) fresh += 1;
+    if (ageMs === null || ageMs >= PLAN_LATE_AFTER_MS) {
+      late.push({ goalId: goal.id, lastRunAt: Number.isFinite(parsed) ? at : null, ageMs, broken: ageMs === null || ageMs >= PLAN_FRESH_PERIOD_MS });
+    }
+  }
+  late.sort((a, b) => (b.ageMs ?? Number.POSITIVE_INFINITY) - (a.ageMs ?? Number.POSITIVE_INFINITY));
+  return { live: goals.length, fresh, late };
+}
+
+/** Lateness already recorded in this process: goal → the last run the record named. */
+const recordedLateness = new Map<string, string | null>();
+
+/**
+ * Read GOAL.PLAN_FRESH from the result and put a late goal on its record.
+ *
+ * One grouped read for every live goal's latest run; one append-only
+ * `GOAL_PLAN_STALE` event per goal per episode — an episode is keyed by the
+ * last run it names, so a goal that stays late is recorded once, and a goal
+ * that is read and then falls late again is recorded again. The process map
+ * spares the event read on later passes; the event row is what decides, so a
+ * restart does not record the same episode twice.
+ */
+async function watchPlanFreshness(nowMs: number): Promise<PlanFreshnessReading> {
+  const nowIso = new Date(nowMs).toISOString();
+  const goals = await getDb().all<{ id: string }>(
+    `SELECT id FROM workstreams
+      WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL
+        AND (due_at IS NULL OR due_at > ?)`,
+    [nowIso],
+  );
+  const lastRunAt = new Map<string, string | null>();
+  if (goals.length > 0) {
+    const labels = goals.map((goal) => `goal ${goal.id}`);
+    const rows = await getDb().all<{ label: string; at: string | null }>(
+      `SELECT label, MAX(started_at) AS at FROM scenario_runs WHERE label IN (${labels.map(() => '?').join(', ')}) GROUP BY label`,
+      labels,
+    );
+    for (const row of rows) lastRunAt.set(row.label.slice('goal '.length), row.at);
+  }
+  const reading = planFreshnessFrom(goals, lastRunAt, nowMs);
+  const lateIds = new Set(reading.late.map((one) => one.goalId));
+  for (const goalId of [...recordedLateness.keys()]) if (!lateIds.has(goalId)) recordedLateness.delete(goalId);
+  const recorded: string[] = [];
+  for (const one of reading.late) {
+    if (recordedLateness.has(one.goalId) && recordedLateness.get(one.goalId) === one.lastRunAt) continue;
+    const prior = await getDb().get<{ detail: string | null }>(
+      `SELECT detail FROM workstream_events WHERE workstream_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1`,
+      [one.goalId, GOAL_PLAN_STALE_EVENT],
+    );
+    let priorRun: string | null | undefined;
+    try {
+      const detail = prior?.detail ? (JSON.parse(prior.detail) as { lastRunAt?: unknown }) : null;
+      priorRun = detail && 'lastRunAt' in detail ? (typeof detail.lastRunAt === 'string' ? detail.lastRunAt : null) : undefined;
+    } catch {
+      priorRun = undefined;
+    }
+    recordedLateness.set(one.goalId, one.lastRunAt);
+    if (priorRun !== undefined && priorRun === one.lastRunAt) continue;
+    const age = one.ageMs === null ? 'no goal scenario run on record' : `no goal scenario run for ${Math.round(one.ageMs / 60_000)} min`;
+    await recordWorkstreamEvent({
+      workstreamId: one.goalId,
+      kind: GOAL_PLAN_STALE_EVENT,
+      summary: `Plan ${one.broken ? 'stale' : 'late'}: ${age} (bar: one within ${PLAN_FRESH_PERIOD_MS / 60_000} min). The goal-plan pass has stopped reaching this goal — deferred, busy or hung.`,
+      detail: { lastRunAt: one.lastRunAt, ageMs: one.ageMs, broken: one.broken, periodMs: PLAN_FRESH_PERIOD_MS, lateAfterMs: PLAN_LATE_AFTER_MS },
+      actorRef: 'goal-tick',
+    });
+    recorded.push(one.goalId);
+  }
+  return { ...reading, recorded };
 }
 
 /**
