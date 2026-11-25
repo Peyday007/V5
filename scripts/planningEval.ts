@@ -354,6 +354,17 @@ async function stall(): Promise<void> {
     WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp} ORDER BY o.completed_at DESC LIMIT 20`, [like]);
   await q('evidence_facts', `SELECT cf.kind, cf.field, COUNT(*) AS n FROM cash_card_facts cf JOIN cash_opportunities op ON op.id = cf.opportunity_id WHERE op.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [like]);
   await q('needs', `SELECT nd.state, COUNT(*) AS n FROM cash_needs nd WHERE nd.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1`, [like]);
+  // What `answerUnaskedParks` selects Brain-wide (its own WHERE, without the grace), in its order, and what it decided lately.
+  const unasked = `o.status = 'NEEDS_HUMAN' AND (o.unresolved_gap_policy IS NULL OR o.unresolved_gap_policy <> 'RECORD_GAPS')
+        AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED')
+        AND NOT EXISTS (SELECT 1 FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id WHERE m.orchestration_id = o.id AND r.state IN ('OPEN', 'ANSWERED'))
+        AND EXISTS (SELECT 1 FROM russell_goals g WHERE g.project_id = o.project_id AND g.purpose = 'STANDING' AND g.state = 'ACTIVE' AND (g.expires_at IS NULL OR g.expires_at > ?))`;
+  await q('unasked_all', `SELECT CASE WHEN o.project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval' ELSE 'other' END AS cls, COUNT(*) AS n, MIN(o.updated_at) AS oldest, MAX(o.updated_at) AS newest FROM research_orchestrations o WHERE ${unasked} GROUP BY 1`, [now]);
+  await q('unasked_head', `SELECT o.id, o.updated_at, o.current_pass, o.verdict, SUBSTR(COALESCE(o.failure_reason, ''), 1, 140) AS why FROM research_orchestrations o WHERE ${unasked} ORDER BY o.updated_at ASC, o.id ASC LIMIT 8`, [now]);
+  await q('routine_decisions_24h', `SELECT SUBSTR(e.created_at, 1, 13) AS hour, COUNT(*) AS n FROM project_events e WHERE e.event_type = 'RUSSELL_ROUTINE_DECISION' AND e.created_at >= ? GROUP BY 1 ORDER BY 1`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+  await q('gap_authorized_24h', `SELECT COUNT(*) AS n, MAX(o.unresolved_gap_authorized_at) AS last FROM research_orchestrations o WHERE o.unresolved_gap_authorized_at >= ?`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+  await q('cycle', `SELECT generation, state, last_ran_at, SUBSTR(COALESCE(last_error, ''), 1, 600) AS last_error FROM russell_cycle LIMIT 1`);
+  await q('filed_needs', `SELECT nd.id, nd.state, nd.request_key, nd.opportunity_id, nd.updated_at FROM cash_needs nd WHERE nd.candidate_id IN (SELECT m.candidate_id FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp})`, [like]);
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 
