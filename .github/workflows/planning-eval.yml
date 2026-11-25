@@ -1,0 +1,107 @@
+# Production planning evaluation (docs/COMPLETION-SPEC.md §114): one fresh
+# request in, Brain's own goal machinery does the rest, and `read` prints what
+# the owner would be handed so an evaluator can judge it. See
+# scripts/planningEval.ts. The script is sent with the command (as the goals
+# census is), so an evaluation reads the running Brain without waiting for a
+# release of the script itself.
+#
+# Nothing here approves, spends, contacts or sends; `create` sets a research-
+# only goal in a project of its own, and `read` is read-only.
+name: Planning evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'create | read | update'
+        required: true
+        default: read
+      run:
+        description: 'The evaluation run id (letters, digits, _ -)'
+        required: false
+        default: ''
+      case:
+        description: 'For create, and optionally read: the case id'
+        required: false
+        default: ''
+      goal:
+        description: 'For update: the goal (wst_...)'
+        required: false
+        default: ''
+      objective_b64:
+        description: 'For create/update: the owner''s words, base64-encoded'
+        required: false
+        default: ''
+
+concurrency:
+  group: brain-planning-eval
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - uses: ./.github/actions/await-release
+
+      - name: Run
+        timeout-minutes: 40
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          E_COMMAND: ${{ inputs.command }}
+          E_RUN: ${{ inputs.run }}
+          E_CASE: ${{ inputs.case }}
+          E_GOAL: ${{ inputs.goal }}
+          E_OBJECTIVE: ${{ inputs.objective_b64 }}
+        run: |
+          set -eu
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          case "$E_COMMAND" in create|read|update) ;; *) echo "::error::Refusing '$E_COMMAND'."; exit 1 ;; esac
+          for value in "$E_RUN" "$E_CASE" "$E_GOAL"; do
+            case "$value" in '') ;; *[!A-Za-z0-9_-]*) echo "::error::Refusing an id that is not letters, digits, underscore or dash."; exit 1 ;; esac
+          done
+          case "$E_OBJECTIVE" in '') ;; *[!A-Za-z0-9+/=]*) echo "::error::The objective must be base64."; exit 1 ;; esac
+
+          args="$E_COMMAND"
+          [ -n "$E_RUN" ] && args="$args --run $E_RUN"
+          [ -n "$E_CASE" ] && args="$args --case $E_CASE"
+          [ -n "$E_GOAL" ] && args="$args --goal $E_GOAL"
+          [ -n "$E_OBJECTIVE" ] && args="$args --objective-b64 $E_OBJECTIVE"
+          echo "planningEval $E_COMMAND run=$E_RUN case=$E_CASE goal=$E_GOAL"
+
+          script_b64=$(base64 -w0 scripts/planningEval.ts)
+          file="scripts/.planning-eval-${GITHUB_RUN_ID}.ts"
+          log="/tmp/planning-eval-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.log"
+          # Detached on the machine, polled from here: a dropped SSH session costs a poll, not the run.
+          started=$(timeout 120 flyctl ssh console --app "$app" \
+            -C "sh -c 'cd /app && echo $script_b64 | base64 -d > $file && nohup setsid env BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=120000 nice -n 10 node --max-old-space-size=1024 --import tsx $file $args > $log 2>&1 < /dev/null & echo EVAL_STARTED'" \
+            2>&1 | tr -d '\r' || true)
+          : > eval.txt
+          if ! printf '%s\n' "$started" | grep -q '^EVAL_STARTED'; then
+            printf '%s\n' "$started"
+            echo "PLANNING_EVAL: FAILED could not start on the machine" | tee eval.txt
+            exit 1
+          fi
+          deadline=$(( $(date +%s) + 37 * 60 ))
+          shown=0
+          while :; do
+            if timeout 90 flyctl ssh console --app "$app" -C "cat $log" > snapshot.txt 2>/dev/null; then
+              tr -d '\r' < snapshot.txt > eval.txt
+              total=$(wc -l < eval.txt)
+              if [ "$total" -gt "$shown" ]; then tail -n "+$((shown + 1))" eval.txt | cut -c1-400; shown=$total; fi
+              grep -q '^PLANNING_EVAL: ' eval.txt && break
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then echo "PLANNING_EVAL: FAILED timed out" >> eval.txt; break; fi
+            sleep 20
+          done
+          timeout 60 flyctl ssh console --app "$app" -C "rm -f /app/$file" >/dev/null 2>&1 || true
+          grep -q '^PLANNING_EVAL: OK' eval.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: planning-eval
+          path: eval.txt
