@@ -75,7 +75,7 @@ import { recordCashEvent } from '../../repos/cashMode.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { executionFrame } from '../cash/discovery.ts';
 import { DISQUALIFIED_FIELD } from '../cash/engineCard.ts';
-import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from '../cash/exclusions.ts';
+import { excludedBy, exclusionLabel, goalExclusions } from '../cash/exclusions.ts';
 import { DELIVERABLE_KINDS, DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
 import { deliverableCapabilityId } from '../cash/capabilities.ts';
 import { readTarget, type TargetReading } from './target.ts';
@@ -517,9 +517,9 @@ export function parseDirections(text: string, ctx: RouteContext): { directions: 
       reject(`needs the owner's physical work: ${fit.because}`, 'PHYSICAL');
       continue;
     }
-    const excluded = excludedBy(`${title} ${payer} ${offer} ${industry}`, ctx.exclusions as never);
+    const excluded = excludedBy(`${title} ${payer} ${offer} ${industry}`, ctx.exclusions);
     if (excluded) {
-      reject(`the owner excluded ${EXCLUSION_CLASSES[excluded].label}`, 'EXCLUDED');
+      reject(`the owner excluded ${exclusionLabel(excluded)}`, 'EXCLUDED');
       continue;
     }
     const ownerFit = str(r['ownerFit'], 300);
@@ -793,9 +793,9 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       reject(`needs the owner's physical work: ${fit.because}`, 'PHYSICAL');
       continue;
     }
-    const excluded = excludedBy(`${title} ${payer} ${offer} ${industry}`, exclusions as never);
+    const excluded = excludedBy(`${title} ${payer} ${offer} ${industry}`, exclusions);
     if (excluded) {
-      reject(`the owner excluded ${EXCLUSION_CLASSES[excluded].label}`, 'EXCLUDED');
+      reject(`the owner excluded ${exclusionLabel(excluded)}`, 'EXCLUDED');
       continue;
     }
     const ownerFit = str(r['ownerFit'], 300);
@@ -1276,7 +1276,7 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
       ownerLabour: ownerLabourOffer(ownerWords(goal), target.resources),
       industry: target.scope?.industry ?? null,
       recurring: target.scope?.recurring === 'MONTHLY',
-      exclusions: exclusions.map((one) => EXCLUSION_CLASSES[one].label),
+      exclusions: exclusions.map((one) => exclusionLabel(one)),
       delivers,
       held: [...new Set([...live, ...heldTitles])],
       refuted,

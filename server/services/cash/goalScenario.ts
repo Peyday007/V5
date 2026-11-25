@@ -28,7 +28,7 @@ import { describesOneBody, namesOneOrganisation } from '../../domain/industry.ts
 import { arrangementExclusion, paymentNatureOf, readPriceEvidence } from '../../domain/paymentNature.ts';
 import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, fulfillerParty, goalOwnerLabour, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
-import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
+import { excludedBy, exclusionLabel, goalExclusions, type ExclusionClass } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactMap } from '../../repos/cashCardFacts.ts';
 import { agreementsFor } from '../../repos/cashJourney.ts';
@@ -1820,7 +1820,7 @@ export function selectEstimatedArrangements(
   input: ArrangementInput & {
     beforeProofCents: number | null;
     remaining: number;
-    exclusions: Parameters<typeof excludedBy>[1];
+    exclusions: readonly ExclusionClass[];
     limit?: number;
     daysLeft?: number | null;
     contactsPerDay?: number;
@@ -3070,7 +3070,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     // it is lives in its buying signal, so both are what the opening is.
     const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.buyingSignal ?? ''} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
     if (excludedClass) {
-      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${EXCLUSION_CLASSES[excludedClass].label}` });
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${exclusionLabel(excludedClass)}` });
       continue;
     }
     // A reward, prize, contest, grant, rebate or wage is not a sale: it never enters a revenue goal's model unless the goal asks for it (§116).
