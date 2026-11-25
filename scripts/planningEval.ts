@@ -16,6 +16,10 @@
  *       Prints, per goal, a bounded JSON of what the owner would be handed: the
  *       plan reading (verdict, chosen strategy, steps, acceptance), the goal's
  *       openings with their card facts, and its research so far. Read-only.
+ *   stall --run R
+ *       Where each goal's research stops between a launched mission and an
+ *       EVIDENCE fact: missions, packets, fragments, work items, claims, and the
+ *       free lane's queue and leases Brain-wide. Read-only.
  *   update --goal G --objective-b64 <words>
  *       A mid-course change in the owner's words, applied through the same
  *       writer the owner's own change uses.
@@ -272,13 +276,52 @@ async function read(): Promise<void> {
   console.log(`EVAL_READ ${run} ${projects.length} case(s)`);
 }
 
+/**
+ * stall --run R: where an evaluation goal's research stops between a launched
+ * mission and an EVIDENCE fact — per goal, its missions, packets, fragments,
+ * work items (by type and state, with owning bin) and claims; Brain-wide, who
+ * holds the free lane and what it finished lately. Counts and timestamps only.
+ */
+async function stall(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const like = `Planning evaluation ${run} %`;
+  const q = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
+    const rows = await getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }]);
+    console.log(`STALL ${label} ${JSON.stringify(rows)}`);
+  };
+  const ev = `SELECT id FROM projects WHERE name LIKE ?`;
+  await q('missions', `SELECT state, waiting_on, terminal_reason, COUNT(*) AS n, MIN(created_at) AS first, MAX(updated_at) AS last FROM russell_missions WHERE project_id IN (${ev}) GROUP BY state, waiting_on, terminal_reason ORDER BY n DESC LIMIT 30`, [like]);
+  await q('packets', `SELECT status, current_pass, provider, COUNT(*) AS n, MIN(created_at) AS first, MAX(heartbeat_at) AS beat, MAX(updated_at) AS last FROM research_orchestrations WHERE project_id IN (${ev}) GROUP BY status, current_pass, provider ORDER BY n DESC`, [like]);
+  await q('fragments', `SELECT status, block_cause, COUNT(*) AS n, MIN(created_at) AS first, MAX(updated_at) AS last, MIN(next_retry_at) AS retry FROM research_fragments WHERE project_id IN (${ev}) GROUP BY status, block_cause ORDER BY n DESC`, [like]);
+  await q('fragment_blocks', `SELECT SUBSTR(COALESCE(blocked_reason, ''), 1, 240) AS reason, COUNT(*) AS n FROM research_fragments WHERE project_id IN (${ev}) AND blocked_reason IS NOT NULL GROUP BY 1 ORDER BY n DESC LIMIT 10`, [like]);
+  await q('items', `SELECT w.work_type, w.state, w.failure_category, (SELECT b.purpose FROM bins b WHERE b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id) ORDER BY b.created_at DESC LIMIT 1) AS purpose, COUNT(*) AS n, MIN(w.priority) AS pmin, MAX(w.priority) AS pmax, MIN(w.available_at) AS avail, MAX(w.attempt_count) AS attempts, MIN(w.created_at) AS first, MAX(w.updated_at) AS last FROM work_items w WHERE w.project_id IN (${ev}) GROUP BY 1, 2, 3, 4 ORDER BY n DESC LIMIT 40`, [like]);
+  await q('item_failures', `SELECT w.work_type, SUBSTR(COALESCE(w.result_summary, w.cancelled_reason, ''), 1, 240) AS why, COUNT(*) AS n FROM work_items w WHERE w.project_id IN (${ev}) AND w.state IN ('FAILED', 'CANCELLED') GROUP BY 1, 2 ORDER BY n DESC LIMIT 12`, [like]);
+  await q('item_workers', `SELECT w.work_type, w.state, k.name AS worker, COUNT(*) AS n FROM work_items w LEFT JOIN workers k ON k.id = w.worker_id WHERE w.project_id IN (${ev}) AND w.worker_id IS NOT NULL GROUP BY 1, 2, 3 ORDER BY n DESC LIMIT 20`, [like]);
+  await q('bins', `SELECT b.purpose, b.state, b.kind, COUNT(*) AS n FROM bins b WHERE b.project_id IN (${ev}) GROUP BY 1, 2, 3 ORDER BY n DESC LIMIT 20`, [like]);
+  await q('claims', `SELECT c.accepted, c.validation_state, COUNT(*) AS n, MAX(c.created_at) AS last FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id WHERE o.project_id IN (${ev}) GROUP BY 1, 2 ORDER BY n DESC LIMIT 20`, [like]);
+  const now = new Date().toISOString();
+  const since = new Date(Date.now() - 3 * 3_600_000).toISOString();
+  // Brain-wide: the free lane's claimable research, who holds its leases, and what finished lately — evaluation vs everything else.
+  const cls = `CASE WHEN w.project_id IN (${ev}) THEN 'eval' WHEN w.project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval_other' ELSE 'other' END`;
+  const types = `('RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_VERIFY', 'RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT')`;
+  await q('queued_all', `SELECT ${cls} AS cls, w.work_type, COUNT(*) AS n, MAX(w.priority) AS pmax, MIN(w.priority) AS pmin, MIN(w.available_at) AS oldest FROM work_items w WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.attempt_count < w.max_attempts AND w.work_type IN ${types} GROUP BY 1, 2 ORDER BY 1, 2`, [like, now]);
+  await q('queued_future', `SELECT ${cls} AS cls, w.work_type, COUNT(*) AS n, MIN(w.available_at) AS next FROM work_items w WHERE w.state = 'QUEUED' AND w.available_at > ? AND w.work_type IN ${types} GROUP BY 1, 2 ORDER BY 1, 2`, [like, now]);
+  await q('queued_exhausted', `SELECT ${cls} AS cls, w.work_type, COUNT(*) AS n FROM work_items w WHERE w.state = 'QUEUED' AND w.attempt_count >= w.max_attempts AND w.work_type IN ${types} GROUP BY 1, 2 ORDER BY 1, 2`, [like]);
+  await q('leased', `SELECT ${cls} AS cls, w.work_type, k.name AS worker, COUNT(*) AS n, MIN(w.leased_at) AS oldest FROM work_items w LEFT JOIN workers k ON k.id = w.worker_id WHERE w.state = 'LEASED' AND w.work_type IN ${types} GROUP BY 1, 2, 3 ORDER BY n DESC LIMIT 30`, [like]);
+  await q('finished_3h', `SELECT ${cls} AS cls, w.work_type, w.state, COUNT(*) AS n FROM work_items w WHERE w.completed_at >= ? AND w.work_type IN ${types} GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`, [like, since]);
+  await q('priority_hist', `SELECT ${cls} AS cls, w.priority, COUNT(*) AS n FROM work_items w WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.work_type IN ${types} GROUP BY 1, 2 ORDER BY 2 DESC, 1 LIMIT 40`, [like, now]);
+  await q('claims_3h', `SELECT CASE WHEN o.project_id IN (${ev}) THEN 'eval' ELSE 'other' END AS cls, c.accepted, COUNT(*) AS n FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id WHERE c.created_at >= ? GROUP BY 1, 2`, [like, since]);
+  await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
+}
+
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
   if (command === 'create') await create();
   else if (command === 'read') await read();
   else if (command === 'update') await update();
-  else fail('command must be create | read | update');
+  else if (command === 'stall') await stall();
+  else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
 } finally {
   await closeDatabase();
