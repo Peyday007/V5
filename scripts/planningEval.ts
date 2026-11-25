@@ -424,6 +424,34 @@ async function stall(): Promise<void> {
   } catch (error) {
     console.log(`STALL routine_bins ${JSON.stringify([{ error: String((error as Error)?.message ?? error).slice(0, 300) }])}`);
   }
+  // What extending the owner-directed resolution to the goal's linked openings would admit, and whether a routine serves it.
+  try {
+    const { ownerDirectedGoalIdsSql } = await import('../server/domain/binPurpose.ts');
+    const bins = await import('../server/repos/bins.ts');
+    const goals = ownerDirectedGoalIdsSql();
+    const opening = `gol.workstream_id IN (${goals}) AND gol.kind = 'OPPORTUNITY' AND gol.superseded_at IS NULL AND gol.relation <> 'DEPENDS_ON' AND gol.ref IS NOT NULL`;
+    const openingPackets =
+      `SELECT gom.orchestration_id FROM workstream_links gol JOIN cash_opportunities goo ON goo.id = gol.ref JOIN russell_missions gom ON gom.candidate_id = goo.candidate_id WHERE ${opening} AND gom.orchestration_id IS NOT NULL` +
+      ` UNION SELECT goo.validation_orchestration_id FROM workstream_links gol JOIN cash_opportunities goo ON goo.id = gol.ref WHERE ${opening} AND goo.validation_orchestration_id IS NOT NULL` +
+      ` UNION SELECT gom.orchestration_id FROM workstream_links gol JOIN cash_needs gon ON gon.opportunity_id = gol.ref JOIN russell_missions gom ON gom.candidate_id = gon.candidate_id WHERE ${opening} AND gon.state = 'OPEN' AND gom.orchestration_id IS NOT NULL`;
+    const served = `SELECT pm.project_id FROM project_memberships pm WHERE pm.principal_type = 'WORKER' AND pm.revoked_at IS NULL AND pm.principal_id IN (SELECT r.worker_id FROM fleet_routines r WHERE r.state = 'ENABLED' AND r.worker_id IS NOT NULL)`;
+    const t = new Date().toISOString();
+    const started = Date.now();
+    await q('newly_admitted', `SELECT CASE WHEN b.project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval' ELSE 'other' END AS cls,
+        CASE WHEN b.project_id IN (${served}) THEN 1 ELSE 0 END AS routine_served,
+        CASE WHEN ${bins.workReadySql('b.')} THEN 1 ELSE 0 END AS work_ready, COUNT(*) AS n
+       FROM bins b WHERE b.kind = 'RESEARCH_PACKET' AND b.state = 'READY' AND b.held_by_workstream_id IS NULL AND b.purpose IN ('PLAY_RESEARCH', 'GRUNT')
+        AND NOT ${bins.purposeAdmitsSql('b.')} AND b.orchestration_id IN (${openingPackets})
+      GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`, [t, t]);
+    console.log(`STALL newly_admitted_ms ${JSON.stringify([{ ms: Date.now() - started }])}`);
+    await q('routine_served_projects', `SELECT CASE WHEN p.name LIKE 'Planning evaluation %' THEN 'eval' ELSE 'other' END AS cls, COUNT(DISTINCT p.id) AS n FROM projects p WHERE p.id IN (${served}) GROUP BY 1`);
+    await q('routine_accepted_hourly', `SELECT SUBSTR(w.completed_at, 1, 13) AS hour, w.work_type, COUNT(*) AS n FROM work_items w
+        WHERE w.state = 'SUCCEEDED' AND w.completed_at >= ? AND w.work_type IN ${types} AND w.worker_id IN (SELECT r.worker_id FROM fleet_routines r WHERE r.worker_id IS NOT NULL)
+        GROUP BY 1, 2 ORDER BY 1 DESC, 2 LIMIT 80`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+    await q('fleet', `SELECT r.state, CASE WHEN r.worker_id IS NULL THEN 0 ELSE 1 END AS bound, COUNT(*) AS n FROM fleet_routines r GROUP BY 1, 2`);
+  } catch (error) {
+    console.log(`STALL newly_admitted ${JSON.stringify([{ error: String((error as Error)?.message ?? error).slice(0, 300) }])}`);
+  }
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 
