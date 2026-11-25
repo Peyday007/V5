@@ -110,6 +110,9 @@ async function update(): Promise<void> {
     goal,
     capitalCeilingCents: reading.capitalCeiling === null ? goal.target.capitalCeilingCents : Math.round(reading.capitalCeiling * 100),
     hoursCeiling: reading.hoursCeiling === null ? goal.target.hoursCeiling : Math.round(reading.hoursCeiling),
+    // The owner's change in their own words stays on the goal beside what it had, so every
+    // reader of the goal's resources (and the route proposer) sees it, not only the two figures.
+    resources: [goal.target.resources, `Update: ${text}`].filter(Boolean).join(' ').slice(0, 2000),
   });
   if (!result.ok) fail(`not changed: ${result.reason}`);
   await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_TARGET_LIMITS_SET', summary: `The owner changed the limits mid-course: "${text.slice(0, 300)}"`, actorRef: 'planning-evaluation' });
@@ -152,7 +155,7 @@ async function read(): Promise<void> {
     const plan = reading && !('error' in reading) ? reading : null;
     const report = plan ? planningReportLines(planningReport(plan as never, goal.dueAt ?? null)) : [];
     const out = {
-      project: project.id, goal: goal.id, objective: goal.intent || goal.title, createdAt: goal.createdAt, readMs: Date.now() - started,
+      project: project.id, goal: goal.id, objective: goal.intent || goal.title, resources: goal.target?.resources ?? null, limits: goal.target ? { capitalCeilingCents: goal.target.capitalCeilingCents, hoursCeiling: goal.target.hoursCeiling } : null, createdAt: goal.createdAt, readMs: Date.now() - started,
       error: reading && 'error' in reading ? reading.error : null,
       report,
       plan: plan
