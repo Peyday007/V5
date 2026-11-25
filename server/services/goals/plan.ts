@@ -5497,6 +5497,41 @@ export async function recordGoalOutcome(goalId: string, now: Date = new Date()):
 export const PLAN_REFRESH_MS = 30 * 60_000;
 
 /**
+ * No live goal's plan goes longer than this without a read, whatever else
+ * would skip it (CAPABILITY:GOAL_PLAN.GOAL.PLAN_FRESH: a run within the last
+ * two hours, every goal). A goal arithmetic rules out (C-10) is not re-read on
+ * the half-hour clock alone, but it is not left to go stale either: production
+ * read 2 of 20 live goals fresh, the rest skipped indefinitely or starved behind
+ * the goals that always won the one scenario slot. Below two hours with room
+ * for a pass that waits on a busy slot.
+ */
+export const PLAN_STALE_MAX_MS = 90 * 60_000;
+
+/**
+ * The order a plan pass offers its goals the scenario slot: never read first,
+ * then the one whose last read is oldest, ties by id. Pure.
+ *
+ * The pass reads at most `maxReads` plans (one under database pressure) and
+ * stops reading at the first busy slot. Walked in row order, the same front
+ * goals took the slot every pass and the tail was never read ("every pass
+ * busy"). Stalest first, whichever goal has waited longest is the one served,
+ * so over consecutive passes every goal is read in turn.
+ */
+export function orderGoalsForPlanPass<T extends { id: string; since: number }>(goals: readonly T[]): T[] {
+  return [...goals].sort((a, b) => a.since - b.since || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * Whether a REFRESH that only the clock asked for is skipped because the goal
+ * is ruled out (NOT_SUPPORTED) and nothing it is composed from has changed.
+ * Never once the goal's plan has reached `PLAN_STALE_MAX_MS`. Pure.
+ */
+export function skipRuledOutRefresh(input: { now: number; since: number; ruledOut: boolean; inputsUnchanged: boolean }): boolean {
+  if (!input.ruledOut || !input.inputsUnchanged) return false;
+  return input.now - input.since < PLAN_STALE_MAX_MS;
+}
+
+/**
  * The last reading of each goal this process took, so the search can be topped
  * up between refreshes. Re-reading the plan is a scenario run; asking one more
  * question needs only the target, the best reach and the titles already held,
@@ -6300,8 +6335,30 @@ export async function advanceGoalPlans(
   let busy = false;
   let onEvidence = 0;
   let resumed = 0;
-  for (const row of goals) {
-    const { id, target_project_id: projectId, paused_at: pausedAt } = row;
+  // When each unpaused goal's plan was last read: its last stored reading, the
+  // last scenario run a stored reading references, or this process's own read.
+  // Two grouped reads for the pass, so the order costs no per-goal query.
+  const live = goals.filter((row) => !row.paused_at).map((row) => row.id);
+  const lastStored = new Map<string, number>();
+  if (live.length > 0) {
+    const marks = live.map(() => '?').join(', ');
+    const stamps = [
+      ...(await getDb().all<{ id: string; at: string | null }>(
+        `SELECT workstream_id AS id, MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id IN (${marks}) GROUP BY workstream_id`,
+        live,
+      )),
+      ...(await getDb().all<{ id: string; at: string | null }>(
+        `SELECT g.workstream_id AS id, MAX(r.started_at) AS at FROM scenario_runs r JOIN goal_plan_readings g ON g.scenario_model_id = r.model_id WHERE g.workstream_id IN (${marks}) GROUP BY g.workstream_id`,
+        live,
+      )),
+    ];
+    for (const one of stamps) if (one.at) lastStored.set(one.id, Math.max(lastStored.get(one.id) ?? 0, Date.parse(one.at)));
+  }
+  const sinceOf = (id: string): number => Math.max(lastStored.get(id) ?? 0, lastReadAt.get(id) ?? 0);
+  // Stalest first, so the one read a throttled pass makes, and the slot a busy pass waits for, go to the goal that has waited longest.
+  const ordered = orderGoalsForPlanPass(goals.map((row) => ({ ...row, since: sinceOf(row.id) })));
+  for (const row of ordered) {
+    const { id, target_project_id: projectId, paused_at: pausedAt, since } = row;
     // Before commercial execution starts the deadline is a full window away, never past (§119).
     const dueAt = effectiveDueAtOfRow(row, now);
     if (await recordGoalOutcome(id, now)) {
@@ -6315,18 +6372,6 @@ export async function advanceGoalPlans(
     // the planning and discovery spend, not only the queue's priority).
     if (pausedAt) continue;
     if (options.maxReads !== undefined && read >= options.maxReads) continue;
-    const last = await getDb().get<{ at: string | null }>(
-      `SELECT MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?`,
-      [id],
-    );
-    const lastRun = await getDb().get<{ at: string | null }>(
-      `SELECT MAX(r.started_at) AS at FROM scenario_runs r JOIN goal_plan_readings g ON g.scenario_model_id = r.model_id WHERE g.workstream_id = ?`,
-      [id],
-    );
-    const since = Math.max(
-      [last?.at, lastRun?.at].filter((one): one is string => !!one).reduce((max, at) => Math.max(max, Date.parse(at)), 0),
-      lastReadAt.get(id) ?? 0,
-    );
     const fingerprint = async (): Promise<string | null> => (projectId ? planInputsFingerprint(projectId, id) : null);
     const inputs = since && now.getTime() - since >= PLAN_EVIDENCE_FLOOR_MS && now.getTime() - since < PLAN_REFRESH_MS ? await fingerprint() : null;
     const repaired = repairedGoals.get(id);
@@ -6338,7 +6383,14 @@ export async function advanceGoalPlans(
         : (planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) }) ?? (floor !== undefined && !lastReadings.has(id) ? 'FLOOR' : null));
     // A goal arithmetic rules out (C-10) is not re-read on the clock alone: only a change to its terms or inputs can change that.
     const held = lastReadings.get(id);
-    if (due === 'REFRESH' && held?.acceptance.status === 'NOT_SUPPORTED' && projectId && (await fingerprint()) === lastInputs.get(id)) due = null;
+    // Never past PLAN_STALE_MAX_MS: a ruled-out goal is still read before its plan goes stale (GOAL.PLAN_FRESH).
+    if (
+      due === 'REFRESH' &&
+      held?.acceptance.status === 'NOT_SUPPORTED' &&
+      projectId &&
+      skipRuledOutRefresh({ now: now.getTime(), since, ruledOut: true, inputsUnchanged: (await fingerprint()) === lastInputs.get(id) })
+    )
+      due = null;
     if (!due) {
       // A protected research floor nothing serves: widen once from the reading held, whatever the top-up cadence says.
       if (floor !== undefined && held) {
