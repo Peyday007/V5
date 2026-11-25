@@ -30,6 +30,17 @@ import { BRAIN_PROJECT_SLUG } from '../../domain/binPurpose.ts';
 import { readMetric } from '../improvement/scoreboard.ts';
 import { LIVE_GOAL_SQL } from '../goals/live.ts';
 
+/**
+ * The register events a persisted read of a goal's plan leaves
+ * (CAPABILITY:GOAL_PLAN.GOAL.PLAN_FRESH, review F1): `GOAL_PLAN_READ` when the
+ * reading wrote a new row, `GOAL_PLAN_CONFIRMED` when it drew the stored
+ * conclusion again and wrote none (C-11). A read that models nothing (no due
+ * date, achieved, nothing to model) or a goal without an owner runs no
+ * scenario, so a scenario run alone cannot say the plan is current; the plan
+ * pass and the freshness probe both take the read from these.
+ */
+export const GOAL_PLAN_READ_EVENT_KINDS = ['GOAL_PLAN_READ', 'GOAL_PLAN_CONFIRMED'] as const;
+
 const HOUR = 3_600_000;
 const n = (value: number | string | null | undefined): number => Number(value ?? 0);
 
@@ -340,14 +351,17 @@ async function readGoalProbe(probe: Probe, from: string, to: string): Promise<Pr
       const twoHours = new Date(Date.parse(to) - 2 * HOUR).toISOString();
       const goals = await liveTargetGoals(to);
       let ok = 0;
+      const kinds = GOAL_PLAN_READ_EVENT_KINDS.map(() => '?').join(', ');
       for (const goal of goals) {
+        // A scenario run, or a persisted plan read that ran none (a refusal, a goal without an owner, an unchanged conclusion).
         const row = await db.get<{ n: number | string }>(
-          `SELECT COUNT(*) AS n FROM scenario_runs WHERE label = ? AND started_at >= ? AND started_at < ?`,
-          [`goal ${goal.id}`, twoHours, to],
+          `SELECT (SELECT COUNT(*) FROM scenario_runs WHERE label = ? AND started_at >= ? AND started_at < ?)
+                + (SELECT COUNT(*) FROM workstream_events WHERE workstream_id = ? AND kind IN (${kinds}) AND created_at >= ? AND created_at < ?) AS n`,
+          [`goal ${goal.id}`, twoHours, to, goal.id, ...GOAL_PLAN_READ_EVENT_KINDS, twoHours, to],
         );
         if (n(row?.n) > 0) ok += 1;
       }
-      return { ok, total: goals.length, detail: 'live targeted goals with a scenario run in the last two hours (now)' };
+      return { ok, total: goals.length, detail: 'live targeted goals whose plan was read (a scenario run or a persisted reading) in the last two hours (now)' };
     }
     case 'GOAL_SEARCH_WIDENS': {
       const short = (await latestProgress(to)).filter((p) => p.verdict !== 'RECOMMENDABLE');

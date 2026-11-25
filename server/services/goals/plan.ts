@@ -126,6 +126,7 @@ import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPa
 import { blockerResolutions, type Resolution } from './resolution.ts';
 import { effectiveDueAtOfRow } from '../../domain/executionWindow.ts';
 import { isLiveGoal } from './live.ts';
+import { GOAL_PLAN_READ_EVENT_KINDS } from '../selfmodel/capabilities.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -5345,6 +5346,30 @@ export function storableAcceptance(acceptance: PlanAcceptance): PlanAcceptance {
   return { ...acceptance, probability: null, accepted: null };
 }
 
+/**
+ * A persisted read that drew the stored conclusion again writes no reading row
+ * (C-11), but it was a read: it leaves one `GOAL_PLAN_CONFIRMED` register event
+ * so the plan pass after a restart and the PLAN_FRESH probe both see the plan
+ * as current (review F1). At most one per `PLAN_CONFIRM_MS` per goal, so an
+ * evidence-driven burst of identical reads does not flood the register.
+ */
+export const PLAN_CONFIRM_MS = 30 * 60_000;
+async function confirmReading(goal: Workstream, reading: PlanReading): Promise<void> {
+  const kinds = GOAL_PLAN_READ_EVENT_KINDS.map(() => '?').join(', ');
+  const recent = await getDb().get<{ at: string | null }>(
+    `SELECT MAX(created_at) AS at FROM workstream_events WHERE workstream_id = ? AND kind IN (${kinds})`,
+    [goal.id, ...GOAL_PLAN_READ_EVENT_KINDS],
+  );
+  if (recent?.at && Date.now() - Date.parse(recent.at) < PLAN_CONFIRM_MS) return;
+  await recordWorkstreamEvent({
+    workstreamId: goal.id,
+    kind: 'GOAL_PLAN_CONFIRMED',
+    summary: `Plan re-read; conclusion unchanged (${reading.verdict}).`,
+    detail: { verdict: reading.verdict, scenarioRunId: reading.scenarioRunId },
+    actorRef: 'BRAIN',
+  });
+}
+
 async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
   // A candidate is never stored as an accepted plan: the verdict follows the acceptance, and the
   // acceptance is stored whole, candidate and coverage included (`storableAcceptance`).
@@ -5355,7 +5380,10 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
   const digest = readingDigest(reading);
   const last = await latestReading(goal.id);
   // A stored reading released before the acceptance writer has none, and must not stand as the latest (GOAL-09).
-  if (last && last.digest === digest && forecastCarriesAcceptance(last.forecast)) return;
+  if (last && last.digest === digest && forecastCarriesAcceptance(last.forecast)) {
+    await confirmReading(goal, reading);
+    return;
+  }
   const forecast = {
     ...(chosen ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep } : {}),
     acceptance: reading.acceptance,
@@ -6351,6 +6379,11 @@ export async function advanceGoalPlans(
       ...(await getDb().all<{ id: string; at: string | null }>(
         `SELECT g.workstream_id AS id, MAX(r.started_at) AS at FROM scenario_runs r JOIN goal_plan_readings g ON g.scenario_model_id = r.model_id WHERE g.workstream_id IN (${marks}) GROUP BY g.workstream_id`,
         live,
+      )),
+      // A persisted read that wrote no row (`confirmReading`): the record the PLAN_FRESH probe reads too.
+      ...(await getDb().all<{ id: string; at: string | null }>(
+        `SELECT workstream_id AS id, MAX(created_at) AS at FROM workstream_events WHERE workstream_id IN (${marks}) AND kind IN (${GOAL_PLAN_READ_EVENT_KINDS.map(() => '?').join(', ')}) GROUP BY workstream_id`,
+        [...live, ...GOAL_PLAN_READ_EVENT_KINDS],
       )),
     ];
     for (const one of stamps) if (one.at) lastStored.set(one.id, Math.max(lastStored.get(one.id) ?? 0, Date.parse(one.at)));
