@@ -191,6 +191,20 @@ async function read(): Promise<void> {
         ORDER BY c.created_at`,
       [project.id],
     ).catch(() => []);
+    // The unjudged ideas, by goal tier and by what raised them (a dive, a need, a round, other).
+    const { goalFirstSql: tierSql } = await import('../server/services/goals/goalWork.ts');
+    const unjudged = await getDb().all<{ tier: number; kind: string; n: number; oldest: string }>(
+      `SELECT ${tierSql('c')} AS tier,
+              CASE WHEN c.id IN (SELECT op.candidate_id FROM cash_opportunities op WHERE op.candidate_id IS NOT NULL) THEN 'dive'
+                   WHEN c.id IN (SELECT nd.candidate_id FROM cash_needs nd WHERE nd.candidate_id IS NOT NULL) THEN 'need'
+                   WHEN c.id IN (SELECT rd.candidate_id FROM cash_discovery_rounds rd WHERE rd.candidate_id IS NOT NULL) THEN 'round'
+                   ELSE 'other' END AS kind,
+              COUNT(*) AS n, MIN(c.created_at) AS oldest
+         FROM russell_candidates c
+        WHERE c.project_id = ? AND c.priority IS NULL AND c.state <> 'MERGED'
+        GROUP BY 1, 2 ORDER BY 1, 2`,
+      [project.id],
+    ).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error) }]);
     const plan = reading && !('error' in reading) ? reading : null;
     const report = plan ? planningReportLines(planningReport(plan as never, goal.dueAt ?? null)) : [];
     const out = {
@@ -210,6 +224,7 @@ async function read(): Promise<void> {
       ideas,
       missions,
       dives,
+      unjudged,
       goalEvents: goalEvents.map((e) => ({ at: e.created_at, kind: e.kind, summary: e.summary.slice(0, 300) })),
       cashEvents,
     };
@@ -230,6 +245,30 @@ async function read(): Promise<void> {
         (SELECT COUNT(*) FROM russell_candidates c WHERE c.state = 'QUEUED' AND c.judgment LIKE '%"missionSpec"%' AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id) AND ${goalIdeaSql('c')}) AS compiled_never_launched_goal`,
   ).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error) }));
   console.log(`EVAL_QUEUE ${JSON.stringify(queue)}`);
+  // Launch and judging throughput, Brain-wide, per ten minutes over the last three hours.
+  const since = new Date(Date.now() - 3 * 3_600_000).toISOString();
+  const launched = await getDb().all<{ at: string; n: number }>(
+    `SELECT SUBSTR(created_at, 1, 15) AS at, COUNT(*) AS n FROM russell_missions WHERE created_at >= ? GROUP BY 1 ORDER BY 1`,
+    [since],
+  ).catch(() => []);
+  console.log(`EVAL_LAUNCHES ${JSON.stringify(launched)}`);
+  // Ideas judged, approximated by a judged idea's last update, and the live goal tier's share of them.
+  const judged = await getDb().all<{ at: string; n: number; goal: number }>(
+    `SELECT SUBSTR(c.updated_at, 1, 15) AS at, COUNT(*) AS n,
+            SUM(CASE WHEN ${goalIdeaSql('c')} THEN 1 ELSE 0 END) AS goal
+       FROM russell_candidates c WHERE c.priority IS NOT NULL AND c.updated_at >= ? GROUP BY 1 ORDER BY 1`,
+    [since],
+  ).catch(() => []);
+  console.log(`EVAL_JUDGED ${JSON.stringify(judged)}`);
+  // Who holds the live goal tier's unjudged backlog: per project, count and oldest.
+  const holders = await getDb().all<{ project_id: string; n: number; oldest: string }>(
+    `SELECT c.project_id, COUNT(*) AS n, MIN(c.created_at) AS oldest FROM russell_candidates c
+      WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL AND ${goalIdeaSql('c')}
+      GROUP BY c.project_id ORDER BY n DESC LIMIT 30`,
+  ).catch(() => []);
+  console.log(`EVAL_GOAL_BACKLOG ${JSON.stringify(holders)}`);
+  const cycle = await getDb().get<Record<string, unknown>>(`SELECT * FROM russell_cycle LIMIT 1`).catch(() => null);
+  console.log(`EVAL_CYCLE ${JSON.stringify(cycle)}`);
   console.log(`EVAL_READ ${run} ${projects.length} case(s)`);
 }
 
