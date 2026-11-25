@@ -27,7 +27,7 @@
  * because an escalation whose answer does nothing is the same defect one level
  * up, and it is the one that produced this module.
  */
-import { currentFragments, getOrchestration } from '../../repos/research.ts';
+import { currentFragments, getOrchestration, laneShortFragments } from '../../repos/research.ts';
 import {
   askHuman,
   getHumanRequest,
@@ -162,6 +162,9 @@ export interface PacketShape {
    * for ever. That is the failure this module exists to fix, wearing the
    * module's own clothes for the second time, one status further along than
    * the first.
+   *
+   * Plus fragments BLOCKED only on an empty lane that hold accepted, sourced
+   * claims (`shapeOf`), which `advancePacket` files under RECORD_GAPS.
    */
   accepted: number;
   /**
@@ -190,13 +193,23 @@ export interface PacketShape {
  * under a person's name.
  */
 export async function packetShape(orchestrationId: string): Promise<PacketShape> {
-  return shapeOf(await currentFragments(orchestrationId));
+  return shapeOf(await currentFragments(orchestrationId), await laneShortFragments(orchestrationId));
 }
 
-function shapeOf(fragments: readonly ResearchFragment[]): PacketShape {
+/**
+ * `laneShort` is how many fragments answered part of their question
+ * (`LANE_SHORT_FRAGMENT_SQL`): BLOCKED on an empty lane, with accepted, sourced
+ * claims on the others. They count toward `accepted` because RECORD_GAPS can
+ * file them — `advancePacket` synthesizes from them once the empty lane is
+ * recorded as an unresolved gap — so offering it no longer parks the packet
+ * again. Without them such a packet offered only STOP, its mission FAILED, and
+ * a price question's accepted claims were never harvested (production
+ * 2026-11-25: 57 evaluation packets).
+ */
+function shapeOf(fragments: readonly ResearchFragment[], laneShort = 0): PacketShape {
   return {
     awaitingApproval: fragments.filter((fragment) => fragment.status === 'PLANNED').length,
-    accepted: fragments.filter((fragment) => fragment.status === 'ACCEPTED').length,
+    accepted: fragments.filter((fragment) => fragment.status === 'ACCEPTED').length + laneShort,
     researched: fragments.filter((fragment) => RESEARCHED_STATUSES.has(fragment.status)).length,
   };
 }
@@ -379,11 +392,23 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      * grant's concurrency stayed full of work waiting on a person while
      * eligible research queued behind it.
      */
+    /*
+     * And a park already decided RECORD_GAPS goes after every undecided one.
+     *
+     * Production 2026-11-25 17:15Z: 59 RUNNING missions whose packets were
+     * answered RECORD_GAPS on 11-14..11-24 and re-parked (an audit item that
+     * recorded nothing) held the front of this window. Each pass re-advanced
+     * them (`ALREADY_FILED_WITH_GAPS`), touched no mission row, and so read
+     * the same rows first next tick; with the window at 50, the 254 undecided
+     * parks behind them — 82 of them evaluation goals' — were never reached:
+     * no mission failed, parked or was filed in six hours. A decided park is
+     * still re-advanced here whenever the window has room.
+     */
     `SELECT m.id FROM russell_missions m
        JOIN research_orchestrations o ON o.id = m.orchestration_id
       WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN')
         AND o.status = 'NEEDS_HUMAN'
-      ORDER BY CASE WHEN m.state = 'NEEDS_HUMAN' THEN 1 ELSE 0 END, m.updated_at, m.rowid
+      ORDER BY CASE WHEN m.state = 'NEEDS_HUMAN' THEN 2 WHEN o.unresolved_gap_policy = 'RECORD_GAPS' THEN 1 ELSE 0 END, m.updated_at, m.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );
@@ -437,7 +462,7 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
     const awaiting = fragments
       .filter((fragment) => fragment.status === 'PLANNED')
       .sort((a, b) => a.fragmentKey.localeCompare(b.fragmentKey));
-    const shape = shapeOf(fragments);
+    const shape = shapeOf(fragments, await laneShortFragments(orchestration.id));
     /*
      * More than one thing a person could decide — asked of the offer itself,
      * not of a proxy for it.

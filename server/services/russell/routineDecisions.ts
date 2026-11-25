@@ -35,7 +35,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
-import { getOrchestration } from '../../repos/research.ts';
+import { getOrchestration, LANE_SHORT_FRAGMENT_SQL } from '../../repos/research.ts';
 import { listGoals } from '../../repos/russellAuthority.ts';
 import { answerHumanRequest, getHumanRequest, getMission } from '../../repos/russellMissions.ts';
 import type { RussellHumanRequest, ResearchOrchestration } from '../../domain/types.ts';
@@ -234,7 +234,7 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
     `SELECT o.id, o.project_id FROM research_orchestrations o
       WHERE o.status = 'NEEDS_HUMAN' AND o.updated_at <= ?
         AND (o.unresolved_gap_policy IS NULL OR o.unresolved_gap_policy <> 'RECORD_GAPS')
-        AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED')
+        AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND (f.status = 'ACCEPTED' OR ${LANE_SHORT_FRAGMENT_SQL}))
         AND NOT EXISTS (SELECT 1 FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id
                          WHERE m.orchestration_id = o.id AND r.state IN ('OPEN', 'ANSWERED'))
         AND EXISTS (SELECT 1 FROM russell_goals g

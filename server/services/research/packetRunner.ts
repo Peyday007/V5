@@ -67,6 +67,8 @@ import type { BuildRepairPlanInput } from './repair.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
   acceptedClaims,
+  citableClaims,
+  laneShortFragments,
   FragmentBudgetRefused,
   listClaims,
   currentFragments,
@@ -2336,7 +2338,20 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
 
   // ---- Every fragment is terminal. ---------------------------------------
   const accepted = fragments.filter((fragment) => fragment.status === 'ACCEPTED');
-  if (accepted.length === 0) {
+  /*
+   * A packet answered RECORD_GAPS files what its gate accepted. That is an
+   * ACCEPTED fragment, or a fragment BLOCKED only on an empty lane whose other
+   * lanes hold accepted, sourced claims (`LANE_SHORT_FRAGMENT_SQL`): the
+   * empty lane was closed as an unresolved gap above (`recordUnresolvedGaps`),
+   * and the claims beside it are evidence `citableClaims` already lets a report
+   * cite. Without this, the authorization parked the packet again here on
+   * every pass, and the accepted claims never reached an answer or a card.
+   */
+  const filesLaneShort =
+    accepted.length === 0 &&
+    orchestration.unresolvedGapPolicy === 'RECORD_GAPS' &&
+    (await laneShortFragments(orchestration.id)) > 0;
+  if (accepted.length === 0 && !filesLaneShort) {
     // A packet where nothing cleared the gate is not a failure to retry; it is
     // a result a person needs to see. Repair is planned, not automatic — §15.
     //
@@ -2403,7 +2418,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     if (alreadyCreated(items, synthItem) && !(await mayReplace(items, synthItem, 'RESEARCH_SYNTHESIZE'))) {
       return await faultedOut({ orchestration, what: 'synthesis', items, predicate: synthItem });
     }
-    const claims = await acceptedClaims(orchestration.id);
+    const claims = filesLaneShort ? await citableClaims(orchestration.id) : await acceptedClaims(orchestration.id);
     if (claims.length === 0) {
       await parkOrchestration(orchestration.id, 'Fragments were accepted but no claim was, so the packet has no evidence.', { stampCompleted: true });
       return {

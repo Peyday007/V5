@@ -342,6 +342,60 @@ async function stall(): Promise<void> {
   await q('rejections', `SELECT SUBSTR(COALESCE(c.rejection_reason, ''), 1, 160) AS why, COUNT(*) AS n FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id JOIN projects p ON p.id = o.project_id WHERE p.name LIKE 'Planning evaluation %' AND c.accepted = 0 GROUP BY 1 ORDER BY n DESC LIMIT 10`);
   // What the lane did per hour today, eval vs not: fragments finished and leased-then-expired.
   await q('lane_hourly', `SELECT SUBSTR(w.completed_at, 1, 13) AS hour, CASE WHEN p.name LIKE 'Planning evaluation %' THEN 'eval' ELSE 'other' END AS cls, w.work_type, w.state, COUNT(*) AS n FROM work_items w JOIN projects p ON p.id = w.project_id WHERE w.completed_at >= ? AND w.work_type IN ${types} GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`, [new Date(Date.now() - 10 * 3_600_000).toISOString()]);
+  // Parked packets (NEEDS_HUMAN): why, whether a fragment or only claims were accepted, gap policy, grant, cards.
+  const evp = `o.project_id IN (SELECT id FROM projects WHERE name LIKE ?)`;
+  await q('parks', `SELECT SUBSTR(COALESCE(o.failure_reason, ''), 1, 200) AS why, o.current_pass AS pass, COALESCE(o.unresolved_gap_policy, '-') AS gap,
+      CASE WHEN EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED') THEN 1 ELSE 0 END AS acc_frag,
+      CASE WHEN EXISTS (SELECT 1 FROM research_claims c WHERE c.orchestration_id = o.id AND c.accepted = 1) THEN 1 ELSE 0 END AS acc_claim,
+      CASE WHEN EXISTS (SELECT 1 FROM russell_goals g WHERE g.project_id = o.project_id AND g.purpose = 'STANDING' AND g.state = 'ACTIVE') THEN 1 ELSE 0 END AS grant_live,
+      CASE WHEN EXISTS (SELECT 1 FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id WHERE m.orchestration_id = o.id AND r.state IN ('OPEN', 'ANSWERED')) THEN 1 ELSE 0 END AS card,
+      (SELECT m.state FROM russell_missions m WHERE m.orchestration_id = o.id ORDER BY m.created_at DESC LIMIT 1) AS mission,
+      COUNT(*) AS n, MIN(o.updated_at) AS oldest, MAX(o.updated_at) AS newest
+     FROM research_orchestrations o WHERE o.status = 'NEEDS_HUMAN' AND ${evp} GROUP BY 1, 2, 3, 4, 5, 6, 7, 8 ORDER BY n DESC LIMIT 25`, [like]);
+  // Blocked fragments: the lanes declared and the lanes their accepted / rejected claims named.
+  await q('blocked_lanes', `SELECT f.block_cause AS cause, SUBSTR(COALESCE(f.required_evidence, ''), 1, 160) AS required, f.evidence_lane AS lane,
+      (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id AND c.accepted = 1) AS acc,
+      (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id) AS claims,
+      (SELECT MIN(c.evidence_lane) || ' .. ' || MAX(c.evidence_lane) FROM research_claims c WHERE c.fragment_id = f.id) AS claim_lanes
+     FROM research_fragments f WHERE f.status = 'BLOCKED' AND f.project_id IN (SELECT id FROM projects WHERE name LIKE ?) ORDER BY f.updated_at DESC LIMIT 25`, [like]);
+  await q('blocked_summary', `SELECT f.block_cause AS cause,
+      CASE WHEN EXISTS (SELECT 1 FROM research_claims c WHERE c.fragment_id = f.id AND c.accepted = 1) THEN 1 ELSE 0 END AS has_acc,
+      CASE WHEN EXISTS (SELECT 1 FROM research_claims c WHERE c.fragment_id = f.id) THEN 1 ELSE 0 END AS has_claims,
+      (SELECT o.status FROM research_orchestrations o WHERE o.id = f.orchestration_id) AS packet,
+      COUNT(*) AS n FROM research_fragments f WHERE f.status = 'BLOCKED' AND f.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1, 2, 3, 4 ORDER BY n DESC`, [like]);
+  // Packets finished with gaps: their mission, the idea, the opening it dives, and the card facts it filed.
+  await q('filed', `SELECT o.id, o.status, o.completed_at, o.document_id IS NOT NULL AS doc, m.state AS mission, m.writeback_at, m.candidate_id,
+      (SELECT op.id FROM cash_opportunities op WHERE op.candidate_id = m.candidate_id LIMIT 1) AS dive_of,
+      (SELECT op.id FROM cash_opportunities op WHERE op.validation_orchestration_id = o.id LIMIT 1) AS validates,
+      (SELECT nd.id FROM cash_needs nd WHERE nd.candidate_id = m.candidate_id LIMIT 1) AS need,
+      (SELECT COUNT(*) FROM cash_card_facts cf WHERE cf.claim_id IN (SELECT c.id FROM research_claims c WHERE c.orchestration_id = o.id)) AS facts_from_claims,
+      (SELECT COUNT(*) FROM research_claims c WHERE c.orchestration_id = o.id AND c.accepted = 1) AS acc
+     FROM research_orchestrations o LEFT JOIN russell_missions m ON m.orchestration_id = o.id
+    WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp} ORDER BY o.completed_at DESC LIMIT 20`, [like]);
+  await q('evidence_facts', `SELECT cf.kind, cf.field, COUNT(*) AS n FROM cash_card_facts cf JOIN cash_opportunities op ON op.id = cf.opportunity_id WHERE op.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [like]);
+  await q('needs', `SELECT nd.state, COUNT(*) AS n FROM cash_needs nd WHERE nd.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1`, [like]);
+  // What `answerUnaskedParks` selects Brain-wide (its own WHERE, without the grace), in its order, and what it decided lately.
+  const unasked = `o.status = 'NEEDS_HUMAN' AND (o.unresolved_gap_policy IS NULL OR o.unresolved_gap_policy <> 'RECORD_GAPS')
+        AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED')
+        AND NOT EXISTS (SELECT 1 FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id WHERE m.orchestration_id = o.id AND r.state IN ('OPEN', 'ANSWERED'))
+        AND EXISTS (SELECT 1 FROM russell_goals g WHERE g.project_id = o.project_id AND g.purpose = 'STANDING' AND g.state = 'ACTIVE' AND (g.expires_at IS NULL OR g.expires_at > ?))`;
+  await q('unasked_all', `SELECT CASE WHEN o.project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval' ELSE 'other' END AS cls, COUNT(*) AS n, MIN(o.updated_at) AS oldest, MAX(o.updated_at) AS newest FROM research_orchestrations o WHERE ${unasked} GROUP BY 1`, [now]);
+  await q('unasked_head', `SELECT o.id, o.updated_at, o.current_pass, o.verdict, SUBSTR(COALESCE(o.failure_reason, ''), 1, 140) AS why FROM research_orchestrations o WHERE ${unasked} ORDER BY o.updated_at ASC, o.id ASC LIMIT 8`, [now]);
+  await q('routine_decisions_24h', `SELECT SUBSTR(e.created_at, 1, 13) AS hour, COUNT(*) AS n FROM project_events e WHERE e.event_type = 'RUSSELL_ROUTINE_DECISION' AND e.created_at >= ? GROUP BY 1 ORDER BY 1`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+  await q('gap_authorized_24h', `SELECT COUNT(*) AS n, MAX(o.unresolved_gap_authorized_at) AS last FROM research_orchestrations o WHERE o.unresolved_gap_authorized_at >= ?`, [new Date(Date.now() - 24 * 3_600_000).toISOString()]);
+  await q('cycle', `SELECT generation, state, last_ran_at, SUBSTR(COALESCE(last_error, ''), 1, 600) AS last_error FROM russell_cycle LIMIT 1`);
+  await q('filed_needs', `SELECT nd.id, nd.state, nd.request_key, nd.opportunity_id, nd.updated_at FROM cash_needs nd WHERE nd.candidate_id IN (SELECT m.candidate_id FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp})`, [like]);
+  // What `parkStoppedMissions` selects (its WHERE and ORDER), and the head of its window.
+  await q('park_window', `SELECT m.state, COALESCE(o.unresolved_gap_policy, '-') AS gap, CASE WHEN o.project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval' ELSE 'other' END AS cls,
+      CASE WHEN EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED') THEN 1 ELSE 0 END AS acc_frag,
+      COUNT(*) AS n, MIN(m.updated_at) AS oldest, MAX(m.updated_at) AS newest
+     FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id
+    WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN') AND o.status = 'NEEDS_HUMAN' GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`);
+  await q('park_head', `SELECT m.id, m.state, m.updated_at, COALESCE(o.unresolved_gap_policy, '-') AS gap, o.current_pass, SUBSTR(COALESCE(o.failure_reason, ''), 1, 120) AS why
+     FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id
+    WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN') AND o.status = 'NEEDS_HUMAN'
+    ORDER BY CASE WHEN m.state = 'NEEDS_HUMAN' THEN 1 ELSE 0 END, m.updated_at LIMIT 6`);
+  await q('park_events_6h', `SELECT e.event_type, COUNT(*) AS n, MAX(e.created_at) AS last FROM project_events e WHERE e.created_at >= ? AND e.event_type IN ('RUSSELL_MISSION_FAILED', 'RUSSELL_MISSION_PARKED', 'RUSSELL_ROUTINE_DECISION', 'RUSSELL_HUMAN_REQUESTED') GROUP BY 1`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]);
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 

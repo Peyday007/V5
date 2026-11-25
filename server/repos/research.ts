@@ -1541,6 +1541,37 @@ export async function citableClaims(orchestrationId: string): Promise<ResearchCl
 }
 
 /**
+ * A fragment that answered part of its question: BLOCKED only because a
+ * required evidence lane is empty (`REQUIRED_LANE_EMPTY`), holding at least one
+ * claim the gate accepted with a source. SQL over a fragment aliased `f`.
+ *
+ * Production 2026-11-25 17:10Z (`planningEval stall --run all`): 103 evaluation
+ * fragments ended BLOCKED this way, each with 1-14 accepted, sourced claims on
+ * its other lanes (price, buyer volume, delivery) and its `payer` or
+ * `demand_signal` lane empty; 57 packets made only of such fragments sat at
+ * NEEDS_HUMAN with "no fragment cleared its evidence gate", their missions
+ * RUNNING, and no answer or card fact ever read their evidence. The empty lane
+ * is a gap in the answer, not a defect in the claims beside it: they passed
+ * every per-claim condition. So a packet holding one may file what it holds
+ * with the empty lane named as unresolved (RECORD_GAPS) — the lane is not
+ * filled, the fragment stays BLOCKED, and its requirement stays unanswered.
+ * Every other block cause (too few independent sources, mostly rejected,
+ * verification judged it insufficient, nothing survived) is a judgement about
+ * the claims themselves and is not this.
+ */
+export const LANE_SHORT_FRAGMENT_SQL = `(f.status = 'BLOCKED' AND f.block_cause = 'REQUIRED_LANE_EMPTY'
+  AND EXISTS (SELECT 1 FROM research_claims lc WHERE lc.fragment_id = f.id AND lc.accepted = 1 AND lc.source_url IS NOT NULL))`;
+
+/** How many of a packet's fragments (any attempt) answered part of their question (`LANE_SHORT_FRAGMENT_SQL`). */
+export async function laneShortFragments(orchestrationId: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM research_fragments f WHERE f.orchestration_id = ? AND ${LANE_SHORT_FRAGMENT_SQL}`,
+    [orchestrationId],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
  * The project's own gated evidence, in the shape the coverage classifier reads.
  *
  * `citableClaims`' predicate, project-wide, narrowed to what the shared pool
