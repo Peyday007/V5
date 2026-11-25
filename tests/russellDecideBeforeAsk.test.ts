@@ -54,7 +54,7 @@ import { capture } from '../server/services/russell/judgment.ts';
 import { launch } from '../server/services/russell/launch.ts';
 import { JUDGE_ROUND_STALL_PREFIX, parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
 import { JUDGE_ROUND_EVENT, assessJudgeRound } from '../server/services/research/judgeRound.ts';
-import { answerUnaskedParks, fileWithGapsUnderStandingGrant, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
+import { answerUnaskedParks, fileWithGapsUnderStandingGrant, JUDGE_ROUND_WAIT_MS, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
 
 const ACCEPTS_A_REPORT = 'Deciding whether this project accepts a report with unresolved questions in it';
 const SPENT = 'The evidence bar was not met and the repair ladder is spent.';
@@ -413,5 +413,43 @@ describe('parkStoppedMissions decides before it asks', () => {
     expect(unasked).not.toContain('authorizeUnresolvedGaps');
     expect(source.match(/authorizeUnresolvedGaps\(/g)).toHaveLength(1);
     expect(typeof fileWithGapsUnderStandingGrant).toBe('function');
+  });
+});
+
+describe('a judge park whose corrected round cannot start', () => {
+  /*
+   * Production 2026-11-25 18:40Z: 71 judge parks read RESUME while 16 resumed
+   * rounds (oldest 11-21) held all 12 live slots; every pass declined them as
+   * "about to be resumed", and nothing had resumed since 10:02Z.
+   */
+  it('is filed under the standing grant once it has waited past the bound with no slot, and waits while a round could start', async () => {
+    await grant();
+    judge.resume = true;
+    // Every slot live: one resumed round holds the only slot.
+    judge.cap = 1;
+    const live = await stoppedMission(['ACCEPTED']);
+    await updateOrchestration(live.orchestrationId, { status: 'RESEARCHING' });
+    await recordEvent({
+      projectId, entityType: 'RESEARCH_ORCHESTRATION', entityId: live.orchestrationId,
+      eventType: JUDGE_ROUND_EVENT, payload: { orchestrationId: live.orchestrationId, round: 1 },
+    });
+    const parkedAt = (ms: number) => new Date(Date.now() - ms).toISOString();
+    const stale = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [parkedAt(JUDGE_ROUND_WAIT_MS + 60_000), stale.orchestrationId]);
+    const recent = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [parkedAt(ROUTINE_DECISION_GRACE_MS + 60_000), recent.orchestrationId]);
+
+    const decided = await answerUnaskedParks({ ignoreBootGrace: true });
+    expect(decided.filter((d) => d.decided).map((d) => d.orchestrationId)).toEqual([stale.orchestrationId]);
+    expect((await getOrchestration(stale.orchestrationId))!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect((await getOrchestration(recent.orchestrationId))!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
+    const [decision] = await decisionsFor(stale.missionId);
+    expect(String(decision!['reason'])).toMatch(/no corrected round could start/);
+
+    // A slot frees: the waiting park is left to the resume pass, however long it waited.
+    judge.cap = 6;
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [parkedAt(JUDGE_ROUND_WAIT_MS + 60_000), recent.orchestrationId]);
+    expect((await answerUnaskedParks({ ignoreBootGrace: true })).filter((d) => d.decided)).toEqual([]);
+    expect((await getOrchestration(recent.orchestrationId))!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
   });
 });
