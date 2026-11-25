@@ -883,18 +883,99 @@ const PERMANENT_REFUSALS = new Set<string>([
 /** Packet → the round (its `auditRoundStartedAt`, null before any) it was settled in. */
 const settled = new Map<string, string | null>();
 
-/** Whether Brain already recovered this packet by itself in the round that began at `roundFrom`. */
-async function recoveredInRound(orchestrationId: string, roundFrom: string | null): Promise<boolean> {
-  const row = await getDb().get<{ id: string }>(
-    `SELECT id FROM work_items
+/**
+ * How many automatic recoveries a spent synthesis may have in one round when
+ * each one failed on a named surface (production 2026-11-17 → 11-25,
+ * `orc_c40cc84d8e944531a8d9`, the owner's $10K goal: its synthesis spent its
+ * attempts on the free lane's one GPU model, the single reissue went to the
+ * same model and spent its attempts too, and the packet sat NEEDS_HUMAN for
+ * eight days while later bins inherited it at 0/5). A retry on the surface
+ * that just failed is not a repair (§15), so every reissue after the first is
+ * taken only by a surface that has not failed this packet's synthesis in this
+ * round (`surfacesThatFailedSynthesis`, honoured by the free lane's admission),
+ * and the count bounds it: three reissues in a round is three different
+ * surfaces, and a fourth failure is a person's.
+ */
+export const MAX_SPENT_RECOVERIES_PER_ROUND = 3;
+
+/** The free lane's own failure sentence, `free lane (<model>) produced no answer …`, as it names the model. */
+const FREE_LANE_FAILURE = /^free lane \(([^)]+)\) produced no answer/;
+
+/** The surface a failed item's own summary names, or null when it names none. Pure. */
+export function surfaceNamedBy(resultSummary: string | null | undefined): string | null {
+  const match = FREE_LANE_FAILURE.exec((resultSummary ?? '').trim());
+  return match?.[1]?.trim() || null;
+}
+
+/**
+ * The free-lane models whose answers for this packet's synthesis Brain refused
+ * until they spent the item's attempts, in the round that began at `roundFrom`.
+ * Read from the failed items' own summaries, so the avoidance survives a
+ * restart and needs no column: an item carries no payload (`noPayload`).
+ */
+export async function surfacesThatFailedSynthesis(orchestrationId: string, roundFrom: string | null): Promise<Set<string>> {
+  const rows = await getDb().all<{ result_summary: string | null }>(
+    `SELECT result_summary FROM work_items
+      WHERE orchestration_id = ? AND work_type = 'RESEARCH_SYNTHESIZE'
+        AND state IN ('FAILED','CANCELLED')${roundFrom ? ' AND created_at > ?' : ''}`,
+    [orchestrationId, ...(roundFrom ? [roundFrom] : [])],
+  );
+  const out = new Set<string>();
+  for (const row of rows) {
+    const surface = surfaceNamedBy(row.result_summary);
+    if (surface) out.add(surface);
+  }
+  return out;
+}
+
+/**
+ * The free-lane models that must leave this item to another surface: for an
+ * automatic reissue of a spent synthesis, every model that already failed this
+ * packet's synthesis in the current round; for anything else, none. The free
+ * lane's admission asks it.
+ */
+export async function synthesisSurfacesToAvoid(
+  item: { work_type: string; created_by_id: string | null; orchestration_id: string | null },
+): Promise<Set<string>> {
+  if (item.work_type !== 'RESEARCH_SYNTHESIZE' || item.created_by_id !== SPENT_RECOVERY_ACTOR || !item.orchestration_id) return new Set();
+  const roundFrom = await auditRoundStartedAt(item.orchestration_id);
+  return surfacesThatFailedSynthesis(item.orchestration_id, roundFrom);
+}
+
+/** The automatic recoveries Brain made of this packet in the round that began at `roundFrom`, by path. */
+async function recoveriesInRound(orchestrationId: string, roundFrom: string | null): Promise<{ filing: number; spent: number }> {
+  const rows = await getDb().all<{ created_by_id: string; n: number | string }>(
+    `SELECT created_by_id, COUNT(*) AS n FROM work_items
       WHERE orchestration_id = ?
         AND work_type = 'RESEARCH_SYNTHESIZE'
         AND created_by_type = 'SYSTEM'
         AND created_by_id IN (?, ?)${roundFrom ? '\n        AND created_at > ?' : ''}
-      LIMIT 1`,
+      GROUP BY created_by_id`,
     [orchestrationId, FILING_RECOVERY_ACTOR, SPENT_RECOVERY_ACTOR, ...(roundFrom ? [roundFrom] : [])],
   );
-  return !!row;
+  const count = (actor: string) => Number(rows.find((row) => row.created_by_id === actor)?.n ?? 0);
+  return { filing: count(FILING_RECOVERY_ACTOR), spent: count(SPENT_RECOVERY_ACTOR) };
+}
+
+/**
+ * Whether the round's recoveries are spent. One per round, as before — except
+ * that a spent synthesis whose every automatic reissue failed on a named
+ * surface is reissued again to a surface that has not failed it, up to
+ * `MAX_SPENT_RECOVERIES_PER_ROUND`. A filing recovery, or a failure that names
+ * no surface, still leaves the packet for a person after one.
+ */
+async function recoveryBoundReached(
+  orchestrationId: string,
+  roundFrom: string | null,
+  newest: { result_summary: string | null; created_by_id: string | null },
+  filing: boolean,
+): Promise<boolean> {
+  const made = await recoveriesInRound(orchestrationId, roundFrom);
+  if (made.filing + made.spent === 0) return false;
+  if (filing || made.filing > 0) return true;
+  if (made.spent >= MAX_SPENT_RECOVERIES_PER_ROUND) return true;
+  // The newest failure is a reissue this sweep made, and it names the surface that spent it.
+  return newest.created_by_id !== SPENT_RECOVERY_ACTOR || surfaceNamedBy(newest.result_summary) === null;
 }
 
 /** Whether this bin was already regranted for `reason` in the round that began at `roundFrom`. */
@@ -948,8 +1029,8 @@ export async function recoverFilingFailures(
   // The newest stopped synthesis ran out of attempts (F7): see SPENT_RECOVERY_ACTOR.
   const attemptsSpent = `((w.state = 'FAILED' AND w.failure_category IN (${SPENT_SYNTHESIS_CATEGORIES.map(() => '?').join(', ')}))
           OR (w.state = 'CANCELLED' AND w.attempt_count >= w.max_attempts))`;
-  const rows = await db.all<{ id: string; orchestration_id: string; filing: number }>(
-    `SELECT w.id AS id, w.orchestration_id AS orchestration_id,
+  const rows = await db.all<{ id: string; orchestration_id: string; filing: number; result_summary: string | null; created_by_id: string | null }>(
+    `SELECT w.id AS id, w.orchestration_id AS orchestration_id, w.result_summary AS result_summary, w.created_by_id AS created_by_id,
             CASE WHEN ${filingRefused} THEN 1 ELSE 0 END AS filing
        FROM work_items w
        JOIN research_orchestrations o ON o.id = w.orchestration_id
@@ -992,8 +1073,8 @@ export async function recoverFilingFailures(
       settled.delete(row.orchestration_id);
     }
     if (out.length >= Math.max(1, limit)) break;
-    if (await recoveredInRound(row.orchestration_id, roundFrom)) {
-      // Already recovered once this round and stopped again: a person's, until a new round.
+    if (await recoveryBoundReached(row.orchestration_id, roundFrom, row, Number(row.filing) === 1)) {
+      // Recovered as often as this round allows and stopped again: a person's, until a new round.
       settled.set(row.orchestration_id, roundFrom);
       continue;
     }
@@ -1104,8 +1185,9 @@ export async function recoverFilingFailures(
                 'filing path has since been repaired, so the synthesis is reissued over the evidence ' +
                 'that survived.'
               : 'This synthesis ran out of attempts (the queue spent them; the evidence was not judged ' +
-                'wanting), and syntheses have succeeded since, so it is reissued once over the accepted ' +
-                'claims. A replacement that fails too is left for a person.',
+                'wanting), so it is reissued over the accepted claims to a surface that has not failed it ' +
+                `this round, at most ${MAX_SPENT_RECOVERIES_PER_ROUND} times; a failure that names no surface, ` +
+                'or one past that bound, is left for a person.',
           })
         : assessed.outcome;
     // A card withdrawn for a recovery that did not happen is asked again.

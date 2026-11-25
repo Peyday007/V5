@@ -56,7 +56,10 @@ import {
   recoverFilingFailures,
   SPENT_RECOVERY_ACTOR,
   SPENT_REGRANT_REASON,
+  MAX_SPENT_RECOVERIES_PER_ROUND,
   resetFilingRecoveryThrottle,
+  surfaceNamedBy,
+  synthesisSurfacesToAvoid,
 } from '../server/services/research/synthesisRecovery.ts';
 
 let projectId = '';
@@ -590,6 +593,66 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
     );
     await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
     expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('reroutes a synthesis spent on one surface to another, bounded per round, never back to a surface that failed it', async () => {
+    // Production, orc_c40cc84d8e944531a8d9: the synthesis spent its attempts on the
+    // lane's one GPU model, the single reissue went to the same model, and the
+    // packet sat NEEDS_HUMAN for eight days.
+    const spentOn = (model: string) =>
+      `free lane (${model}) produced no answer Brain accepted for this RESEARCH_SYNTHESIZE`;
+    const spend = async (id: string, model: string) => {
+      await getDb().run(
+        `UPDATE work_items SET state = 'FAILED', failure_category = 'ATTEMPTS_EXHAUSTED',
+                attempt_count = max_attempts, result_summary = ? WHERE id = ?`,
+        [spentOn(model), id],
+      );
+    };
+    const live = async (orchestrationId: string) =>
+      (await listWorkItems(projectId, { limit: 50 })).find(
+        (item) => item.orchestrationId === orchestrationId && item.state === 'QUEUED',
+      );
+    const row = async (id: string) =>
+      (await getDb().get<{ work_type: string; created_by_id: string | null; orchestration_id: string | null }>(
+        'SELECT work_type, created_by_id, orchestration_id FROM work_items WHERE id = ?',
+        [id],
+      ))!;
+
+    const stuck = await stuckPacket({ claims: 2 });
+    await spend(stuck.workItemId, 'runpod/openai/gpt-oss-120b');
+    expect(surfaceNamedBy(spentOn('runpod/openai/gpt-oss-120b'))).toBe('runpod/openai/gpt-oss-120b');
+
+    // First reissue: the free lane must not hand it back to the model that spent it.
+    expect((await recoverFilingFailures(10, { force: true }))[0]).toMatchObject({ outcome: 'RECOVERED' });
+    const first = (await live(stuck.orchestrationId))!;
+    expect(first.createdById).toBe(SPENT_RECOVERY_ACTOR);
+    expect([...(await synthesisSurfacesToAvoid(await row(first.id)))]).toEqual(['runpod/openai/gpt-oss-120b']);
+
+    // It failed on the other model too: reissued again, avoiding both — not left for a person.
+    await spend(first.id, 'auto/best-coding');
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    expect((await recoverFilingFailures(10, { force: true }))[0]).toMatchObject({ outcome: 'RECOVERED' });
+    const second = (await live(stuck.orchestrationId))!;
+    expect(new Set(await synthesisSurfacesToAvoid(await row(second.id)))).toEqual(
+      new Set(['runpod/openai/gpt-oss-120b', 'auto/best-coding']),
+    );
+    // An ordinary synthesis item is never steered.
+    expect((await synthesisSurfacesToAvoid({ ...(await row(second.id)), created_by_id: 'runner' })).size).toBe(0);
+
+    // Bounded: the third reissue is the last one this round.
+    await spend(second.id, 'runpod/other-model');
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    expect((await recoverFilingFailures(10, { force: true }))[0]).toMatchObject({ outcome: 'RECOVERED' });
+    const third = (await live(stuck.orchestrationId))!;
+    await spend(third.id, 'runpod/a-fourth-model');
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    expect(MAX_SPENT_RECOVERIES_PER_ROUND).toBe(3);
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+    expect(await live(stuck.orchestrationId)).toBeUndefined();
+    // Every spent item keeps its row and its attempts (§5).
+    for (const id of [stuck.workItemId, first.id, second.id, third.id]) {
+      expect((await getWorkItem(id))!).toMatchObject({ state: 'FAILED', failureCategory: 'ATTEMPTS_EXHAUSTED' });
+    }
   });
 
   it('reads the current round: a judge-resumed packet whose new synthesis ran out is reissued over the earlier report (W10)', async () => {
