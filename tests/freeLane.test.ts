@@ -1329,6 +1329,80 @@ describe('the whole packet on the free lane', () => {
     const bin = await getDb().get<{ state: string }>('SELECT state FROM bins WHERE orchestration_id = ?', [orchestration.id]);
     expect(bin?.state).toBe('COMPLETE');
   });
+
+  /*
+   * A pooled connection is never held across a wait on something outside the
+   * database. Production 2026-11-25 (liveness, proc_9e1e3dba): the top holder of
+   * a workload connection was the effect transaction, 1,003 holds totalling
+   * 1,258 s with one of 194 s, and `idempotency_operations` named it — the JUDGE
+   * `research.audit` (p90 27 s, max 194 s) and `research.synthesis` (median
+   * 14 s): each read and wrote the document store, and the synthesis extracted
+   * its own report, inside the transaction. With eight workload connections
+   * every such hold is a caller waiting, and any waiter holds the GPU slots
+   * where they are ("database connections contended"). On the local store the
+   * calls are instant, so the property is checked directly: no model call, no
+   * source read and no store request happens while a transaction is open.
+   */
+  it('holds no database transaction across a model call, a source read or a document-store request', async () => {
+    const { inTransaction } = await import('../server/db/database.ts');
+    const { getStorage } = await import('../server/services/storage/index.ts');
+    const { orchestration, fragment } = await packet(play.project.id);
+    await getDb().run("UPDATE research_orchestrations SET status = 'RESEARCHING' WHERE id = ?", [orchestration.id]);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const inside: string[] = [];
+    const registrationWrites: string[] = [];
+    const seen = { model: 0, source: 0, store: 0 };
+    const store = getStorage() as unknown as Record<string, unknown>;
+    const originals = new Map<string, (...args: unknown[]) => unknown>();
+    for (const method of ['put', 'get', 'openRead', 'head', 'exists', 'namesIn', 'move', 'remove', 'list']) {
+      const original = store[method];
+      if (typeof original !== 'function') continue;
+      originals.set(method, original as (...args: unknown[]) => unknown);
+      store[method] = (...args: unknown[]) => {
+        seen.store += 1;
+        if (!inTransaction()) return (original as (...a: unknown[]) => unknown).apply(store, args);
+        // The registration's own write is the one store request left inside a transaction, named below.
+        if (/storeFile/.test(new Error().stack ?? '')) registrationWrites.push(method);
+        else inside.push(`store.${method}(${String(args[0]).slice(-40)})`);
+        return (original as (...a: unknown[]) => unknown).apply(store, args);
+      };
+    }
+    try {
+      for (let round = 0; round < 8; round += 1) {
+        const { completer: inner } = model();
+        const completer: Completer = async (config, name, system, prompt, ...rest) => {
+          seen.model += 1;
+          if (inTransaction()) inside.push(`model call (${name})`);
+          return inner(config, name, system, prompt, ...rest);
+        };
+        const reading = async (url: string): Promise<SourceFetch> => {
+          seen.source += 1;
+          if (inTransaction()) inside.push(`source read ${url}`);
+          return fetchSource(url);
+        };
+        const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource: reading, search: async () => [] });
+        const { advancePacket } = await import('../server/services/research/packetRunner.ts');
+        await advancePacket(orchestration.id);
+        if (tick.claimed === 0 && round > 0) break;
+      }
+    } finally {
+      for (const [method, original] of originals) store[method] = original;
+    }
+    const status = await getDb().get<{ status: string }>('SELECT status FROM research_orchestrations WHERE id = ?', [orchestration.id]);
+    expect(status?.status).toBe('COMPLETE');
+    // The packet really did call out at every stage, so an empty list is a finding, not an absence of calls.
+    expect(seen.model).toBeGreaterThan(4);
+    expect(seen.source).toBeGreaterThan(0);
+    expect(seen.store).toBeGreaterThan(0);
+    expect(inside).toEqual([]);
+    /*
+     * What is left: registering the report writes its bytes (and asks whether
+     * the name is free) inside the synthesis effect, because the importer owns
+     * the write and the row together and the effect owns at-most-once filing.
+     * One write, not a read-back; stated here so a second one is a failure.
+     */
+    expect(registrationWrites).toEqual(['exists', 'put']);
+  });
 });
 
 describe('a model keeps only the kinds of work Brain accepts from it', () => {

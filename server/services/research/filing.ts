@@ -181,13 +181,36 @@ export async function assertCitable(
   return accepted;
 }
 
-export async function fileResearchPacket(input: {
+export interface FilePacketInput {
   orchestration: ResearchOrchestration;
   reportText: string;
   citedClaimIds: string[];
   stillMissing: string[];
   passId: string;
-}): Promise<FiledPacket> {
+}
+
+/** Register the packet and read it back for audit: the whole filing, in one call. */
+export async function fileResearchPacket(input: FilePacketInput): Promise<FiledPacket> {
+  const registered = await registerResearchPacket(input);
+  return registered.documentId ? await readBackFiledPacket(input.orchestration.id, registered) : registered;
+}
+
+/**
+ * The half of a filing that belongs inside the synthesis effect: the citations
+ * checked again, the artifact assembled and registered, its id on the packet.
+ *
+ * The read-back (`readBackFiledPacket`) is the other half, and it is kept out
+ * of the effect's transaction on purpose. Production 2026-11-25:
+ * `research.synthesis` held its pooled connection for a median 14 s (p90 25 s,
+ * max 38 s), because extraction ran inside the transaction — a store request
+ * for whether the bytes exist, a download of them, and a statement per block
+ * and chunk — while the free lane's GPU slots were held at their target by
+ * "database connections contended". Extraction is a derivation from a
+ * registered document (§18): nothing it writes needs to commit atomically with
+ * the registration, and the importer already queues it to run once the
+ * registration commits.
+ */
+export async function registerResearchPacket(input: FilePacketInput): Promise<FiledPacket> {
   const { orchestration } = input;
 
   // Checked again here even though the caller checks first. The caller checks
@@ -260,29 +283,6 @@ export async function fileResearchPacket(input: {
 
   await updateOrchestration(orchestration.id, { documentId: filed.imported.documentId });
 
-  // The audit reads extracted evidence, never raw bytes (invariant 9), and
-  // importing only queues the extraction. Waiting for it here is what makes the
-  // handoff real: without it the audit would judge a document Brain had not yet
-  // read, and would correctly refuse.
-  const extraction = await enqueueExtraction(filed.imported.documentId);
-  if (!isAuditable(extraction.run.status)) {
-    const reason =
-      'The report was filed but could not be read back for audit: ' +
-      `${extraction.quality?.blockedReason ?? extraction.run.status}.`;
-    await updateOrchestration(orchestration.id, {
-      status: 'NEEDS_HUMAN',
-      failureReason: reason,
-      completedAt: new Date().toISOString(),
-    });
-    return {
-      documentId: filed.imported.documentId,
-      summary: 'filed, unreadable',
-      value: { filed: true, documentId: filed.imported.documentId, auditable: false, reason },
-    };
-  }
-
-  await updateOrchestration(orchestration.id, { status: 'AUDITING', currentPass: 'AUDIT' });
-
   return {
     documentId: filed.imported.documentId,
     summary: `filed as ${filed.document?.canonicalName ?? filed.imported.documentId}`,
@@ -295,8 +295,53 @@ export async function fileResearchPacket(input: {
       version,
       acceptedClaims: accepted.length,
       citedClaims: input.citedClaimIds.length,
-      auditable: true,
-      status: 'AUDITING',
     },
+  };
+}
+
+/**
+ * Read a registered packet back for its audit, and say whether it can be.
+ *
+ * The audit reads extracted evidence, never raw bytes (invariant 9), and
+ * importing only queues the extraction. Waiting for it here is what makes the
+ * handoff real: without it the audit would judge a document Brain had not yet
+ * read, and would correctly refuse.
+ *
+ * Called outside any transaction (`registerResearchPacket` says why), and safe
+ * to call again: the extraction queue shares an in-flight reading and keeps a
+ * standing one, and the status it writes is the same each time. It is asked
+ * for ahead of the queue's backlog, because a synthesis worker holds its lease
+ * until it returns.
+ */
+export async function readBackFiledPacket(orchestrationId: string, filed: FiledPacket): Promise<FiledPacket> {
+  const documentId = filed.documentId;
+  if (!documentId) return filed;
+  // A reading that threw has been recorded FAILED on its run; it is an unreadable report, said so.
+  const extraction = await enqueueExtraction(documentId, { first: true }).catch((error: unknown) => ({
+    run: { status: 'FAILED' as const },
+    quality: { blockedReason: `extraction failed: ${error instanceof Error ? error.message : String(error)}` },
+  }));
+  if (!isAuditable(extraction.run.status)) {
+    const reason =
+      'The report was filed but could not be read back for audit: ' +
+      `${extraction.quality?.blockedReason ?? extraction.run.status}.`;
+    await updateOrchestration(orchestrationId, {
+      status: 'NEEDS_HUMAN',
+      failureReason: reason,
+      completedAt: new Date().toISOString(),
+    });
+    return {
+      documentId,
+      summary: 'filed, unreadable',
+      value: { filed: true, documentId, auditable: false, reason },
+    };
+  }
+
+  await updateOrchestration(orchestrationId, { status: 'AUDITING', currentPass: 'AUDIT' });
+
+  return {
+    documentId,
+    summary: filed.summary,
+    value: { ...filed.value, auditable: true, status: 'AUDITING' },
   };
 }

@@ -64,7 +64,13 @@ async function drain(): Promise<void> {
  */
 export async function enqueueExtraction(
   documentId: string,
-  options: { force?: boolean } = {},
+  /**
+   * `first`: read this one before the queue's backlog. For a caller holding
+   * something while it waits — a synthesis worker holds its lease until its
+   * report is read back — and not for a bulk import, which would only reorder
+   * one backlog behind another.
+   */
+  options: { force?: boolean; first?: boolean } = {},
 ): Promise<ExtractionResult> {
   // Read without awaiting, deliberately. `inFlight` is a Map, so there is
   // nothing to await — and suspending here would return control before the
@@ -85,10 +91,17 @@ export async function enqueueExtraction(
   if (inTransaction()) return extractDocument(documentId, { force: options.force ?? false });
 
   const existing: Promise<ExtractionResult> | undefined = inFlight.get(documentId);
-  if (existing) return existing;
+  if (existing) {
+    // Still waiting its turn (not being read): moved to the front when asked.
+    const at = options.first ? pending.findIndex((entry) => entry.documentId === documentId) : -1;
+    if (at > 0) pending.unshift(...pending.splice(at, 1));
+    return existing;
+  }
 
   const promise = new Promise<ExtractionResult>((resolve, reject) => {
-    pending.push({ documentId, force: options.force ?? false, resolve, reject });
+    const entry = { documentId, force: options.force ?? false, resolve, reject };
+    if (options.first) pending.unshift(entry);
+    else pending.push(entry);
   });
   inFlight.set(documentId, promise);
   // Errors are delivered to whoever awaited the promise; an unawaited scheduling

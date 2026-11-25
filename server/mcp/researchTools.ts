@@ -171,8 +171,9 @@ import { classifyContradiction } from '../services/research/contradictions.ts';
 import { applyProposal } from '../services/research/intelligence/proposals.ts';
 import {
   assertCitable,
-  fileResearchPacket,
   NothingToFile,
+  readBackFiledPacket,
+  registerResearchPacket,
   UncitableClaims,
 } from '../services/research/filing.ts';
 import { conflictError, invalidInput, limitExceeded, notFoundError } from './errors.ts';
@@ -2805,7 +2806,8 @@ const submitSynthesisTool: McpTool = {
           raw: { citedClaimIds: cited, stillMissing, reportChars: report.length },
         });
 
-        const filed = await fileResearchPacket({
+        // Registered here; read back once this commits (`registerResearchPacket` says why).
+        const filed = await registerResearchPacket({
           orchestration,
           reportText: report,
           citedClaimIds: cited,
@@ -2816,19 +2818,36 @@ const submitSynthesisTool: McpTool = {
         return {
           resultRef: filed.documentId ?? passId,
           resultSummary: filed.summary,
-          value: filed.value,
+          value: { ...filed.value },
         };
       },
     );
 
+    /*
+     * The read-back, on no connection of the effect's. A replay reads back too
+     * when the packet is still waiting on it — the first call committed the
+     * registration and did not live to read it — and a packet already past it
+     * is left alone.
+     */
+    let value = outcome.value;
+    const filedId = typeof value['documentId'] === 'string' ? (value['documentId'] as string) : null;
+    if (value['filed'] === true && filedId) {
+      value = (await readBackFiledPacket(orchestration.id, { documentId: filedId, summary: '', value })).value;
+    } else if (outcome.replayed) {
+      const current = await getOrchestration(orchestration.id);
+      if (current?.documentId && current.status === 'SYNTHESIZING') {
+        await readBackFiledPacket(current.id, { documentId: current.documentId, summary: '', value: {} });
+      }
+    }
+
     // A filed report is the whole of what this item asks for.
-    if ((outcome.value as { filed?: unknown }).filed === true) {
+    if (value['filed'] === true) {
       await finishOwnItem({ principal, item, proof, requestId, summary: 'synthesis filed' });
     }
 
     return {
       projectId: item.projectId,
-      value: outcome.value,
+      value,
       replayed: outcome.replayed,
       operationId: outcome.operationId,
     };
@@ -3033,187 +3052,207 @@ const submitAuditTool: McpTool = {
       throw invalidInput(`The ${role} output is not valid: ${parsed.error}`);
     }
 
-    const outcome = await idempotentEffect(
-      {
-        namespace: AUDIT_NAMESPACE,
-        principal,
-        projectId: item.projectId,
-        proof,
-        suppliedKey: optionalIdempotencyKey(args),
-        requestId,
-        discriminator: role,
-        payload: { workItemId: item.id, operation: 'submit-audit', role },
-      },
-      /*
-       * One answer per stored object for the whole submission.
-       *
-       * The judge's branch rebuilds the brief — which asks the store about
-       * every sibling in the layer — and then recomputes the project more than
-       * once, and each recompute asked the store about every document again,
-       * because its memo was scoped to that one recompute. That is roughly four
-       * bucket requests per document in the layer, all inside this effect's
-       * transaction, over a verification layer that gains a document or two
-       * every deploy. Deploy 318's judge died inside this transaction and the
-       * next release could not boot because the storage API itself answered
-       * `544 DatabaseTimeout`. Nothing in this effect writes an object, so an
-       * answer cannot go stale inside it, and the memo ends with the call: it
-       * de-duplicates rather than caches.
-       */
-      () => withExistenceMemo(async () => {
-        const passId = await recordPass({
-          orchestration,
-          fragmentId: null,
-          passKey: 'AUDIT',
-          ordinal: ROLE_PASS_ORDINAL[role],
-          attempt: orchestration.attempt,
-          workerId,
-          credentialId: principal.credentialId,
-          assignment: orchestration.assignment,
-          raw: payload,
-        });
-
-        // The first two roles record and stop. Only the judge advances state,
-        // which is §8 and is the whole reason the roles are separate.
-        if (role !== 'JUDGE') {
-          return {
-            resultRef: passId,
-            resultSummary: `${role} pass recorded`,
-            value: { role, recorded: true, advancesState: false, passId },
-          };
-        }
-
+    /*
+     * The judge's audit context, read before the effect's transaction opens.
+     *
+     * Production 2026-11-25 (`idempotency_operations`): the JUDGE
+     * `research.audit` held its pooled connection for a p90 27 s and up to
+     * 194 s, the longest hold in the process, and the context was the part of
+     * it that waits on something outside the database — the layer's state asks
+     * the document store whether each document's bytes exist. Everything it
+     * reads is read-only and nothing in the effect writes what it reads, so it
+     * is the same context read a moment earlier, on no connection of the
+     * effect's. One memo spans both, so the post-commit recompute reuses its
+     * answers. A context that cannot be built here is built inside as before,
+     * where its refusal keeps its old meaning.
+     */
+    const outcome = await withExistenceMemo(async () => {
+      const prepared =
+        role === 'JUDGE'
+          ? await auditBriefFor({ orchestration, role: 'JUDGE' }).then(({ context }) => context, () => null)
+          : null;
+      return await idempotentEffect(
+        {
+          namespace: AUDIT_NAMESPACE,
+          principal,
+          projectId: item.projectId,
+          proof,
+          suppliedKey: optionalIdempotencyKey(args),
+          requestId,
+          discriminator: role,
+          payload: { workItemId: item.id, operation: 'submit-audit', role },
+        },
         /*
-         * This round's arguments, and only this round's.
+         * One answer per stored object for the whole submission.
          *
-         * The refusal immediately below is what makes a judge a judge: it may
-         * not record a verdict until both arguments exist. Unscoped, the
-         * *previous* round's passes satisfy it — so after an `OTHER_LAYER`
-         * handoff a judge could store a verdict over a round that had produced
-         * one argument and nothing answering it, having read (correctly, from
-         * `auditBriefFor`) only that one.
-         *
-         * The claim path refuses this too, and both refusals are wanted for the
-         * reason this file already gives: a lease can expire and be retaken, so
-         * eligible at claim time is not eligible at submit time, and this is
-         * the guard that stands where state actually moves.
-         *
-         * It also stops the *selection* being right by accident. Unscoped,
-         * `earlierAuditRole` returns the last matching pass and the last one
-         * happens to be this round's — correct until somebody changes an
-         * ORDER BY, which is not a property to leave a stored verdict resting
-         * on.
+         * The judge's branch rebuilds the brief — which asks the store about
+         * every sibling in the layer — and then recomputes the project more than
+         * once, and each recompute asked the store about every document again,
+         * because its memo was scoped to that one recompute. That is roughly four
+         * bucket requests per document in the layer, all inside this effect's
+         * transaction, over a verification layer that gains a document or two
+         * every deploy. Deploy 318's judge died inside this transaction and the
+         * next release could not boot because the storage API itself answered
+         * `544 DatabaseTimeout`. Nothing in this effect writes an object, so an
+         * answer cannot go stale inside it, and the memo ends with the call: it
+         * de-duplicates rather than caches.
          */
-        const round = await auditRoundFor(orchestration.id);
-        const primaryRaw = await earlierAuditRole(orchestration.id, 'PRIMARY', round);
-        const adversarialRaw = await earlierAuditRole(orchestration.id, 'ADVERSARIAL', round);
-        if (!primaryRaw || !adversarialRaw) {
-          throw new TerminalEffectFailure(
-            'NOT_AUTHORIZED',
-            'The judge cannot record a verdict before the primary and adversarial passes.',
+        () => withExistenceMemo(async () => {
+          const passId = await recordPass({
+            orchestration,
+            fragmentId: null,
+            passKey: 'AUDIT',
+            ordinal: ROLE_PASS_ORDINAL[role],
+            attempt: orchestration.attempt,
+            workerId,
+            credentialId: principal.credentialId,
+            assignment: orchestration.assignment,
+            raw: payload,
+          });
+
+          // The first two roles record and stop. Only the judge advances state,
+          // which is §8 and is the whole reason the roles are separate.
+          if (role !== 'JUDGE') {
+            return {
+              resultRef: passId,
+              resultSummary: `${role} pass recorded`,
+              value: { role, recorded: true, advancesState: false, passId },
+            };
+          }
+
+          /*
+           * This round's arguments, and only this round's.
+           *
+           * The refusal immediately below is what makes a judge a judge: it may
+           * not record a verdict until both arguments exist. Unscoped, the
+           * *previous* round's passes satisfy it — so after an `OTHER_LAYER`
+           * handoff a judge could store a verdict over a round that had produced
+           * one argument and nothing answering it, having read (correctly, from
+           * `auditBriefFor`) only that one.
+           *
+           * The claim path refuses this too, and both refusals are wanted for the
+           * reason this file already gives: a lease can expire and be retaken, so
+           * eligible at claim time is not eligible at submit time, and this is
+           * the guard that stands where state actually moves.
+           *
+           * It also stops the *selection* being right by accident. Unscoped,
+           * `earlierAuditRole` returns the last matching pass and the last one
+           * happens to be this round's — correct until somebody changes an
+           * ORDER BY, which is not a property to leave a stored verdict resting
+           * on.
+           */
+          const round = await auditRoundFor(orchestration.id);
+          const primaryRaw = await earlierAuditRole(orchestration.id, 'PRIMARY', round);
+          const adversarialRaw = await earlierAuditRole(orchestration.id, 'ADVERSARIAL', round);
+          if (!primaryRaw || !adversarialRaw) {
+            throw new TerminalEffectFailure(
+              'NOT_AUTHORIZED',
+              'The judge cannot record a verdict before the primary and adversarial passes.',
+            );
+          }
+          const primary = parsePrimaryPass(primaryRaw);
+          const adversarial = parseAdversarialPass(adversarialRaw);
+          if (!primary.ok || !adversarial.ok) {
+            throw new TerminalEffectFailure(
+              'NOT_AUTHORIZED',
+              'An earlier audit pass is not valid, so the judge has nothing sound to weigh.',
+            );
+          }
+
+          /*
+           * The signed matrix, applied where state moves.
+           *
+           * The admission rule already refused an ineligible executor before the
+           * lease, which is where independence is *arranged*. This is where it is
+           * *proved*, and both are needed: a lease can expire and be retaken, so
+           * the surface that was eligible when it claimed is not necessarily the
+           * one that submitted.
+           *
+           * Checked against the recorded lineage of the passes that actually ran,
+           * never against the role name the submitter claimed — a submitter
+           * claiming a role is the thing being checked. Missing lineage fails
+           * closed: "we could not tell" must not read the same as "we checked".
+           */
+          const matrix = auditMatrixVerdict(
+            // Scoped for the same reason, and to the same round: the separation
+            // being proved is between the three sessions that produced *this*
+            // verdict. It happened to pick them anyway, by insertion order —
+            // which is the kind of correctness that stops being true the first
+            // time somebody changes an ORDER BY.
+            await passesInCurrentRound(orchestration.id),
+            // The mission's own declared tier, read from a server row. Enforced
+            // here as well as at admission, because a lease can expire and be
+            // retaken — a packet must not be stored under a weaker separation
+            // than the one it asked to be judged by.
+            (await missionRequiredTier(orchestration.id)) ?? undefined,
           );
-        }
-        const primary = parsePrimaryPass(primaryRaw);
-        const adversarial = parseAdversarialPass(adversarialRaw);
-        if (!primary.ok || !adversarial.ok) {
-          throw new TerminalEffectFailure(
-            'NOT_AUTHORIZED',
-            'An earlier audit pass is not valid, so the judge has nothing sound to weigh.',
-          );
-        }
+          if (!matrix.eligible) {
+            throw new TerminalEffectFailure(
+              'NOT_AUTHORIZED',
+              `The audit lineage does not satisfy the independence matrix, so the judgement is ` +
+                `not stored: ${matrix.reasons.join(' ')} (policy ${matrix.policyVersion})`,
+            );
+          }
 
-        /*
-         * The signed matrix, applied where state moves.
-         *
-         * The admission rule already refused an ineligible executor before the
-         * lease, which is where independence is *arranged*. This is where it is
-         * *proved*, and both are needed: a lease can expire and be retaken, so
-         * the surface that was eligible when it claimed is not necessarily the
-         * one that submitted.
-         *
-         * Checked against the recorded lineage of the passes that actually ran,
-         * never against the role name the submitter claimed — a submitter
-         * claiming a role is the thing being checked. Missing lineage fails
-         * closed: "we could not tell" must not read the same as "we checked".
-         */
-        const matrix = auditMatrixVerdict(
-          // Scoped for the same reason, and to the same round: the separation
-          // being proved is between the three sessions that produced *this*
-          // verdict. It happened to pick them anyway, by insertion order —
-          // which is the kind of correctness that stops being true the first
-          // time somebody changes an ORDER BY.
-          await passesInCurrentRound(orchestration.id),
-          // The mission's own declared tier, read from a server row. Enforced
-          // here as well as at admission, because a lease can expire and be
-          // retaken — a packet must not be stored under a weaker separation
-          // than the one it asked to be judged by.
-          (await missionRequiredTier(orchestration.id)) ?? undefined,
-        );
-        if (!matrix.eligible) {
-          throw new TerminalEffectFailure(
-            'NOT_AUTHORIZED',
-            `The audit lineage does not satisfy the independence matrix, so the judgement is ` +
-              `not stored: ${matrix.reasons.join(' ')} (policy ${matrix.policyVersion})`,
-          );
-        }
+          const context = prepared ?? (await auditBriefFor({ orchestration, role: 'JUDGE' })).context;
 
-        const { context } = await auditBriefFor({ orchestration, role: 'JUDGE' });
+          // The same recording path `runDynamicAudit` uses. The cross-checked
+          // counts and the refusal to advance a layer with an open foundational
+          // gap already happened in parseJudgePass above.
+          const recorded = await recordAuditPasses({
+            context,
+            pipelineId: `pipe_wk_${item.id.slice(-16)}`,
+            runId: orchestration.runId,
+            mode: 'SINGLE_DOCUMENT',
+            primary: primary.value,
+            adversarial: adversarial.value,
+            judge: parsed.value as JudgePassOutput,
+            providerName: 'WORKER',
+            model: workerId,
+          });
 
-        // The same recording path `runDynamicAudit` uses. The cross-checked
-        // counts and the refusal to advance a layer with an open foundational
-        // gap already happened in parseJudgePass above.
-        const recorded = await recordAuditPasses({
-          context,
-          pipelineId: `pipe_wk_${item.id.slice(-16)}`,
-          runId: orchestration.runId,
-          mode: 'SINGLE_DOCUMENT',
-          primary: primary.value,
-          adversarial: adversarial.value,
-          judge: parsed.value as JudgePassOutput,
-          providerName: 'WORKER',
-          model: workerId,
-        });
-
-        /**
-         * The verdict decides the research outcome; the rows decide the
-         * workflow state. Hardcoding COMPLETE here is what let a packet whose
-         * judge said MORE_RESEARCH read as finished.
-         */
-        const outcome = outcomeFor({
-          verdict: recorded.audit.verdict,
-          orchestration,
-          fragments: await currentFragmentsForOutcome(orchestration.id),
-        });
-        await updateOrchestration(orchestration.id, {
-          status: outcome,
-          auditId: recorded.audit.id,
-          verdict: recorded.audit.verdict,
-          // A packet going back for repair has not completed. Stamping it
-          // would leave a completion time on a run that then carries on.
-          completedAt: TERMINAL_ORCHESTRATION.has(outcome) ? new Date().toISOString() : null,
-        });
-        await recomputeProject(orchestration.projectId);
-        // A repairable outcome has to be backed by work, not by a status. The
-        // advance is what mints it, and the empty-queue invariant refuses to
-        // leave AWAITING_REPAIR standing without it.
-        if (outcome === 'AWAITING_REPAIR') {
-          const { advancePacket } = await import('../services/research/packetRunner.ts');
-          await advancePacket(orchestration.id);
-        }
-
-        return {
-          resultRef: recorded.audit.id,
-          resultSummary: `audit ${recorded.audit.verdict}`,
-          value: {
-            role,
-            recorded: true,
-            advancesState: true,
+          /**
+           * The verdict decides the research outcome; the rows decide the
+           * workflow state. Hardcoding COMPLETE here is what let a packet whose
+           * judge said MORE_RESEARCH read as finished.
+           */
+          const outcome = outcomeFor({
+            verdict: recorded.audit.verdict,
+            orchestration,
+            fragments: await currentFragmentsForOutcome(orchestration.id),
+          });
+          await updateOrchestration(orchestration.id, {
+            status: outcome,
             auditId: recorded.audit.id,
             verdict: recorded.audit.verdict,
-            orchestrationStatus: outcome,
-          },
-        };
-      }),
-    );
+            // A packet going back for repair has not completed. Stamping it
+            // would leave a completion time on a run that then carries on.
+            completedAt: TERMINAL_ORCHESTRATION.has(outcome) ? new Date().toISOString() : null,
+          });
+          await recomputeProject(orchestration.projectId);
+          // A repairable outcome has to be backed by work, not by a status. The
+          // advance is what mints it, and the empty-queue invariant refuses to
+          // leave AWAITING_REPAIR standing without it.
+          if (outcome === 'AWAITING_REPAIR') {
+            const { advancePacket } = await import('../services/research/packetRunner.ts');
+            await advancePacket(orchestration.id);
+          }
+
+          return {
+            resultRef: recorded.audit.id,
+            resultSummary: `audit ${recorded.audit.verdict}`,
+            value: {
+              role,
+              recorded: true,
+              advancesState: true,
+              auditId: recorded.audit.id,
+              verdict: recorded.audit.verdict,
+              orchestrationStatus: outcome,
+            },
+          };
+        }),
+      );
+    });
 
     /*
      * And let the packet see the role that just finished.
