@@ -1144,6 +1144,8 @@ export interface RouteDeps {
   delivers?: (projectId: string, currency: string) => Promise<string[]>;
   /** Start the project's deep dives once routes are filed; production: `startValidations`. */
   startDives?: (projectId: string) => Promise<{ opportunityId: string }[]>;
+  /** The environment the strong route model's key is read from; production: `process.env`. */
+  env?: NodeJS.ProcessEnv;
   /** The project's gated, sourced claims, newest first; production: `projectEvidenceClaims`. */
   claims?: (projectId: string) => Promise<ResearchClaim[]>;
   /** File one cited claim as a route's EVIDENCE fact; production: `writeEvidenceAnswer`. */
@@ -1212,9 +1214,32 @@ export function routeAskDue(
   };
 }
 
+/** The Anthropic model a route ask uses first when the deployment holds a key (`BRAIN_ROUTE_MODEL` overrides it). */
+export const ROUTE_STRONG_MODEL = 'claude-sonnet-5-5';
+/** Anthropic's OpenAI-compatible endpoint: the same chat path as every other model (`chatFor`). */
+export const ANTHROPIC_COMPAT_URL = 'https://api.anthropic.com/v1';
+
+/**
+ * The strong reasoning model a route ask tries first, when the deployment holds
+ * an Anthropic key (§54: a provider is a deployment secret — with none set this
+ * is empty and the operator models stand exactly as they were). Measured
+ * (blind, 2026-11-25, the ten dec1125 goals, Brain's identical direction
+ * prompt): a Claude model gave at least one credible direction on 10/10 goals
+ * (27 of 33 credible), the production gpt-oss on 5/10 (6 of 31); with live web
+ * research the same model wrote usable plans for 7/10 where Brain wrote 0/10.
+ * Pure.
+ */
+export function strongRouteModels(env: NodeJS.ProcessEnv): OperatorModel[] {
+  const key = env['ANTHROPIC_API_KEY']?.trim();
+  if (!key) return [];
+  const model = env['BRAIN_ROUTE_MODEL']?.trim() || ROUTE_STRONG_MODEL;
+  return [{ label: `anthropic:${model}`, baseUrl: ANTHROPIC_COMPAT_URL, apiKey: key, model } as OperatorModel];
+}
+
 async function operatorChats(deps: RouteDeps, timeoutMs: () => number): Promise<{ label: string; chat: ChatFn }[]> {
-  const models = await (deps.models ?? (async () => (await import('../operator/run.ts')).modelsFor()))().catch(() => [] as OperatorModel[]);
-  return challengerModels(models).map((model) => ({
+  const operator = await (deps.models ?? (async () => (await import('../operator/run.ts')).modelsFor()))().catch(() => [] as OperatorModel[]);
+  const models = [...strongRouteModels(deps.env ?? process.env), ...challengerModels(operator)];
+  return models.map((model) => ({
     label: model.label,
     // Each turn is given what the budget has left, never more than one attempt's bound.
     chat: (messages, tools, maxTokens) =>
