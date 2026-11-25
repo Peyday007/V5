@@ -128,6 +128,30 @@ export function liveGoalCandidateIdsSql(): string {
   );
 }
 
+/**
+ * The openings any approved, live goal links, as one uncorrelated sub-select:
+ * a route its own proposal filed (`routeProposal.ts` links it `SOURCE`, the
+ * goal being where the opening came from) or one its plan pursues. No
+ * parameters.
+ *
+ * Production 2026-11-25: twelve evaluation goals, each its own project, had
+ * route dives started 04:51–06:35Z, and at 09:05Z every dive's idea was still
+ * CAPTURED and unjudged, ordered with 26,551 untargeted ideas (tier 3) at one
+ * ordinary judgment a tick. The dive's own `CANDIDATE` link is written when the
+ * dive starts (#1305), so it reaches only dives started after that release and
+ * none of the narrow questions raised about the same opening (63 in one
+ * project, all tier 3). The goal-found-opening branches below read the opening
+ * from the goal's round; a route opening has no round, so this is the same rule
+ * read from the goal's own link to the opening — derived from rows, so it
+ * reaches every dive and question already stranded as well as the next one.
+ */
+export function liveGoalOpeningIdsSql(): string {
+  return (
+    `SELECT go.ref FROM workstream_links go WHERE go.workstream_id IN (${LIVE_GOAL_IDS_SQL})` +
+    ` AND go.kind = 'OPPORTUNITY' AND go.superseded_at IS NULL AND go.relation <> 'DEPENDS_ON' AND go.ref IS NOT NULL`
+  );
+}
+
 /** A goal's live, pursuing links, aliased `gl`. `goals` is an id list or an uncorrelated sub-select. */
 export function goalLinksLiveSql(goals: string): string {
   return `gl.workstream_id IN (${goals}) AND gl.superseded_at IS NULL AND gl.relation NOT IN ('SOURCE', 'DEPENDS_ON')`;
@@ -178,7 +202,22 @@ export function goalIdeaSql(c: string): string {
     OR ${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
                     WHERE gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL
                       AND (gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' OR ${planQuestionSql('gp')}))
+    OR ${goalDiveSql(c)}
+    OR ${c}.id IN (SELECT gn4.candidate_id FROM cash_needs gn4
+                    WHERE gn4.state = 'OPEN' AND gn4.candidate_id IS NOT NULL
+                      AND gn4.opportunity_id IN (${liveGoalOpeningIdsSql()}))
     OR ${c}.id IN (${liveGoalCandidateIdsSql()}))`;
+}
+
+/**
+ * A boolean SQL expression: this idea is the deep dive of an opening a live
+ * goal links (`liveGoalOpeningIdsSql`) — the qualification its plan is judged
+ * on ("research first: the deep dive … establishes or refutes the buyer,
+ * price and demand each route proposal assumed"). No parameters.
+ */
+export function goalDiveSql(c: string): string {
+  return `${c}.id IN (SELECT gd.candidate_id FROM cash_opportunities gd
+                      WHERE gd.candidate_id IS NOT NULL AND gd.id IN (${liveGoalOpeningIdsSql()}))`;
 }
 
 /** A boolean SQL expression: this idea is one of a goal's own search rounds (`goal-…` bucket). No parameters. */
@@ -233,8 +272,20 @@ export function planQuestionSql(n: string): string {
   return `(${n}.request_key LIKE 'goal-plan-%' OR (${n}.request_key LIKE 'causal-%' AND ${n}.blocked_action LIKE 'Every answer in causal graph goal:%:plan %'))`;
 }
 
+/**
+ * The tier `goalFirstSql` gives an idea no live goal claims; every lower tier
+ * is a live goal's own work.
+ *
+ * **A goal opening's deep dive goes before the goal's other ideas**, after its
+ * price questions and rounds (production 2026-11-25, d01): inside one project
+ * the dive and the 63 narrow questions about the same openings were one tier
+ * ordered by age, and the questions were older, so the dive the plan names as
+ * "research first" waited for every one of them.
+ */
+export const GOAL_TIER_NONE = 4;
+
 export function goalFirstSql(c: string): string {
-  return `CASE WHEN ${goalPriceSql(c)} THEN 0 WHEN ${goalRoundSql(c)} THEN 1 WHEN ${goalIdeaSql(c)} THEN 2 ELSE 3 END`;
+  return `CASE WHEN ${goalPriceSql(c)} THEN 0 WHEN ${goalRoundSql(c)} THEN 1 WHEN ${goalDiveSql(c)} THEN 2 WHEN ${goalIdeaSql(c)} THEN 3 ELSE ${GOAL_TIER_NONE} END`;
 }
 
 /**

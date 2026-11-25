@@ -118,13 +118,13 @@ describe('a live goal’s linked research', () => {
 
     const tier = async (id: string) =>
       Number((await getDb().get<{ k: number }>(`SELECT ${goalFirstSql('c')} AS k FROM russell_candidates c WHERE c.id = ?`, [id]))!.k);
-    expect(await tier(backlog.id)).toBe(3);
-    expect(await tier(direct.id)).toBe(2);
-    expect(await tier(viaMission.id)).toBe(2);
-
-    expect(await pauseGoal(goal, 'not now')).toBe(true);
+    expect(await tier(backlog.id)).toBe(4);
     expect(await tier(direct.id)).toBe(3);
     expect(await tier(viaMission.id)).toBe(3);
+
+    expect(await pauseGoal(goal, 'not now')).toBe(true);
+    expect(await tier(direct.id)).toBe(4);
+    expect(await tier(viaMission.id)).toBe(4);
   });
 
   it('is claimed from the shared queue ahead of untargeted backlog at the same priority', async () => {
