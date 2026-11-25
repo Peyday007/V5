@@ -36,6 +36,7 @@ import { readMoneyFigures, readSettlementDays } from './figures.ts';
 import { cashOutcomeLessons, INBOUND_MIN_VISITORS, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { readTrialVolume, readVolume } from './volume.ts';
+import { acquisitionOf } from '../goals/pathways.ts';
 import { frontierTiers } from './shared.ts';
 import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { STRUCTURES } from './properties.ts';
@@ -98,6 +99,22 @@ export const MAX_MODEL_OPPORTUNITIES = Math.floor((SCENARIO_LIMITS.maxVariables 
 export const OUTREACH_MULTIPLE = 4;
 /** And never more than this many buyers in one strategy. */
 export const MAX_BUYERS_OFFERED = 200;
+
+/**
+ * The most buyers one strategy offers to. The bound is outreach's: a strategy contacts no
+ * more than `MAX_BUYERS_OFFERED` buyers. A marketplace listing contacts nobody — the
+ * platform brings its buyers to the listing (`acquisitionOf`) — so where research
+ * established how many buyers that market holds, the listing is offered to as many of
+ * them as the strategy needs, up to that count (planner residuals, 2026-11-25: a $20
+ * listing on a platform of 130 million buyers read as unable to reach $8,000, "at most
+ * 4,000", because it was offered to 200 buyers as if each were cold-emailed). Pure.
+ */
+export function offerCeiling(one: Pick<ModelledOpportunity, 'volume' | 'repeatable'> & { opportunity?: { reachableChannel?: string | null } | null }): number {
+  const channel = one.opportunity?.reachableChannel ?? null;
+  if (!channel || acquisitionOf(channel, null).method !== 'MARKETPLACE') return MAX_BUYERS_OFFERED;
+  if (!volumeEstablished(one) || one.volume.value === null) return MAX_BUYERS_OFFERED;
+  return Math.max(MAX_BUYERS_OFFERED, Math.floor(one.volume.value));
+}
 
 const LIVE = new Set(['DISCOVERED', 'EVIDENCE_CARD', 'READY', 'EXECUTING', 'DELIVERING']);
 const IN_FLIGHT = new Set(['EXECUTING', 'DELIVERING']);
@@ -2092,8 +2109,19 @@ export function pickEstimatedArrangements(arrangements: readonly ConstructedArra
  */
 export { COMPETITIVE_AWARD };
 
+/**
+ * An award word naming the work sold to those who compete, never an award to the seller:
+ * "grant research and application retainer", "bid estimate", "RFP response writing". A
+ * nonprofit pays its grant writer whether or not the grant comes, and a contractor pays its
+ * estimator for the takeoff before it bids (planner residuals, 2026-11-25: both read as
+ * competitive awards, so neither opening was sold and each plan was a lone "sell to
+ * measure" step with no delivery or collection). Only the award word directly followed by
+ * a word for a service (optionally after "and <word>") is read this way.
+ */
+const AWARD_SERVICE = /\b(?:rfp|rfq|rfi|rfx|tender|solicitation|bids?|bidding|grants?|procurement)(?:\s+and\s+[a-z-]+)?\s+(?:research|writ(?:ing|ers?)|prep(?:aration)?|estimat(?:es?|ing|ion|or|ors)|takeoffs?|consult(?:ing|ancy|ants?)?|support|management|services?|assistance|responses?|retainers?|packages?|help|review|tracking|alerts?|software|tools?|templates?|coaching|training|readiness|strategy|drafting|database|lists?|leads?|monitoring|subscriptions?|reports?)\b/gi;
+
 export function isCompetitiveAward(o: { title: string; source: string | null; buyingSignal: string | null; offerScope?: string | null }): boolean {
-  const text = [o.title, o.source, o.buyingSignal].filter(Boolean).join(' ');
+  const text = [o.title, o.source, o.buyingSignal].filter(Boolean).join(' ').replace(AWARD_SERVICE, ' ');
   // A bounty, prize or contest is won like a tender and paid after it is judged (audit 2026-11-23: GitHub's bug bounty was modelled as a buyer paying on agreement).
   return COMPETITIVE_AWARD.test(text) || paymentNatureOf(text).nature === 'CONTINGENT_REWARD';
 }
@@ -2480,7 +2508,7 @@ export async function modelOpportunity(
    * capital is published, and the per-deal cost stays what research says.
    */
   const oneTimeCost = !!costFact && ONE_TIME_COST.test(costFact.value) && !PER_DEAL_COST.test(costFact.value);
-  const costFigures = costFact && !oneTimeCost ? readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit) : [];
+  const costFigures = costFact && !oneTimeCost ? readMoneyFigures(withoutExampleBases(costFact.value), currency).filter((one) => !one.perUnit) : [];
   if (oneTimeCost && opportunity.peakFundingCents === null && capitalFigures.length === 0) {
     const setup = readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit);
     if (setup.length > 0) capital = known(Math.max(...setup.map((one) => one.cents)) / 100, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'a one-time setup cost paid before the first deal');
@@ -2724,7 +2752,7 @@ export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysL
   // The best case on a net target is still net: each deal at its top price less its lowest cost.
   const each = perDealToward(one, price, net, 'LOW');
   const held = agreedToward(one, net, 'LOW');
-  let deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(Math.max(0, remaining - held) / Math.max(1, each))) : one.agreedValue > 0 ? 0 : 1;
+  let deals = one.repeatable ? Math.min(offerCeiling(one), Math.ceil(Math.max(0, remaining - held) / Math.max(1, each))) : one.agreedValue > 0 ? 0 : 1;
   if (established && one.repeatable) deals = Math.min(deals, volumeEstablished(one) ? (buyersLeft(one) ?? 1) : 1);
   return Math.max(0, Math.min(remaining, held + deals * each));
 }
@@ -2776,6 +2804,36 @@ export function namesIndustry(industry: string, text: string | null | undefined)
 const RECURRING_PRICE = /\b(?:a|per|each|every)\s+(?:month|year|quarter|week)\b|\/\s?(?:mo|month|yr|year)\b|\bmonthly\b|\bquarterly\b|\bannual(?:ly)?\b|\bretainer\b|\bsubscription\b|\brecurring\b/i;
 export function recurringRevenue(priceStatement: string | null | undefined, title: string | null | undefined): boolean {
   return RECURRING_PRICE.test(priceStatement ?? '') || /\b(?:retainer|subscription|monthly)\b/i.test(title ?? '');
+}
+
+const NAMING_STOP = new Set(['and', 'the', 'for', 'with', 'from', 'into', 'per', 'service', 'services', 'business', 'company', 'local', 'small', 'monthly']);
+/**
+ * A cost text without the figures it only names as the base of an example: in "Stripe costs
+ * 2.9% + $0.30 per card payment (about $7.55 on a $250 order)" the cost is $7.55 and the
+ * $250 is the order it was worked out on (integration owner, 2026-11-25: the highest figure
+ * was taken, so a $99 offer read as costing $250 a deal and losing money). A figure
+ * introduced as the sale, order or payment a cost falls "on", is taken "of" or "from", or
+ * is quoted "for", is that base, never the cost. Pure.
+ */
+const EXAMPLE_BASE = /\b(?:on|of|from|for|per)\s+(?:a|an|each|every|one|the|any|your)?\s*(?:[$€£]\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?(?:usd|dollars?|eur|gbp))\s+(?:[a-z-]+\s+){0,2}?(?:orders?|sales?|purchases?|transactions?|deals?|invoices?|payments?|bookings?|tickets?|baskets?|carts?|charges?|checkouts?|subscriptions?|contracts?)\b/gi;
+export function withoutExampleBases(text: string): string {
+  return text.replace(EXAMPLE_BASE, ' ');
+}
+
+/**
+ * Whether the goal's own words name this opening's business: every content word of its
+ * title (at least two of them) stands in the objective. The owner who writes "launch a
+ * mobile notary and loan-signing dispatch service … reaching $3,500 a month" has said
+ * that this business's monthly sales are the run-rate, so a per-job price does not put
+ * the business he named outside his own goal (planner residuals, 2026-11-25: the only
+ * route the objective named was left out as "pays once", and the plan was "establish an
+ * offer and a price"). A one-off the objective does not name is still left out. Pure.
+ */
+export function namedByObjective(goalText: string, title: string): boolean {
+  const words = (s: string) => (s.toLowerCase().match(/[a-z][a-z-]{2,}/g) ?? []).filter((w) => !NAMING_STOP.has(w));
+  const have = new Set(words(goalText).flatMap((w) => [w, w.replace(/s$/, '')]));
+  const need = [...new Set(words(title.split(/\s+(?:for|to|with|from)\s+/i)[0] ?? ''))];
+  return need.length >= 2 && need.every((w) => have.has(w) || have.has(w.replace(/s$/, '')));
 }
 
 /**
@@ -2958,7 +3016,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   }
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
-    const outOfScope = IN_FLIGHT.has(opportunity.state) ? null : outOfGoalScope(scope, opportunity, scoped.get(opportunity.id)?.recurring ?? false);
+    const outOfScope = IN_FLIGHT.has(opportunity.state) ? null : outOfGoalScope(scope, opportunity, (scoped.get(opportunity.id)?.recurring ?? false) || namedByObjective(goalText, opportunity.title));
     if (outOfScope) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal's own terms: ${outOfScope}` });
       continue;
@@ -3390,19 +3448,20 @@ export function dealsForGoal(one: ModelledOpportunity, remainingMajor: number, n
  * rate the strategy offers OUTREACH_MULTIPLE times the deals needed: a choice
  * it makes and states, never an assumption about how many will say yes.
  */
-export function buyersToOffer(one: Pick<ModelledOpportunity, 'price' | 'close' | 'volume' | 'repeatable'> & Partial<Pick<ModelledOpportunity, 'directCost'>>, gap: number, net = false): number {
+export function buyersToOffer(one: Pick<ModelledOpportunity, 'price' | 'close' | 'volume' | 'repeatable'> & Partial<Pick<ModelledOpportunity, 'directCost' | 'opportunity'>>, gap: number, net = false): number {
   if (gap <= 0) return 0;
   const price = one.price.value ?? one.price.low ?? 1;
   // On a net target a deal adds its price less its cost: the deals needed are the gap ÷ that, never ÷ the price.
   const each = net && one.directCost ? perDealToward({ directCost: one.directCost }, price, true) : price;
   const needed = Math.ceil(gap / Math.max(1, each));
-  const fixed = Math.min(MAX_BUYERS_OFFERED, needed * OUTREACH_MULTIPLE);
+  const ceiling = offerCeiling(one);
+  const fixed = Math.min(ceiling, needed * OUTREACH_MULTIPLE);
   const close = measuredClose(one);
   if (close === null) return fixed;
   const want = Math.ceil(needed / Math.min(1, close) - 1e-9);
   // The market's deals bound what offering more can win: past volume ÷ close, another buyer asked adds nothing.
   const volume = volumeEstablished(one) && one.volume.value !== null ? Math.floor(one.volume.value) : null;
-  const cap = volume === null ? MAX_BUYERS_OFFERED : Math.ceil(volume / Math.min(1, close) - 1e-9);
+  const cap = volume === null ? ceiling : Math.ceil(volume / Math.min(1, close) - 1e-9);
   // Never fewer than the fixed multiple: the volume link reads the deals a strategy needs back from what it offers.
   return Math.max(fixed, Math.min(cap, want));
 }

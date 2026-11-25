@@ -1153,6 +1153,17 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
 }
 
 /**
+ * The days one lot holds its capital: its days to cash, and never less than one day. Cash
+ * usable the day of the sale ("0 days") frees a lot's money for the next day's lot (planner
+ * residuals, 2026-11-25: r09, a lead service paid at signing with $600 of ads a deal, read
+ * as 27 lots held at once — $16,200 against a $15,000 ceiling — because a cycle of 0 days
+ * was read as unknown timing). Pure.
+ */
+function lotCycleDays(daysToCash: number): number {
+  return Math.max(1, daysToCash);
+}
+
+/**
  * How many of an opening's lots hold money at once (planningReliability fam-16,
  * 2026-11-21). A lot ties its capital up from the day it is bought until its
  * cash settles `daysToCash` later, and then that money is free for the next
@@ -1165,8 +1176,8 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
  */
 export function peakConcurrentLots(lots: number, daysToCash: number | null, daysLeft: number | null): number {
   if (!(lots > 0)) return 0;
-  if (daysToCash === null || daysLeft === null || !(daysToCash > 0)) return lots;
-  const inSequence = Math.floor(daysLeft / daysToCash);
+  if (daysToCash === null || daysLeft === null || !(daysToCash >= 0)) return lots;
+  const inSequence = Math.floor(daysLeft / lotCycleDays(daysToCash));
   if (inSequence < 1) return lots;
   // A fractional cautious count (deals × a close rate) is never rounded up past itself.
   return Math.min(lots, Math.ceil(Math.ceil(lots - 1e-9) / inSequence));
@@ -1197,9 +1208,9 @@ export function lotsUnderCeiling(
   const atOnce = peakConcurrentLots(lots, daysToCash, daysLeft);
   const all = { atOnce, inWindow: lots };
   if (ceilingMajor === null || !(capital > 0) || atOnce * capital <= ceilingMajor + 1e-9) return all;
-  if (daysToCash === null || daysLeft === null || !(daysToCash > 0)) return all;
+  if (daysToCash === null || daysLeft === null || !(daysToCash >= 0)) return all;
   const slots = Math.floor(ceilingMajor / capital + 1e-9);
-  const inSequence = Math.floor(daysLeft / daysToCash);
+  const inSequence = Math.floor(daysLeft / lotCycleDays(daysToCash));
   if (slots < 1 || inSequence < 1) return all;
   return { atOnce: Math.min(atOnce, slots), inWindow: Math.min(lots, slots * inSequence) };
 }

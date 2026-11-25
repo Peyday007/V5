@@ -163,3 +163,31 @@ describe('the grader sees net versus gross', () => {
     expect(grade({ ...c, objective: 'Collect $12,000 of settled cash within 150 days with at most $25,000 of capital.' }, plan(14)).pass).toBe(true);
   });
 });
+
+describe('a cost is not the order it was worked out on (2026-11-25)', () => {
+  it('drops the base of a worked example, and keeps a cost stated beside an order', async () => {
+    const { withoutExampleBases } = await import('../server/services/cash/goalScenario.ts');
+    const { readMoneyFigures } = await import('../server/services/cash/figures.ts');
+    const figures = (text: string) => readMoneyFigures(withoutExampleBases(text), 'USD').filter((one) => !one.perUnit).map((one) => one.cents / 100);
+    expect(figures('Stripe costs 2.9% + $0.30 per card payment (about $7.55 on a $250 order).')).toEqual([7.55]);
+    expect(figures('The platform keeps $12 of a $99 sale.')).toEqual([12]);
+    expect(figures('The supplier charges $40 for each kit.')).toEqual([40]);
+    expect(figures('Printing costs $250 for an order of 500 cards.')).toEqual([250]);
+  });
+});
+
+describe('a marketplace listing is offered to the market research counted, not to an outreach batch (planner residuals, 2026-11-25)', () => {
+  const listing = (channel: string, volume: ModelInput) =>
+    lot({ opportunity: { id: 'opp_listing', title: 'Replenishable resale', reachableChannel: channel } as ModelledOpportunity['opportunity'], price: fixed(20), directCost: fixed(15), close: { value: null, low: null, high: null, provenance: 'UNKNOWN', source: null, note: '' }, volume, agreed: false, agreedValue: 0, agreedDeals: 0 });
+
+  it('offers a $20 listing to the 1,600 buyers an $8,000 target needs on a counted platform', () => {
+    // ceil(8000 / 20) = 400 deals, offered to the fixed 4× = 1,600 buyers: under 130 million counted.
+    expect(buyersToOffer(listing('Amazon FBA and eBay listings', fixed(130_000_000)), 8000)).toBe(1600);
+    expect(bestCaseReach(listing('Amazon FBA and eBay listings', fixed(130_000_000)), 8000, 60)).toBe(8000);
+  });
+
+  it('keeps the outreach batch for an emailed offer, and for a listing whose market nobody counted', () => {
+    expect(buyersToOffer(listing('Cold email through Instantly', fixed(130_000_000)), 8000)).toBe(200);
+    expect(buyersToOffer(listing('Amazon FBA and eBay listings', { value: null, low: 1, high: 200, provenance: 'UNKNOWN', source: null, note: '' }), 8000)).toBe(200);
+  });
+});
