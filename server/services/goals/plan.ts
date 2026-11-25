@@ -6467,8 +6467,24 @@ export async function advanceGoalPlans(
    */
   options: { maxReads?: number } = {},
 ): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
-  const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null; due_at: string | null; execution_window_days: number | null; execution_started_at: string | null }>(
-    `SELECT id, target_project_id, paused_at, due_at, execution_window_days, execution_started_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
+  /*
+   * Least recently read first, and a goal never read before all of them.
+   *
+   * Production, 2026-11-25: with ~60 live goals each read took 20-60 s, so one
+   * pass read about forty in table order before its 30-minute bound (and every
+   * deploy's restart) ended it — and the next pass began again at the top of
+   * the table. The twelve goals created at 19:29Z sat at its end and had no
+   * plan read and no route ask (armed in this same loop) 75 minutes later;
+   * under SHEDDING a pass reads one goal and the first due one always won.
+   * Ordering by the last reading makes a pass that is cut short leave the
+   * goals it just read, never the ones it has not.
+   */
+  const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null; due_at: string | null; execution_window_days: number | null; execution_started_at: string | null; last_read_at: string }>(
+    `SELECT w.id, w.target_project_id, w.paused_at, w.due_at, w.execution_window_days, w.execution_started_at,
+            COALESCE((SELECT MAX(g.created_at) FROM goal_plan_readings g WHERE g.workstream_id = w.id), '') AS last_read_at
+       FROM workstreams w
+      WHERE w.target_metric IS NOT NULL AND w.archived_at IS NULL AND w.cancelled_at IS NULL
+      ORDER BY last_read_at, w.created_at, w.id`,
   );
   let read = 0;
   let outcomes = 0;

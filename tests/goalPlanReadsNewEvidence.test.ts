@@ -19,6 +19,7 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { recordClaimFact } from '../server/repos/construction.ts';
 import { FACT_KEY_LIST } from '../server/domain/construction.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
+import { createProject } from '../server/repos/projects.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { advanceGoalPlans, forgetGoalReadings, inputsTakenOver, planInputsFingerprint, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS } from '../server/services/goals/plan.ts';
@@ -346,5 +347,39 @@ describe('a read that writes no row still counts as the goal having been read', 
     const filed = await play({ title: 'Quarterly tenant surveys', priceCents: 40_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
     expect(await advanceGoalPlans(at(34))).toMatchObject({ read: 1, onEvidence: 1 });
     expect(await goalRunsSince(id, filed.createdAt)).toBeGreaterThan(0);
+  });
+});
+
+describe('which goal a pass that is cut short reaches', () => {
+  async function readings(goalId: string): Promise<number> {
+    const rows = await getDb().all<{ n: number | string }>(`SELECT COUNT(*) AS n FROM goal_plan_readings WHERE workstream_id = ?`, [goalId]);
+    return Number(rows[0]!.n);
+  }
+
+  /*
+   * Production, 2026-11-25: ~60 live goals, a pass reading them in table order
+   * was ended by its bound after about forty, and the next pass started again
+   * at the top — twelve goals created at 19:29Z had no plan read 75 minutes
+   * later. A pass reads the goal never read first, then the least recently read.
+   */
+  it('a new goal is read before goals that are merely due for a refresh', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const older = await goal(100_000);
+    const start = new Date();
+    expect((await advanceGoalPlans(start)).read).toBe(1);
+    expect(await readings(older)).toBe(1);
+
+    // A second goal needs a project of its own (one goal per project).
+    const other = await createProject({ name: 'Second goal', slug: `second-goal-${Math.random().toString(36).slice(2, 8)}` });
+    expect((await activate({ projectId: other.id, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    const g = await createWorkstream({ projectId: other.id, title: 'Collect cash fast too', intent: 'Collect settled cash within the window.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: inDays(30), ownerUserId: userId }, `person:${userId}`);
+    expect((await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 100_000, currency: 'USD', projectId: other.id, capitalCeilingCents: null, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) })).ok).toBe(true);
+    const fresh = g.id;
+    // Both are due — the older one for its half-hour refresh — and the pass may read one.
+    const pass = await advanceGoalPlans(new Date(start.getTime() + PLAN_REFRESH_MS + 60_000), { maxReads: 1 });
+    expect(pass.read).toBe(1);
+    expect(await readings(fresh)).toBe(1);
+    expect(await readings(older)).toBe(1);
   });
 });

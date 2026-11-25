@@ -1610,6 +1610,18 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   const asks = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - Math.max(DAY, ROUTE_PROPOSAL_EVERY_MS)).toISOString(), 50);
   // How much research the goal's project holds now: new findings make a fresh, grounded ask due.
   const claimsOf = deps.claims ?? ((projectId: string) => projectEvidenceClaims(projectId, FINDINGS_COUNTED));
+  /*
+   * The findings are read only when they can change the answer: the ask is
+   * due anyway, or the last ask counted findings and the retry spacing has
+   * passed. The plan pass arms this for every live goal on every pass, and
+   * reading up to 200 claims first made each of those a join over
+   * research_claims while the database was already contended (2026-11-25).
+   */
+  const last = asks[0];
+  const findingsCanMatter =
+    !!last && typeof last.detail['findingsSeen'] === 'number' && now.getTime() - Date.parse(last.createdAt) >= ROUTE_RETRY_AFTER_FAILURE_MS;
+  const without = routeAskDue(asks, now, { retryOnly: input.retryOnly === true });
+  if (!without.due && !findingsCanMatter) return { kind: 'NOT_DUE', reason: without.reason };
   const claims = goal.projectId ? await claimsOf(goal.projectId).catch(() => [] as ResearchClaim[]) : [];
   const due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, findings: claims.length });
   if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
