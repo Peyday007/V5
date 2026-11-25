@@ -543,34 +543,35 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
       necessity: 'CONDITIONAL',
     },
     /*
-     * The three parts of a route the dive had no lane for (2026-11-25). A plan
-     * needs to know how many such buyers exist, that they want it now, and who
-     * does the work; a dive that could establish only price, cost, timing and
-     * access left MARKET_VOLUME, CURRENT_DEMAND and FULFILMENT open on every
-     * route it qualified. Each is written onto the card by the one research
-     * answer writer (`writeEvidenceAnswer`).
+     * The three a whole commercial route needs that no lane above asks
+     * (PLANNING-9-10 §2): how many such buyers there are, a dated sign they
+     * want it now, and who fulfils it. A plan needs the first two together.
      */
     {
       id: 'buyer_volume',
+      evidenceKind: 'SPECIFIC_INSTANCE',
       description:
-        'How many buyers of this kind exist in the reachable market, and how often each buys: a ' +
-        'count a directory, register, census or association publishes, with its source.',
+        'How many buyers of this kind exist — a sourced count of the businesses, organisations ' +
+        'or people who buy this (a register, directory, census or association count), with its ' +
+        'date. A market’s money size or growth rate is not a count of buyers; say so where ' +
+        'that is all there is.',
       necessity: 'CONDITIONAL',
     },
     {
       id: 'current_demand',
       evidenceKind: 'SPECIFIC_INSTANCE',
       description:
-        'A dated sign from the last few months that buyers of this kind want it now: a request, ' +
-        'posting, tender or listing, with its URL and the date it was published.',
+        'A dated sign that buyers of this kind want it now — a posting, request, tender, review, ' +
+        'announcement or listing from the last few months — quoted with the date the source ' +
+        'prints. An undated page is not a sign of current demand.',
       necessity: 'CONDITIONAL',
     },
     {
       id: 'fulfiller',
+      evidenceKind: 'SPECIFIC_INSTANCE',
       description:
-        'Who performs, produces or supplies the work if it is not produced by this operation: a ' +
-        'named supplier, a kind of contractor with published rates, or a marketplace where such ' +
-        'work is bought, with its source.',
+        'Who can deliver it: a named supplier, subcontractor, platform or tool that publishes ' +
+        'that it does this work, with its published price or terms where it states them.',
       necessity: 'CONDITIONAL',
     },
   ],

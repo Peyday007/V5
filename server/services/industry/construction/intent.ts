@@ -208,10 +208,25 @@ export interface ObjectiveReading {
    * wherever it is read (`goalScope`).
    */
   capitalAssumed: { amount: number; phrase: string; basis: string } | null;
+  /**
+   * What the person says they have besides money and a number of hours, verbatim:
+   * equipment ("a pickup truck") and time stated without a figure ("my weekends are
+   * free"). Never turned into an hours limit — no figure was said (invariant 39).
+   */
+  resources: string[];
   /** The constraint phrases, verbatim. */
   constraints: string[];
   /** Phrases the reader saw and could not interpret, and required fields it could not find. */
   unread: string[];
+  /** A place the words name, set only by a second reading (`objectiveAssist.ts`) that found it verbatim in them. */
+  location?: string | null;
+  /**
+   * Set when a model read the words a second time because this reader left a
+   * money figure unplaced, read no amount, or found no deadline: which fields
+   * came from that reading (each checked against the words), which it proposed
+   * and were refused, and which model answered. Absent when the reader alone decided.
+   */
+  assisted?: { model: string; fields: string[]; rejected: string[] } | null;
 }
 
 type TokenRole = 'AMOUNT' | 'CAPITAL' | 'BEFORE_PROOF' | 'PER_WEEK' | 'RANGE' | 'DEADLINE' | 'MADE';
@@ -239,7 +254,7 @@ const SUFFIX_SRC = String.raw`(?:k|m|mm|bn|thousand|million|billion)\b`;
 const CODE_SRC = String.raw`(?:usd|eur|gbp|dollars?|euros?|pounds?|bucks)\b`;
 /** One figure with whatever marks it as money, for embedding in a phrase. */
 const MP = String.raw`(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s?${NUMBER_SRC}(?:\s?${SUFFIX_SRC})?(?:\s?${CODE_SRC})?`;
-const LIMIT = String.raw`(?:at most|no more than|not more than|up to|under|less than|below|a maximum of|maximum of|max(?:imum)?|only|just|about|around|roughly)`;
+const LIMIT = String.raw`(?:at most|no more than|not more than|up to|under|less than|below|a maximum of|maximum of|max(?:imum)?|only|just|about|around|roughly|approximately|maybe|close to|nearly|almost)`;
 /** The verbs of "turn $1,000 into $10,000". */
 const GROW = String.raw`(?:turn|turning|grow|growing|convert|converting|multiply|multiplying|compound|compounding)`;
 const NUMBER_WORDS: Record<string, number> = {
@@ -249,6 +264,26 @@ const NUMBER_WORDS: Record<string, number> = {
 };
 const NUMBER_WORD_SRC = Object.keys(NUMBER_WORDS).sort((a, b) => b.length - a.length).join('|');
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const MONTH_SRC = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+/** "About", "around", "roughly": an approximate figure is the figure; the word changes nothing the reader places. */
+const APPROX_SRC = String.raw`(?:about|around|roughly|approximately|approx\.?|maybe|say|some)`;
+/**
+ * A count in words or digits, including the vague ones: "a couple of weeks" is
+ * two, "a few"/"several" three. A vague count is read at its low end, so a
+ * vague deadline is never read later than the words allow.
+ */
+const COUNT_SRC = String.raw`\d+(?:\.\d+)?|(?:a\s+)?couple(?:\s+of)?|(?:a\s+)?few|several|${NUMBER_WORD_SRC}`;
+function countOf(raw: string): number | null {
+  const s = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (/^\d/.test(s)) return Number(s);
+  if (/couple/.test(s)) return 2;
+  if (/few|several/.test(s)) return 3;
+  return NUMBER_WORDS[s] ?? null;
+}
+/** A figure per month: "a month", "per month", "/mo", "monthly". */
+const PER_MONTH_SRC = String.raw`(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?\b|a\s+mo\b|monthly\b)`;
+/** What follows a per-month figure that says it is money coming in, not money going out. */
+const INCOME_AFTER_SRC = String.raw`(?:(?:in|of)\s+)?(?:(?:new|net|gross|steady|passive|extra|side|reliable|consistent|recurring|monthly|take-home)\s+)*(?:revenue|income|profit|cash(?:\s+flow)?|sales|earnings)\b|(?:coming|rolling|flowing)\s+in\b|on\s+a\s+(?:recurring|regular|monthly|steady|consistent)\s+basis\b|(?:recurring|consistently|reliably|steadily|ongoing|every\s+month)\b`;
 
 function moneyTokens(text: string): MoneyToken[] {
   const re = new RegExp(
@@ -257,13 +292,37 @@ function moneyTokens(text: string): MoneyToken[] {
   );
   const out: MoneyToken[] = [];
   for (let m = re.exec(text); m; m = re.exec(text)) {
-    const [raw, symbol, digits, suffix, code] = m;
+    const [match, symbol, digits, suffix, code] = m;
+    // "$1,500-ish", "$2k ish": an approximate figure is the figure, and the token keeps the word with it.
+    const ish = /^\s?-?\s?ish\b/i.exec(text.slice(m.index + match!.length));
+    const raw = ish ? match! + ish[0] : match!;
+    if (ish) re.lastIndex = m.index + raw.length;
     const base = Number(digits!.replace(/,/g, ''));
     const value = suffix ? base * (MAGNITUDE[suffix.toLowerCase()] ?? 1) : base;
     const currency = symbol ? CURRENCY_OF[symbol.toLowerCase()] ?? null : code ? CURRENCY_OF[code.toLowerCase()] ?? null : null;
-    out.push({ start: m.index, end: m.index + raw!.length, raw: raw!.trim(), value, currency, marked: Boolean(symbol || suffix || code), role: null });
+    out.push({ start: m.index, end: m.index + raw.length, raw: raw.trim(), value, currency, marked: Boolean(symbol || suffix || code), role: null });
   }
   return out;
+}
+
+/**
+ * Every figure the words state, with the currency each names: money tokens at
+ * their full value ("$5k" is 5,000) and counts written as words ("ten hours").
+ * What a second reader of the same words may cite; anything not here was not said.
+ */
+export function statedFigures(text: string): { value: number; currency: string | null }[] {
+  const t = text.replace(/\s+/g, ' ');
+  const out = moneyTokens(t).map((m) => ({ value: m.value, currency: m.currency }));
+  for (const m of t.matchAll(new RegExp(String.raw`\b(${NUMBER_WORD_SRC})\b`, 'gi'))) {
+    const word = m[1]!.toLowerCase();
+    if (word !== 'a' && word !== 'an') out.push({ value: NUMBER_WORDS[word]!, currency: null });
+  }
+  return out;
+}
+
+/** Whether the words state a figure per month ("a month", "/mo", "monthly", "MRR"). */
+export function statesMonthlyRate(text: string): boolean {
+  return new RegExp(String.raw`${PER_MONTH_SRC}|\bMRR\b|\bmonthly\b`, 'i').test(text);
 }
 
 interface Span {
@@ -286,6 +345,81 @@ function addCalendar(now: Date, unit: 'month' | 'year', n: number): Date {
 function endOfDay(year: number, monthIndex: number, day: number): Date | null {
   const d = new Date(Date.UTC(year, monthIndex, day, 23, 59, 59));
   return d.getUTCMonth() === monthIndex && d.getUTCDate() === day ? d : null;
+}
+
+type Period = 'week' | 'month' | 'quarter' | 'year';
+/** The last second of the current calendar period, or of the one `ahead` periods later. Weeks end on Sunday. */
+function periodEnd(now: Date, period: Period, ahead: number): Date {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  if (period === 'week') {
+    const toSunday = (7 - now.getUTCDay()) % 7 + 7 * ahead;
+    return new Date(Date.UTC(y, m, now.getUTCDate() + toSunday, 23, 59, 59));
+  }
+  if (period === 'month') return new Date(Date.UTC(y, m + 1 + ahead, 0, 23, 59, 59));
+  if (period === 'quarter') return new Date(Date.UTC(y, Math.floor(m / 3) * 3 + 3 + 3 * ahead, 0, 23, 59, 59));
+  return new Date(Date.UTC(y + ahead, 11, 31, 23, 59, 59));
+}
+
+/** The next occurrence after `now` of a date computed per year. */
+function nextOf(now: Date, on: (year: number) => Date | null): Date | null {
+  for (const year of [now.getUTCFullYear(), now.getUTCFullYear() + 1]) {
+    const at = on(year);
+    if (at && at.getTime() > now.getTime()) return at;
+  }
+  return null;
+}
+
+const SEASON_START: Record<string, number> = { spring: 2, summer: 5, fall: 8, autumn: 8, winter: 11 };
+/** "By spring" is before the season begins; "by the end of summer" is its last day. Meteorological seasons. */
+function seasonAt(now: Date, name: string, end: boolean): Date | null {
+  const first = SEASON_START[name]!;
+  return nextOf(now, (year) => (end ? new Date(Date.UTC(year, first + 3, 0, 23, 59, 59)) : new Date(Date.UTC(year, first, 1) - 1000)));
+}
+
+const HOLIDAY_SRC = String.raw`christmas(?:\s+eve)?|xmas|new\s+year'?s?(?:\s+(?:eve|day))?|thanksgiving|halloween|valentine'?s(?:\s+day)?|fourth\s+of\s+july|independence\s+day|labou?r\s+day|memorial\s+day|tax\s+day`;
+/** The nth (1-based; -1 the last) weekday `dow` of a month. */
+function nthWeekday(year: number, month: number, dow: number, nth: number): Date {
+  if (nth > 0) {
+    const first = new Date(Date.UTC(year, month, 1)).getUTCDay();
+    return endOfDay(year, month, 1 + ((dow - first + 7) % 7) + 7 * (nth - 1))!;
+  }
+  const lastDay = new Date(Date.UTC(year, month + 1, 0));
+  return endOfDay(year, month, lastDay.getUTCDate() - ((lastDay.getUTCDay() - dow + 7) % 7))!;
+}
+/** A holiday's day, end of day; "before" it is the day before. */
+function holidayAt(now: Date, raw: string, before: boolean, fromYear: number | null = null): Date | null {
+  const h = raw.toLowerCase().replace(/\s+/g, ' ');
+  const day = (year: number): Date | null => {
+    if (/eve$/.test(h) && /christmas/.test(h)) return endOfDay(year, 11, 24);
+    if (/christmas|xmas/.test(h)) return endOfDay(year, 11, 25);
+    if (/new year/.test(h)) return /day$/.test(h) ? endOfDay(year + 1, 0, 1) : endOfDay(year, 11, 31);
+    if (/thanksgiving/.test(h)) return nthWeekday(year, 10, 4, 4);
+    if (/halloween/.test(h)) return endOfDay(year, 9, 31);
+    if (/valentine/.test(h)) return endOfDay(year, 1, 14);
+    if (/july|independence/.test(h)) return endOfDay(year, 6, 4);
+    if (/labou?r/.test(h)) return nthWeekday(year, 8, 1, 1);
+    if (/memorial/.test(h)) return nthWeekday(year, 4, 1, -1);
+    if (/tax/.test(h)) return endOfDay(year, 3, 15);
+    return null;
+  };
+  const on = (year: number) => {
+    const at = day(year);
+    return at && before ? new Date(at.getTime() - 86_400_000) : at;
+  };
+  if (fromYear !== null) return on(fromYear);
+  return nextOf(now, on);
+}
+
+const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+/** "Tomorrow", "tonight", "the weekend" (Sunday) or the next named weekday, end of day. */
+function dayAt(now: Date, word: string): Date | null {
+  const today = (plus: number) => endOfDay(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + plus) ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + plus, 23, 59, 59));
+  if (word === 'tonight') return today(0);
+  if (word === 'tomorrow') return today(1);
+  const dow = word === 'weekend' ? 0 : WEEKDAYS.indexOf(word.slice(0, 3));
+  const ahead = (dow - now.getUTCDay() + 7) % 7;
+  return today(ahead);
 }
 
 interface ObjectiveDetail {
@@ -328,20 +462,31 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     if (at.getTime() <= now.getTime()) return unread.push(`"${phrase}": a deadline already past`);
     deadline = at;
   };
-  const relative = new RegExp(String.raw`\b(?:in|within|inside(?:\s+of)?|over|during)\s+(?:the\s+)?(?:next\s+|coming\s+|first\s+)?(\d+(?:\.\d+)?|${NUMBER_WORD_SRC})\s+(hours?|hrs?|days?|weeks?|months?|years?)\b`, 'gi');
+  const spanAt = (n: number, unit: string): Date | null => {
+    if (unit === 'hour' || unit === 'hr') return new Date(now.getTime() + n * 3_600_000);
+    if (unit === 'day') return new Date(now.getTime() + n * 86_400_000);
+    if (unit === 'week') return new Date(now.getTime() + n * 7 * 86_400_000);
+    return Number.isInteger(n) ? addCalendar(now, unit as 'month' | 'year', n) : null;
+  };
+  /** A span ("within 30 days", "four months from now"): the first one read is also the execution window (§119). */
+  const spanSeen = (start: number, end: number, n: number | null, unitRaw: string, phrase: string) => {
+    const unit = unitRaw.toLowerCase().replace(/s$/, '');
+    const first = deadline === null;
+    deadlineSeen(start, end, n === null ? null : spanAt(n, unit), phrase);
+    if (first && deadline !== null && unit !== 'hour' && unit !== 'hr') windowDays = Math.max(1, Math.round(((deadline as Date).getTime() - now.getTime()) / 86_400_000));
+  };
+  // "within 30 days", "in a couple of weeks", "over the next few months", "in about six weeks".
+  const relative = new RegExp(String.raw`\b(?:in|within|inside(?:\s+of)?|over|during)\s+(?:the\s+)?(?:next\s+|coming\s+|first\s+)?(?:${APPROX_SRC}\s+)?(${COUNT_SRC})\s+(hours?|hrs?|days?|weeks?|months?|years?)\b`, 'gi');
   for (const m of text.matchAll(relative)) {
     // "can put in 10 hours this week" is the person's time, not a deadline: the hours reader (step 3) takes it.
     if (/\bhours?|hrs?\b/i.test(m[2]!) && /\b(?:put|putting|spend|spending|give|giving|work|working)\s*$/i.test(text.slice(Math.max(0, m.index! - 12), m.index!))) continue;
-    const n = /^\d/.test(m[1]!) ? Number(m[1]) : NUMBER_WORDS[m[1]!.toLowerCase()]!;
-    const unit = m[2]!.toLowerCase().replace(/s$/, '');
-    let at: Date | null = null;
-    if (unit === 'hour' || unit === 'hr') at = new Date(now.getTime() + n * 3_600_000);
-    else if (unit === 'day') at = new Date(now.getTime() + n * 86_400_000);
-    else if (unit === 'week') at = new Date(now.getTime() + n * 7 * 86_400_000);
-    else if (Number.isInteger(n)) at = addCalendar(now, unit as 'month' | 'year', n);
-    const first = deadline === null;
-    deadlineSeen(m.index!, m.index! + m[0].length, at, m[0]);
-    if (first && deadline !== null && unit !== 'hour' && unit !== 'hr') windowDays = Math.max(1, Math.round(((deadline as Date).getTime() - now.getTime()) / 86_400_000));
+    spanSeen(m.index!, m.index! + m[0].length, countOf(m[1]!), m[2]!, m[0]);
+  }
+  // "four months from now", "by about six weeks from today", "3 months out from now".
+  const fromNow = new RegExp(String.raw`(?:\b(?:by|in|within|before)\s+)?(?:${APPROX_SRC}\s+)?\b(${COUNT_SRC})\s+(days?|weeks?|months?|years?)\s+(?:out\s+)?from\s+(?:now|today)\b`, 'gi');
+  for (const m of text.matchAll(fromNow)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    spanSeen(m.index!, m.index! + m[0].length, countOf(m[1]!), m[2]!, m[0]);
   }
   for (const m of text.matchAll(/\bby\s+(\d{4})-(\d{2})-(\d{2})\b/gi)) {
     deadlineSeen(m.index!, m.index! + m[0].length, endOfDay(Number(m[1]), Number(m[2]) - 1, Number(m[3])), m[0]);
@@ -349,10 +494,58 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   for (const m of text.matchAll(/\bby\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\b/gi)) {
     deadlineSeen(m.index!, m.index! + m[0].length, endOfDay(Number(m[3]), Number(m[1]) - 1, Number(m[2])), m[0]);
   }
-  for (const m of text.matchAll(/\bby\s+(?:the\s+)?end\s+of\s+(?:the\s+|this\s+)?(year|month)\b/gi)) {
-    const y = now.getUTCFullYear();
-    const at = m[1]!.toLowerCase() === 'year' ? endOfDay(y, 11, 31) : new Date(Date.UTC(y, now.getUTCMonth() + 1, 0, 23, 59, 59));
+  // "by end of next month", "before the end of the quarter", "end of this week": the last day of that calendar period.
+  const endOfPeriod = new RegExp(String.raw`(?:\b(?:by|before|until|till|til|at|for)\s+)?(?:${APPROX_SRC}\s+)?(?:the\s+)?\bend\s+of\s+(?:the\s+|this\s+|(next)\s+)?(week|month|quarter|year)\b`, 'gi');
+  for (const m of text.matchAll(endOfPeriod)) {
+    deadlineSeen(m.index!, m.index! + m[0].length, periodEnd(now, m[2]!.toLowerCase() as Period, m[1] ? 1 : 0), m[0]);
+  }
+  // "by next month", "by next week": before that period begins — the end of the current one, never later than the words allow.
+  for (const m of text.matchAll(/\b(?:by|before)\s+next\s+(week|month|quarter|year)\b/gi)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    deadlineSeen(m.index!, m.index! + m[0].length, periodEnd(now, m[1]!.toLowerCase() as Period, 0), m[0]);
+  }
+  // "by mid-January", "before early March", "by the beginning of April", "by January".
+  const partOfMonth = new RegExp(String.raw`\b(?:by|before|until|till|around)\s+(?:${APPROX_SRC}\s+)?(?:the\s+)?(?:(early|mid|middle\s+of|late|(?:start|beginning)\s+of)[\s-]*(?:the\s+month\s+of\s+)?)?(${MONTH_SRC})\b(?!\.?\s+\d{1,2}(?:st|nd|rd|th)?\b)(?:,?\s+(\d{4}))?`, 'gi');
+  for (const m of text.matchAll(partOfMonth)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    // "may" is also a verb: only a capitalised or qualified "May" is the month.
+    if (/^may$/i.test(m[2]!) && !m[1] && m[2] !== 'May') continue;
+    const month = MONTHS.indexOf(m[2]!.slice(0, 3).toLowerCase());
+    const part = (m[1] ?? '').toLowerCase();
+    const day = /^early/.test(part) ? 10 : /^mid/.test(part) ? 15 : /^late/.test(part) ? 20 : 0;
+    const on = (year: number) => (day ? endOfDay(year, month, day) : new Date(Date.UTC(year, month, 1) - 1000));
+    let at = on(m[3] ? Number(m[3]) : now.getUTCFullYear());
+    if (at && !m[3] && at.getTime() <= now.getTime()) at = on(now.getUTCFullYear() + 1);
     deadlineSeen(m.index!, m.index! + m[0].length, at, m[0]);
+  }
+  // "by spring", "before the end of summer": the season's first or last day (meteorological seasons).
+  const season = new RegExp(String.raw`\b(?:by|before|until|till)\s+(?:${APPROX_SRC}\s+)?(?:the\s+)?(?:(start|beginning|end)\s+of\s+(?:the\s+)?)?(?:this\s+|next\s+)?(spring|summer|fall|autumn|winter)\b`, 'gi');
+  for (const m of text.matchAll(season)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    deadlineSeen(m.index!, m.index! + m[0].length, seasonAt(now, m[2]!.toLowerCase(), (m[1] ?? '').toLowerCase() === 'end'), m[0]);
+  }
+  // "before Christmas", "by Thanksgiving", "for New Year's".
+  const holiday = new RegExp(String.raw`\b(by|before|until|till|for)\s+(?:${APPROX_SRC}\s+)?(?:the\s+)?(${HOLIDAY_SRC})(?![\w'])(?:,?\s+(?:(this|next)\s+year|(\d{4})))?`, 'gi');
+  for (const m of text.matchAll(holiday)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    // "before Thanksgiving next year": that year's, never this year's.
+    const fromYear = m[4] ? Number(m[4]) : m[3]?.toLowerCase() === 'next' ? now.getUTCFullYear() + 1 : null;
+    deadlineSeen(m.index!, m.index! + m[0].length, holidayAt(now, m[2]!, m[1]!.toLowerCase() === 'before', fromYear), m[0]);
+  }
+  // "by the 15th of February", "before the 3rd of March 2027".
+  const dayOfMonth = new RegExp(String.raw`\b(?:by|before|until|till|on)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(${MONTH_SRC})\b(?:,?\s+(\d{4}))?`, 'gi');
+  for (const m of text.matchAll(dayOfMonth)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    const month = MONTHS.indexOf(m[2]!.slice(0, 3).toLowerCase());
+    const day = Number(m[1]);
+    let at = endOfDay(m[3] ? Number(m[3]) : now.getUTCFullYear(), month, day);
+    if (at && !m[3] && at.getTime() <= now.getTime()) at = endOfDay(now.getUTCFullYear() + 1, month, day);
+    deadlineSeen(m.index!, m.index! + m[0].length, at, m[0]);
+  }
+  // "by Friday", "before this Thursday", "by tomorrow", "by the weekend": the next such day, end of day.
+  for (const m of text.matchAll(/\b(?:by|before|until)\s+(?:this\s+|next\s+|the\s+)?(tomorrow|tonight|weekend|(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b/gi)) {
+    if (overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) continue;
+    deadlineSeen(m.index!, m.index! + m[0].length, dayAt(now, m[1]!.toLowerCase()), m[0]);
   }
   const monthDay = /\bby\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/gi;
   for (const m of text.matchAll(monthDay)) {
@@ -363,12 +556,13 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     if (at && !m[3] && at.getTime() <= now.getTime()) at = endOfDay(now.getUTCFullYear() + 1, month, day);
     deadlineSeen(m.index!, m.index! + m[0].length, at, m[0]);
   }
-  for (const m of text.matchAll(/\bby\s+(?:tomorrow|tonight|next\s+\w+|this\s+\w+|(?:mon|tues|wednes|thurs|fri|satur|sun)day|the\s+end\s+of\s+(?:the\s+|this\s+|next\s+)?(?:week|quarter|summer|winter|spring|fall))\b/gi)) {
-    if (!overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) deadlineSeen(m.index!, m.index! + m[0].length, null, m[0]);
-  }
   // "this week": the seven days from now. "by (the) end of March": the last day of the next March.
   for (const m of text.matchAll(/\b(?:this|within the|in the next)\s+week\b/gi)) {
     if (!overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed) && deadline === null) deadlineSeen(m.index!, m.index! + m[0].length, new Date(now.getTime() + 7 * 86_400_000), m[0]);
+  }
+  // "make $500 this month": the end of this month, quarter or year, when nothing else set a deadline.
+  for (const m of text.matchAll(/\b(?:(?:by|before|within|during|in)\s+)?this\s+(month|quarter|year)\b/gi)) {
+    if (!overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed) && deadline === null) deadlineSeen(m.index!, m.index! + m[0].length, periodEnd(now, m[1]!.toLowerCase() as Period, 0), m[0]);
   }
   const endOfMonthName = /\bby\s+(?:the\s+)?end\s+of\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b(?:,?\s+(\d{4}))?/gi;
   for (const m of text.matchAll(endOfMonthName)) {
@@ -378,6 +572,10 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     let at = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59));
     if (!m[2] && at.getTime() <= now.getTime()) at = new Date(Date.UTC(++year, month + 1, 0, 23, 59, 59));
     deadlineSeen(m.index!, m.index! + m[0].length, at, m[0]);
+  }
+  // Anything else that looks like a deadline and was not read is named, never guessed.
+  for (const m of text.matchAll(/\bby\s+(?:tomorrow|tonight|next\s+\w+|this\s+\w+|(?:mon|tues|wednes|thurs|fri|satur|sun)day|the\s+end\s+of\s+(?:the\s+|this\s+|next\s+)?(?:week|quarter|summer|winter|spring|fall))\b/gi)) {
+    if (!overlaps({ start: m.index!, end: m.index! + m[0].length }, consumed)) deadlineSeen(m.index!, m.index! + m[0].length, null, m[0]);
   }
   if (!deadline) {
     for (const m of text.matchAll(/\b(asap|as soon as possible|quickly|fast|soon|right away|immediately)\b/gi)) unread.push(`"${m[0]}": not a deadline`);
@@ -437,7 +635,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     constraintSpans.push({ start: fewHours.index, end: fewHours.index + fewHours[0].length, text: fewHours[0] });
   }
   const PER_WEEK: Record<string, number> = { day: 7, week: 1, month: 7 / 30 };
-  for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s+(?:of\s+\w+\s+)?(?:per|a|each|every)\s+(day|week|month)\b/gi)) {
+  for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s*(?:(?:of\s+\w+\s+)?(?:per|a|each|every)\s+|\/\s?)(day|week|wk|month)\b/gi)) {
     const span = { start: m.index!, end: m.index! + m[0].length, text: m[0] };
     if (overlaps(span, consumed)) continue;
     consumed.push(span);
@@ -449,7 +647,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     } else if (hoursPerWeek !== null || hoursCeiling !== null) {
       unread.push(`"${m[0]}": a second hours limit`);
     } else {
-      hoursPerWeek = Math.round(Number(m[1]) * PER_WEEK[m[2]!.toLowerCase()]! * 100) / 100;
+      hoursPerWeek = Math.round(Number(m[1]) * PER_WEEK[m[2]!.toLowerCase().replace(/^wk$/, 'week')]! * 100) / 100;
       hoursCeiling = Math.round((hoursPerWeek * (window.getTime() - now.getTime())) / (7 * 86_400_000));
     }
   }
@@ -463,7 +661,11 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     { role: 'CAPITAL', re: new RegExp(String.raw`(?:\b(?:using|use|with|${spend}|on|from)\s+)?(?:${LIMIT}\s+)?(?:an?\s+)?${MP}\s+(?:(?:of|in|as|for)\s+)?(?:(?:my|our|own|the|total|starting|start-up|startup|seed|initial|upfront|up-front|working)\s+)*(?:capital|budget|investment|funding|funds|cash to (?:invest|spend)|money to (?:invest|spend))\b`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:budget|capital|investment|funding|bankroll)\s+(?:(?:of|is|is only|at)\s+)?(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b${spend}\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
-    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)\s+(?:only\s+)?(?:have|has|got|own|can (?:spend|invest|put in|afford))\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)\s+(?:only\s+)?(?:have|has|got|own|can (?:spend|invest|put in|afford|spare))\s+(?:${LIMIT}\s+)?${MP}(?!\s*(?:${PER_MONTH_SRC}|(?:per|a)\s+(?:week|year)|coming in|in (?:income|revenue|sales)))`, 'gi') },
+    // "…, have $100", "Got about $1,500.": the same, with the person left unsaid at the start of a clause.
+    { role: 'CAPITAL', re: new RegExp(String.raw`(?:^|[.;,:!]\s*|\b(?:and|but)\s+)(?:only\s+)?(?:have|got)\s+(?:${LIMIT}\s+)?${MP}(?!\s*(?:${PER_MONTH_SRC}|(?:per|a)\s+(?:week|year)|coming in|in (?:income|revenue|sales)))`, 'gi') },
+    // "I've got $1,000", "we have got about $500": money the person has is the most the plan may use.
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)(?:'ve|\s+have)\s+(?:only\s+)?got\s+(?:${LIMIT}\s+)?${MP}(?!\s*(?:${PER_MONTH_SRC}|(?:per|a)\s+(?:week|year)|coming in|in (?:income|revenue|sales)))`, 'gi') },
     // "I've got 10k to invest", "$1,000 to start", "I can put up to $500 into it", "I'll put in $10k".
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)(?:'ve|'ll| have| will)?\s+(?:only\s+)?(?:got|have|put(?:\s+in)?|invest|spend)\s+(?:${LIMIT}\s+)?${MP}(?=\s+(?:to (?:invest|spend|start|work with|put in)|into (?:it|this)|in(?:to)? (?:the business|it))\b)`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:put|invest|spend)\s+(?:${LIMIT}\s+)?${MP}\s+into\s+(?:it|this|the business)\b`, 'gi') },
@@ -495,9 +697,11 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   // is what one sale brings in, never the amount or a limit: it is kept as a constraint, read by nothing else.
   for (const t of tokens) {
     if (t.role !== null || !t.marked) continue;
-    const before = text.slice(Math.max(0, t.start - 14), t.start);
+    const before = text.slice(Math.max(0, t.start - 20), t.start);
     const after = text.slice(t.end, t.end + 40);
-    const priced = /\b(?:at|for|charging|charge|priced at)\s+$/i.test(before) || /^\s*(?:\/\s?(?:mo(?:nth)?|each)\s+)?(?:each\b|retainers?\b|per\s+(?:client|customer|sale|deal|unit|job|order|lead|listing|door)\b)/i.test(after);
+    // "Aiming for $12,000" is the goal, not a price.
+    const goalFor = /\b(?:aim(?:s|ing)?|shoot(?:s|ing)?|hop(?:e|es|ing)|looking|going|gunning)\s+for\s+$/i.test(before);
+    const priced = (/\b(?:at|for|charging|charge|priced at)\s+$/i.test(before) && !goalFor) || /^\s*(?:\/\s?(?:mo(?:nth)?|each)\s+)?(?:each\b|retainers?\b|per\s+(?:client|customer|sale|deal|unit|job|order|lead|listing|door)\b)/i.test(after);
     if (!priced) continue;
     t.role = 'MADE';
     constraintSpans.push({ start: t.start, end: t.end, text: `price ${t.raw}` });
@@ -505,7 +709,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
 
   // 5. The amount: a figure the words say is to be brought in.
   // Every person of the verb: "a business that collects $50,000" names the amount as surely as "collect $50,000".
-  const verbBefore = /\b(?:want|wants|need|needs|builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:me|us|it|them|this|that|my business|the business)\s+)?(?:(?:to|up to)\s+)?(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
+  const verbBefore = /\b(?:want|wants|need|needs|builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?|pays?(?:\s+(?:me|us))?|paying(?:\s+(?:me|us))?|take home|taking home|replac(?:e|es|ing)(?:\s+(?:my|our))?|(?:like|want|need|love|hope)\s+to\s+have|aim(?:s|ing)?\s+for|shoot(?:s|ing)?\s+for|hop(?:e|es|ing)\s+for|looking\s+for|(?:goal|target|aim)\s+(?:is|of)|(?:income|revenue|earnings|profit)\s+of)\s+(?:(?:me|us|it|them|this|that|my business|the business)\s+)?(?:(?:to|up to)\s+)?(?:(?:me|us|at least|over|more than|about|around|roughly|approximately|maybe|some|close to|nearly|almost|just over|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
   const nounAfter = /^\s*(?:(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments|invoices|billings?|bookings|fees|commissions|deposits)\b|collected\b|(?:a|per)\s+month\s+recurring\b|\/\s?mo(?:nth)?\s+recurring\b|MRR\b)/i;
   let amountToken: MoneyToken | null = null;
   let recurring: ObjectiveReading['recurring'] = null;
@@ -513,21 +717,43 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     if (t.role !== null || !t.marked) continue;
     const before = text.slice(Math.max(0, t.start - 60), t.start);
     const after = text.slice(t.end);
-    const beforeDeadline = consumed.some((s) => s.start >= t.end && /^\s*$/.test(text.slice(t.end, s.start)) && /^(?:in|within|inside|over|during|by)\b/i.test(s.text));
+    const beforeDeadline = consumed.some((s) => s.start >= t.end && /^\s*$/.test(text.slice(t.end, s.start)) && /^(?:in|within|inside|over|during|by|before|until|till)\b/i.test(s.text));
     // The figure a stake is turned into: the stake's own phrase (step 4) ends right before "into".
     const turnedInto = constraintSpans.some((s) => new RegExp(String.raw`^${GROW}\s`, 'i').test(s.text) && /^\s+into\s+$/i.test(text.slice(s.end, t.start)));
     // "$5,000 a month in recurring revenue", "$5k MRR", "$5,000 in monthly recurring revenue": a monthly run-rate is the amount.
     const statedRecurring =
       /^\s*(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?)\s+recurring\b/i.test(after) ||
       /^\s*(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?)\s+(?:(?:in|of)\s+)?(?:(?:new|net|gross|monthly)\s+)*(?:recurring|subscription|retainer)\s+(?:revenue|income|sales|billings?)\b/i.test(after) ||
-      /^\s*(?:(?:in|of)\s+)?(?:(?:new|net|gross)\s+)*(?:monthly\s+recurring\s+(?:revenue|income|sales)|MRR)\b/i.test(after);
+      /^\s*(?:(?:in|of)\s+)?(?:(?:new|net|gross)\s+)*(?:monthly\s+recurring\s+(?:revenue|income|sales)|MRR)\b/i.test(after) ||
+      // "$5k a month coming in", "$3,000/mo in steady income", "$2,000 monthly on a recurring basis": the words after the rate say it is income.
+      new RegExp(String.raw`^\s*${PER_MONTH_SRC}\s*(?:${INCOME_AFTER_SRC})`, 'i').test(after) ||
+      // "$2.5k coming in monthly", "$1,000 in monthly income".
+      /^\s*(?:(?:coming|rolling|flowing)\s+in\s+(?:monthly|every\s+month|each\s+month|(?:a|per)\s+month)|(?:in|of)\s+monthly\s+(?:income|revenue|profit|cash\s+flow))\b/i.test(after);
     /*
      * "Get to $4,000 a month within 60 days", "reach $6,000 a month": a per-month figure the
      * sentence's own verb says is to be brought in, with no other amount, is a monthly run-rate.
      * The owner's ordinary phrasing (2026-11-24 investigation: 12 of 40 fresh requests were
      * refused or read without an amount) — a rate with no such verb stays unread below.
      */
-    const ranRate = !amountToken && verbBefore.test(before) && /^\s*(?:per|a|each|every)\s+month\b(?!\s+(?:of|in)\s+(?:capital|budget|spend))/i.test(after);
+    const ranRate = !amountToken && verbBefore.test(before) && new RegExp(String.raw`^\s*${PER_MONTH_SRC}(?!\s+(?:of|in|on)\s+(?:capital|budget|spend|costs?|expenses?|ads))`, 'i').test(after);
+    /*
+     * "Replace my $60k salary", "replace my $4,000 a month salary": a salary to replace is a
+     * monthly run-rate. With no period stated a salary is annual by ordinary usage, so it is a
+     * twelfth a month — but only from a figure no month's pay is (12,000 and up); a smaller
+     * one with no period is named unread, never guessed.
+     */
+    if (!amountToken && /\breplac(?:e|es|ing)(?:\s+(?:my|our))?\s+(?:\S+\s+){0,2}$/i.test(before) && /^\s*(?:(?:a|per)\s+year\s+|\/\s?y(?:ea)?r\s+|annual\s+|yearly\s+)?(?:salary|income|paycheck|pay|wages?)\b/i.test(after)) {
+      const annual = /^\s*(?:(?:a|per)\s+year|\/\s?y(?:ea)?r|annual|yearly)\b/i.test(after) || t.value >= 12_000;
+      if (!annual) {
+        t.role = 'MADE';
+        unread.push(`"${t.raw}": a salary with no period`);
+        continue;
+      }
+      t.role = 'AMOUNT';
+      amountToken = { ...t, value: Math.round(t.value / 12) };
+      recurring = 'MONTHLY';
+      continue;
+    }
     const monthlyRecurring = statedRecurring || ranRate;
     if (!(verbBefore.test(before) || nounAfter.test(after) || beforeDeadline || turnedInto || statedRecurring)) {
       /*
@@ -600,12 +826,34 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       hoursPerWeek,
       industry: readRequiredIndustry(text),
       capitalAssumed: capitalCeiling === null && amountToken ? assumedLittleCapital(text, amountToken.value) : null,
+      resources: readResources(text),
       constraints: constraintSpans.sort((a, b) => a.start - b.start).map((s) => s.text),
       unread,
     },
     amountSpan: amountToken ? { start: amountToken.start, end: amountToken.end } : null,
     madeSpans: tokens.filter((t) => t.role === 'MADE').map((t) => ({ start: t.start, end: t.end })),
   };
+}
+
+const TIME_OF_WEEK = String.raw`(?:weekends?|evenings?|nights?|mornings?|afternoons?|saturdays?|sundays?|weekdays?)`;
+/**
+ * What the person has besides money and hours, in their own words: "I've got a
+ * pickup truck", "my weekends are free", "I have $3,000 and weekends". Pure.
+ */
+export function readResources(text: string): string[] {
+  const out: string[] = [];
+  const add = (phrase: string) => {
+    const p = phrase.trim().replace(/[.,;!]+$/, '');
+    if (p && !out.some((o) => o.toLowerCase() === p.toLowerCase())) out.push(p);
+  };
+  const possession = /\b(?:I|we)(?:'ve|\s+have)?\s+(?:also\s+)?(?:got|have|own)\s+((?:an?|my|our|two|three|four|\d+)\s+[a-z][a-z\- ]{1,40}?)(?=\s*(?:[,.;!]|\band\b|\bbut\b|\bthat\b|\bwhich\b|$))/gi;
+  for (const m of text.matchAll(possession)) {
+    if (/\b(?:money|capital|budget|cash|dollars?|bucks|savings|hours?|hrs?|time|deadline|goal|idea|job)\b/i.test(m[1]!)) continue;
+    add(m[1]!);
+  }
+  const free = new RegExp(String.raw`\b(?:my\s+|our\s+)?${TIME_OF_WEEK}\s+(?:are|is)\s+(?:free|open|available)\b|\b(?:free|available|open)\s+(?:on\s+|in\s+the\s+)?${TIME_OF_WEEK}\b|\b${TIME_OF_WEEK}\s+(?:free|off|open)\b|\b(?:and|plus|with)\s+(?:my\s+)?${TIME_OF_WEEK}(?=\s*(?:[,.;!]|$))`, 'gi');
+  for (const m of text.matchAll(free)) add(m[0].replace(/^(?:and|plus|with)\s+/i, ''));
+  return out;
 }
 
 /**
@@ -627,9 +875,9 @@ const LITTLE_CAPITAL = /\b(?:very\s+)?(?:little|minimal|minimum|low|small|modest
  * 2026-11-20: such a goal was planned as if money were unlimited and read
  * 0.898 against 0.434 for the same goal with $1,000).
  */
-const NO_CAPITAL = /\b(?:no|zero|without(?:\s+any)?|nothing\s+in)\s+(?:(?:up-?front|upfront|starting|initial|start-?up|seed|own|working)\s+)*(?:capital|money|cash|investment|funding|outlay)\b|\b(?:don't|do not|can't|cannot|won't|will not)\s+(?:have|want to (?:spend|put in|invest)|spend|invest|put in)\s+(?:any(?:thing)?|a (?:dime|cent|penny))(?:\s+(?:money|cash|capital))?\b|\bI've got no money\b/i;
+const NO_CAPITAL = /\b(?:no|zero|without(?:\s+any)?|nothing\s+in)\s+(?:(?:up-?front|upfront|starting|initial|start-?up|seed|own|working)\s+)*(?:capital|money|cash|investment|funding|outlay)\b|\b(?:don't|do not|can't|cannot|won't|will not)\s+(?:have|want to (?:spend|put in|invest)|spend|invest|put in)\s+(?:any(?:thing)?|a (?:dime|cent|penny))(?:\s+(?:money|cash|capital))?\b|\b(?:don't|do not|can't|cannot)\s+have\s+(?:any\s+|the\s+|spare\s+)?(?:money|cash|capital)\b|\bI've got no money\b/i;
 
-function assumedLittleCapital(text: string, amount: number): ObjectiveReading['capitalAssumed'] {
+export function assumedLittleCapital(text: string, amount: number): ObjectiveReading['capitalAssumed'] {
   const none = NO_CAPITAL.exec(text);
   if (none && amount > 0) return { amount: 0, phrase: none[0], basis: `"${none[0]}": nothing may be tied up before money comes in` };
   // "a couple hundred bucks", "a few hundred dollars": read at its low end, as every vague count is.

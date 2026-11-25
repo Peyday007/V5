@@ -4,7 +4,7 @@
  * and this operation coordinates it online; geography is a business variable.
  */
 import { describe, expect, it } from 'vitest';
-import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFit } from '../server/domain/operatingModel.ts';
+import { breaksOperatingModel, licensedActIn, OPERATING_MODEL_SENTENCE, operatingFit } from '../server/domain/operatingModel.ts';
 import { executionFrameSentence } from '../server/services/cash/discovery.ts';
 import { notWorthResearching } from '../server/services/cash/worthResearching.ts';
 import { APPROVAL_ENVELOPES } from '../server/services/research/approvalEnvelope.ts';
@@ -123,5 +123,36 @@ describe('every kernel states the rule in its research questions', () => {
       expect(source, path).not.toMatch(/short cash sprint whose goal is: \$\{/);
       expect(source, path).toContain('sprintGoalLine(');
     }
+  });
+});
+
+/*
+ * 2026-11-24 investigation (r40): a regulated notary service never reached the
+ * plan. A fulfiller named as a licensed professional was not recognised as a
+ * third party, and "commissioned" read as a brokerage commission.
+ */
+describe('a regulated service performed by licensed professionals', () => {
+  it('reads a licensed or commissioned professional named as fulfiller as a third party, never the owner', () => {
+    for (const fulfillmentOwner of ['Commissioned notary (licence required)', 'a licensed electrician', 'Independent notary signing agents', 'Certified home inspectors on the state roster']) {
+      const fit = operatingFit({ title: 'In-person notarization and inspection visits for real estate closings', fulfillmentOwner });
+      expect(fit.kind, fulfillmentOwner).toBe('BROKERED_PHYSICAL');
+      expect(breaksOperatingModel(fit)).toBe(false);
+    }
+  });
+
+  it('keeps the owner named as the licence holder the owner\'s own physical work', () => {
+    expect(operatingFit({ title: 'In-person notarization for real estate closings', fulfillmentOwner: 'the owner, a commissioned notary' }).kind).toBe('OWNER_PHYSICAL');
+  });
+
+  it('"commissioned" is a licence, not a brokerage commission', () => {
+    expect(operatingFit({ title: 'A commissioned notary does in-person signings' }).kind).toBe('OWNER_PHYSICAL');
+    expect(operatingFit({ title: 'Broker in-person signings to independent notaries for a 20% commission' }).kind).toBe('BROKERED_PHYSICAL');
+  });
+
+  it('names the licensed act an opening performs, and nothing for an unregulated one', () => {
+    expect(licensedActIn('Mobile notary loan-signing appointments for title companies')).toMatch(/^notary/i);
+    expect(licensedActIn('Home inspection reports for buyers')).toBe('Home inspection');
+    expect(licensedActIn('A state licence required for the work')).toBe('licence required');
+    expect(licensedActIn('Vendor-compliance spreadsheet for property managers')).toBeNull();
   });
 });

@@ -91,7 +91,7 @@ import {
   overrideCoverage,
   upsertCoverage,
 } from '../../repos/reconciliation.ts';
-import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
+import { binForOrchestration, creditBinAttempt, liveGoalPacketIdsSql } from '../../repos/bins.ts';
 import {
   cancelWork,
   enqueueWork,
@@ -675,7 +675,13 @@ export async function servesGoalSearch(orchestrationId: string): Promise<boolean
         LIMIT 1`,
       [orchestrationId],
     );
-    return !!row;
+    if (row) return true;
+    // Any approved, live goal's own packet: linked to the goal, or reached through a mission or idea it links.
+    const linked = await getDb().get<{ one: number }>(
+      `SELECT 1 AS one FROM research_orchestrations o WHERE o.id = ? AND o.id IN (${liveGoalPacketIdsSql()})`,
+      [orchestrationId],
+    );
+    return !!linked;
   } catch {
     return false;
   }

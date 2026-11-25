@@ -34,6 +34,7 @@ import { createWorkstream, getWorkstream, linkWorkstream, listLinks, recordWorks
 import { binsHeldBy, cancelGoal, pauseGoal, reinstateGoal, resumeGoal, setGoalTerms } from '../../repos/goals.ts';
 import { getProject } from '../../repos/projects.ts';
 import { readObjective, type ObjectiveReading } from '../industry/construction/intent.ts';
+import { assistObjective, assistReason, operatorInterpreter, type ObjectiveInterpreter } from './objectiveAssist.ts';
 import { liveTargetOn, setTarget, sharedLedgerReason } from './target.ts';
 
 
@@ -99,11 +100,23 @@ export async function createGoal(input: {
   actorRef: string;
   userId: string | null;
   now?: Date;
+  /**
+   * The model asked for a second reading where `readObjective` leaves a gap
+   * (`objectiveAssist.ts`). Omitted: the operator's first model, when one is
+   * configured. Null: the reader alone.
+   */
+  interpreter?: ObjectiveInterpreter | null;
 }): Promise<CreateGoalResult> {
   const now = input.now ?? new Date();
   const objective = input.objective.replace(/\s+/g, ' ').trim();
-  const reading = readObjective(objective, now);
+  let reading = readObjective(objective, now);
   if (!objective) return { ok: false, reason: 'State the objective in words.', reading };
+  // A gap the reader left — a money figure unplaced, no amount, no deadline — is read a second time by a model,
+  // and only what the words bear out is taken from it (`objectiveAssist.ts`). The reader's reading otherwise stands.
+  if (!input.target && assistReason(reading, { dueAtGiven: input.dueAt !== undefined })) {
+    const interpreter = input.interpreter === undefined ? await operatorInterpreter() : input.interpreter;
+    reading = await assistObjective(reading, now, interpreter, { dueAtGiven: input.dueAt !== undefined });
+  }
   if (!(await getProject(input.projectId))) return { ok: false, reason: 'No project with that id.', reading };
 
   const dueAt = input.dueAt ?? reading.deadline ?? undefined;
@@ -184,7 +197,8 @@ export async function createGoal(input: {
       projectId: input.projectId,
       capitalCeilingCents: target.capitalCeilingCents ?? null,
       hoursCeiling: target.hoursCeiling ?? null,
-      resources: input.resources ?? null,
+      // What the words say the person has ("a pickup truck", "my weekends are free"), when the caller states none.
+      resources: input.resources ?? (reading.resources.length ? reading.resources.join('; ') : null),
       capitalBeforeProofCents: target.capitalBeforeProofCents ?? null,
       capitalPerWeekCents: target.capitalPerWeekCents ?? null,
       now,
@@ -198,8 +212,8 @@ export async function createGoal(input: {
     await recordWorkstreamEvent({
       workstreamId: goal.id,
       kind: 'GOAL_TARGET_SET',
-      summary: `Target: ${target.metric} ${target.amountCents / 100} ${target.currency}${recurring ? ' a month (run-rate over the trailing month)' : ''}${set.capitalCeilingCents !== null ? `, at most ${set.capitalCeilingCents / 100} tied up` : ''}${set.hoursCeiling !== null ? `, at most ${set.hoursCeiling} hours${reading.hoursPerWeek !== null && !input.target ? ` (${reading.hoursPerWeek} a week)` : ''}` : ''}${reading.industry && !input.target ? `, only in ${reading.industry}` : ''}${reading.capitalAssumed && set.capitalCeilingCents === null && !input.target ? `; capital stated without a figure, so at most ${reading.capitalAssumed.amount} is assumed (${reading.capitalAssumed.basis})` : ''}. Counted from now.`,
-      detail: { recurring: recurring ? 'MONTHLY' : null, hoursPerWeek: reading.hoursPerWeek, industry: reading.industry, capitalAssumed: set.capitalCeilingCents === null ? reading.capitalAssumed : null },
+      summary: `Target: ${target.metric} ${target.amountCents / 100} ${target.currency}${recurring ? ' a month (run-rate over the trailing month)' : ''}${set.capitalCeilingCents !== null ? `, at most ${set.capitalCeilingCents / 100} tied up` : ''}${set.hoursCeiling !== null ? `, at most ${set.hoursCeiling} hours${reading.hoursPerWeek !== null && !input.target ? ` (${reading.hoursPerWeek} a week)` : ''}` : ''}${reading.industry && !input.target ? `, only in ${reading.industry}` : ''}${reading.capitalAssumed && set.capitalCeilingCents === null && !input.target ? `; capital stated without a figure, so at most ${reading.capitalAssumed.amount} is assumed (${reading.capitalAssumed.basis})` : ''}${reading.assisted?.fields.length ? `; read with a model's second reading (${reading.assisted.model}): ${reading.assisted.fields.join(', ')}` : ''}. Counted from now.`,
+      detail: { recurring: recurring ? 'MONTHLY' : null, hoursPerWeek: reading.hoursPerWeek, industry: reading.industry, capitalAssumed: set.capitalCeilingCents === null ? reading.capitalAssumed : null, assisted: reading.assisted ?? null },
       actorRef: input.actorRef,
     });
   }

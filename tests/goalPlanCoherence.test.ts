@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import {
   adoptReconstruction,
+  collectsOutsideWindow,
   continueSearch,
   judgeAcceptance,
   judgeFeasibility,
@@ -31,6 +32,9 @@ import {
   stepAsNextTest,
   type PlanAcceptance,
   type PlanReading,
+  type StrategyReading,
+  withholdImplausibleFigures,
+  withoutFigures,
 } from '../server/services/goals/plan.ts';
 import { planFieldsFor } from '../server/services/goals/pathResearch.ts';
 import { goalPlanScope, sendPlanQuestions } from '../server/services/goals/portfolioNeeds.ts';
@@ -398,5 +402,60 @@ describe('C-13: a failure inside the read is carried and recorded', () => {
     expect(await recordDegraded('wst_degraded', projectId, ['reconstruction: boom again'], 2_000)).toBe(0);
     const events = (await listEvents(projectId)).filter((e) => e.eventType === 'GOAL_PLAN_DEGRADED');
     expect(events.map((e) => e.payload['stage']).sort()).toEqual(['construction', 'reconstruction']);
+  });
+});
+
+/*
+ * Production baseline, 2026-11-24 (independent judge, 12 fresh requests): plans
+ * presented figures the reading itself flags implausible ("$3,161,954 toward
+ * $1,500"; an HVAC deal that "keeps $37,271" on $1 of capital), and one plan's
+ * only collection landed after the goal's 21-day window while it was presented.
+ */
+describe('a figure the reading cannot stand behind is never presented as the plan', () => {
+  it('a flagged reconstruction shows none of its money figures and carries no upside', () => {
+    const base = reconstruction();
+    const r = reconstruction({ flags: [{ key: base.best.key, reach: base.best.reach, settledP50: base.best.settledP50, flags: [{ kind: 'SCALE', detail: 'one deal of "HVAC retrofit" needs $1 and keeps $37,271, 37271× the $1 behind the plan (bound ×20)' }] }] });
+    const out = adoptReconstruction({ reconstruction: r, baseline: portfolio({ reach: 0.011, basis: 'COVERAGE' }), openings });
+    expect(out.adoption.reason).toMatch(/flagged implausible \(SCALE: .*none of its figures is shown/);
+    expect(out.adoption.reason).not.toMatch(/37,271|\$1\b/);
+    expect(out.adoption.upside).toBeUndefined();
+    expect(withoutFigures('keeps $37,271 on $1, or 3,161,954 USD')).toBe('keeps [figure withheld] on [figure withheld], or [figure withheld]');
+  });
+
+  const strategy = (over: Partial<StrategyReading>): StrategyReading => ({
+    key: 's', label: 'HVAC retrofit leads', verdict: 'NEEDS_EVIDENCE', opportunityIds: ['o1'], links: [], constraintsFailed: [],
+    sweep: { goalMetShare: 1, settledP50: 3_161_954, settledP90: 4_000_000, infeasibleShare: 0, probabilistic: false },
+    conservativeSettled: null, chainComplete: false, nextTest: null, ...over,
+  });
+
+  it('withholds a settled figure over 100× what remains on inputs not all established, and says so', () => {
+    const s = [strategy({})];
+    const candidate = { label: 'HVAC retrofit leads', opportunityIds: ['o1'], source: 'PATHWAYS' as const, settledP50: 3_161_954, reach: 1, reachBasis: 'COVERAGE' as const };
+    const withheld = withholdImplausibleFigures(s, candidate, 1_500);
+    expect(s[0]!.sweep).toMatchObject({ settledP50: null, settledP90: null, goalMetShare: 1 });
+    expect(s[0]!.basis).toMatch(/figures withheld: a settled figure of 2667× what remains/);
+    expect(candidate.settledP50).toBeNull();
+    expect(withheld).toHaveLength(2);
+  });
+
+  it('keeps a figure established inputs carry, and every figure inside the bound', () => {
+    const established = [strategy({ chainComplete: true, conservativeSettled: 200_000 })];
+    const modest = [strategy({ sweep: { goalMetShare: 0.6, settledP50: 9_000, settledP90: 140_000, infeasibleShare: 0, probabilistic: false } })];
+    expect(withholdImplausibleFigures(established, null, 1_500)).toEqual([]);
+    expect(established[0]!.sweep.settledP50).toBe(3_161_954);
+    expect(withholdImplausibleFigures(modest, null, 1_500)).toEqual([]);
+    expect(modest[0]!.sweep.settledP90).toBe(140_000);
+  });
+
+  it('a plan whose every collection lands after the window is not presented; one inside it, or unestablished, is', () => {
+    const late = { label: 'Collect payment for "HVAC retrofit"', when: 'not scheduled: cash would be usable on day 35–40 (proven), after the 21 days left', stage: { stage: 'COLLECT' as const, costSource: 'NOT_OWNERS' as const, unscheduled: 'AFTER_DEADLINE' as const } };
+    const inside = { label: 'Collect payment', when: 'day 9–12', stage: { stage: 'COLLECT' as const, costSource: 'NOT_OWNERS' as const } };
+    const unknown = { ...inside, stage: { ...inside.stage, unscheduled: 'NO_MODEL_DAYS' as const } };
+    const offer = { label: 'Sell', stage: { stage: 'OFFER' as const, costSource: 'NONE_HELD' as const } };
+    expect(collectsOutsideWindow([offer, late], 21)).toMatch(/cash would be usable on day 35–40 .* no cash inside the goal's window/);
+    expect(collectsOutsideWindow([offer, late, inside], 21)).toBeNull();
+    expect(collectsOutsideWindow([offer, unknown], 21)).toBeNull();
+    expect(collectsOutsideWindow([offer], 21)).toBeNull();
+    expect(collectsOutsideWindow([offer, late], null)).toBeNull();
   });
 });

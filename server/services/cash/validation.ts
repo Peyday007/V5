@@ -99,6 +99,9 @@ import { latestReadingFor, refreshPositionEvidence, separateInvestigationsSenten
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
+import { isRouteOpening, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
+import { readMoneyFigures } from './figures.ts';
+import { MAX_COLUMN_CENTS } from './answers.ts';
 
 /**
  * The states that actually occupy capacity.
@@ -245,6 +248,8 @@ export function nextDiveStage(
   opportunity: CashOpportunity,
   fact: (field: string) => CashCardFact | null,
 ): DiveStage {
+  // A proposed route is asked as one unit: its question carries the kill questions itself.
+  if (isRouteOpening(opportunity)) return 'FULL';
   return payerEstablished(opportunity, fact) ? 'FULL' : 'SCREEN';
 }
 
@@ -478,7 +483,13 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   if (closedBy(opportunity.expiresAt, cashNow())) {
     return { kind: 'EXPIRED', at: opportunity.expiresAt! };
   }
-  if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
+  /*
+   * A route Brain proposed for a goal (`goals/routeProposal.ts`) has nothing
+   * published behind it by construction: it is a whole hypothesis — buyer,
+   * offer, price, channel, fulfiller — and the dive is what tests it. It is
+   * admitted by its recorded origin, never by a fabricated signal.
+   */
+  if (!opportunity.buyingSignal && !opportunity.sourceClaimId && !isRouteOpening(opportunity)) {
     return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
   }
   const waste = await notWorthResearching(opportunity, { now: cashNow() });
@@ -749,6 +760,67 @@ export function validationQuestion(
     'A price somebody else charges, an asking price and an appraisal are evidence about a ' +
     'market and are not evidence that anybody would pay us: where that is all there is, say ' +
     'so plainly rather than treating it as an answer.'
+  );
+}
+
+/**
+ * The question a proposed route's deep dive asks: the whole route, as one unit.
+ *
+ * A route opening (`goals/routeProposal.ts`) is Brain's hypothesis — a buyer,
+ * an offer, a price, a channel, a fulfiller — with nothing published behind it,
+ * so there is no source sentence to quote. What is asked is exactly what the
+ * planner needs to turn it into a startable plan (PLANNING-9-10 §2–§3): a
+ * named buyer who pays and the route to more of them, the published price
+ * such buyers pay, how many of them exist, a dated sign of demand now, who
+ * fulfils it and at what cost, and when the money settles — each in the lane
+ * `applyValidationAnswers` reads it from. A source that refutes the route is
+ * an answer, filed in `ruled_out`, and the proposal itself is never evidence.
+ * Pure: composed from the opening's row and its card facts.
+ */
+export function routeValidationQuestion(
+  opportunity: CashOpportunity,
+  fact: (field: string) => CashCardFact | null,
+  /** Fields an earlier dive this epoch left open; named so the round asks them first. */
+  stillOpen?: readonly string[],
+): string {
+  const clip = (text: string | null | undefined, max = 200) => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+  const offer = clip(opportunity.offerScope) || clip(opportunity.title);
+  const payer = clip(opportunity.payer) || 'buyers of this kind';
+  const channel = clip(opportunity.reachableChannel);
+  const fulfiller = clip(opportunity.fulfillmentOwner) || clip(fact('fulfillment')?.value);
+  const priceText = clip(fact('price')?.value, 80);
+  const searches = clip(fact(ROUTE_SEARCHES_FIELD)?.value, 600);
+  const lanes = (stillOpen ?? [])
+    .map((field) => LANE_FOR_FIELD[field])
+    .filter((lane): lane is string => Boolean(lane));
+  return (
+    `Brain proposed this commercial route for an owner's goal, and it is a hypothesis that no ` +
+    `published source has established yet: sell "${offer}" to ${payer}` +
+    (channel ? `, reached through ${channel}` : '') +
+    (priceText ? `, at about ${priceText}` : '') +
+    (fulfiller ? `, delivered by ${fulfiller}` : '') +
+    '. Research the whole route as one unit, from published sources, and say plainly where they ' +
+    'refute it. First, if a published fact rules the route out — buyers of this kind do not buy ' +
+    'this from suppliers like us, a published rule excludes us, or the demand has ended — submit ' +
+    'that one fact in the ruled_out lane with its source and stop. Otherwise establish each of ' +
+    'these, each in its own lane: who pays — at least one named buyer of this kind that a ' +
+    'published source shows paying for this offer, and the published way a supplier reaches more ' +
+    'of them (payer, contact_mode); the published price buyers of this kind pay for it, as a ' +
+    'figure with its date and whether it is per month or once (price_evidence); how many such ' +
+    'buyers exist, as a sourced count of buyers rather than a market’s money size ' +
+    '(buyer_volume); a dated sign that buyers want it now — a posting, request, tender, review or ' +
+    'announcement from the last few months, with its date (current_demand); who can fulfil it — a ' +
+    'named supplier, subcontractor, platform or tool — and what that costs per sale (fulfiller, ' +
+    'cost_evidence); and when the money arrives, from published payment or settlement terms ' +
+    '(timing). ' +
+    (lanes.length > 0
+      ? `An earlier dive answered part of this; ask first what it left open: ${[...new Set(lanes)].join(', ')}. `
+      : '') +
+    (searches ? `Searches likely to find this: ${searches}. ` : '') +
+    'Where sources state a different price, volume, cost or timing from the proposal, submit what ' +
+    'they state: the proposal is not evidence and must never be restated as a finding. A price ' +
+    'somebody else charges is evidence about the market, not that anybody would pay us; say which ' +
+    'it is. Where nothing published answers a lane, say so plainly with where you looked.'
   );
 }
 
@@ -1180,7 +1252,8 @@ export async function startValidations(input: {
   const goalRounds = new Set(rounds.filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
   const bucketByRound = new Map(rounds.map((r) => [r.id, r.bucketId]));
   const forFamily = (opportunity: CashOpportunity) => intermediationOpening(opportunity, bucketByRound);
-  const forGoal = (opportunity: CashOpportunity) => !!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId);
+  // A route proposed for an approved goal is that goal's own opening, as a goal round's find is.
+  const forGoal = (opportunity: CashOpportunity) => (!!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId)) || isRouteOpening(opportunity);
   let goalExtra = 0;
   if ((derived.limitedBy === 'OPERATOR' || derived.limitedBy === 'SURFACES' || derived.limitedBy === 'GRANT') && input.limit === undefined && (await freeLaneOwnsResearch(input.projectId))) {
     // The grant's own free slots, one held back for discovery: the free lane, not a Routine surface, does the work.
@@ -1373,11 +1446,17 @@ export async function startValidations(input: {
       visibility: 'SHARED',
       title: `${stage === 'SCREEN' ? 'Screen' : 'Qualify'}: ${opportunity.title}`,
       statement:
-        validationQuestion(
-          opportunity,
-          stage,
-          askedBefore ? fieldsWorthResearching(opportunity, tierById.get(opportunity.id)!) : undefined,
-        ) +
+        (isRouteOpening(opportunity)
+          ? routeValidationQuestion(
+              opportunity,
+              lookup(opportunity.id),
+              askedBefore ? fieldsWorthResearching(opportunity, tierById.get(opportunity.id)!) : undefined,
+            )
+          : validationQuestion(
+              opportunity,
+              stage,
+              askedBefore ? fieldsWorthResearching(opportunity, tierById.get(opportunity.id)!) : undefined,
+            )) +
         // S-0150: an asking price or market size alone leaves access and conversion
         // to be investigated separately, and the full dive is where that happens.
         (stage === 'FULL' ? separateInvestigationsSentence(await latestReadingFor(opportunity.id)) : ''),
@@ -2121,6 +2200,16 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
    * stopping the opening; `applyValidationAnswers` records the second.
    */
   ruled_out: 'disqualifiers',
+  /*
+   * The three a whole route needs that no lane asked (PLANNING-9-10 §2: with a
+   * fulfiller, cost and settlement the plan still lacked CURRENT_DEMAND and
+   * MARKET_VOLUME, and the two only work together). Declared on every full
+   * dive and CONDITIONAL, so an older packet that never offered them is not
+   * invalidated; a proposed route's question asks them by name.
+   */
+  buyer_volume: 'buyerVolume',
+  current_demand: 'buyingEvidence',
+  fulfiller: 'fulfillment',
 });
 
 /**
@@ -2281,6 +2370,16 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
           fields.push(ALSO_ANSWERS_BY_LANE[lane]);
         }
         /*
+         * A proposed route's price is the card's `price`, which its proposal
+         * filled as a RECOMMENDATION: the planner reads the price from that fact
+         * and its column, never from `revenueRange`, so a published price that
+         * answered only the range would leave the route priced on Brain's guess
+         * for ever. Only a claim that states a figure (below), only on a route.
+         */
+        if (lane === 'price_evidence' && claim.claimType !== 'NEGATIVE_EXISTENCE' && isRouteOpening(opportunity)) {
+          fields.push('price');
+        }
+        /*
          * "No disqualifier found" and "disqualifier found" are two answers.
          *
          * Found is declared: a claim filed in `ruled_out` answers the question
@@ -2342,6 +2441,34 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
           // recency. Asked here to skip the write, and again inside it.
           if (!mayReplace(existing, 'EVIDENCE')) continue;
           const value = clampText(claim.claim, 600);
+          /*
+           * Two fields whose answer is more than a sentence, decided before
+           * anything is written so the fact and its column never disagree:
+           *
+           *   - a price is a figure in the opening's currency, or it answers
+           *     nothing; a per-period figure counts only for a route priced per
+           *     period (its proposal said so), and the lowest stated is taken;
+           *   - a sign of current demand is evidence only with the date its
+           *     source prints, which becomes the signal's observation date — the
+           *     day a page was read says nothing about when buyers wanted it.
+           */
+          let columns: Record<string, string | number> | null = null;
+          if (field === 'price') {
+            const monthly = /\b(?:a|per|each)\s+month\b|monthly|\/\s*mo\b/i.test(existing?.value ?? '');
+            const figures = readMoneyFigures(claim.claim, opportunity.currency)
+              .filter((one) => one.cents > 0 && one.cents <= MAX_COLUMN_CENTS && (!one.perUnit || (monthly && one.perPeriod === true)))
+              .map((one) => one.cents)
+              .sort((a, b) => a - b);
+            if (figures.length === 0) continue;
+            columns = { price_cents: figures[0]! };
+          } else if (field === 'buyingEvidence') {
+            const dated = (claim.sourceDate ?? '').trim();
+            if (!dated || !Number.isFinite(Date.parse(dated))) continue;
+            const fresh = await getOpportunity(opportunity.id);
+            // A signal research already found stands: this fills a blank, it never rewrites one.
+            if (fresh?.buyingSignal) continue;
+            columns = { buying_signal: value, signal_observed_at: new Date(Date.parse(dated)).toISOString() };
+          }
           const written = await recordEvidenceFact({
             projectId,
             opportunityId: opportunity.id,
@@ -2364,7 +2491,9 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
            * so the column and the fact cannot name two different claims.
            */
           const column = COLUMN[field];
-          if (column) {
+          if (columns) {
+            await updateOpportunity(opportunity.id, columns as never);
+          } else if (column) {
             await updateOpportunity(opportunity.id, { [column]: value } as never);
           }
           out.push({ opportunityId: opportunity.id, field, claimId: claim.id });

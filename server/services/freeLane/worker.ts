@@ -43,6 +43,7 @@ import { findTool } from '../../mcp/tools.ts';
 import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
+import { liveGoalWorkItemSql } from '../goals/goalWork.ts';
 import { laneFitFailure } from '../research/gate.ts';
 import { isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, servedRoute, type Completer, type LaneConfig } from '../cheap/lane.ts';
@@ -2921,7 +2922,8 @@ async function waitingPackets(projectIds: string[], types: readonly string[]): P
       WHERE ${CLAIMABLE_SQL} AND orchestration_id IS NOT NULL
         AND project_id IN (${projectIds.map(() => '?').join(', ')})
         AND work_type IN (${types.map(() => '?').join(', ')})
-      GROUP BY orchestration_id ORDER BY MAX(priority) DESC, orchestration_id LIMIT 10`,
+      GROUP BY orchestration_id
+      ORDER BY MAX(priority) DESC, CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END, orchestration_id LIMIT 10`,
     [now, now, ...projectIds, ...types],
   );
   return rows.map((row) => row.orchestration_id);
@@ -3439,6 +3441,21 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if (await failedHereBefore(item.id, worker.model)) {
       const other = workers.some((w) => w.model !== worker.model && otherHold(w.model) === null);
       if (other) return { ok: false, reason: 'this model already failed this item; another model takes the next attempt' };
+    }
+    /*
+     * A spent synthesis Brain reissued goes to a surface that has not failed
+     * this packet's synthesis this round — read from the failed items' own
+     * rows, so a restart does not forget it (`synthesisAvoidsSurface`). Only
+     * declined when the lane has another model to take it; otherwise a Claude
+     * routine serving the packet's bin is the other surface, or this one
+     * takes it rather than nobody.
+     */
+    if (item.work_type === 'RESEARCH_SYNTHESIZE' && workers.some((w) => w.model !== worker.model)) {
+      const { synthesisSurfacesToAvoid } = await import('../research/synthesisRecovery.ts');
+      const avoid = await synthesisSurfacesToAvoid(item);
+      if (avoid.has(worker.model) && workers.some((w) => !avoid.has(w.model))) {
+        return { ok: false, reason: 'this model already failed this packet’s synthesis; another surface takes the reissue' };
+      }
     }
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
     // A check is answered by a model that did not produce what it checks — the model that answers, not the slot's label.
