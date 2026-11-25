@@ -22,10 +22,12 @@
  *     still opens a lens round, and when one of those missions ends the next
  *     discovery pass retires the stalled rounds, so the yield lasts exactly as
  *     long as the grant's wait;
- *   - slots full for as long as it lasts (repair F2): the oldest stalled lens
- *     round gives its place to the next lens one for one (review F1), so the
- *     goal keeps asking every pass and its lens rounds never grow past the
- *     live cap once that cap is held.
+ *   - slots full for as long as it lasts (repair F2): the stalled lens round
+ *     at the tail of the goal's launch queue gives its place to the next lens
+ *     one for one (review F1), so the goal keeps asking every pass, its lens
+ *     rounds never grow past the live cap once that cap is held, and the head
+ *     of its queue — the idea a freed grant slot would launch next — is never
+ *     the one discarded.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -303,7 +305,7 @@ describe('a short goal keeps searching past rounds that never launched (CAPABILI
     expect(await roundsHoldingSlots(await goalRounds(), new Date().toISOString(), MAX_LIVE_GOAL_ROUNDS)).toBeGreaterThanOrEqual(MAX_LIVE_GOAL_ROUNDS);
   });
 
-  it('keeps searching however long the grant stays full: past the yield the oldest stalled round gives its place to the next lens (repair F2)', async () => {
+  it('keeps searching however long the grant stays full: past the yield the stalled round at the tail of the launch queue gives its place to the next lens (repair F2)', async () => {
     const g = await grant();
     const start = Date.now();
     let k = await fillGoalCap(start);
@@ -341,5 +343,36 @@ describe('a short goal keeps searching past rounds that never launched (CAPABILI
       expect(idea!.state).toBe('REJECTED');
     }
     expect(seen.size).toBeGreaterThan(2 * MAX_LIVE_GOAL_ROUNDS + passes - MAX_LIVE_GOAL_ROUNDS - 1);
+  });
+
+  it('never discards the head of the goal\'s launch queue to make room: the idea a freed slot would launch next keeps its turn (review F2)', async () => {
+    const g = await grant();
+    const start = Date.now();
+    let k = await fillGoalCap(start);
+    await fillGrant(g.goalId, g.cap);
+    // The head of the goal's queue, in the launch queue's own order (`nextLaunchable`): priority, ordinal, created.
+    // Only a lens round gives its place to a lens (constructed rounds keep their own share), so the head is read among them.
+    const open = (await goalRounds()).filter((r) => !r.bucketId.includes('-mx-'));
+    expect(open.length).toBeGreaterThanOrEqual(2);
+    const ids = open.map((r) => r.candidateId);
+    const head = await getDb().get<{ id: string }>(
+      `SELECT id FROM russell_candidates WHERE id IN (${ids.map(() => '?').join(',')})
+        ORDER BY CASE priority WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2 WHEN 'EXPLORE' THEN 3 ELSE 4 END,
+                 COALESCE(ordinal, 999), created_at, rowid LIMIT 1`,
+      ids,
+    );
+    const headRound = open.find((r) => r.candidateId === head!.id)!;
+    for (let pass = 0; pass < 2 * MAX_LIVE_GOAL_ROUNDS; pass += 1) {
+      await age(await goalRounds(), 2);
+      // The head has also waited longest: retiring the oldest would discard exactly the idea launched next.
+      await getDb().run('UPDATE cash_discovery_rounds SET opened_at = ? WHERE id = ?', [new Date(Date.now() - UNLAUNCHED_GOAL_ROUND_MS - 48 * 3_600_000).toISOString(), headRound.id]);
+      await harvest({ projectId, limit: 50 });
+      expect(await goalPass(start, k++)).toBeGreaterThanOrEqual(1);
+      expect((await listRounds(projectId)).find((r) => r.id === headRound.id)!.state).toBe('OPEN');
+      const idea = await getDb().get<{ state: string }>('SELECT state FROM russell_candidates WHERE id = ?', [head!.id]);
+      expect(idea!.state).not.toBe('REJECTED');
+    }
+    // The search still moved on: rounds behind the head gave their places.
+    expect((await listRounds(projectId)).filter((r) => r.state === 'ABANDONED' && r.bucketId.startsWith(`goal-${goalId}`)).length).toBeGreaterThanOrEqual(1);
   });
 });
