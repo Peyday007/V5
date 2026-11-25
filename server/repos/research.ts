@@ -1198,6 +1198,23 @@ export async function projectEvidenceClaims(projectId: string, limit: number): P
 }
 
 /**
+ * How many gated, read claims a project holds: the count `projectEvidenceClaims`
+ * would list without a limit. One aggregate, so a goal pass that only needs to
+ * know whether research came back since its last ask reads no claim rows.
+ */
+export async function projectEvidenceClaimCount(projectId: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM research_claims c
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.source_url IS NOT NULL
+        AND COALESCE(c.retrieval_state, 'RETRIEVED') = 'RETRIEVED'`,
+    [projectId],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
  * Gated UNIT_ECONOMIC claims of a project with a declared figure that no
  * construction fact names yet, by id after `afterId`, at most `limit` (F3
  * back-fill). Any orchestration, not only a kernel round's: what research
@@ -1215,6 +1232,34 @@ export async function unfiledUnitEconomicClaims(projectId: string, afterId: stri
       ORDER BY c.id
       LIMIT ?`,
     [projectId, afterId, Math.max(1, Math.trunc(limit))],
+  );
+  return rows.map(mapClaim);
+}
+
+/**
+ * Gated, sourced claims that answer a goal's price question (a `goal-price-`
+ * need's idea, or a `price:` causal scope, as `goalPriceIdeasOfClaims` reads
+ * them) and declared no figure — no UNIT_ECONOMIC finding with an amount, so
+ * `unfiledUnitEconomicClaims` never reads them — and that no construction
+ * fact names yet, by claim id after `afterId`, at most `limit`. Production
+ * 2026-11-25: 19 accepted answers in lane `economics` stating prices in prose
+ * ("$30–$120 per recipient"), both needs still OPEN.
+ */
+export async function undeclaredGoalPriceClaims(projectId: string, afterId: string, limit: number): Promise<ResearchClaim[]> {
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1 AND c.source_url IS NOT NULL
+        AND NOT (COALESCE(c.structural_finding, '') = 'UNIT_ECONOMIC' AND c.structural_amount_cents IS NOT NULL)
+        AND c.id > ?
+        AND NOT EXISTS (SELECT 1 FROM construction_facts f WHERE f.source_claim_id = c.id)
+        AND EXISTS (SELECT 1 FROM russell_missions m JOIN russell_candidates k ON k.id = m.candidate_id
+                     WHERE m.orchestration_id = c.orchestration_id AND k.project_id = ?
+                       AND (k.id IN (SELECT n.candidate_id FROM cash_needs n WHERE n.project_id = ? AND n.request_key LIKE ? AND n.candidate_id IS NOT NULL)
+                            OR k.statement LIKE ?))
+      ORDER BY c.id
+      LIMIT ?`,
+    [projectId, afterId, projectId, projectId, 'goal-price-%', 'For causal graph price:%', Math.max(1, Math.trunc(limit))],
   );
   return rows.map(mapClaim);
 }

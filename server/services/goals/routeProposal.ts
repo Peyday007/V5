@@ -69,7 +69,7 @@ import { chatFor, type ChatFn } from '../cheap/modelBench.ts';
 import { challengerModels } from '../operator/decisions.ts';
 import { getWorkstream, linkWorkstream, recordWorkstreamEvent, workstreamEventsOfKind } from '../../repos/register.ts';
 import { createOpportunity, getOpportunity, opportunitiesWithRecordPrefix, transitionOpportunity, updateOpportunity } from '../../repos/cashPortfolio.ts';
-import { claimsByIds, projectEvidenceClaims } from '../../repos/research.ts';
+import { claimsByIds, projectEvidenceClaimCount, projectEvidenceClaims } from '../../repos/research.ts';
 import { cardFactsFor, recordRecommendationFact } from '../../repos/cashCardFacts.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
@@ -306,7 +306,7 @@ export const ROUTE_RULES = {
   CAPITAL: "the capital is read as the owner gave it: a small budget rules out spend-heavy channels; a large one may fund inventory, equipment or paid labour where that is what earns the money; few owner hours rule out labour-per-unit work that does not scale; a recurring target needs recurring billing",
   MARKET: 'the market exists and is buying now, in this season; no invented or dead markets',
   VALUE:
-    "the owner's side adds something the buyer pays for: reselling gigs, services or products another platform already sells to the same buyers at a markup, or a referral commission without a named partner programme that publishes what it pays, is not a route",
+    "the owner's side adds something the buyer pays for: reselling gigs, services or products another platform already sells to the same buyers at a markup, or a referral commission without a named partner programme that publishes what it pays, is not a route; a digital deliverable a model would generate (templates, reports, scripts, graphics, newsletters, \"AI\" content) is not a route unless a named kind of buyer is already shown paying for exactly that",
   LAWFUL:
     "lawful, and inside the terms of every platform it uses: nothing deceptive (fake, paid or incentivised reviews, fake engagement or testimonials), nothing that breaks a marketplace's or platform's rules, no licensed work done without the licence, and no regulated claim made without the right to make it",
   EVIDENCE:
@@ -453,7 +453,7 @@ export function directionPrompt(ctx: RouteContext, k: number = DIRECTIONS_PER_AS
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `FEASIBILITY (a direction must be able to pass these once researched):\n- ${RULE_KEYS.filter((rule) => rule !== 'PRICE' && rule !== 'EVIDENCE').map((rule) => ROUTE_RULES[rule]).join('\n- ')}`,
     ...evidenceSections(ctx),
-    `STEP 2 — DIRECTIONS TO CHECK. Nothing has been researched for this goal yet, so do not price anything. Name up to ${k} directions worth one short piece of research each: a kind of buyer with a real problem or need they already spend money on, the offer that would answer it from the owner's own means, what such buyers already pay for comparable things (your expectation, to be checked — never a figure stated as known), how they could be reached inside the window, who could deliver it, and the single unknown most likely to rule it out. Name fewer when fewer are genuinely different; no spread of buyer kinds or business models is required. A direction that would fit any request equally (a report, an audit, a template, a course or an "AI" product offered to everyone) is a poor one unless the owner's words point to it. When the owner states a licence, certification or trade, at least one direction sells that licensed or trade work itself to the buyers who pay for it.`,
+    `STEP 2 — DIRECTIONS TO CHECK. Nothing has been researched for this goal yet, so do not price anything. Name up to ${k} directions worth one short piece of research each: a kind of buyer with a real problem or need they already spend money on, the offer that would answer it from the owner's own means, what such buyers already pay for comparable things (your expectation, to be checked — never a figure stated as known), how they could be reached inside the window, who could deliver it, and the single unknown most likely to rule it out. Name fewer when fewer are genuinely different; no spread of buyer kinds or business models is required. A direction that would fit any request equally (a report, an audit, a template, a course or an "AI" product offered to everyone) is a poor one unless the owner's words point to it. When the owner states a licence, certification or trade, at least one direction sells that licensed or trade work itself to the buyers who pay for it. When the owner states no skill or asset, their capital, time and place are the means: consider work buyers already pay for that the owner can arrange and stand behind — a local service delivered by a provider the owner books and pays, goods bought and resold where a price gap is published, or a service resold through a programme that publishes its terms — before any digital product.`,
     `WHAT BRAIN ITSELF PROVABLY PRODUCES (one possible fulfilment, never the reason for a direction; performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use OWNER or SUBCONTRACTOR directions'}.`,
     ctx.held.length ? `ALREADY HELD for this goal (name different directions): ${ctx.held.slice(0, 20).join(' | ')}` : '',
     ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not name these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
@@ -482,15 +482,23 @@ export function parseDirections(text: string, ctx: RouteContext): { directions: 
       break;
     }
   }
+  /*
+   * Read as tolerantly as a route reply (production, dec1125c p04, 2026-11-25:
+   * both models answered and neither reply was readable): a bare list, one
+   * object at a time, or a list cut off mid-way keeps every direction finished.
+   */
+  if (raw.length === 0) raw = routesJson(text.replace(/"directions"\s*:/gi, '"routes":'))?.routes ?? [];
   for (const item of raw.slice(0, DIRECTIONS_PER_ASK * 2)) {
     if (!item || typeof item !== 'object') continue;
     const r = item as Record<string, unknown>;
     const title = str(r['title'], 120);
-    const payer = str(r['payer'], 200);
+    // A buyer kind in the payer field names nobody (production, dec1125c: payer "LOCAL_BUSINESS").
+    const payerRaw = str(r['payer'], 200);
+    const payer = payerRaw && !(BUYER_KINDS as readonly string[]).includes(payerRaw.toUpperCase().replace(/[^A-Z]+/g, '_')) ? payerRaw : null;
     const offer = str(r['offer'], 300);
     const channel = str(r['channel'], 200);
-    const problem = str(r['problem'], 300);
-    const decisiveUnknown = str(r['decisiveUnknown'], 300);
+    const problem = str(r['problem'] ?? r['buyerProblem'] ?? r['need'], 300);
+    const decisiveUnknown = str(r['decisiveUnknown'] ?? r['decisive_unknown'] ?? r['killer'], 300);
     const name = title ?? offer ?? '(untitled)';
     const reject = (why: string, rule: RouteRejectionRule) => rejected.push({ title: name, why, rule });
     if (!title || !payer || !offer || !channel || !problem || !decisiveUnknown) {
@@ -522,11 +530,13 @@ export function parseDirections(text: string, ctx: RouteContext): { directions: 
       reject(`the owner excluded ${exclusionLabel(excluded)}`, 'EXCLUDED');
       continue;
     }
-    const ownerFit = str(r['ownerFit'], 300);
-    if (!ownerFit) {
-      reject("it does not say how it uses or respects the owner's stated skills, assets, location and refusals", 'OWNER_FIT');
-      continue;
-    }
+    /*
+     * A direction that does not say how it uses the owner is kept for its
+     * review (`critiqueDirections`) to judge rather than refused here: in
+     * production (dec1125c p02) four of five directions for a licensed drone
+     * pilot were refused for the missing field alone, and the goal had none.
+     */
+    const ownerFit = str(r['ownerFit'] ?? r['owner_fit'] ?? r['fit'], 300) ?? '';
     // Its own key space: the priced route research builds from it, to the same buyer and offer, is filed beside it, not refused as held.
     const key = routeKey(`scouted ${payer}`, offer);
     if (directions.some((one) => one.key === key)) {
@@ -556,6 +566,56 @@ export function parseDirections(text: string, ctx: RouteContext): { directions: 
     });
   }
   return { directions, rejected };
+}
+
+/** The rules a direction is reviewed against before any research is spent on it: every rule a direction can meet unpriced. */
+export const DIRECTION_RULES: readonly RouteRule[] = ['OWNER_FIT', 'WINDOW', 'CHANNEL', 'FULFILLER', 'CAPITAL', 'MARKET', 'VALUE', 'LAWFUL'];
+
+/** The review of scouted directions: keep or drop each against the rules, and rank what is kept. Pure. */
+export function directionCritiquePrompt(ctx: RouteContext, directions: readonly ProposedDirection[]): string {
+  const listed = directions.map((one, i) => `${i + 1}. ${JSON.stringify({ title: one.title, payer: one.payer, problem: one.problem, offer: one.offer, comparableSpend: one.comparableSpend, channel: one.channel, performer: one.performer, fulfiller: one.fulfiller, decisiveUnknown: one.decisiveUnknown, ownerFit: one.ownerFit || '(not stated)' })}`);
+  return [
+    `THE OWNER'S OWN WORDS (verbatim): ${ctx.objective}`,
+    ctx.today ? `DATE: ${calendarLine(ctx.today)}` : '',
+    `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
+    `RULES (score each direction 0–5 on each; ${CRITIQUE_FAIL_SCORE} or less is a failure):\n${DIRECTION_RULES.map((rule) => `- ${rule}: ${ROUTE_RULES[rule]}`).join('\n')}`,
+    ...evidenceSections(ctx),
+    `DIRECTIONS NAMED, before anything is priced or researched:\n${listed.join('\n')}`,
+    'Judge each as a sceptical operator deciding which are worth one short piece of research. KEEP a direction that could pass every rule once researched; DROP one that fails a rule no research could fix — it ignores the owner\'s stated skills, assets or place for something that would fit any request, it resells what a platform already sells, it is unlawful or against a platform\'s terms, or its channel cannot produce a buyer inside the window. Rank the kept ones, best first: the one most likely to put the owner\'s first money in their hand inside the window first.',
+    'Reply with exactly one JSON object and nothing else:',
+    `{"reviews":[{"index":1,"verdict":"KEEP"|"DROP","scores":{${DIRECTION_RULES.map((rule) => `"${rule}":0-5`).join(',')}},"failed":["rule names it fails"],"why":"one sentence"}],"ranking":[indices of kept directions, best first]}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * Apply a direction review: drop what it dropped or what fails a rule, order
+ * the rest by its ranking. With no readable review every direction stands, in
+ * the order proposed. Pure.
+ */
+export function applyDirectionCritique(directions: readonly ProposedDirection[], critique: RouteCritique | null): { kept: ProposedDirection[]; dropped: RejectedRoute[] } {
+  if (!critique) return { kept: [...directions], dropped: [] };
+  const dropped: RejectedRoute[] = [];
+  const kept: { one: ProposedDirection; index: number }[] = [];
+  directions.forEach((one, i) => {
+    const review = critique.reviews.find((r) => r.index === i + 1);
+    if (!review) {
+      dropped.push({ title: one.title, why: 'the review did not judge it', rule: 'CRITIQUE' });
+      return;
+    }
+    if (review.verdict === 'DROP' || review.failed.length > 0) {
+      dropped.push({ title: one.title, why: `the review dropped it${review.failed.length ? ` (fails ${review.failed.join(', ')})` : ''}: ${review.why}`.slice(0, 400), rule: 'CRITIQUE' });
+      return;
+    }
+    kept.push({ one, index: i + 1 });
+  });
+  const placeOf = (index: number) => {
+    const at = critique.ranking.indexOf(index);
+    return at < 0 ? Number.POSITIVE_INFINITY : at;
+  };
+  kept.sort((a, b) => placeOf(a.index) - placeOf(b.index) || a.index - b.index);
+  return { kept: kept.map((k) => k.one), dropped };
 }
 
 /** The balanced JSON value starting at `start` (an object or an array), or null when it never closes. */
@@ -1084,6 +1144,8 @@ export interface RouteDeps {
   delivers?: (projectId: string, currency: string) => Promise<string[]>;
   /** Start the project's deep dives once routes are filed; production: `startValidations`. */
   startDives?: (projectId: string) => Promise<{ opportunityId: string }[]>;
+  /** The environment the strong route model's key is read from; production: `process.env`. */
+  env?: NodeJS.ProcessEnv;
   /** The project's gated, sourced claims, newest first; production: `projectEvidenceClaims`. */
   claims?: (projectId: string) => Promise<ResearchClaim[]>;
   /** File one cited claim as a route's EVIDENCE fact; production: `writeEvidenceAnswer`. */
@@ -1152,9 +1214,33 @@ export function routeAskDue(
   };
 }
 
+/** The Anthropic model the measurement used; a deployment selects it by setting `BRAIN_ROUTE_MODEL`. */
+export const ROUTE_STRONG_MODEL = 'claude-sonnet-5-5';
+/** Anthropic's OpenAI-compatible endpoint: the same chat path as every other model (`chatFor`). */
+export const ANTHROPIC_COMPAT_URL = 'https://api.anthropic.com/v1';
+
+/**
+ * The strong reasoning model a route ask tries first, when the deployment holds
+ * an Anthropic key (§54: a provider is a deployment secret — with none set this
+ * is empty and the operator models stand exactly as they were). Measured
+ * (blind, 2026-11-25, the ten dec1125 goals, Brain's identical direction
+ * prompt): a Claude model gave at least one credible direction on 10/10 goals
+ * (27 of 33 credible), the production gpt-oss on 5/10 (6 of 31); with live web
+ * research the same model wrote usable plans for 7/10 where Brain wrote 0/10.
+ * Pure.
+ */
+export function strongRouteModels(env: NodeJS.ProcessEnv): OperatorModel[] {
+  const key = env['ANTHROPIC_API_KEY']?.trim();
+  // Selected, not merely present: a key held for another purpose spends nothing here until someone names the model (invariant 18).
+  const model = env['BRAIN_ROUTE_MODEL']?.trim();
+  if (!key || !model) return [];
+  return [{ label: `anthropic:${model}`, baseUrl: ANTHROPIC_COMPAT_URL, apiKey: key, model } as OperatorModel];
+}
+
 async function operatorChats(deps: RouteDeps, timeoutMs: () => number): Promise<{ label: string; chat: ChatFn }[]> {
-  const models = await (deps.models ?? (async () => (await import('../operator/run.ts')).modelsFor()))().catch(() => [] as OperatorModel[]);
-  return challengerModels(models).map((model) => ({
+  const operator = await (deps.models ?? (async () => (await import('../operator/run.ts')).modelsFor()))().catch(() => [] as OperatorModel[]);
+  const models = [...strongRouteModels(deps.env ?? process.env), ...challengerModels(operator)];
+  return models.map((model) => ({
     label: model.label,
     // Each turn is given what the budget has left, never more than one attempt's bound.
     chat: (messages, tools, maxTokens) =>
@@ -1608,23 +1694,27 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   if (goal.pausedAt) return { kind: 'NOT_DUE', reason: 'the goal is paused' };
   // The goal's own record first: it is the cheap answer on most passes, and the target is read only when an ask is due.
   const asks = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - Math.max(DAY, ROUTE_PROPOSAL_EVERY_MS)).toISOString(), 50);
-  // How much research the goal's project holds now: new findings make a fresh, grounded ask due.
-  const claimsOf = deps.claims ?? ((projectId: string) => projectEvidenceClaims(projectId, FINDINGS_COUNTED));
   /*
-   * The findings are read only when they can change the answer: the ask is
-   * due anyway, or the last ask counted findings and the retry spacing has
-   * passed. The plan pass arms this for every live goal on every pass, and
-   * reading up to 200 claims first made each of those a join over
-   * research_claims while the database was already contended (2026-11-25).
+   * The cheap answer first, from the goal's own record alone; the project's
+   * research is counted only when that says no and the last ask recorded how
+   * much it had seen — new findings can then make a fresh, grounded ask due.
+   * Production, 2026-11-25 (ec0131a): reading the claims before this check, on
+   * every plan pass for every live goal, put a claim query per goal per pass on
+   * a database already contended, and fresh goals went 75 minutes unplanned.
    */
+  let due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true });
   const last = asks[0];
-  const findingsCanMatter =
-    !!last && typeof last.detail['findingsSeen'] === 'number' && now.getTime() - Date.parse(last.createdAt) >= ROUTE_RETRY_AFTER_FAILURE_MS;
-  const without = routeAskDue(asks, now, { retryOnly: input.retryOnly === true });
-  if (!without.due && !findingsCanMatter) return { kind: 'NOT_DUE', reason: without.reason };
-  const claims = goal.projectId ? await claimsOf(goal.projectId).catch(() => [] as ResearchClaim[]) : [];
-  const due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, findings: claims.length });
+  if (!due.due && goal.projectId && last && typeof last.detail['findingsSeen'] === 'number' && now.getTime() - Date.parse(last.createdAt) >= ROUTE_RETRY_AFTER_FAILURE_MS) {
+    const count = deps.claims
+      ? (await deps.claims(goal.projectId).catch(() => [] as ResearchClaim[])).length
+      : await projectEvidenceClaimCount(goal.projectId).catch(() => 0);
+    due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, findings: count });
+  }
   if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
+  const claimsOf = deps.claims ?? ((projectId: string) => projectEvidenceClaims(projectId, FINDINGS_COUNTED));
+  const claims = goal.projectId ? await claimsOf(goal.projectId).catch(() => [] as ResearchClaim[]) : [];
+  // What this ask has seen, counted the way the next due check counts it (the listing above is capped).
+  const seenCount = deps.claims || !goal.projectId ? claims.length : await projectEvidenceClaimCount(goal.projectId).catch(() => claims.length);
   const target = await readTarget(goal, now);
   if (!target || target.achieved) return { kind: 'NOT_DUE', reason: 'no target still open' };
   const gate = await discoveryAllowed(target.projectId);
@@ -1659,7 +1749,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
 
   // The ask is stamped at the moment it was judged due, the same clock the next due check reads it against.
   const record = (summary: string, detail: Record<string, unknown>) =>
-    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail: { ...detail, stage, findingsSeen: claims.length, findingsShown: findings.length }, actorRef: 'BRAIN', at: now.toISOString() });
+    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail: { ...detail, stage, findingsSeen: seenCount, findingsShown: findings.length }, actorRef: 'BRAIN', at: now.toISOString() });
   const clock = deps.clock ?? Date.now;
   const deadline = clock() + ROUTE_BUDGET_MS;
   const chats = await (deps.chats ?? (() => operatorChats(deps, () => Math.max(5_000, Math.min(ROUTE_ATTEMPT_MS, deadline - clock())))))().catch(() => []);
@@ -1669,6 +1759,9 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     return { kind: 'NO_MODEL', reason };
   }
   read.ctx.today = now.toISOString().slice(0, 10);
+  // What the last ask's review dropped is not offered again as if new: the next ask sees why.
+  const reviewDropped = ((asks[0]?.detail['rejected'] as RejectedRoute[] | undefined) ?? []).filter((one) => one && one.rule === 'CRITIQUE');
+  if (reviewDropped.length) read.ctx.refuted = [...read.ctx.refuted, ...reviewDropped.slice(0, 8).map((one) => ({ title: one.title, why: one.why }))];
   const failures: string[] = [];
   const ask = (chat: ChatFn, system: string, content: string, maxTokens: number) =>
     chat([{ role: 'system', content: system }, { role: 'user', content }], undefined, maxTokens).catch((error: unknown) => ({ content: '', error: String((error as Error)?.message ?? error) }));
@@ -1700,10 +1793,28 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       await record(`Routes: none proposed — ${reason}.`, { outcome: 'NO_ANSWER', reason });
       return { kind: 'NO_ANSWER', reason };
     }
+    // A review before research is spent: what fails a rule no research could fix is dropped, the rest ranked.
+    let review: RouteCritique | null = null;
+    let reviewer: string | null = null;
+    if (got.directions.length > 0) {
+      const order = [...chats.filter((one) => one.label === got!.model), ...chats.filter((one) => one.label !== got!.model)];
+      for (const { label, chat } of order) {
+        if (deadline - clock() < 5_000) break;
+        const r = await ask(chat, CRITIC_SYSTEM, directionCritiquePrompt(read.ctx, got.directions), 2500);
+        if (r.error) continue;
+        review = critiqueJson(r.content, got.directions.length);
+        if (review) {
+          reviewer = label;
+          break;
+        }
+      }
+    }
+    const reviewed = applyDirectionCritique(got.directions, review);
+    got.rejected.push(...reviewed.dropped);
     const existingKeys = new Set(read.routes.map((one) => (one.externalRecordId ?? '').slice(goalRoutePrefix(goal.id).length)));
     const filed: string[] = [];
     const existing: string[] = [];
-    for (const direction of got.directions) {
+    for (const direction of reviewed.kept) {
       if (existingKeys.has(direction.key)) {
         existing.push(direction.title);
         continue;
@@ -1714,10 +1825,10 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     }
     await record(
       `Routes: ${filed.length} direction(s) named to scout before anything is priced${existing.length ? `, ${existing.length} already held` : ''}${got.rejected.length ? `, ${got.rejected.length} rejected (${rejectionSummary(got.rejected)})` : ''}; each one's research asks its decisive unknown first.`,
-      { outcome: 'PROPOSED', model: got.model, filed, existing, rejected: got.rejected, rejectedByRule: rejectionCounts(got.rejected), owner: got.owner, directions: got.directions.map((one) => ({ title: one.title, decisiveUnknown: one.decisiveUnknown })) },
+      { outcome: 'PROPOSED', model: got.model, filed, existing, rejected: got.rejected, rejectedByRule: rejectionCounts(got.rejected), owner: got.owner, directions: got.directions.map((one) => ({ title: one.title, decisiveUnknown: one.decisiveUnknown })), reviewer, reviewed: !!review },
     );
     const dived = filed.length > 0 ? await startDives() : [];
-    return { kind: 'PROPOSED', filed, existing, rejected: got.rejected, model: got.model, dived, critique: 'SKIPPED' };
+    return { kind: 'PROPOSED', filed, existing, rejected: got.rejected, model: got.model, dived, critique: review ? 'CRITIQUED' : 'SKIPPED' };
   }
 
   const prompt = routePrompt(read.ctx);

@@ -165,3 +165,28 @@ Not done in this change:
   findings.
 - Cross-goal lessons are kept goal-scoped. Generalising them across goals would leak between
   evaluation goals that share request text, so it waits for a fresh-request design.
+
+## 7. First measurement of the loop (blind, 2026-11-25 ~21:00Z)
+
+Same 10 requests. dec1125b ran on 74691c7 (before) and dec1125c on ec0131a (research-informed loop,
+scouting stage only, because no research had returned). An independent grader worked blind
+(shuffled labels) with GRADER-BRIEF and the sealed feasibility notes.
+
+| | before (dec1125b) | after (dec1125c) |
+|---|---|---|
+| goals with ≥ 1 credible route | 5 / 10 | 6 / 10 |
+| credible routes / total | 8 / 30 | 7 / 31 |
+| complete plans | 0 | 0 |
+
+- **Recovered:** p03 (legal translation for law firms), p05 (corporate holiday cookie boxes),
+  p07 (loan signings; the licence rule), p10.
+- **Lost:** p02 (every direction refused over a missing ownerFit field or as physical work),
+  p06 and p08 (generic and design-file menus).
+- **Empty in both:** p04.
+
+The losses are fixed on `claude/route-ask-cheap` (f9290684): a review of directions before research
+is spent, tolerant parsing of direction replies, and stated activity hours read as the owner's own
+labour. The same branch also removes the per-pass claim read #1322 added.
+
+No plan can complete until research returns claims: 0 evidence facts on 118 Brain-created openings
+across four runs. Restoring research is the coordinator's critical-path fix.

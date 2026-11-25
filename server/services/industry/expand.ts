@@ -51,10 +51,11 @@
  */
 import { isNonPurchasePayment, nonPurchaseSentence, paymentNatureOf, wrongWayPrice } from '../../domain/paymentNature.ts';
 import { getDb } from '../../db/database.ts';
-import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
-import { claimsByIds, constructedRoundBuckets, goalPriceIdeasOfClaims, structuralClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { claimsByIds, constructedRoundBuckets, goalPriceIdeasOfClaims, structuralClaims, undeclaredGoalPriceClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { closeNeed } from '../cash/needs.ts';
 import { goalPriceQuestionOf } from '../goals/goalWork.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
 import { ARRANGEMENT_BUCKET_MARK, arrangementKeyOfBucket } from '../cash/arrangementLibrary.ts';
@@ -1015,6 +1016,8 @@ const BACKFILL_FIELDS: Readonly<Record<string, { key: FactKey; end: 'LOW' | 'HIG
 const unitEconomicCursor = new Map<string, string>();
 /** Where each project's constructed-round scan stopped, for the same reason. */
 const constructedCursor = new Map<string, string>();
+/** Where each project's scan of goal price answers stated in prose stopped (source 1b). */
+const statedPriceCursor = new Map<string, string>();
 
 export interface Backfilled {
   filed: RecordedFact[];
@@ -1025,7 +1028,7 @@ export interface Backfilled {
 }
 
 /** Which of the back-fill's sources a candidate came from. */
-export type BackfillSource = 'UNIT_ECONOMIC' | 'CARD_EVIDENCE' | 'CONSTRUCTED_ROUND';
+export type BackfillSource = 'UNIT_ECONOMIC' | 'GOAL_PRICE_STATED' | 'CARD_EVIDENCE' | 'CONSTRUCTED_ROUND';
 
 /** A claim the back-fill would file, and as what. */
 export interface BackfillCandidate {
@@ -1046,6 +1049,11 @@ export interface BackfillCandidate {
    * files against it.
    */
   askedPopulation?: AskedPopulation;
+  /**
+   * The goal price question this files an answer to: its need is answered
+   * with the figure, its unit and the claim once the fact is filed.
+   */
+  answers?: { candidateId: string; figure: string };
   key: FactKey;
   amount: number;
   /** The top of a stated range; absent, the fact is the point `amount`. */
@@ -1089,6 +1097,8 @@ export interface AskedPopulation {
   /** The industry of the opening the ref names, when it names one: the sector a new buyer type is put under. */
   industry: string | null;
   opportunityId: string | null;
+  /** The idea a goal price question opened, which its `goal-price-` need points at; absent for an arrangement's own buyers. */
+  candidateId?: string;
 }
 
 /**
@@ -1117,7 +1127,7 @@ async function askedPopulations(projectId: string, claims: readonly ResearchClai
       openings.set(asked.ref, opening && opening.projectId === projectId ? { id: opening.id, industry: opening.industry } : null);
     }
     const opening = openings.get(asked.ref) ?? null;
-    out.set(claimId, { ref: asked.ref, name: mapped ? mapped.name : asked.buyer, industry: opening?.industry ?? null, opportunityId: opening?.id ?? null });
+    out.set(claimId, { ref: asked.ref, name: mapped ? mapped.name : asked.buyer, industry: opening?.industry ?? null, opportunityId: opening?.id ?? null, candidateId: idea.candidateId });
   }
   return out;
 }
@@ -1207,6 +1217,106 @@ export function payerBuyerType(payer: string, nodes: readonly IndustryNode[]): I
   if (direct) return direct;
   const population = buyerPopulationName(payer);
   return population ? matchBuyerType(population, nodes) : null;
+}
+
+/**
+ * The price a goal price question's answer states in prose, per the unit it
+ * names (production 2026-11-25: "B2B year-end gift budgets typically range
+ * from $30–$120 per recipient", filed in lane `economics` with no declared
+ * figure). Read by the one money reader: only USD figures stated per a unit
+ * the text names (`MoneyFigure.unit`) that is not a measure of the work (a
+ * word, an hour), and only those of the first unit named,
+ * so two units are never mixed and none is supplied. A range keeps both ends.
+ * Null when the claim states no such figure (invariant 39). Pure.
+ */
+export function statedUnitPrice(claimText: string): { low: number; high: number; unit: string } | null {
+  // A rate per a measured quantity of the work (a word, an hour) is never what one purchase costs (`perMeasure`).
+  const figures = readMoneyFigures(claimText, 'USD').filter((one) => one.cents > 0 && one.perUnit && one.unit && !one.perMeasure);
+  const unit = figures[0]?.unit;
+  if (!unit) return null;
+  const same = figures.filter((one) => one.unit === unit).map((one) => one.cents);
+  return { low: Math.min(...same) / 100, high: Math.max(...same) / 100, unit };
+}
+
+/** `USD 30–120 per recipient`: a stated price as a need's answer says it. */
+function priceWords(price: { low: number; high: number; unit: string }): string {
+  return `USD ${price.low === price.high ? price.low : `${price.low}–${price.high}`} per ${price.unit}`;
+}
+
+/**
+ * Source 1b's verdict on a goal price question's answer that declared no
+ * figure: the price it states per a named unit, filed against the population
+ * the question asked about under the same refusals as a declared answer
+ * (`judgeUnitEconomic`) — never money paid to them, a non-purchase payment or
+ * a price running the wrong way.
+ */
+function judgeStatedGoalPrice(claim: ResearchClaim, nodes: readonly IndustryNode[], asked: AskedPopulation): BackfillDecision {
+  const refuse = (reason: string, unmatchedBuyer?: string): BackfillDecision => ({
+    source: 'GOAL_PRICE_STATED',
+    claimId: claim.id,
+    candidate: null,
+    reason,
+    countsAsSkipped: true,
+    ...(unmatchedBuyer ? { unmatchedBuyer } : {}),
+  });
+  if (!claim.accepted) return refuse('claim is not gated (accepted)');
+  if (!claim.sourceUrl) return refuse('claim has no source URL');
+  const price = statedUnitPrice(claim.claim);
+  if (!price) return refuse('the claim states no USD price per a unit it names');
+  if (claimPaysPopulation(claim.claim, asked.name)) return refuse(`the claim states money paid to "${asked.name}", not a price they pay`);
+  if (isNonPurchasePayment(claim.claim)) return refuse(`the claim states ${nonPurchaseSentence(paymentNatureOf(claim.claim))}`);
+  const wrongWay = wrongWayPrice(claim.claim, asked.name);
+  if (wrongWay) return refuse(`the claim states ${wrongWay.why}`);
+  const buyer = planBuyerType(asked.name, nodes);
+  if (!buyer && !namesABuyerPopulation(asked.name)) return refuse('the population the price question asked about is not a buyer population, so none is mapped', asked.name);
+  const figure = priceWords(price);
+  return {
+    source: 'GOAL_PRICE_STATED',
+    claimId: claim.id,
+    candidate: {
+      source: 'GOAL_PRICE_STATED',
+      claim,
+      buyer,
+      ...(buyer ? {} : { askedPopulation: asked }),
+      ...(asked.candidateId ? { answers: { candidateId: asked.candidateId, figure } } : {}),
+      key: 'price_per_unit',
+      amount: price.low,
+      high: price.high,
+      measures: `answering Brain's price question about "${asked.name}": ${figure}, as stated: ${claim.claim}`,
+    },
+    reason: null,
+    countsAsSkipped: true,
+  };
+}
+
+/** Source 1b's decisions for one scan: each undeclared answer to a goal price question. */
+async function statedGoalPriceDecisions(projectId: string, claims: readonly ResearchClaim[], nodes: readonly IndustryNode[]): Promise<BackfillDecision[]> {
+  const population = await askedPopulations(projectId, claims, nodes);
+  return claims.flatMap((claim) => {
+    const asked = population.get(claim.id);
+    return asked ? [judgeStatedGoalPrice(claim, nodes, asked)] : [];
+  });
+}
+
+/**
+ * Answer the goal price question a filed fact answers: its open `goal-price-`
+ * need, resolved with the figure, its unit and the claim — the need's
+ * condition is the fact just written, which Brain read back.
+ */
+async function answerGoalPriceNeed(projectId: string, answers: { candidateId: string; figure: string }, claimId: string): Promise<void> {
+  const needs = await getDb().all<{ id: string }>(
+    `SELECT id FROM cash_needs WHERE project_id = ? AND candidate_id = ? AND request_key LIKE ? AND state = 'OPEN'`,
+    [projectId, answers.candidateId, 'goal-price-%'],
+  );
+  for (const need of needs) {
+    await closeNeed({
+      needId: need.id,
+      to: 'RESOLVED',
+      resolution: `Established by research: ${answers.figure} (claim ${claimId}).`,
+      actorUserId: 'BRAIN',
+      verifiedBy: 'BRAIN_READ_THE_ROW',
+    });
+  }
 }
 
 /** Source 2's verdicts: every EVIDENCE card fact for a price or a direct cost not yet filed, in card order. */
@@ -1664,10 +1774,27 @@ const SUPPLY_FILED_KEYS: readonly FactKey[] = ['price_per_unit', 'contractor_rat
  * evidence. Otherwise the B1h rule.
  */
 export function rederivedMeaning(
-  fact: Pick<RecordedFact, 'key' | 'low' | 'high'> & { status?: RecordedFact['status'] },
+  fact: Pick<RecordedFact, 'key' | 'low' | 'high'> & { status?: RecordedFact['status']; measures?: string; cardPriceWithdrawn?: boolean },
   claimText: string,
   sides: ArrangementSides | undefined,
 ): { key: FactKey; amount: number; status?: 'ASSUMPTION'; why: string } | null {
+  /*
+   * A price filed from card evidence whose claim the card itself took back as
+   * its price — a rate read as what one purchase costs
+   * (`withdrawPricesReadFromARate`; production 2026-11-25: "Agencies charge
+   * $0.01 to $0.05 per email" filed as Digital agencies' price_per_unit 0.01)
+   * — goes with it. Withdrawn as an ASSUMPTION, which no plan reads as
+   * evidence, exactly as a supply price is. Only on that withdrawal: a rate per
+   * the unit of work a card sells ("$300 to $450 per grease trap cleaning")
+   * stands, because nothing took it back.
+   */
+  if (fact.key === 'price_per_unit' && fact.cardPriceWithdrawn === true && fact.status !== 'ASSUMPTION' && fact.measures?.startsWith(BACKFILL_FIELDS['price']!.measures)) {
+    const held = Math.round(Math.min(fact.low, fact.high) * 100);
+    const stated = readMoneyFigures(claimText, 'USD').filter((one) => one.cents === held);
+    if (stated.length > 0 && stated.every((one) => one.perUnit && one.perPeriod !== true)) {
+      return { key: 'price_per_unit', amount: Math.min(fact.low, fact.high), status: 'ASSUMPTION', why: 'withdrawn: the card price it was filed from is a rate per unit, not what one purchase costs' };
+    }
+  }
   if (SUPPLY_FILED_KEYS.includes(fact.key) && claimPricesSupply(claimText, sides)) {
     const quote = supplyQuote(claimText);
     if (!quote) {
@@ -1724,13 +1851,19 @@ export async function rederiveClaimFacts(projectId: string, batch = REDERIVE_BAT
   }
   const claims = new Map((await claimsByIds([...new Set(scan.map((one) => one.sourceClaimId!))])).map((one) => [one.id, one]));
   const sides = await supplySidesOf(projectId, scan.filter((one) => SUPPLY_FILED_KEYS.includes(one.key)).map((one) => one.sourceClaimId!));
+  // The claims a card took back as its price (`withdrawPricesReadFromARate`): a price filed from one goes too.
+  const withdrawnPrices = new Set(
+    (await cashEventsOfKindInProject(projectId, 'CASH_CARD_FACT_WITHDRAWN'))
+      .filter((one) => one.detail['field'] === 'price' && typeof one.detail['claimId'] === 'string')
+      .map((one) => one.detail['claimId'] as string),
+  );
   let reached = '';
   for (const fact of scan) {
     if (out.length >= batch) break;
     reached = fact.id;
     const claim = claims.get(fact.sourceClaimId!);
     if (!claim || !claim.accepted || !claim.sourceUrl) continue;
-    const meaning = rederivedMeaning(fact, claim.claim, sides.get(claim.id));
+    const meaning = rederivedMeaning({ ...fact, cardPriceWithdrawn: withdrawnPrices.has(claim.id) }, claim.claim, sides.get(claim.id));
     if (meaning === null) continue;
     const { key, amount, status } = meaning;
     const recorded = await recordClaimFact({
@@ -1784,10 +1917,11 @@ export async function backfillCandidates(projectId: string, cursors: BackfillCur
   // Each source from its own cursor, as the writer reads it: source 3's is never source 1's (B1g).
   const declared = await unfiledUnitEconomicClaims(projectId, cursors.unitEconomic ?? unitEconomicCursor.get(projectId) ?? '', BACKFILL_SCAN);
   const population = await askedPopulations(projectId, declared, nodes);
+  const stated = await statedGoalPriceDecisions(projectId, await undeclaredGoalPriceClaims(projectId, statedPriceCursor.get(projectId) ?? '', BACKFILL_SCAN), nodes);
   // With no buyer type on the map, only an answer to a population's price question can file (it maps its population).
   if (!hasBuyerTypes) {
     const answers = declared.filter((claim) => population.has(claim.id));
-    return { hasBuyerTypes: false, unitEconomicRead: declared.length, decisions: answers.map((claim) => judgeUnitEconomic(claim, nodes, population.get(claim.id))) };
+    return { hasBuyerTypes: false, unitEconomicRead: declared.length, decisions: [...answers.map((claim) => judgeUnitEconomic(claim, nodes, population.get(claim.id))), ...stated] };
   }
   const asked = await unfiledConstructedRoundClaims(projectId, cursors.constructed ?? constructedCursor.get(projectId) ?? '', BACKFILL_SCAN);
   return {
@@ -1795,6 +1929,7 @@ export async function backfillCandidates(projectId: string, cursors: BackfillCur
     unitEconomicRead: declared.length,
     decisions: [
       ...declared.map((claim) => judgeUnitEconomic(claim, nodes, population.get(claim.id))),
+      ...stated,
       ...(await cardEvidenceDecisions(projectId, nodes)),
       ...(await constructedRoundDecisions(projectId, nodes, asked)),
     ],
@@ -1887,6 +2022,7 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
     });
     if (!recorded) return;
     out.filed.push(recorded);
+    if (input.answers) await answerGoalPriceNeed(projectId, input.answers, claim.id);
     await recordCashEvent({
       projectId,
       kind: 'INDUSTRY_FACT_ABSORBED',
@@ -1913,6 +2049,21 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
   }
   // Everything read: start over next pass (a buyer added since may now match). Otherwise resume after the last one read.
   unitEconomicCursor.set(projectId, reached === declared[declared.length - 1]?.id && declared.length < BACKFILL_SCAN ? '' : reached);
+
+  // 1b. Goal price questions answered in prose with no declared figure: the price each states per a named unit.
+  const stated = await undeclaredGoalPriceClaims(projectId, statedPriceCursor.get(projectId) ?? '', BACKFILL_SCAN);
+  let statedReached = stated[stated.length - 1]?.id ?? '';
+  let statedConsumed = '';
+  for (const decision of await statedGoalPriceDecisions(projectId, stated, nodes)) {
+    if (room() <= 0) {
+      statedReached = statedConsumed;
+      break;
+    }
+    await consume(decision);
+    statedConsumed = decision.claimId ?? statedConsumed;
+  }
+  // Everything read: start over next pass. Otherwise resume where the batch ran out.
+  statedPriceCursor.set(projectId, statedReached === stated[stated.length - 1]?.id && stated.length < BACKFILL_SCAN ? '' : statedReached);
   if (!hasBuyerTypes) return out;
 
   // 2. Prices and costs cards hold as evidence, for payers the map names.

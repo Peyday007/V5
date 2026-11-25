@@ -23,7 +23,7 @@ import {
   type PodConfig,
 } from '../server/services/cheap/runpodPod.ts';
 import { creationPlan, RECIPES } from '../server/services/cheap/runpodRestore.ts';
-import { decideTarget, latencyBaseline, poolShare, slotShare, SLOTS_PER_DB_CONNECTION } from '../server/services/freeLane/capacity.ts';
+import { decideTarget, gpuBaseline, gpuFloor, gpuLatencyVerdict, gpuStep, poolShare, type GpuReading, slotShare, SLOTS_PER_DB_CONNECTION } from '../server/services/freeLane/capacity.ts';
 import { gpuRestrictions, workState } from '../server/services/cheap/gpuStatus.ts';
 import { gpuThroughput, summarizeGpuJobs } from '../server/services/cheap/gpuCapacity.ts';
 import type { RecordBinEventInput } from '../server/repos/bins.ts';
@@ -276,7 +276,7 @@ describe('the GPU slot\'s concurrency rises under waiting work (§86, §121)', (
     let target = 2;
     const seen: number[] = [];
     for (let step = 0; step < 8; step += 1) {
-      const d = decideTarget({ target, active: target, waiting: 174, window: { ok: 20, content: 1, transient: 0 }, pressure: calm, ceiling: 48, latency: { meanMs: 9_000, baselineMs: 8_000 } });
+      const d = decideTarget({ target, active: target, waiting: 174, window: { ok: 20, content: 1, transient: 0 }, pressure: calm, ceiling: 48, gpu: { current: null, readings: [], floor: 8 } });
       const share = poolShare({ gpu: true, models: 2, othersTarget: 4, poolMax: 8 })!;
       target = Math.min(d.target, share);
       seen.push(target);
@@ -285,17 +285,57 @@ describe('the GPU slot\'s concurrency rises under waiting work (§86, §121)', (
     expect(target).toBe(20);
   });
 
-  it('holds when the GPU\'s answer time doubles against its baseline', () => {
-    const d = decideTarget({ target: 16, active: 16, waiting: 100, window: { ok: 20, content: 0, transient: 0 }, pressure: calm, ceiling: 48, latency: { meanMs: 25_000, baselineMs: 10_000 } });
-    expect(d.target).toBe(16);
-    expect(d.reason).toMatch(/GPU answer time/);
+  /*
+   * Production 2026-11-25 21:32Z: target 1, highest stable 23, "GPU answer time 11 s is over 2x
+   * its 3 s baseline; holding", 815 items waiting, 17 accepted in the hour against 878/24h before.
+   */
+  const reading = (concurrency: number, meanMs: number | null, accepted: number, at = 0): GpuReading => ({ at, concurrency, meanMs, accepted, windowMs: 3 * 60_000 });
+
+  it('does not hold a GPU whose answers are slow against a low-load baseline: it grows', () => {
+    const readings = [reading(1, 3_000, 4), reading(1, 11_000, 5), reading(2, 11_000, 9)];
+    const d = decideTarget({ target: 2, active: 2, waiting: 815, window: { ok: 9, content: 0, transient: 0 }, pressure: calm, ceiling: 48, gpu: { current: readings[2]!, readings, floor: 8 } });
+    expect(d.target).toBeGreaterThan(2);
+    expect(d.reason).not.toMatch(/GPU answer time/);
   });
 
-  it('keeps the lowest answer time of the last hour as the baseline', () => {
-    const readings: { at: number; ms: number }[] = [];
-    expect(latencyBaseline(readings, 9_000, 0)).toBe(9_000);
-    expect(latencyBaseline(readings, 20_000, 60_000)).toBe(9_000);
-    expect(latencyBaseline(readings, null, 2 * H)).toBeNull();
+  it('steps back only when fewer slots accepted as much work, and never under the floor', () => {
+    // 32 slots answer 2.5x slower than at 16 and accept no more per minute: more sequences added time, not work.
+    const readings = [reading(16, 10_000, 30), reading(32, 25_000, 28)];
+    const back = decideTarget({ target: 32, active: 32, waiting: 100, window: { ok: 28, content: 0, transient: 0 }, pressure: calm, ceiling: 48, gpu: { current: readings[1]!, readings, floor: 8 } });
+    expect(back.target).toBe(16);
+    expect(back.reason).toMatch(/stepping back/);
+    // The same slowdown with throughput still rising is load, not a fault: it keeps growing.
+    const rising = [reading(16, 10_000, 30), reading(32, 25_000, 50)];
+    const grow = decideTarget({ target: 32, active: 32, waiting: 100, window: { ok: 50, content: 0, transient: 0 }, pressure: calm, ceiling: 48, gpu: { current: rising[1]!, readings: rising, floor: 8 } });
+    expect(grow.target).toBeGreaterThan(32);
+    // Evidence that 6 slots did as much as 12 steps back no further than the floor of 8.
+    const low = [reading(6, 4_000, 12), reading(12, 9_000, 12)];
+    expect(gpuLatencyVerdict({ target: 12, current: low[1]!, readings: low, floor: 8 })!.target).toBe(8);
+  });
+
+  it('keeps the paid GPU at its floor while useful work waits, except under saturation or failing answers', () => {
+    const gpu = { current: null, readings: [], floor: gpuFloor(48) };
+    expect(gpuFloor(48)).toBe(8);
+    expect(gpuFloor(4)).toBe(4);
+    // Brain's own lag halves a free model; the GPU slot stays at its floor.
+    expect(decideTarget({ target: 8, active: 8, waiting: 100, window: { ok: 10, content: 0, transient: 0 }, pressure: { ...calm, lagMs: 2_000 }, gpu }).target).toBe(8);
+    expect(decideTarget({ target: 1, active: 1, waiting: 100, window: { ok: 10, content: 0, transient: 0 }, pressure: { ...calm, dbContended: true }, gpu }).target).toBe(8);
+    // The database-saturation and provider-overload halvings still bind (§61/§63).
+    expect(decideTarget({ target: 8, active: 8, waiting: 100, window: { ok: 10, content: 0, transient: 0 }, pressure: { ...calm, db: true }, gpu }).target).toBe(4);
+    expect(decideTarget({ target: 8, active: 8, waiting: 100, window: { ok: 2, content: 0, transient: 8 }, pressure: calm, gpu }).target).toBe(4);
+    // Nothing waiting: no floor.
+    expect(decideTarget({ target: 2, active: 0, waiting: 0, window: { ok: 0, content: 0, transient: 0 }, pressure: calm, gpu }).target).toBe(2);
+  });
+
+  it('reads the baseline at comparable load, and a reading only from a target held through its window', () => {
+    const readings = [reading(1, 3_000, 4), reading(16, 10_000, 30), reading(16, 12_000, 30), reading(32, 20_000, 40)];
+    expect(gpuBaseline(readings, 32)).toBe(11_000);
+    expect(gpuBaseline(readings, 2)).toBe(3_000);
+    const H0 = 10 * H;
+    expect(gpuStep({ readings: [], target: 8, settledSince: H0 - 60_000, meanMs: 9_000, accepted: 6, now: H0 }).current).toBeNull();
+    const held = gpuStep({ readings: [reading(4, 5_000, 4, H0 - 2 * H)], target: 8, settledSince: H0 - 3 * 60_000, meanMs: 9_000, accepted: 6, now: H0 });
+    expect(held.current).toMatchObject({ concurrency: 8, meanMs: 9_000, accepted: 6 });
+    expect(held.readings).toHaveLength(1);
   });
 
   it('measures accepted GPU jobs per dollar', () => {

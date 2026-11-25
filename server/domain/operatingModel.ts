@@ -335,6 +335,8 @@ const OWNER_OFFERS_LABOUR = new RegExp(
     "i (?:have|'ve got|got) (?:my )?(?:weekends|evenings) (?:free|open)",
     // Hours the owner gives the goal.
     "i (?:can|could|will|am able to|'m able to) (?:give|put|spend|devote|commit|dedicate|work)(?: it| this| in)? (?:about |around |roughly |up to |maybe )?\\d+(?:\\.\\d+)?(?:\\s*-\\s*\\d+)? ?(?:hours?|hrs?)",
+    // Hours of a named activity of the owner's own ("I can fly about 20 hours a week", "I can bake 18 hours a week").
+    "i (?:can|could|will|am able to|'m able to) (?!not\\b|only\\b)[a-z]+ (?:about |around |roughly |up to |maybe )?\\d+(?:\\.\\d+)?(?:\\s*-\\s*\\d+)? ?(?:hours?|hrs?) (?:a|per|each|every) (?:week|day|weekend|month)",
     "i (?:have|'ve got|got) (?:about |around |roughly |up to )?\\d+(?:\\.\\d+)? ?(?:hours?|hrs?) (?:a|per|each|every) (?:week|day|weekend|month)",
     // Equipment or a vehicle the owner has.
     "i(?:'ve| have)? (?:got|own|have) (?:a |an |my own |our )?(?:[a-z-]+ ){0,2}(?:pickup|truck|van|car|vehicle|trailer|camera|cameras|drone|gear|equipment|tools|kitchen|studio|workshop|garage|printer|sewing machine|mower|pressure washer)s?\\b",

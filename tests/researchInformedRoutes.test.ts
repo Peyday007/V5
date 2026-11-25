@@ -119,6 +119,31 @@ describe('scouting: directions before anything is priced', () => {
   });
 });
 
+describe('a review before research is spent on directions', () => {
+  const many = [direction, { ...direction, title: 'Notion templates for everyone', payer: 'Productivity fans online', offer: 'A template pack', ownerFit: '' }];
+  it('drops what fails a rule no research could fix, ranks the rest, and keeps all when no review is readable', async () => {
+    const { applyDirectionCritique, directionCritiquePrompt } = await import('../server/services/goals/routeProposal.ts');
+    const { critiqueJson } = await import('../server/services/goals/routeProposal.ts');
+    const parsed = parseDirections(JSON.stringify({ directions: many }), ctx({ ownerLabour: { offered: true, evidence: 'I run two embroidery machines' } as never })).directions;
+    expect(parsed).toHaveLength(2); // a missing owner fit is the review's to judge, not a parse refusal
+    const prompt = directionCritiquePrompt(ctx(), parsed);
+    expect(prompt).toMatch(/VALUE: the owner's side adds something/);
+    expect(prompt).toMatch(/2\. \{"title":"Notion templates for everyone"[\s\S]*"ownerFit":"\(not stated\)"/);
+    const review = critiqueJson(JSON.stringify({ reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5 }, why: 'uses the machines' }, { index: 2, verdict: 'DROP', scores: { OWNER_FIT: 0 }, failed: ['OWNER_FIT'], why: 'fits any request' }], ranking: [1] }), 2);
+    const applied = applyDirectionCritique(parsed, review);
+    expect(applied.kept.map((one) => one.title)).toEqual([direction.title]);
+    expect(applied.dropped[0]).toMatchObject({ title: 'Notion templates for everyone', rule: 'CRITIQUE' });
+    expect(applyDirectionCritique(parsed, null).kept).toHaveLength(2);
+  });
+
+  it('reads a cut-off reply and refuses a buyer kind written as the payer', () => {
+    const cut = `{"owner":{},"directions":[${JSON.stringify(direction)},{"title":"half`;
+    expect(parseDirections(cut, ctx({ ownerLabour: { offered: true, evidence: 'x' } as never })).directions.map((one) => one.title)).toEqual([direction.title]);
+    const kindAsPayer = parseDirections(JSON.stringify({ directions: [{ ...direction, payer: 'LOCAL_BUSINESS' }] }), ctx({ ownerLabour: { offered: true, evidence: 'x' } as never }));
+    expect(kindAsPayer.rejected[0]).toMatchObject({ rule: 'INCOMPLETE' });
+  });
+});
+
 describe('routes from findings', () => {
   const findings = findingsOf([
     claim('Custom embroidered aprons cost $18–$24 each for orders of 12 from online embroidery shops.', { evidenceLane: 'price_evidence' }),
@@ -148,6 +173,9 @@ describe('routes from findings', () => {
     // Platform resale and unnamed referral commissions are not routes (dev4, 2026-11-25: six Fiverr/Upwork resale routes).
     expect(prompt).toMatch(/reselling gigs, services or products another platform already sells/);
     expect(prompt).toMatch(/referral commission without a named partner programme/);
+    // A model-generated digital deliverable is not a route without buyers shown paying for exactly that (dev5, 2026-11-25: 6/12 goals).
+    expect(prompt).toMatch(/digital deliverable a model would generate[\s\S]*already shown paying for exactly that/);
+    expect(directionPrompt(ctx())).toMatch(/When the owner states no skill or asset, their capital, time and place are the means/);
   });
 
   it('keeps only cited refs the prompt showed, and reads demand as comparable unless the reply says exact', () => {
@@ -171,6 +199,18 @@ describe('routes from findings', () => {
     expect(routeAskDue(asked, now, { findings: 2 + NEW_FINDINGS_FOR_REASK })).toEqual({ due: true, onFindings: true });
     const tooSoon = [{ ...asked[0]!, createdAt: new Date(now.getTime() - 60_000).toISOString() }];
     expect(routeAskDue(tooSoon, now, { findings: 50 }).due).toBe(false);
+  });
+});
+
+describe('the strong route model', () => {
+  it('is offered first only when the deployment holds a key and names the model, through the same chat path', async () => {
+    const { strongRouteModels, ANTHROPIC_COMPAT_URL, ROUTE_STRONG_MODEL } = await import('../server/services/goals/routeProposal.ts');
+    expect(strongRouteModels({})).toEqual([]);
+    expect(strongRouteModels({ ANTHROPIC_API_KEY: '  ', BRAIN_ROUTE_MODEL: ROUTE_STRONG_MODEL })).toEqual([]);
+    // A key alone selects nothing: spending starts only when the model is named.
+    expect(strongRouteModels({ ANTHROPIC_API_KEY: 'sk-ant-test' })).toEqual([]);
+    expect(strongRouteModels({ ANTHROPIC_API_KEY: 'sk-ant-test', BRAIN_ROUTE_MODEL: ROUTE_STRONG_MODEL })[0]).toMatchObject({ label: `anthropic:${ROUTE_STRONG_MODEL}`, baseUrl: ANTHROPIC_COMPAT_URL, model: ROUTE_STRONG_MODEL });
+    expect(strongRouteModels({ ANTHROPIC_API_KEY: 'sk-ant-test', BRAIN_ROUTE_MODEL: 'claude-opus-5-5' })[0]!.model).toBe('claude-opus-5-5');
   });
 });
 
@@ -240,13 +280,17 @@ describe('the loop on a goal', () => {
     };
     const { deps, asked, critic } = scripted(
       [{ owner: { skills: ['embroidery'], assets: ['two embroidery machines'], location: 'Tucson' }, directions: [direction] }, { rethink: null, routes: [priced] }],
-      [{ reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5, WINDOW: 4, CHANNEL: 4, FULFILLER: 5, PRICE: 4, CAPITAL: 5, MARKET: 4, EVIDENCE: 5 }, why: 'priced from F1, sized from F2' }], ranking: [1] }],
+      [
+        { reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5, WINDOW: 4, CHANNEL: 4, FULFILLER: 5, CAPITAL: 5, MARKET: 4, VALUE: 5, LAWFUL: 5 }, why: 'uses the machines locally' }], ranking: [1] },
+        { reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5, WINDOW: 4, CHANNEL: 4, FULFILLER: 5, PRICE: 4, CAPITAL: 5, MARKET: 4, EVIDENCE: 5 }, why: 'priced from F1, sized from F2' }], ranking: [1] },
+      ],
       () => held,
       written,
     );
     // Nothing researched: a direction, no price.
     const t0 = new Date();
-    expect(await proposeGoalRoutes({ goalId, now: t0 }, deps)).toMatchObject({ kind: 'PROPOSED', critique: 'SKIPPED' });
+    expect(await proposeGoalRoutes({ goalId, now: t0 }, deps)).toMatchObject({ kind: 'PROPOSED', critique: 'CRITIQUED' });
+    expect(critic[0]).toMatch(/DIRECTIONS NAMED, before anything is priced/);
     let openings = await opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
     expect(openings).toHaveLength(1);
     expect(openings[0]!.priceCents).toBeNull();
@@ -268,8 +312,8 @@ describe('the loop on a goal', () => {
     expect(await proposeGoalRoutes({ goalId, now: t1 }, deps)).toMatchObject({ kind: 'PROPOSED', critique: 'CRITIQUED' });
     expect(asked[1]).toMatch(/FINDINGS — what research has established/);
     expect(asked[1]).toMatch(/DIRECTIONS ALREADY SCOUTED[\s\S]*Embroidered staff uniforms for local cafés/);
-    expect(critic[0]).toMatch(/FINDINGS research holds for this goal/);
-    expect(critic[0]).toMatch(/cites price: F1, volume: F2, demand: F3 \(demand COMPARABLE\)/);
+    expect(critic[1]).toMatch(/FINDINGS research holds for this goal/);
+    expect(critic[1]).toMatch(/cites price: F1, volume: F2, demand: F3 \(demand COMPARABLE\)/);
 
     openings = await opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
     const route = openings.find((one) => one.title === 'Café apron runs')!;
