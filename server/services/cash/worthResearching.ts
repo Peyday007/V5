@@ -30,6 +30,7 @@
  */
 import { isMarketLevelFigure } from './positionEvidence.ts';
 import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
+import { openingOwnerLabour } from '../goals/ownerLabour.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getClaim, sourceUrlsForProject } from '../../repos/research.ts';
 import { inReadScope, scopedRead } from '../../repos/readScope.ts';
@@ -266,7 +267,7 @@ export async function notWorthResearching(
     return { kind: 'MARKET_LEVEL' };
   }
   const fit = operatingFit(operatingFactsOf(opportunity));
-  if (breaksOperatingModel(fit)) {
+  if (breaksOperatingModel(fit, fit.kind === 'OWNER_PHYSICAL' ? await openingOwnerLabour(opportunity) : null)) {
     return { kind: 'SCREENED_OUT', reason: 'OWNER_PHYSICAL_WORK', detail: fit.because, limit: 'the owner does no physical work' };
   }
   const sourceUrl = await sourceUrlOf(opportunity);

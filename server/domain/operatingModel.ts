@@ -300,9 +300,74 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
   return words.trim() ? { kind: 'REMOTE', because: 'nothing in it needs anybody physically present' } : { kind: 'UNKNOWN', because: 'nothing recorded says how it is delivered' };
 }
 
-/** Whether a reading rules the opening out under the standing rule. */
-export function breaksOperatingModel(fit: OperatingFit): boolean {
-  return fit.kind === 'OWNER_PHYSICAL';
+/**
+ * Whether one goal's own words offer the requester's labour or assets for that
+ * goal, with the phrase that says so (integration owner, 2026-11-25: §91's
+ * "the owner does no physical work" is the standing default, and §105 says a
+ * goal's own constraint binds that goal). "My weekends are free", "I've got a
+ * pickup truck", "I'm a photographer with my own gear and can shoot", "I can
+ * give it 20 hours a week" offer it; silence never does (invariant 39), and an
+ * explicit refusal ("I'm not doing any of the work") wins over any offer.
+ * Matched on the words, never a model's judgment. Pure.
+ */
+export type OwnerLabour =
+  | { offered: true; evidence: string }
+  | { offered: false; refused: string | null };
+
+const OWNER_REFUSES_LABOUR = new RegExp(
+  [
+    "i(?:'m| am)? not (?:doing|going to do|willing to do|able to do) (?:any|the)(?: of the)? (?:physical |manual )?work",
+    "i (?:won'?t|will not|don'?t want to|do not want to|can'?t|cannot) (?:do|perform) (?:any|the)(?: of the)? (?:physical |manual )?(?:work|labou?r)",
+    'no (?:physical|manual|hands[- ]on) (?:work|labou?r)',
+    'without (?:me )?(?:doing|performing) (?:any|the) (?:physical |manual )?work',
+    'hands[- ]off',
+    'fully passive|passive(?: income)? only',
+    "i (?:won'?t|will not|don'?t want to|do not want to) (?:drive|deliver|travel|meet (?:customers|clients|anyone))",
+  ].join('|'),
+  'i',
+);
+
+const OWNER_OFFERS_LABOUR = new RegExp(
+  [
+    // Free time, stated as the owner's own.
+    "(?:my )?(?:weekends|evenings|mornings|afternoons|nights|saturdays|sundays)(?: are| is)? (?:free|open|available)",
+    "(?:free|available) (?:on )?(?:weekends|evenings|saturdays|sundays)",
+    "i (?:have|'ve got|got) (?:my )?(?:weekends|evenings) (?:free|open)",
+    // Hours the owner gives the goal.
+    "i (?:can|could|will|am able to|'m able to) (?:give|put|spend|devote|commit|dedicate|work)(?: it| this| in)? (?:about |around |roughly |up to |maybe )?\\d+(?:\\.\\d+)?(?:\\s*-\\s*\\d+)? ?(?:hours?|hrs?)",
+    "i (?:have|'ve got|got) (?:about |around |roughly |up to )?\\d+(?:\\.\\d+)? ?(?:hours?|hrs?) (?:a|per|each|every) (?:week|day|weekend|month)",
+    // Equipment or a vehicle the owner has.
+    "i(?:'ve| have)? (?:got|own|have) (?:a |an |my own |our )?(?:[a-z-]+ ){0,2}(?:pickup|truck|van|car|vehicle|trailer|camera|cameras|drone|gear|equipment|tools|kitchen|studio|workshop|garage|printer|sewing machine|mower|pressure washer)s?\\b",
+    'with my own (?:gear|equipment|tools|camera|truck|van|car|vehicle)',
+    // A trade the owner states and offers to do.
+    "i(?:'m| am) an? (?:[a-z-]+ ){0,2}(?:photographer|videographer|electrician|plumber|carpenter|mechanic|cleaner|driver|chef|cook|baker|tutor|teacher|handyman|painter|trainer|stylist|barber|landscaper|gardener|mover|musician|dj)\\b",
+    "(?:and |i )can (?:shoot|film|photograph|drive|deliver|haul|clean|mow|cook|bake|install|repair|fix|teach|tutor|move|build|paint|cater)\\b",
+    "i(?:'m| am) (?:happy|willing|able|ok|okay|fine|glad) to (?:do|work|drive|deliver|help|shoot|clean|meet|travel|cook|teach|install)\\b",
+  ].join('|'),
+  'i',
+);
+
+export function ownerLabourOffer(...texts: readonly (string | null | undefined)[]): OwnerLabour {
+  const words = texts.filter((one): one is string => !!one && !!one.trim()).join(' \n ').replace(/[’‘]/g, "'");
+  const refused = words.match(OWNER_REFUSES_LABOUR)?.[0] ?? null;
+  if (refused) return { offered: false, refused };
+  const offered = words.match(OWNER_OFFERS_LABOUR)?.[0] ?? null;
+  return offered ? { offered: true, evidence: offered.trim() } : { offered: false, refused: null };
+}
+
+/** A goal's offer, read from its own recorded words: title, intent and the resources it was set with. Pure. */
+export function goalOwnerLabour(goal: { title: string; intent?: string | null; target?: { resources: string | null } | null }): OwnerLabour {
+  return ownerLabourOffer(goal.title, goal.intent, goal.target?.resources);
+}
+
+/**
+ * Whether a reading rules the opening out under the standing rule. A goal
+ * whose own words offer the requester's labour (`ownerLabourOffer`) lifts the
+ * refusal of owner physical work for that goal alone; the goal's hours, skills
+ * and capital still bind it where they are checked.
+ */
+export function breaksOperatingModel(fit: OperatingFit, labour: OwnerLabour | null = null): boolean {
+  return fit.kind === 'OWNER_PHYSICAL' && !labour?.offered;
 }
 
 /**

@@ -14811,6 +14811,15 @@ stated correctly in every research question and applied too broadly in code:
 - **Breadth is kept.** Nothing new is preferred: the lenses, buckets and
   constructed arrangements are unchanged, and the examples above are examples.
 
+**A goal's own offer of labour (integration owner, 2026-11-25; §105).** The rule
+is the owner's standing default. When one goal's own words offer the
+requester's labour or assets ("my weekends are free", "I've got a pickup
+truck", "I can give it 20 hours a week"), `ownerLabourOffer` records the phrase
+and `breaksOperatingModel(fit, offer)` lets routes the requester performs stand
+for that goal only — its route filter, plan and delivery reading — still inside
+its stated hours. Silence is no offer, an explicit refusal wins, and openings
+no goal owns or another goal owns keep the refusal.
+
 ## 92. An industry is constructed from positions and evidence, and the decision is Brain's.
 
 Owner, 2026-11-07: take an operator's ambition ("enter last-mile logistics in

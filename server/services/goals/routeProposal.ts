@@ -48,7 +48,7 @@ import { createHash } from 'node:crypto';
 import type { OperatorModel } from '../../domain/operator.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
-import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
 import { goalRoutePrefix, routeRecordId, ROUTE_RANK_FIELD, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
 import { chatFor, type ChatFn } from '../cheap/modelBench.ts';
 import { challengerModels } from '../operator/decisions.ts';
@@ -155,6 +155,8 @@ export interface RouteContext {
   refuted: { title: string; why: string }[];
   /** Today's date (ISO), so the season and calendar reach the routes; absent in a context built without a clock. */
   today?: string;
+  /** Whether this goal's own words offer the requester's labour or assets (`ownerLabourOffer`); absent reads as not offered. */
+  ownerLabour?: OwnerLabour | null;
 }
 
 const num = (v: unknown): number | null => {
@@ -249,6 +251,9 @@ function limitLines(ctx: RouteContext): string[] {
     ctx.recurring ? 'The target is monthly recurring revenue: every route must be billed monthly.' : '',
     ctx.exclusions.length ? `The owner excluded: ${ctx.exclusions.join('; ')}.` : '',
     OPERATING_MODEL_SENTENCE,
+    ctx.ownerLabour?.offered
+      ? `For this goal only, the owner offered their own work ("${ctx.ownerLabour.evidence}"): routes the owner personally performs — in person included — are allowed, using only the skills and assets their words state and inside their stated hours. Set performer OWNER and count every one of those hours.`
+      : '',
   ].filter(Boolean);
 }
 
@@ -271,7 +276,7 @@ export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): stri
     ctx.today ? `DATE: ${calendarLine(ctx.today)}` : '',
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `FEASIBILITY (every route must pass every one):\n- ${Object.values(ROUTE_RULES).join('\n- ')}`,
-    `STEP 2 — ROUTES. Propose ${k} concrete, different commercial routes built from the owner profile, each able to collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers pay today, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and how many such buyers exist. Spread the routes across genuinely different kinds of buyer — use at least three of ${BUYER_KINDS.join(', ')} where the owner's words allow it — and at least three different mechanisms; no two routes may share a buyer type. When the owner names a place, an asset or a hands-on skill, and the target is small or the window short, buyers near them (households and local businesses, reached directly) are usually the fastest money — the in-person work done by a local provider the owner books and pays, as the operating rule above allows, and the owner's own skills used wherever they need no physical work: consider them before anything sold to the whole internet. A route that would fit any request equally — a report, an audit, a template, a dashboard, a course or an "AI" product offered to everyone — is a poor route unless the owner's own words point to it. Each route says in ownerFit which of the owner's stated facts it uses.`,
+    `STEP 2 — ROUTES. Propose ${k} concrete, different commercial routes built from the owner profile, each able to collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers pay today, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and how many such buyers exist. Spread the routes across genuinely different kinds of buyer — use at least three of ${BUYER_KINDS.join(', ')} where the owner's words allow it — and at least three different mechanisms; no two routes may share a buyer type. When the owner names a place, an asset or a hands-on skill, and the target is small or the window short, buyers near them (households and local businesses, reached directly) are usually the fastest money — the in-person work done by the owner where this goal's words offer it, otherwise by a local provider the owner books and pays, as the operating rule above allows: consider them before anything sold to the whole internet. A route that would fit any request equally — a report, an audit, a template, a dashboard, a course or an "AI" product offered to everyone — is a poor route unless the owner's own words point to it. Each route says in ownerFit which of the owner's stated facts it uses.`,
     `WHAT BRAIN ITSELF PROVABLY PRODUCES (one possible fulfilment, never the reason for a route; performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use OWNER or SUBCONTRACTOR routes'}.`,
     ctx.held.length ? `ALREADY HELD for this goal (propose different routes): ${ctx.held.slice(0, 20).join(' | ')}` : '',
     ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not propose these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
@@ -514,7 +519,7 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
     const fulfiller = str(r['fulfiller'], 200) ?? (performer === 'BRAIN' ? `Brain (${brainDeliverable})` : performer === 'OWNER' ? 'The owner' : 'A subcontractor to be named');
     const industry = str(r['industry'], 80) ?? 'unspecified';
     const fit = operatingFit(operatingFactsOf({ title, offerScope: offer, fulfillmentOwner: performer === 'OWNER' ? 'The owner, personally' : fulfiller, mechanism }));
-    if (breaksOperatingModel(fit)) {
+    if (breaksOperatingModel(fit, ctx.ownerLabour ?? null)) {
       reject(`needs the owner's physical work: ${fit.because}`, 'PHYSICAL');
       continue;
     }
@@ -900,6 +905,7 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
       hoursLimit: target.hoursCeiling,
       hoursPerWeek: target.scope?.hoursPerWeek ?? null,
       resources: target.resources,
+      ownerLabour: ownerLabourOffer(ownerWords(goal), target.resources),
       industry: target.scope?.industry ?? null,
       recurring: target.scope?.recurring === 'MONTHLY',
       exclusions: exclusions.map((one) => EXCLUSION_CLASSES[one].label),

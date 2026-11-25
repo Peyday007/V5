@@ -60,6 +60,7 @@
  *     person's own answer outranks a proposal permanently.
  */
 import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
+import { openingOwnerLabour } from '../goals/ownerLabour.ts';
 import { citableClaims } from '../../repos/research.ts';
 import { getMission } from '../../repos/russellMissions.ts';
 import { missionsForRounds } from '../russell/roundMissions.ts';
@@ -707,7 +708,9 @@ export type DeliveryReading =
  */
 export async function deliveryReading(opportunity: CashOpportunity): Promise<DeliveryReading> {
   const fit = operatingFit(operatingFactsOf(opportunity));
-  if (breaksOperatingModel(fit)) {
+  // A route whose own goal offered the requester's labour is that goal's to perform (§91 note); every other opening keeps the rule.
+  const labour = fit.kind === 'OWNER_PHYSICAL' ? await openingOwnerLabour(opportunity) : null;
+  if (breaksOperatingModel(fit, labour)) {
     return { kind: 'WITHHOLD', bar: 'PHYSICAL', because: `Not proposed: ${fit.because}.` };
   }
   const workflow = (await listWorkflows(opportunity.projectId)).find(
@@ -737,8 +740,8 @@ export async function deliveryReading(opportunity: CashOpportunity): Promise<Del
    * whose provider is not yet known is a question to research, not a verdict
    * that it cannot be delivered (owner, 2026-11-07).
    */
-  if (physical.length > 0 && fit.kind === 'BROKERED_PHYSICAL') {
-    // The physical tasks are the provider's; the rest of the reading decides.
+  if (physical.length > 0 && (fit.kind === 'BROKERED_PHYSICAL' || labour?.offered)) {
+    // The physical tasks are the provider's, or the requester's who offered them for this goal; the rest of the reading decides.
   } else if (physical.length > 0 && fit.kind === 'UNKNOWN') {
     return {
       kind: 'WITHHOLD',
