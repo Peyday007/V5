@@ -143,6 +143,8 @@ describe('routes from findings', () => {
     expect(prompt).toMatch(/Propose up to 6/);
     expect(prompt).not.toMatch(/at least three/);
     expect(prompt).toMatch(/"rethink"/);
+    // Unlawful or terms-breaking routes fail a rule the critic scores (dev4, 2026-11-25: paid reviews proposed).
+    expect(prompt).toMatch(/fake, paid or incentivised reviews/);
   });
 
   it('keeps only cited refs the prompt showed, and reads demand as comparable unless the reply says exact', () => {

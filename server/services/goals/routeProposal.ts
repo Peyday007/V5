@@ -305,6 +305,8 @@ export const ROUTE_RULES = {
   PRICE: 'the price is anchored to what this kind of buyer typically pays for this today; commodity work is priced at its market rate, never far above it; the buyer count is built from the bottom up (a place, a directory, a marketplace category), never a top-down guess',
   CAPITAL: "the capital is read as the owner gave it: a small budget rules out spend-heavy channels; a large one may fund inventory, equipment or paid labour where that is what earns the money; few owner hours rule out labour-per-unit work that does not scale; a recurring target needs recurring billing",
   MARKET: 'the market exists and is buying now, in this season; no invented or dead markets',
+  LAWFUL:
+    "lawful, and inside the terms of every platform it uses: nothing deceptive (fake, paid or incentivised reviews, fake engagement or testimonials), nothing that breaks a marketplace's or platform's rules, no licensed work done without the licence, and no regulated claim made without the right to make it",
   EVIDENCE:
     "every figure that cites a finding says what that finding says, for buyers like these; a route a finding contradicts is not proposed again in another wording; with findings available, a route resting on none of them is weaker than one that rests on them; demand shown only for comparable offers is comparable demand, never proof that buyers want this exact offer",
 } as const;
