@@ -33,6 +33,33 @@ export type BinLane = 'CLAUDE' | 'FREE_LANE' | 'WAITING_FOR_FREE_LANE' | 'PARKED
  */
 export const OWNER_DIRECTED_GOAL_IDS: readonly string[] = ['wst_7b4fcbb5f2384f31b6c3'];
 
+/**
+ * Every owner-directed goal, read from rows (§119: an owner's rule lives in a
+ * row), as one uncorrelated sub-select of `workstreams.id`.
+ *
+ * A goal is owner-directed when a person owns it and stated a measurable target
+ * for it (`owner_user_id`, `target_metric`, `target_set_at`, migration 128) and
+ * it is live — not archived, cancelled or paused (a person's pause, or an
+ * operator's under a committed decision, takes its research back off the
+ * routines). `OWNER_DIRECTED_GOAL_IDS` stays in the set: it is the order the
+ * owner gave before the target columns existed.
+ *
+ * Production, 2026-11-25 00:19Z: five cash goals the owner set on 2026-11-19
+ * (wst_db2e2e0e…, wst_fa476177…, wst_deede499…, wst_66311cab…, wst_4f0c3124…)
+ * read "Brain fires the next free Routine at bin …" beside 11 idle routines,
+ * and none was ever fired: the list above named only the $10K goal, so their
+ * research waited on the free lane alone.
+ */
+export function ownerDirectedGoalIdsSql(): string {
+  const ids = OWNER_DIRECTED_GOAL_IDS.filter((id) => /^wst_[0-9a-f]+$/.test(id));
+  const listed = ids.length > 0 ? `SELECT ow.id FROM workstreams ow WHERE ow.id IN (${ids.map((id) => `'${id}'`).join(', ')}) UNION ` : '';
+  return (
+    `${listed}SELECT ow2.id FROM workstreams ow2` +
+    ` WHERE ow2.owner_user_id IS NOT NULL AND ow2.target_metric IS NOT NULL AND ow2.target_set_at IS NOT NULL` +
+    ` AND ow2.archived_at IS NULL AND ow2.cancelled_at IS NULL AND ow2.paused_at IS NULL`
+  );
+}
+
 /** The project whose research is how Brain researches (`capability/ingest.ts`). */
 export const BRAIN_PROJECT_SLUG = 'brain-architecture';
 

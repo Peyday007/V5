@@ -16,7 +16,7 @@ import { binPurposeAdmits, createBin, getBin, listBinEvents, purposeAdmitsSql } 
 import { createProject } from '../server/repos/projects.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createOrchestration } from '../server/repos/research.ts';
-import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { checkIn, nextItemInBin } from '../server/services/bins/service.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
@@ -268,6 +268,43 @@ describe('the assignment query enforces it', () => {
     if (answer.assigned) expect(answer.assignment.binId).toBe(goalBin);
     expect((await getBin(other))?.state).toBe('READY');
     expect((await checkIn({ principal: routine(), workerId })).assigned).toBe(false);
+  });
+
+  it('treats every live goal a person owns and set a target for as owner-directed, read from rows (§119)', async () => {
+    // Production, 2026-11-25 00:19Z: five cash goals the owner set on 11-19 sat at
+    // "Brain fires the next free Routine" beside 11 idle routines, because the
+    // owner-directed set was a hard-coded list naming only the $10K goal.
+    const owner = await createUser({ email: `od-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    const goalId = 'wst_0e0a1a7e0000000000000001';
+    expect(OWNER_DIRECTED_GOAL_IDS).not.toContain(goalId);
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, owner_user_id, target_metric, target_amount_cents,
+         target_currency, target_project_id, target_set_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'SETTLED_CASH', 300000, 'USD', ?, ?, ?, ?)`,
+      [goalId, play.project.id, '$3K', 'Earn 3000 dollars', 'REVENUE_DIRECT', owner.id, play.project.id, now, now, now],
+    );
+    const goalBin = await bin(play.project.id, 'Constructed: who pays for this service', 3);
+    const layer = await play.layerByName('Discovery Logic');
+    const run = await createRun({ projectId: play.project.id, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const packet = await createOrchestration({ projectId: play.project.id, layerId: layer.id, runId: run.id, title: 'q', assignment: 'q', provider: 'WORKER', autoApprove: false });
+    await getDb().run('UPDATE bins SET orchestration_id = ? WHERE id = ?', [packet.id, goalBin]);
+    await getDb().run(
+      `INSERT INTO workstream_links (id, workstream_id, kind, ref, relation, recorded_by, created_at)
+       VALUES ('wsl_row_goal_packet', ?, 'PACKET', ?, 'PURSUES', 'BRAIN', ?)`,
+      [goalId, packet.id, now],
+    );
+    expect(await binPurposeAdmits(goalBin)).toBe(true);
+    // Paused, it is no longer owner-directed, and its research goes back to the free lane alone.
+    await getDb().run("UPDATE workstreams SET paused_at = ?, paused_reason = 'test' WHERE id = ?", [now, goalId]);
+    expect(await binPurposeAdmits(goalBin)).toBe(false);
+    // A goal without a stated target (a research question) never was.
+    await getDb().run('UPDATE workstreams SET paused_at = NULL, target_metric = NULL, target_set_at = NULL WHERE id = ?', [goalId]);
+    expect(await binPurposeAdmits(goalBin)).toBe(false);
+    await getDb().run('UPDATE workstreams SET target_metric = ?, target_set_at = ? WHERE id = ?', ['SETTLED_CASH', now, goalId]);
+    const answer = await checkIn({ principal: routine(), workerId });
+    expect(answer.assigned).toBe(true);
+    if (answer.assigned) expect(answer.assignment.binId).toBe(goalBin);
   });
 
   it('reaches the goal’s research through a mission the goal links, as the goal model does', async () => {
