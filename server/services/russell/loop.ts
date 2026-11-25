@@ -3176,16 +3176,15 @@ export async function nextLaunchable(limit: number): Promise<
    * **Among the ideas that fit, each project's best goes before any project's
    * second**, live-goal work ahead of the rest (production 2026-11-25,
    * 08:15-08:53Z: RESEARCH_SLOTS read "43-56 launchable idea(s) have a free
-   * slot in their own project's grant" sample after sample while twelve fresh
-   * evaluation goals, each its own project and grant, had route dives started
-   * at 04:00-07:04Z and no packet). The order across fitting ideas was the
-   * Brain-wide rank — goal tier, then priority — and a launch pass starts only
-   * `SLOT_FILL_PER_TICK` of them, so a goal with a deeper backlog of better-
-   * ranked ideas (price questions and rounds, tier 0-1, refilled every plan
-   * read) took every one of a tick's launches while a new goal's dives (tier
-   * 2) waited for that backlog to empty. Slots are per project, so one
-   * project's rank says nothing about another's; the turn each project gets
-   * within one tick is what decides whether a goal waits on someone else's.
+   * slot in their own project's grant" sample after sample, with 819 judged
+   * goal ideas never launched and 5-10 missions started every ten minutes).
+   * The order across fitting ideas was the Brain-wide rank — goal tier, then
+   * priority — and a launch pass starts only so many of them, so a goal with a
+   * deeper backlog of better-ranked ideas (price questions and rounds, refilled
+   * every plan read) takes a tick's launches while another goal's dives wait
+   * for that backlog to empty. Slots are per project, so one project's rank
+   * says nothing about another's; the turn each project gets within one tick
+   * is what decides whether a goal waits on someone else's.
    */
   const projects = await launchableByProject();
   const budgets = projects.filter((one) => one.free > 0);
