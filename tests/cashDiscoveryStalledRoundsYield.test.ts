@@ -22,9 +22,10 @@
  *     still opens a lens round, and when one of those missions ends the next
  *     discovery pass retires the stalled rounds, so the yield lasts exactly as
  *     long as the grant's wait;
- *   - slots full for as long as it lasts (repair F2): past the yield the
- *     oldest stalled round gives its place to the next lens, so the goal keeps
- *     asking every pass and never holds more than twice its cap open.
+ *   - slots full for as long as it lasts (repair F2): the oldest stalled lens
+ *     round gives its place to the next lens one for one (review F1), so the
+ *     goal keeps asking every pass and its lens rounds never grow past the
+ *     live cap once that cap is held.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -178,18 +179,28 @@ async function fillGrant(grantId: string, slots: number): Promise<{ missionId: s
   return out;
 }
 
+/** The goal's OPEN lens rounds (constructed `-mx-` rounds keep their own share). */
+function lensOf(open: readonly CashDiscoveryRound[]): CashDiscoveryRound[] {
+  return open.filter((r) => !r.bucketId.includes('-mx-'));
+}
+
 /**
- * The bound a full grant leaves: at most twice the live cap of lens rounds
- * open, and constructed rounds only inside their own reserved share
- * (`constructedShare`). The goal pass raises the live cap by the research
- * surfaces idle at that moment (`cashSpareSurfaces`), so the bound is read
- * against the cap the pass used.
+ * One for one (review F1): a goal pass made while the goal's live cap is held
+ * replaces a stalled lens round rather than adding one, so its lens rounds do
+ * not grow; with the cap not held it admits lens rounds only up to the cap.
+ * Constructed rounds stay inside their own reserved share (`constructedShare`).
+ * The goal pass raises the live cap by the research surfaces idle at that
+ * moment (`cashSpareSurfaces`), so the bound is read against the cap the pass
+ * used. The round-1 yield, which admitted up to the cap again behind a grant
+ * that could launch none of them, fails this.
  */
-async function expectBounded(open: readonly CashDiscoveryRound[], spare: number): Promise<void> {
+async function expectOneForOne(before: readonly CashDiscoveryRound[], after: readonly CashDiscoveryRound[], spare: number): Promise<void> {
   const liveCap = MAX_LIVE_GOAL_ROUNDS + Math.max(0, spare, await cashSpareSurfaces(projectId));
-  const lens = open.filter((r) => !r.bucketId.includes('-mx-'));
-  expect(lens.length).toBeLessThanOrEqual(2 * liveCap);
-  expect(open.length).toBeLessThanOrEqual(2 * liveCap + constructedShare(liveCap));
+  const lensBefore = lensOf(before).length;
+  const lensAfter = lensOf(after).length;
+  if (before.length >= liveCap) expect(lensAfter).toBeLessThanOrEqual(lensBefore);
+  else expect(lensAfter).toBeLessThanOrEqual(Math.max(lensBefore, liveCap));
+  expect(after.length - lensAfter).toBeLessThanOrEqual(constructedShare(liveCap));
 }
 
 async function stopCauses(): Promise<Map<string, unknown>> {
@@ -276,7 +287,7 @@ describe('a short goal keeps searching past rounds that never launched (CAPABILI
     expect(await roundsHoldingSlots(await goalRounds(), new Date().toISOString(), MAX_LIVE_GOAL_ROUNDS)).toBe(held.length);
   });
 
-  it('with the grant full, stalled rounds yield at most the cap, so a goal never holds more than twice its cap open', async () => {
+  it('with the grant full, a goal whose cap is held replaces stalled lens rounds one for one and never adds past the cap', async () => {
     const g = await grant();
     const start = Date.now();
     let k = await fillGoalCap(start);
@@ -285,8 +296,9 @@ describe('a short goal keeps searching past rounds that never launched (CAPABILI
       await age(await goalRounds(), 2);
       await harvest({ projectId, limit: 50 });
       const spare = await cashSpareSurfaces(projectId);
+      const before = await goalRounds();
       await goalPass(start, k++);
-      await expectBounded(await goalRounds(), spare);
+      await expectOneForOne(before, await goalRounds(), spare);
     }
     expect(await roundsHoldingSlots(await goalRounds(), new Date().toISOString(), MAX_LIVE_GOAL_ROUNDS)).toBeGreaterThanOrEqual(MAX_LIVE_GOAL_ROUNDS);
   });
@@ -308,10 +320,13 @@ describe('a short goal keeps searching past rounds that never launched (CAPABILI
       // Production's order: the discovery pass (which retires nothing while the grant is full), then the goal pass.
       await harvest({ projectId, limit: 50 });
       const spare = await cashSpareSurfaces(projectId);
-      // Still short, every round stalled behind a full grant: the goal asks a lens every pass, never stopping at 2x its cap.
+      // Still short, every round stalled behind a full grant: the goal asks a lens every pass, one for one.
+      const before = await goalRounds();
       expect(await goalPass(start, k++)).toBeGreaterThanOrEqual(1);
       const open = await goalRounds();
-      await expectBounded(open, spare);
+      await expectOneForOne(before, open, spare);
+      // The cap was held before this pass, so the lens asked replaced one: the lens count is unchanged.
+      expect(lensOf(open).length).toBe(lensOf(before).length);
       for (const r of open) seen.add(r.id);
       // Research runs throughout: the grant's slots stay held by the running broad missions.
       expect((await researchMissionSlots(projectId))!.live).toBe(g.cap);
