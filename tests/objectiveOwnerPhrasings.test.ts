@@ -87,4 +87,24 @@ describe('readObjective: the owner’s ordinary phrasings', () => {
     expect(read("Build $7,500 a month in recurring revenue within 5 months using up to $12,000. I don't want to put in any hours.").hoursCeiling).toBe(0);
     expect(read("What's the fastest way to collect $2,000 in 14 days? I can spend a couple hundred bucks.").capitalAssumed?.amount).toBe(200);
   });
+
+  it('reads a figure the owner says they have or put in as the capital limit, and an amount verb with an object', () => {
+    const cases: [string, number, number][] = [
+      ["I already own a 16-foot box truck that's sitting in my driveway in Detroit. Figure out how to have it bringing in $4,000 a month within 45 days. I won't drive it myself. I can put $1,500 in and maybe 5 hours a week.", 4000, 1500],
+      ["Win a government contract worth at least $25,000 within 120 days. Michigan state/local or federal, I don't care which. I've got $2,000 and about 10 hours a week.", 25000, 2000],
+      ["I've got $10,000 I'm willing to put in. Get me to $20,000 in net sales within 90 days, online, and I don't want to be the one answering customers.", 20000, 10000],
+      ['Build something that collects $60,000 in customer payments within 6 months. I\'ll put up $25,000 and 20 hours a week.', 60000, 25000],
+    ];
+    for (const [text, amount, capital] of cases) {
+      const o = read(text);
+      expect(o.unread, text).toEqual([]);
+      expect(o.amount, text).toBe(amount);
+      expect(o.capitalCeiling, text).toBe(capital);
+    }
+    expect(read("Get me $1,500 in paid invoices in the next 10 days. I have zero dollars to put in.").amount).toBe(1500);
+    const r = read('Start a medical records retrieval service for personal injury law firms in Ohio and get it to $3,000 a month within 60 days.');
+    expect(r.amount).toBe(3000);
+    expect(r.recurring).toBe('MONTHLY');
+  });
 });
+

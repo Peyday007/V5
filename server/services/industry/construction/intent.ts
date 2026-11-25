@@ -298,6 +298,17 @@ interface ObjectiveDetail {
   madeSpans: { start: number; end: number }[];
 }
 
+/** Words with which an owner states money of their own: what they have, put in, spend or budget. */
+const OWNER_MONEY = /\b(?:I|we)(?:'ve|'ll|'d| have| will| can| could| am| are)?\b[^.;!?]{0,40}\b(?:have|has|got|put|putting|invest|investing|spend|spending|afford|willing|budget|bankroll|start(?:ing)? with)\b|\b(?:budget|capital|bankroll|to (?:invest|spend|start|put in))\b/i;
+
+/** The sentence (or clause between strong stops) that holds a span. Pure. */
+function sentenceAround(text: string, start: number, end: number): string {
+  const from = Math.max(text.lastIndexOf('.', start - 1), text.lastIndexOf(';', start - 1), text.lastIndexOf('!', start - 1), text.lastIndexOf('?', start - 1)) + 1;
+  const stops = ['.', ';', '!', '?'].map((c) => text.indexOf(c, end)).filter((i) => i >= 0);
+  const to = stops.length ? Math.min(...stops) : text.length;
+  return text.slice(from, to);
+}
+
 function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   const text = input.replace(/\s+/g, ' ').trim();
   const tokens = moneyTokens(text);
@@ -494,8 +505,8 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
 
   // 5. The amount: a figure the words say is to be brought in.
   // Every person of the verb: "a business that collects $50,000" names the amount as surely as "collect $50,000".
-  const verbBefore = /\b(?:want|wants|need|needs|builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
-  const nounAfter = /^\s*(?:(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments)\b|collected\b|(?:a|per)\s+month\s+recurring\b|\/\s?mo(?:nth)?\s+recurring\b|MRR\b)/i;
+  const verbBefore = /\b(?:want|wants|need|needs|builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:me|us|it|them|this|that|my business|the business)\s+)?(?:(?:to|up to)\s+)?(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
+  const nounAfter = /^\s*(?:(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments|invoices|billings?|bookings|fees|commissions|deposits)\b|collected\b|(?:a|per)\s+month\s+recurring\b|\/\s?mo(?:nth)?\s+recurring\b|MRR\b)/i;
   let amountToken: MoneyToken | null = null;
   let recurring: ObjectiveReading['recurring'] = null;
   for (const t of tokens) {
@@ -519,6 +530,19 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     const ranRate = !amountToken && verbBefore.test(before) && /^\s*(?:per|a|each|every)\s+month\b(?!\s+(?:of|in)\s+(?:capital|budget|spend))/i.test(after);
     const monthlyRecurring = statedRecurring || ranRate;
     if (!(verbBefore.test(before) || nounAfter.test(after) || beforeDeadline || turnedInto || statedRecurring)) {
+      /*
+       * A figure the owner says they have, put in, spend or budget is the capital limit, whatever
+       * the phrase around it (2026-11-25: "I can put $1,500 in", "I've got $2,000", "$10,000 I'm
+       * willing to put in", "I'll put up $25,000" were each refused at goal creation). Read from
+       * its own sentence's words, and only when no other phrase already set the limit.
+       */
+      const sentence = sentenceAround(text, t.start, t.end);
+      if (figures.CAPITAL.length === 0 && OWNER_MONEY.test(sentence) && !/\b(?:a|per|each|every)\s+(?:week|month|year)\b/i.test(text.slice(t.end, t.end + 16))) {
+        t.role = 'CAPITAL';
+        figures.CAPITAL.push(t);
+        constraintSpans.push({ start: t.start, end: t.end, text: sentence.trim().slice(0, 160) });
+        continue;
+      }
       unread.push(`"${t.raw}": a figure the reader could not place`);
       continue;
     }

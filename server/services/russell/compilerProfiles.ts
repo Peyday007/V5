@@ -542,6 +542,37 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
         'published, submit that as NEGATIVE_EXISTENCE naming where you looked.',
       necessity: 'CONDITIONAL',
     },
+    /*
+     * The three parts of a route the dive had no lane for (2026-11-25). A plan
+     * needs to know how many such buyers exist, that they want it now, and who
+     * does the work; a dive that could establish only price, cost, timing and
+     * access left MARKET_VOLUME, CURRENT_DEMAND and FULFILMENT open on every
+     * route it qualified. Each is written onto the card by the one research
+     * answer writer (`writeEvidenceAnswer`).
+     */
+    {
+      id: 'buyer_volume',
+      description:
+        'How many buyers of this kind exist in the reachable market, and how often each buys: a ' +
+        'count a directory, register, census or association publishes, with its source.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'current_demand',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A dated sign from the last few months that buyers of this kind want it now: a request, ' +
+        'posting, tender or listing, with its URL and the date it was published.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'fulfiller',
+      description:
+        'Who performs, produces or supplies the work if it is not produced by this operation: a ' +
+        'named supplier, a kind of contractor with published rates, or a marketplace where such ' +
+        'work is bought, with its source.',
+      necessity: 'CONDITIONAL',
+    },
   ],
   expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
   failureConditions: [

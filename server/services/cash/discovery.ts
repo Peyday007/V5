@@ -2093,6 +2093,8 @@ export async function harvest(input: {
   });
 
   const out: Harvested[] = [];
+  /** What Brain has proved it produces here (`executionFrame`), read once, for the route join. */
+  let delivers: readonly string[] | undefined;
 
   for (const entry of signalled) {
     if (out.length >= limit) break;
@@ -2242,7 +2244,8 @@ export async function harvest(input: {
      * ten separate missions to establish again. A twin is a linked record of an
      * opening that already has its own card, so it is not joined.
      */
-    const joined = twin ? { written: [] } : await joinRouteEvidence({ opportunity: withSignal ?? created, claim, orchestrationId: entry.orchestrationId, fragmentId: entry.fragmentId }).catch((error) => {
+    delivers ??= (await executionFrame(input.projectId, mode.currency).catch(() => null))?.delivers ?? [];
+    const joined = twin ? { written: [] } : await joinRouteEvidence({ opportunity: withSignal ?? created, claim, orchestrationId: entry.orchestrationId, fragmentId: entry.fragmentId, delivers }).catch((error) => {
       console.warn(`route evidence join failed for ${created.id}: ${String((error as Error)?.message ?? error)}`);
       return { written: [] };
     });

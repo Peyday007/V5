@@ -34,6 +34,10 @@ import { citableClaims } from '../../repos/research.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
 import type { CashOpportunity, ResearchClaim } from '../../domain/types.ts';
 import { writeEvidenceAnswer } from './answers.ts';
+import { updateOpportunity } from '../../repos/cashPortfolio.ts';
+import { brainProduces } from '../goals/pathways.ts';
+import { DELIVERABLE_KINDS, DELIVERABLE_LABEL } from './deliverables/spec.ts';
+import { deliverableCapabilityId } from './capabilities.ts';
 
 /**
  * The card field each route lane answers (compiler profile `GOAL_MECHANISM`).
@@ -113,6 +117,8 @@ export async function joinRouteEvidence(input: {
   claim: ResearchClaim;
   orchestrationId: string;
   fragmentId: string | null;
+  /** The deliverable kinds Brain has proved it produces here (`executionFrame().delivers`). */
+  delivers?: readonly string[];
 }): Promise<JoinedRouteEvidence> {
   const written: JoinedRouteEvidence['written'] = [];
   if (!input.fragmentId) return { written };
@@ -140,5 +146,28 @@ export async function joinRouteEvidence(input: {
       }
     }
   }
+  /*
+   * Who does the work, where it is a deliverable Brain has proved it produces (2026-11-25).
+   * A research answer cannot establish that — it is a fact about Brain, not the market — so
+   * a route whose offer is, by its own words, a kind of deliverable Brain has proved (a
+   * document, a spreadsheet, a data set, a website…) requires that capability, exactly as
+   * a play bucket's opening does, and the plan reads Brain as its fulfiller from Brain's own
+   * proof. An offer that names no proved kind is left to research and to a named fulfiller.
+   */
+  if (input.opportunity.requiredCapabilities.length === 0 && input.delivers && input.delivers.length > 0) {
+    const offer = routeOffer(input.claim.route);
+    const label = brainProduces(`${offer ?? ''} ${input.claim.route ?? ''} ${input.claim.claim}`, { delivers: [...input.delivers], puzzleFormats: [] });
+    const kind = label ? DELIVERABLE_KINDS.find((one) => DELIVERABLE_LABEL[one] === label) : undefined;
+    if (kind) {
+      await updateOpportunity(input.opportunity.id, { required_capabilities: JSON.stringify([deliverableCapabilityId(kind)]) } as never);
+      written.push({ field: 'requiredCapabilities', claimId: input.claim.id });
+    }
+  }
   return { written };
+}
+
+/** What a route name says its buyers pay for (its part after "·"), or null. Pure. */
+export function routeOffer(route: string | null | undefined): string | null {
+  const parts = (route ?? '').split(/\s+[·|—–]\s+/);
+  return parts.length > 1 ? parts.slice(1).join(' ').trim() || null : null;
 }

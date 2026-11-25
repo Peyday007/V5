@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { writeEvidenceAnswer } from './answers.ts';
 import { latestScreens, laneConfig, screenOpening, type ScreenOutput } from '../cheap/lane.ts';
 import { closedBy } from './closing.ts';
 import {
@@ -2137,6 +2138,14 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
  * Never from a `NEGATIVE_EXISTENCE` claim: a documented absence of a route is
  * a finding, and it is the opposite of access.
  */
+/** The dive lanes written through `writeEvidenceAnswer` rather than the plain fact write below (see the apply loop). */
+export const WRITER_FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
+  effort: 'hours',
+  buyer_volume: 'buyerVolume',
+  current_demand: 'buyingEvidence',
+  fulfiller: 'fulfillment',
+});
+
 export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   contact_mode: 'access',
 });
@@ -2284,6 +2293,19 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
          * a statement nobody classified, recorded as a *possible* disqualifier
          * that blocks qualification and says so — never as clear.
          */
+        /*
+         * The route lanes, and the hours, go through the one research answer writer
+         * (`writeEvidenceAnswer`, 2026-11-25): a dated demand sign keeps its date, stated
+         * hours reach the column the plan reads, and a count reaches the card the planner's
+         * volume reader parses. An absence answers none of them.
+         */
+        const routeField = claim.claimType === 'NEGATIVE_EXISTENCE' ? undefined : WRITER_FIELD_BY_LANE[lane];
+        if (routeField) {
+          if (await writeEvidenceAnswer({ opportunity: (await getOpportunity(opportunity.id)) ?? opportunity, field: routeField, claim, needId: null })) {
+            out.push({ opportunityId: opportunity.id, field: routeField, claimId: claim.id });
+          }
+          continue;
+        }
         const classifying = await declares(claim.fragmentId);
         if (claim.claimType !== 'NEGATIVE_EXISTENCE') {
           if (lane === RULED_OUT_LANE) {
