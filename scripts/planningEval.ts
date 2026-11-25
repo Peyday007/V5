@@ -322,6 +322,38 @@ async function stall(): Promise<void> {
   await q('rejections', `SELECT SUBSTR(COALESCE(c.rejection_reason, ''), 1, 160) AS why, COUNT(*) AS n FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id JOIN projects p ON p.id = o.project_id WHERE p.name LIKE 'Planning evaluation %' AND c.accepted = 0 GROUP BY 1 ORDER BY n DESC LIMIT 10`);
   // What the lane did per hour today, eval vs not: fragments finished and leased-then-expired.
   await q('lane_hourly', `SELECT SUBSTR(w.completed_at, 1, 13) AS hour, CASE WHEN p.name LIKE 'Planning evaluation %' THEN 'eval' ELSE 'other' END AS cls, w.work_type, w.state, COUNT(*) AS n FROM work_items w JOIN projects p ON p.id = w.project_id WHERE w.completed_at >= ? AND w.work_type IN ${types} GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`, [new Date(Date.now() - 10 * 3_600_000).toISOString()]);
+  // Parked packets (NEEDS_HUMAN): why, whether a fragment or only claims were accepted, gap policy, grant, cards.
+  const evp = `o.project_id IN (SELECT id FROM projects WHERE name LIKE ?)`;
+  await q('parks', `SELECT SUBSTR(COALESCE(o.failure_reason, ''), 1, 200) AS why, o.current_pass AS pass, COALESCE(o.unresolved_gap_policy, '-') AS gap,
+      CASE WHEN EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED') THEN 1 ELSE 0 END AS acc_frag,
+      CASE WHEN EXISTS (SELECT 1 FROM research_claims c WHERE c.orchestration_id = o.id AND c.accepted = 1) THEN 1 ELSE 0 END AS acc_claim,
+      CASE WHEN EXISTS (SELECT 1 FROM russell_goals g WHERE g.project_id = o.project_id AND g.purpose = 'STANDING' AND g.state = 'ACTIVE') THEN 1 ELSE 0 END AS grant_live,
+      CASE WHEN EXISTS (SELECT 1 FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id WHERE m.orchestration_id = o.id AND r.state IN ('OPEN', 'ANSWERED')) THEN 1 ELSE 0 END AS card,
+      (SELECT m.state FROM russell_missions m WHERE m.orchestration_id = o.id ORDER BY m.created_at DESC LIMIT 1) AS mission,
+      COUNT(*) AS n, MIN(o.updated_at) AS oldest, MAX(o.updated_at) AS newest
+     FROM research_orchestrations o WHERE o.status = 'NEEDS_HUMAN' AND ${evp} GROUP BY 1, 2, 3, 4, 5, 6, 7, 8 ORDER BY n DESC LIMIT 25`, [like]);
+  // Blocked fragments: the lanes declared and the lanes their accepted / rejected claims named.
+  await q('blocked_lanes', `SELECT f.block_cause AS cause, SUBSTR(COALESCE(f.required_evidence, ''), 1, 160) AS required, f.evidence_lane AS lane,
+      (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id AND c.accepted = 1) AS acc,
+      (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id) AS claims,
+      (SELECT MIN(c.evidence_lane) || ' .. ' || MAX(c.evidence_lane) FROM research_claims c WHERE c.fragment_id = f.id) AS claim_lanes
+     FROM research_fragments f WHERE f.status = 'BLOCKED' AND f.project_id IN (SELECT id FROM projects WHERE name LIKE ?) ORDER BY f.updated_at DESC LIMIT 25`, [like]);
+  await q('blocked_summary', `SELECT f.block_cause AS cause,
+      CASE WHEN EXISTS (SELECT 1 FROM research_claims c WHERE c.fragment_id = f.id AND c.accepted = 1) THEN 1 ELSE 0 END AS has_acc,
+      CASE WHEN EXISTS (SELECT 1 FROM research_claims c WHERE c.fragment_id = f.id) THEN 1 ELSE 0 END AS has_claims,
+      (SELECT o.status FROM research_orchestrations o WHERE o.id = f.orchestration_id) AS packet,
+      COUNT(*) AS n FROM research_fragments f WHERE f.status = 'BLOCKED' AND f.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1, 2, 3, 4 ORDER BY n DESC`, [like]);
+  // Packets finished with gaps: their mission, the idea, the opening it dives, and the card facts it filed.
+  await q('filed', `SELECT o.id, o.status, o.completed_at, o.document_id IS NOT NULL AS doc, m.state AS mission, m.writeback_at, m.candidate_id,
+      (SELECT op.id FROM cash_opportunities op WHERE op.candidate_id = m.candidate_id LIMIT 1) AS dive_of,
+      (SELECT op.id FROM cash_opportunities op WHERE op.validation_orchestration_id = o.id LIMIT 1) AS validates,
+      (SELECT nd.id FROM cash_needs nd WHERE nd.candidate_id = m.candidate_id LIMIT 1) AS need,
+      (SELECT COUNT(*) FROM cash_card_facts cf WHERE cf.claim_id IN (SELECT c.id FROM research_claims c WHERE c.orchestration_id = o.id)) AS facts_from_claims,
+      (SELECT COUNT(*) FROM research_claims c WHERE c.orchestration_id = o.id AND c.accepted = 1) AS acc
+     FROM research_orchestrations o LEFT JOIN russell_missions m ON m.orchestration_id = o.id
+    WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp} ORDER BY o.completed_at DESC LIMIT 20`, [like]);
+  await q('evidence_facts', `SELECT cf.kind, cf.field, COUNT(*) AS n FROM cash_card_facts cf JOIN cash_opportunities op ON op.id = cf.opportunity_id WHERE op.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [like]);
+  await q('needs', `SELECT nd.state, COUNT(*) AS n FROM cash_needs nd WHERE nd.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1`, [like]);
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 
