@@ -1198,6 +1198,23 @@ export async function projectEvidenceClaims(projectId: string, limit: number): P
 }
 
 /**
+ * How many gated, read claims a project holds: the count `projectEvidenceClaims`
+ * would list without a limit. One aggregate, so a goal pass that only needs to
+ * know whether research came back since its last ask reads no claim rows.
+ */
+export async function projectEvidenceClaimCount(projectId: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM research_claims c
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.source_url IS NOT NULL
+        AND COALESCE(c.retrieval_state, 'RETRIEVED') = 'RETRIEVED'`,
+    [projectId],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
  * Gated UNIT_ECONOMIC claims of a project with a declared figure that no
  * construction fact names yet, by id after `afterId`, at most `limit` (F3
  * back-fill). Any orchestration, not only a kernel round's: what research

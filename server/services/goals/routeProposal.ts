@@ -69,7 +69,7 @@ import { chatFor, type ChatFn } from '../cheap/modelBench.ts';
 import { challengerModels } from '../operator/decisions.ts';
 import { getWorkstream, linkWorkstream, recordWorkstreamEvent, workstreamEventsOfKind } from '../../repos/register.ts';
 import { createOpportunity, getOpportunity, opportunitiesWithRecordPrefix, transitionOpportunity, updateOpportunity } from '../../repos/cashPortfolio.ts';
-import { claimsByIds, projectEvidenceClaims } from '../../repos/research.ts';
+import { claimsByIds, projectEvidenceClaimCount, projectEvidenceClaims } from '../../repos/research.ts';
 import { cardFactsFor, recordRecommendationFact } from '../../repos/cashCardFacts.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
@@ -1608,7 +1608,23 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   if (goal.pausedAt) return { kind: 'NOT_DUE', reason: 'the goal is paused' };
   // The goal's own record first: it is the cheap answer on most passes, and the target is read only when an ask is due.
   const asks = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - Math.max(DAY, ROUTE_PROPOSAL_EVERY_MS)).toISOString(), 50);
-  // How much research the goal's project holds now: new findings make a fresh, grounded ask due.
+  /*
+   * The cheap answer first, from the goal's own record alone; the project's
+   * research is counted only when that says no and the last ask recorded how
+   * much it had seen — new findings can then make a fresh, grounded ask due.
+   * Production, 2026-11-25 (ec0131a): reading the claims before this check, on
+   * every plan pass for every live goal, put a claim query per goal per pass on
+   * a database already contended, and fresh goals went 75 minutes unplanned.
+   */
+  let due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true });
+  const last = asks[0];
+  if (!due.due && goal.projectId && last && typeof last.detail['findingsSeen'] === 'number' && now.getTime() - Date.parse(last.createdAt) >= ROUTE_RETRY_AFTER_FAILURE_MS) {
+    const count = deps.claims
+      ? (await deps.claims(goal.projectId).catch(() => [] as ResearchClaim[])).length
+      : await projectEvidenceClaimCount(goal.projectId).catch(() => 0);
+    due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, findings: count });
+  }
+  if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
   const claimsOf = deps.claims ?? ((projectId: string) => projectEvidenceClaims(projectId, FINDINGS_COUNTED));
   /*
    * The findings are read only when they can change the answer: the ask is
@@ -1623,8 +1639,8 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   const without = routeAskDue(asks, now, { retryOnly: input.retryOnly === true });
   if (!without.due && !findingsCanMatter) return { kind: 'NOT_DUE', reason: without.reason };
   const claims = goal.projectId ? await claimsOf(goal.projectId).catch(() => [] as ResearchClaim[]) : [];
-  const due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, findings: claims.length });
-  if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
+  // What this ask has seen, counted the way the next due check counts it (the listing above is capped).
+  const seenCount = deps.claims || !goal.projectId ? claims.length : await projectEvidenceClaimCount(goal.projectId).catch(() => claims.length);
   const target = await readTarget(goal, now);
   if (!target || target.achieved) return { kind: 'NOT_DUE', reason: 'no target still open' };
   const gate = await discoveryAllowed(target.projectId);
@@ -1659,7 +1675,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
 
   // The ask is stamped at the moment it was judged due, the same clock the next due check reads it against.
   const record = (summary: string, detail: Record<string, unknown>) =>
-    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail: { ...detail, stage, findingsSeen: claims.length, findingsShown: findings.length }, actorRef: 'BRAIN', at: now.toISOString() });
+    recordWorkstreamEvent({ workstreamId: goal.id, kind: ROUTE_EVENT, summary: summary.slice(0, 400), detail: { ...detail, stage, findingsSeen: seenCount, findingsShown: findings.length }, actorRef: 'BRAIN', at: now.toISOString() });
   const clock = deps.clock ?? Date.now;
   const deadline = clock() + ROUTE_BUDGET_MS;
   const chats = await (deps.chats ?? (() => operatorChats(deps, () => Math.max(5_000, Math.min(ROUTE_ATTEMPT_MS, deadline - clock())))))().catch(() => []);
