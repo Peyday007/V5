@@ -203,11 +203,13 @@ describe('routes from findings', () => {
 });
 
 describe('the strong route model', () => {
-  it('is offered first only when the deployment holds a key, through the same chat path', async () => {
+  it('is offered first only when the deployment holds a key and names the model, through the same chat path', async () => {
     const { strongRouteModels, ANTHROPIC_COMPAT_URL, ROUTE_STRONG_MODEL } = await import('../server/services/goals/routeProposal.ts');
     expect(strongRouteModels({})).toEqual([]);
-    expect(strongRouteModels({ ANTHROPIC_API_KEY: '  ' })).toEqual([]);
-    expect(strongRouteModels({ ANTHROPIC_API_KEY: 'sk-ant-test' })[0]).toMatchObject({ label: `anthropic:${ROUTE_STRONG_MODEL}`, baseUrl: ANTHROPIC_COMPAT_URL, model: ROUTE_STRONG_MODEL });
+    expect(strongRouteModels({ ANTHROPIC_API_KEY: '  ', BRAIN_ROUTE_MODEL: ROUTE_STRONG_MODEL })).toEqual([]);
+    // A key alone selects nothing: spending starts only when the model is named.
+    expect(strongRouteModels({ ANTHROPIC_API_KEY: 'sk-ant-test' })).toEqual([]);
+    expect(strongRouteModels({ ANTHROPIC_API_KEY: 'sk-ant-test', BRAIN_ROUTE_MODEL: ROUTE_STRONG_MODEL })[0]).toMatchObject({ label: `anthropic:${ROUTE_STRONG_MODEL}`, baseUrl: ANTHROPIC_COMPAT_URL, model: ROUTE_STRONG_MODEL });
     expect(strongRouteModels({ ANTHROPIC_API_KEY: 'sk-ant-test', BRAIN_ROUTE_MODEL: 'claude-opus-5-5' })[0]!.model).toBe('claude-opus-5-5');
   });
 });

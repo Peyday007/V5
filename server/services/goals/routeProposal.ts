@@ -1214,7 +1214,7 @@ export function routeAskDue(
   };
 }
 
-/** The Anthropic model a route ask uses first when the deployment holds a key (`BRAIN_ROUTE_MODEL` overrides it). */
+/** The Anthropic model the measurement used; a deployment selects it by setting `BRAIN_ROUTE_MODEL`. */
 export const ROUTE_STRONG_MODEL = 'claude-sonnet-5-5';
 /** Anthropic's OpenAI-compatible endpoint: the same chat path as every other model (`chatFor`). */
 export const ANTHROPIC_COMPAT_URL = 'https://api.anthropic.com/v1';
@@ -1231,8 +1231,9 @@ export const ANTHROPIC_COMPAT_URL = 'https://api.anthropic.com/v1';
  */
 export function strongRouteModels(env: NodeJS.ProcessEnv): OperatorModel[] {
   const key = env['ANTHROPIC_API_KEY']?.trim();
-  if (!key) return [];
-  const model = env['BRAIN_ROUTE_MODEL']?.trim() || ROUTE_STRONG_MODEL;
+  // Selected, not merely present: a key held for another purpose spends nothing here until someone names the model (invariant 18).
+  const model = env['BRAIN_ROUTE_MODEL']?.trim();
+  if (!key || !model) return [];
   return [{ label: `anthropic:${model}`, baseUrl: ANTHROPIC_COMPAT_URL, apiKey: key, model } as OperatorModel];
 }
 
