@@ -413,6 +413,7 @@ async function stall(): Promise<void> {
       }
     }
   }
+  await statedPriceProbe(like);
   await q('evidence_facts', `SELECT cf.kind, cf.field, COUNT(*) AS n FROM cash_card_facts cf JOIN cash_opportunities op ON op.id = cf.opportunity_id WHERE op.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [like]);
   await q('needs', `SELECT nd.state, COUNT(*) AS n FROM cash_needs nd WHERE nd.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1`, [like]);
   // What `answerUnaskedParks` selects Brain-wide (its own WHERE, without the grace), in its order, and what it decided lately.
@@ -458,6 +459,88 @@ async function stall(): Promise<void> {
     WHERE e.event_type = 'RESEARCH_ROUND_RESUMED' AND e.created_at >= ? GROUP BY 1, 2 ORDER BY n DESC`, [new Date(Date.now() - 7 * 24 * 3_600_000).toISOString()]);
   await q('judge_resumed_daily', `SELECT SUBSTR(e.created_at, 1, 10) AS day, COUNT(*) AS n FROM project_events e WHERE e.event_type = 'RESEARCH_ROUND_RESUMED' AND e.created_at >= ? GROUP BY 1 ORDER BY 1`, [new Date(Date.now() - 7 * 24 * 3_600_000).toISOString()]);
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
+}
+
+/**
+ * The price a goal price answer states per a named unit, as branch
+ * fix/price-question-filing reads it (`statedUnitPrice`, which the serving
+ * revision does not have yet): USD figures, a range's unit applying to both
+ * ends, an open upper end (`$250+`), only figures per a unit the text names,
+ * only the first unit. A copy for measurement only; tests compare it.
+ */
+export function probeStatedUnitPrice(text: string): { low: number; high: number; unit: string } | null {
+  const num = String.raw`\d[\d.,]*\d|\d`;
+  const stop = '(?:for|at|in|on|with|and|or|to|of|from|by|when|if|per|plus|including|excluding|is|are|was|were)\\b';
+  const unitRe = new RegExp(String.raw`^\s*(?:\/\s*|per\s+|an?\s+|each\s+|for\s+(?:each|every|one|a|an)\s+)((?!${stop})[a-z][\w-]*(?:\s+(?!${stop})[a-z][\w-]*){0,2})`, 'i');
+  const rangeRe = new RegExp(String.raw`^\s*(?:to|through|-|–|—)\s*(?:USD|US\$|\$)?\s?(?:${num})(?:\s?(?:USD|US\$|\$)\b)?\+?`, 'i');
+  const found: { cents: number; unit: string }[] = [];
+  const seen = new Set<number>();
+  for (const re of [new RegExp(String.raw`(?:\bUSD\b|US\$|\$)\s?(${num})`, 'gi'), new RegExp(String.raw`(${num})\s?\bUSD\b`, 'gi')]) {
+    for (const m of text.matchAll(re)) {
+      const raw = (m[1] ?? '').replace(/,/g, '');
+      if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) continue;
+      const cents = Math.round(Number(raw) * 100);
+      let rest = text.slice(m.index + m[0].length);
+      if (/^[%kKmMbB]/.test(rest) || /^\s*(?:thousand|million|billion|bn|mn|mm|m|k)\b/i.test(rest) || cents <= 0 || seen.has(cents)) continue;
+      if (/\p{L}$/u.test(text.slice(Math.max(0, m.index - 1), m.index)) && !/^USD/i.test(m[0])) continue;
+      seen.add(cents);
+      if (rest.startsWith('+')) rest = rest.slice(1);
+      const range = rangeRe.exec(rest);
+      const unit = unitRe.exec(range ? rest.slice(range[0].length) : rest)?.[1]?.toLowerCase();
+      if (unit) found.push({ cents, unit });
+    }
+  }
+  found.sort((a, b) => a.cents - b.cents);
+  const first = found[0]?.unit;
+  if (!first) return null;
+  const same = found.filter((one) => one.unit === first).map((one) => one.cents);
+  return { low: Math.min(...same) / 100, high: Math.max(...same) / 100, unit: first };
+}
+
+/**
+ * Read-only: the OPEN goal price needs (Brain-wide and evaluation) whose idea's
+ * research holds an accepted, sourced, undeclared answer with no construction
+ * fact that the branch reader prices — under the same refusals the back-fill
+ * applies (money paid to them, a non-purchase payment, a wrong-way price, a
+ * population that is no buyer population). What the fix would answer.
+ */
+async function statedPriceProbe(like: string): Promise<void> {
+  try {
+    const { goalPriceQuestionOf } = await import('../server/services/goals/goalWork.ts');
+    const { claimPaysPopulation } = await import('../server/services/industry/expand.ts');
+    const { isNonPurchasePayment, wrongWayPrice } = await import('../server/domain/paymentNature.ts');
+    const { namesABuyerPopulation } = await import('../server/domain/industry.ts');
+    const rows = await getDb().all<{ need: string; project_id: string; eval: number; title: string; statement: string; claim_id: string | null; claim: string | null }>(
+      `SELECT nd.id AS need, nd.project_id, CASE WHEN nd.project_id IN (SELECT id FROM projects WHERE name LIKE ?) THEN 1 ELSE 0 END AS eval, k.title, k.statement, c.id AS claim_id, c.claim
+         FROM cash_needs nd JOIN russell_candidates k ON k.id = nd.candidate_id
+         LEFT JOIN russell_missions m ON m.candidate_id = k.id
+         LEFT JOIN research_claims c ON c.orchestration_id = m.orchestration_id AND c.accepted = 1 AND c.source_url IS NOT NULL
+              AND NOT (COALESCE(c.structural_finding, '') = 'UNIT_ECONOMIC' AND c.structural_amount_cents IS NOT NULL)
+              AND NOT EXISTS (SELECT 1 FROM construction_facts f WHERE f.source_claim_id = c.id)
+        WHERE nd.state = 'OPEN' AND nd.request_key LIKE 'goal-price-%'`,
+      [like],
+    );
+    const needs = new Map<string, { eval: number; claims: number; answered: string | null; refused: Record<string, number> }>();
+    for (const row of rows) {
+      const one = needs.get(row.need) ?? { eval: row.eval, claims: 0, answered: null, refused: {} };
+      needs.set(row.need, one);
+      if (!row.claim_id || !row.claim) continue;
+      one.claims += 1;
+      const asked = goalPriceQuestionOf({ title: row.title, statement: row.statement });
+      const price = probeStatedUnitPrice(row.claim);
+      const why = !asked ? 'not a price question' : !price ? 'no price per a named unit' : claimPaysPopulation(row.claim, asked.buyer) ? 'paid to them' : isNonPurchasePayment(row.claim) ? 'non-purchase' : wrongWayPrice(row.claim, asked.buyer) ? 'wrong way' : !namesABuyerPopulation(asked.buyer) ? 'no buyer population' : null;
+      if (why) one.refused[why] = (one.refused[why] ?? 0) + 1;
+      else one.answered ??= `${row.claim_id}: USD ${price!.low}–${price!.high} per ${price!.unit}`;
+    }
+    const sum = (evalOnly: boolean) => {
+      const list = [...needs.values()].filter((one) => !evalOnly || one.eval === 1);
+      return { open: list.length, withClaims: list.filter((one) => one.claims > 0).length, wouldAnswer: list.filter((one) => one.answered).length };
+    };
+    console.log(`STALL stated_price_needs ${JSON.stringify({ all: sum(false), eval: sum(true) })}`);
+    console.log(`STALL stated_price_detail ${JSON.stringify([...needs].filter(([, one]) => one.claims > 0).slice(0, 40).map(([need, one]) => ({ need, ...one })))}`);
+  } catch (error) {
+    console.log(`STALL stated_price_needs ${JSON.stringify({ error: String((error as Error)?.message ?? error).slice(0, 300) })}`);
+  }
 }
 
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
