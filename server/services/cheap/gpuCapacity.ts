@@ -235,7 +235,11 @@ export function shrinkCauses(rows: readonly CapacityDecisionRow[]): Map<string, 
     const why = row.reason.replace(/^\d+ -> \d+: /, '');
     const cause = /database pool/.test(why)
       ? 'held to its share of the database pool'
-      : /starting up/.test(why)
+      : /GPU's floor/.test(why)
+        ? 'kept at the GPU floor while work waits'
+        : /stepping back/.test(why)
+          ? 'stepped back: fewer slots accepted as much'
+          : /starting up/.test(why)
         ? 'boot grace after a restart'
         : /Brain CPU/.test(why)
           ? 'Brain CPU over 85%'

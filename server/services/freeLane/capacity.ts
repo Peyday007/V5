@@ -56,8 +56,18 @@ const CONTROL_MS = 30_000;
 const IDLE_SLEEP_MS = 20_000;
 /** Mean event-loop lag over a control window above which every model's slots halve. */
 export const LAG_SHRINK_MS = 1_000;
-/** The GPU's mean answer time, as a multiple of its baseline, above which its slots stop growing (§121). */
+/**
+ * The GPU's mean answer time, as a multiple of its load-aware baseline, above which the controller
+ * asks whether its throughput still rises with concurrency (§121, `gpuLatencyVerdict`).
+ */
 export const LATENCY_HOLD_FACTOR = 2;
+/**
+ * The fewest GPU slots held while useful research waits (§121). The pod bills by the hour whatever
+ * it holds and vLLM batches up to its served sequences in one pass, so one or two slots leave a paid
+ * card nearly idle. Only a saturated database, an overloaded provider or answers mostly failing go
+ * below it; the database-pool share and the boot grace still cap it afterwards.
+ */
+export const GPU_FLOOR = 8;
 
 export interface Window {
   ok: number;
@@ -123,26 +133,39 @@ export function decideTarget(input: {
   pressure: Pressure;
   ceiling?: number;
   /**
-   * The GPU's own answer time (§121): the mean of its recent successful calls and the lowest such
-   * mean seen in the last hour. Growth holds while the mean is over `LATENCY_HOLD_FACTOR` × that
-   * baseline — more sequences in one vLLM batch then cost every request time instead of adding work.
+   * The GPU slot's own measurements (§121), or null for a free model: the current step's settled
+   * reading (null while the target changed inside the window), the readings of the last hour, and
+   * the floor it holds while work waits (`gpuFloor`). See `gpuLatencyVerdict`.
    */
-  latency?: { meanMs: number; baselineMs: number } | null;
+  gpu?: { current: GpuReading | null; readings: readonly GpuReading[]; floor: number } | null;
 }): Decision {
+  const decision = decideCore(input);
+  const gpu = input.gpu;
+  // §121: while useful research waits the paid GPU keeps a productive floor. Only Brain's own
+  // database saturating, the provider failing or answers mostly failing go under it.
+  if (!gpu || input.waiting <= 0 || decision.target >= gpu.floor || decision.belowFloor) {
+    return { target: decision.target, reason: decision.reason, stable: decision.stable };
+  }
+  const floor = Math.min(gpu.floor, input.ceiling ?? SAFETY_CEILING);
+  if (decision.target >= floor) return { target: decision.target, reason: decision.reason, stable: decision.stable };
+  return { target: floor, reason: `${decision.reason}; kept at the GPU's floor of ${floor} while ${input.waiting} useful item(s) wait`, stable: decision.stable };
+}
+
+function decideCore(input: Parameters<typeof decideTarget>[0]): Decision & { belowFloor?: boolean } {
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const { target, active, waiting, window, pressure } = input;
   const samples = window.ok + window.content + window.transient;
   const transientRate = samples > 0 ? window.transient / samples : 0;
   const okRate = samples > 0 ? window.ok / samples : 1;
   const half = Math.max(MIN_TARGET, Math.floor(target / 2));
-  if (pressure.db) return { target: half, reason: 'Brain database saturated', stable: false };
+  if (pressure.db) return { target: half, reason: 'Brain database saturated', stable: false, belowFloor: true };
   // The lane's slots wait on HTTP; the mean lag that should shrink them is Brain's own stall,
   // not a busy loop. At 300 ms the lane sat at one slot through ordinary bursts (production
   // 2026-11-14: halved at 474–974 ms with highest stable targets of 19–26).
   if (pressure.lagMs > LAG_SHRINK_MS) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
   if (pressure.cpu > 0.85) return { target: half, reason: cpuReason(pressure), stable: false };
   if (samples >= 4 && transientRate >= 0.3) {
-    return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false };
+    return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false, belowFloor: true };
   }
   const stable = samples >= 4 && transientRate < 0.1;
   if (waiting <= 0) {
@@ -152,18 +175,113 @@ export function decideTarget(input: {
     return { target, reason: 'database connections contended; holding until they free up', stable };
   }
   if (samples >= 6 && okRate < 0.2) {
-    return { target, reason: `answers mostly failing (${Math.round(okRate * 100)}% accepted); not multiplying failed work`, stable };
+    return { target, reason: `answers mostly failing (${Math.round(okRate * 100)}% accepted); not multiplying failed work`, stable, belowFloor: true };
   }
   if (target >= 4 && active < target / 2) {
     return { target, reason: `slots not filled (${active} of ${target} busy)`, stable };
   }
-  const latency = input.latency;
-  if (latency && latency.baselineMs > 0 && latency.meanMs > LATENCY_HOLD_FACTOR * latency.baselineMs) {
-    return { target, reason: `GPU answer time ${Math.round(latency.meanMs / 1000)} s is over ${LATENCY_HOLD_FACTOR}x its ${Math.round(latency.baselineMs / 1000)} s baseline; holding`, stable };
-  }
+  const verdict = input.gpu ? gpuLatencyVerdict({ target, current: input.gpu.current, readings: input.gpu.readings, floor: input.gpu.floor }) : null;
+  if (verdict) return { ...verdict, stable };
   if (target >= ceiling) return { target: ceiling, reason: 'at the safety ceiling', stable };
   const grown = Math.min(ceiling, target * 2, Math.max(target + 1, active + waiting));
   return { target: grown, reason: `useful research waiting (${waiting}), errors acceptable`, stable };
+}
+
+/* ------------------------------------------------------------------------- */
+/* The GPU's latency guard: throughput decides, latency only asks (§121)       */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * One control step's GPU measurement, taken only when its target held for the whole window, so
+ * every number in it belongs to that one concurrency.
+ */
+export interface GpuReading {
+  at: number;
+  /** The slot target held through the window. */
+  concurrency: number;
+  /** Mean answer time of the GPU's successful calls in the window, or null under too few of them. */
+  meanMs: number | null;
+  /** Items the GPU slot had accepted (SUBMITTED) in the window. */
+  accepted: number;
+  windowMs: number;
+}
+
+/** Accepted items a reading needs before its throughput is evidence: fewer is noise. */
+export const GPU_MIN_ACCEPTED = 4;
+
+/** The GPU's floor while work waits: `GPU_FLOOR`, never above what its pod serves at once. Pure. */
+export function gpuFloor(served: number | null): number {
+  return Math.max(MIN_TARGET, Math.min(GPU_FLOOR, served ?? GPU_FLOOR));
+}
+
+function perMinute(r: GpuReading): number {
+  return r.accepted / Math.max(1, r.windowMs / 60_000);
+}
+
+/** Each concurrency's mean answer time and mean accepted per minute over its readings. Pure. */
+function byConcurrency(readings: readonly GpuReading[]): Map<number, { meanMs: number | null; perMin: number; accepted: number }> {
+  const groups = new Map<number, GpuReading[]>();
+  for (const r of readings) groups.set(r.concurrency, [...(groups.get(r.concurrency) ?? []), r]);
+  const out = new Map<number, { meanMs: number | null; perMin: number; accepted: number }>();
+  for (const [c, rs] of groups) {
+    const timed = rs.filter((r) => r.meanMs !== null);
+    out.set(c, {
+      meanMs: timed.length > 0 ? timed.reduce((s, r) => s + r.meanMs!, 0) / timed.length : null,
+      perMin: rs.reduce((s, r) => s + perMinute(r), 0) / rs.length,
+      accepted: Math.min(...rs.map((r) => r.accepted)),
+    });
+  }
+  return out;
+}
+
+/**
+ * The answer-time baseline at the load being judged: the lowest per-concurrency mean among
+ * readings at `concurrency / 2` or more. Pure.
+ *
+ * Production 2026-11-25 21:32Z: the baseline was the lowest three-minute mean of the hour at any
+ * load — 3 s, read while the slot ran one or two sequences on short answers — so gpt-oss-120b's
+ * ordinary 9–11 s answers held the slot at one, with 815 items waiting and 17 accepted an hour.
+ * A batched server answers more slowly as it batches more; that is the load, not a fault, so only
+ * a comparable load sets the bar, and a per-concurrency mean replaces the minimum of noisy windows.
+ */
+export function gpuBaseline(readings: readonly GpuReading[], concurrency: number): number | null {
+  let best: number | null = null;
+  for (const [c, g] of byConcurrency(readings)) {
+    if (c * 2 < concurrency || g.meanMs === null) continue;
+    best = best === null ? g.meanMs : Math.min(best, g.meanMs);
+  }
+  return best;
+}
+
+/**
+ * The GPU latency guard. Pure. Latency never holds or reduces the slot by itself: a mean over
+ * `LATENCY_HOLD_FACTOR` × the load-aware baseline only asks whether fewer slots did as much work.
+ * The slot steps back to the highest lower concurrency whose measured accepted-per-minute was at
+ * least the current one — more sequences then added time, not work — and never under `floor`.
+ * Without that evidence it returns null and the controller grows as it would have. Errors and
+ * timeouts are not judged here: a failing provider halves the slot before this is reached.
+ */
+export function gpuLatencyVerdict(input: { target: number; current: GpuReading | null; readings: readonly GpuReading[]; floor: number }): Decision | null {
+  const { target, current } = input;
+  if (!current || current.meanMs === null || current.concurrency !== target) return null;
+  const baseline = gpuBaseline(input.readings, target);
+  if (baseline === null || baseline <= 0 || current.meanMs <= LATENCY_HOLD_FACTOR * baseline) return null;
+  if (current.accepted < GPU_MIN_ACCEPTED) return null;
+  const now = byConcurrency(input.readings.filter((r) => r.concurrency === target));
+  const here = now.get(target)?.perMin ?? perMinute(current);
+  let back: { concurrency: number; perMin: number } | null = null;
+  for (const [c, g] of byConcurrency(input.readings)) {
+    if (c >= target || g.accepted < GPU_MIN_ACCEPTED || g.perMin < here) continue;
+    if (!back || c > back.concurrency) back = { concurrency: c, perMin: g.perMin };
+  }
+  const head = `GPU answer time ${Math.round(current.meanMs / 1000)} s is over ${LATENCY_HOLD_FACTOR}x its ${Math.round(baseline / 1000)} s baseline at comparable load`;
+  if (!back) return null;
+  const to = Math.max(Math.min(input.floor, target), back.concurrency);
+  return {
+    target: to,
+    reason: `${head}, and ${back.concurrency} slot(s) accepted ${back.perMin.toFixed(1)}/min against ${here.toFixed(1)}/min at ${target}: ${to < target ? 'stepping back' : 'holding'}`,
+    stable: false,
+  };
 }
 
 /* ------------------------------------------------------------------------- */
@@ -447,6 +565,8 @@ interface ModelPool {
   busy: number;
   /** The most slots busy at once since the last control step: simultaneous jobs, measured. */
   peakBusy: number;
+  /** When `target` last changed, so a reading is attributed to one concurrency (`gpuStep`). */
+  since: number;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -552,15 +672,21 @@ export function poolShare(input: { gpu: boolean; models: number; othersTarget: n
   return input.gpuBeside ? Math.min(even, left) : even;
 }
 
-/** GPU mean answer times per control step, for the latency baseline (`decideTarget`'s `latency`). */
-const latencyReadings: { at: number; ms: number }[] = [];
-const LATENCY_BASELINE_MS = 60 * 60_000;
+/** The GPU slot's settled readings per model, for `decideTarget`'s `gpu` (§121). */
+const gpuReadings = new Map<string, GpuReading[]>();
+const GPU_READINGS_MS = 60 * 60_000;
 
-/** Pure: the lowest mean answer time read in the hour before `now`, after adding `reading`. */
-export function latencyBaseline(readings: { at: number; ms: number }[], reading: number | null, now: number): number | null {
-  if (reading !== null) readings.push({ at: now, ms: reading });
-  while (readings.length > 0 && readings[0]!.at < now - LATENCY_BASELINE_MS) readings.shift();
-  return readings.length > 0 ? Math.min(...readings.map((r) => r.ms)) : null;
+/**
+ * Pure: the GPU's reading for this step, or null while its target changed inside the window
+ * (`settledSince` is when the target last changed), and the readings of the hour before `now`
+ * with it added.
+ */
+export function gpuStep(input: { readings: GpuReading[]; target: number; settledSince: number; meanMs: number | null; accepted: number; now: number; windowMs?: number }): { current: GpuReading | null; readings: GpuReading[] } {
+  const windowMs = input.windowMs ?? WINDOW_MS;
+  const current = input.now - input.settledSince >= windowMs ? { at: input.now, concurrency: input.target, meanMs: input.meanMs, accepted: input.accepted, windowMs } : null;
+  const readings = input.readings.filter((r) => r.at >= input.now - GPU_READINGS_MS);
+  if (current) readings.push(current);
+  return { current, readings };
 }
 
 /** Allocation fingerprints already applied, per model; backed by the FREE_LANE_CAPACITY rows across a restart. */
@@ -607,7 +733,7 @@ export async function controlStep(): Promise<ControlReading | null> {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
       const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0 });
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, since: Date.now() });
     }
   }
   const waiting = await waitingNow();
@@ -621,13 +747,15 @@ export async function controlStep(): Promise<ControlReading | null> {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let latency: { meanMs: number; baselineMs: number } | null = null;
+    let gpuInput: { current: GpuReading | null; readings: GpuReading[]; floor: number } | null = null;
     if (gpu) {
-      const meanMs = runpodLatency(WINDOW_MS);
-      const baselineMs = latencyBaseline(latencyReadings, meanMs, Date.now());
-      if (meanMs !== null && baselineMs !== null) latency = { meanMs, baselineMs };
+      // Throughput is what the GPU slot is judged on: items it had accepted in the window, at a target held through it.
+      const accepted = (await windowFor(pool.worker.model)).ok;
+      const step = gpuStep({ readings: gpuReadings.get(pool.worker.model) ?? [], target: pool.target, settledSince: pool.since, meanMs: runpodLatency(WINDOW_MS), accepted, now: Date.now() });
+      gpuReadings.set(pool.worker.model, step.readings);
+      gpuInput = { ...step, floor: gpuFloor(servedSequences(pool.worker.model)) };
     }
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, latency, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, gpu: gpuInput, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
     const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
     const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
     const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
@@ -687,6 +815,7 @@ export async function controlStep(): Promise<ControlReading | null> {
         evidenceClass: 'MEASURED',
       });
     }
+    if (decision.target !== pool.target) pool.since = Date.now();
     pool.target = decision.target;
     await writeCapacity(pool.worker.model, pool.target, pool.stableHigh, decision.reason);
     fill(pool, config);
@@ -799,7 +928,7 @@ export function stopAdaptivePool(): void {
   pools.clear();
   workersCache = [];
   appliedGrants.clear();
-  latencyReadings.length = 0;
+  gpuReadings.clear();
 }
 
 /**
