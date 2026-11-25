@@ -58,6 +58,8 @@ const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504, 544]);
 const READ_ATTEMPTS = 3;
 /** The most entries one listing request returns; a page this full may be truncated. */
 const LIST_PAGE = 1000;
+/** The most pages one folder listing reads before it gives up and the caller asks key by key. */
+const LIST_MAX_PAGES = 20;
 
 /**
  * The one write refusal that is documented as "not processed": a rate or
@@ -409,19 +411,32 @@ export class SupabaseStorageProvider implements StorageProvider {
    * four layers makes four requests rather than a hundred. Each request is a
    * `storage.search` on the same Postgres as Brain; production ran 389 283 of
    * them by 2026-10-16, the largest single consumer of server time in a
-   * healthy window. A page that comes back full may have been cut short, so it
-   * answers null and the caller asks key by key, exactly as before.
+   * healthy window.
+   *
+   * A folder larger than one page is read page by page (`offset`), up to
+   * `LIST_MAX_PAGES`. Production, 2026-11-25: the release gate's own layer
+   * held 1,375 documents, so its one full page answered null and every plan
+   * read of it fell back to ~375 keyed listings, all through the four-slot
+   * existence gate. Any other reader of a large layer (an audit brief derives
+   * its layer the same way) filled that gate ahead of it, and
+   * `GET /api/projects/:id` stopped answering inside 240 s on two releases in a
+   * row. Two pages are two requests. Only a folder past the page bound still
+   * answers null, and the caller asks key by key, exactly as before.
    */
   async namesIn(prefix: string): Promise<string[] | null> {
     const clean = prefix.replace(/^\/+|\/+$/g, '');
     if (clean) assertSafeKey(clean);
-    const entries = await this.#existenceGate.run(() => this.#listRaw(clean));
-    // Supabase reports a folder as an entry with no id.
-    const names = entries.filter((entry) => entry.id).map((entry) => entry.name);
-    // Every name listed is there now, whether or not the page was complete.
-    for (const name of names) this.#markPresent(clean ? `${clean}/${name}` : name);
-    if (entries.length >= LIST_PAGE) return null;
-    return names;
+    const names: string[] = [];
+    for (let page = 0; page < LIST_MAX_PAGES; page += 1) {
+      const entries = await this.#existenceGate.run(() => this.#listRaw(clean, undefined, page * LIST_PAGE));
+      // Supabase reports a folder as an entry with no id.
+      const listed = entries.filter((entry) => entry.id).map((entry) => entry.name);
+      // Every name listed is there now, whether or not the listing is complete.
+      for (const name of listed) this.#markPresent(clean ? `${clean}/${name}` : name);
+      names.push(...listed);
+      if (entries.length < LIST_PAGE) return names;
+    }
+    return null;
   }
 
   async move(fromKey: string, toKey: string): Promise<StoredObjectMeta> {
@@ -489,7 +504,7 @@ export class SupabaseStorageProvider implements StorageProvider {
   }
 
   /** One page of a listing. Supabase's list is POST with a JSON body. */
-  async #listRaw(prefix: string, search?: string): Promise<SupabaseListEntry[]> {
+  async #listRaw(prefix: string, search?: string, offset: number = 0): Promise<SupabaseListEntry[]> {
     const response = await this.#readWithRetry(() =>
       this.#request(
         `${this.#base}/storage/v1/object/list/${encodeURIComponent(this.#bucket)}`,
@@ -499,7 +514,7 @@ export class SupabaseStorageProvider implements StorageProvider {
           body: JSON.stringify({
             prefix,
             limit: LIST_PAGE,
-            offset: 0,
+            offset,
             ...(search ? { search } : {}),
             sortBy: { column: 'name', order: 'asc' },
           }),
