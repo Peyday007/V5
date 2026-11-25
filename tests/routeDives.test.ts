@@ -234,7 +234,8 @@ describe('a route ask no model answered is asked again soon', () => {
     expect((await proposeGoalRoutes({ goalId, now: new Date(now.getTime() + 60_000) }, { ...deps, startDives: async () => [] })).kind).toBe('NOT_DUE');
     const second = await proposeGoalRoutes({ goalId, now: new Date(now.getTime() + ROUTE_RETRY_AFTER_FAILURE_MS + 60_000) }, { ...deps, startDives: async () => [] });
     expect(second.kind).toBe('PROPOSED');
-    expect(asked()).toBe(2);
+    // Two proposals and one critique of the second, which reads as no critique, so the proposal stands.
+    expect(asked()).toBe(3);
     const events = await workstreamEventsOfKind(goalId, ROUTE_EVENT, new Date(0).toISOString(), 5);
     expect(events.map((one) => one.detail['outcome'])).toEqual(['PROPOSED', 'NO_ANSWER']);
   });

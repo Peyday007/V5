@@ -38,3 +38,17 @@ export function routeGoalOf(opportunity: { externalRecordId?: string | null }): 
 
 /** The card fact that carries the searches a route's research should run (a RECOMMENDATION). */
 export const ROUTE_SEARCHES_FIELD = 'routeSearches';
+
+/**
+ * The card fact that carries the place a route's critique gave it among the
+ * routes of the same ask (a RECOMMENDATION, "1 of 4: why"). The plan reads it
+ * to choose among routes nobody has researched yet (`routeRankOf`).
+ */
+export const ROUTE_RANK_FIELD = 'routeRank';
+
+/** The rank a `ROUTE_RANK_FIELD` value states (1 is best), or null when it states none. Pure. */
+export function routeRankOf(value: string | null | undefined): number | null {
+  const m = /^\s*(\d+)\b/.exec(value ?? '');
+  const n = m ? Number(m[1]) : Number.NaN;
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}

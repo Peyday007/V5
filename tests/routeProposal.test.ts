@@ -85,7 +85,8 @@ const ANSWER = {
 function stub(answer: unknown = ANSWER): { deps: RouteDeps; prompts: string[] } {
   const prompts: string[] = [];
   const chat: ChatFn = async (messages) => {
-    prompts.push(String((messages[1] as { content: string }).content));
+    // The proposals only: the critique's ask is a second turn, and this answer is no critique, so the proposal stands.
+    if (/strategist/.test(String((messages[0] as { content: string }).content))) prompts.push(String((messages[1] as { content: string }).content));
     return { content: JSON.stringify(answer), toolCalls: [], ms: 1, completionTokens: 1, error: null };
   };
   return { prompts, deps: { chats: async () => [{ label: 'stub', chat }], delivers: async () => ['spreadsheet'] } };
@@ -106,7 +107,7 @@ describe('a goal is given whole routes from its objective', () => {
     // The prompt carries the owner's own words verbatim, the limits and Brain's proved deliverables, and no industry template.
     expect(prompts[0]).toContain('Collect 3000 dollars of settled cash within 30 days using at most $500');
     expect(prompts[0]).toMatch(/must settle inside \d+ day/);
-    expect(prompts[0]).toMatch(/No two routes may share a buyer type/);
+    expect(prompts[0]).toMatch(/no two routes may share a buyer type/i);
     expect(prompts[0]).toMatch(/ownerFit/);
     expect(prompts[0]).toMatch(/at most \$500 may be tied up/);
     expect(prompts[0]).toMatch(/within \d+ day/);

@@ -24,6 +24,17 @@
  *   - it is linked to the goal (`workstream_links`, SOURCE), so the goal's
  *     spending limits bind it (`spending.ts`).
  *
+ * Independent judge, 2026-11-25 (12 fresh goals, 3 of 67 routes credible):
+ * the same digital-product menu answered unrelated requests, the owner's own
+ * skills, assets and place were dropped, and channels and fulfilment could not
+ * work inside the window. So the owner's words lead the prompt and are read
+ * first into a profile; the feasibility rules (`ROUTE_RULES`) and a spread of
+ * buyer kinds are stated; and a second turn critiques the answer against those
+ * rules (`critiqueAndRevise`), repairs or drops what fails, asks once for
+ * replacements when fewer than `ROUTES_MIN_SURVIVING` survive, and ranks the
+ * rest. The rank is filed on each opening (`ROUTE_RANK_FIELD`) and decides the
+ * plan's choice among routes nobody has researched yet (`plan.ts`).
+ *
  * Nothing here is a new scheduler or a new model path (rule 6). The models are
  * the operator's (`modelsFor`), ordered and asked exactly as the committee's
  * specialists are (`challengerModels`, `chatFor`; the reply read by `routesJson`); the cadence is
@@ -38,7 +49,7 @@ import type { OperatorModel } from '../../domain/operator.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
 import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
-import { goalRoutePrefix, routeRecordId, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
+import { goalRoutePrefix, routeRecordId, ROUTE_RANK_FIELD, ROUTE_SEARCHES_FIELD } from '../../domain/routeOrigin.ts';
 import { chatFor, type ChatFn } from '../cheap/modelBench.ts';
 import { challengerModels } from '../operator/decisions.ts';
 import { getWorkstream, linkWorkstream, recordWorkstreamEvent, workstreamEventsOfKind } from '../../repos/register.ts';
@@ -91,11 +102,15 @@ type Performer = (typeof PERFORMERS)[number];
 export interface ProposedRoute {
   key: string;
   title: string;
+  /** Which kind of buyer it sells to (`BUYER_KINDS`), or null when the reply did not say. */
+  buyerKind: BuyerKind | null;
   mechanism: CashMechanism;
   industry: string;
   payer: string;
   offer: string;
   price: number;
+  /** What such buyers typically pay for this today, as the model anchored the price. */
+  priceAnchor: string;
   monthly: boolean;
   channel: string;
   performer: Performer;
@@ -138,6 +153,8 @@ export interface RouteContext {
   delivers: string[];
   held: string[];
   refuted: { title: string; why: string }[];
+  /** Today's date (ISO), so the season and calendar reach the routes; absent in a context built without a clock. */
+  today?: string;
 }
 
 const num = (v: unknown): number | null => {
@@ -179,19 +196,53 @@ export function routeKey(payer: string, offer: string): string {
 }
 
 /**
- * The prompt: the objective, the owner's limits stated as hard rules, what
- * Brain proves it delivers, what the goal already holds and what research
- * refuted. No industry template: the routes are the model's to reason. Pure.
+ * The kinds of buyer a goal's routes are spread across. A route list that
+ * stays inside one kind (in production, 2026-11-25: digital products sold
+ * online, whatever the request said) is one idea written several ways.
  */
-export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): string {
-  const limits = [
+export const BUYER_KINDS = ['LOCAL_CONSUMER', 'LOCAL_BUSINESS', 'ONLINE_MARKETPLACE', 'ONLINE_CONSUMER', 'B2B'] as const;
+export type BuyerKind = (typeof BUYER_KINDS)[number];
+
+/**
+ * The feasibility rules every route is held to, by the proposal and again by
+ * its critique. Each is general — about time, money, channels, fulfilment and
+ * prices — never about an industry. Independent judge, 2026-11-25 (12 fresh
+ * goals, 3 of 67 routes credible): routes failed on exactly these, most often
+ * on owner fit, then channels that cannot produce buyers inside the window,
+ * then fulfilment nobody can perform, then prices no such buyer pays.
+ */
+export const ROUTE_RULES = {
+  OWNER_FIT: "uses what the owner said they have — skills, assets, location, free time — or a priced subcontractor; never expertise the owner did not claim, and never a menu that would fit any request",
+  WINDOW: 'the first money settles inside the window',
+  CHANNEL: "the channel produces paying buyers inside the window with the stated budget: a channel that compounds slowly (search ranking, a new content or video channel, a newsletter, a course, a new marketplace profile with no reviews, enterprise procurement) cannot do that in a short window, and paid advertising needs a budget that buys enough reach to close the sales needed",
+  FULFILLER: 'a named fulfiller with a known cost who can start now: the owner, within the stated hours and skills they actually have; a subcontractor whose price fits the capital; or Brain, only for a deliverable it has proved',
+  PRICE: 'the price is anchored to what this kind of buyer typically pays for this today; commodity work is priced at its market rate, never far above it; the buyer count is built from the bottom up (a place, a directory, a marketplace category), never a top-down guess',
+  CAPITAL: "the capital is read as the owner gave it: a small budget rules out spend-heavy channels; a large one may fund inventory, equipment or paid labour where that is what earns the money; few owner hours rule out labour-per-unit work that does not scale; a recurring target needs recurring billing",
+  MARKET: 'the market exists and is buying now, in this season; no invented or dead markets',
+} as const;
+export type RouteRule = keyof typeof ROUTE_RULES;
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** Today's date and where in the month it falls, for the season and calendar a route must respect. Pure. */
+export function calendarLine(today: string): string {
+  const d = new Date(`${today.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  const day = d.getUTCDate();
+  const part = day <= 10 ? 'early' : day <= 20 ? 'mid' : 'late';
+  return `Today is ${today.slice(0, 10)} (${part} ${MONTHS[d.getUTCMonth()]}). Use the season and the calendar where the owner and the buyers are — weather, holidays, school terms, year-end budgets and closures — when choosing buyers, channels and timing, and keep any constraint the owner set for part of the window.`;
+}
+
+/** The owner's limits, stated as hard rules. Pure. */
+function limitLines(ctx: RouteContext): string[] {
+  return [
     `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s).`,
     ctx.capitalLimit !== null ? `Capital: at most ${money(ctx.capitalLimit, ctx.currency)} may be tied up before money comes back. A route needing more is not allowed.` : 'Capital: the owner set no figure; prefer routes that tie up little.',
     ctx.hoursPerWeek
       ? `Owner's time: at most ${ctx.hoursPerWeek} hour(s) a week of the owner's own work (about ${Math.round(weeklyToMonthly(ctx.hoursPerWeek))} a month), every route's work together. Routes must fit inside it.`
       : ctx.hoursLimit !== null
         ? `Owner's time: at most ${ctx.hoursLimit} hour(s) of the owner's own work in the whole window. Routes must fit inside it.`
-        : 'Owner\'s time: no figure set; the owner does no routine personal work.',
+        : "Owner's time: no figure set; the owner does no routine personal work.",
     ctx.resources ? `What the owner said they have, verbatim: ${ctx.resources}` : '',
     `Time: the first money must settle inside ${ctx.daysLeft} day(s). A buyer who pays in arrears, on invoice terms or after a long sales cycle that would land later is not allowed.`,
     ctx.industry ? `The owner confined this goal to: ${ctx.industry}. Every route must be in it.` : 'No industry is excluded: choose on economics, time to cash and whether it can be done.',
@@ -199,15 +250,33 @@ export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): stri
     ctx.exclusions.length ? `The owner excluded: ${ctx.exclusions.join('; ')}.` : '',
     OPERATING_MODEL_SENTENCE,
   ].filter(Boolean);
+}
+
+const ROUTE_SHAPE = (currency: string) =>
+  `{"title":"short name","buyerKind":one of ${JSON.stringify(BUYER_KINDS)},"mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${currency} (per month when billed monthly),"priceAnchor":"what this kind of buyer typically pays for this today, and where that is seen","monthly":true|false,"channel":"how buyers are reached, and why it yields paying buyers inside the window on the stated budget","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it, named, and what they cost","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"capital":number tied up before the first payment,"ownerHoursPerDeal":number of the owner's own hours per sale (for a route billed monthly, per buyer per month),"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"how that count was built, from the bottom up","assumptions":"what this route assumes that research must check","ownerFit":"which of the owner's stated skills, assets, location, time or refusals it uses or respects","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]}}`;
+
+/**
+ * The prompt. The owner's own words lead, and the model reads them first into
+ * an owner profile (skills, assets, location, hours, capital, refusals) that
+ * every route must use. Then the date, the limits, the feasibility rules and
+ * the spread of buyer kinds. What Brain proves it delivers is one possible
+ * fulfilment, offered last — never the frame, which is how one menu of
+ * digital products came to answer every request. No industry template: the
+ * routes are the model's to reason. Pure.
+ */
+export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): string {
   return [
-    `OBJECTIVE (the owner's own words, verbatim — every skill, asset, place and refusal in them binds every route): ${ctx.objective}`,
-    `LIMITS (hard rules):\n- ${limits.join('\n- ')}`,
-    `WHAT BRAIN ITSELF PROVABLY PRODUCES (performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use SUBCONTRACTOR routes'}.`,
+    `THE OWNER'S OWN WORDS (verbatim — they lead; every skill, asset, place, amount of time and refusal in them binds every route): ${ctx.objective}`,
+    'STEP 1 — READ THE OWNER. Before any route, write in "owner" what those words say about: skills (what they can do, languages they speak), assets (equipment, a vehicle, space, accounts, an audience, contacts), location, hours (and when they are free), capital, and refusals. Write "not stated" for anything the words do not say; never invent it.',
+    ctx.today ? `DATE: ${calendarLine(ctx.today)}` : '',
+    `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
+    `FEASIBILITY (every route must pass every one):\n- ${Object.values(ROUTE_RULES).join('\n- ')}`,
+    `STEP 2 — ROUTES. Propose ${k} concrete, different commercial routes built from the owner profile, each able to collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers pay today, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and how many such buyers exist. Spread the routes across genuinely different kinds of buyer — use at least three of ${BUYER_KINDS.join(', ')} where the owner's words allow it — and at least three different mechanisms; no two routes may share a buyer type. When the owner names a place, an asset or a hands-on skill, and the target is small or the window short, buyers near them (households and local businesses, reached directly) are usually the fastest money — the in-person work done by a local provider the owner books and pays, as the operating rule above allows, and the owner's own skills used wherever they need no physical work: consider them before anything sold to the whole internet. A route that would fit any request equally — a report, an audit, a template, a dashboard, a course or an "AI" product offered to everyone — is a poor route unless the owner's own words point to it. Each route says in ownerFit which of the owner's stated facts it uses.`,
+    `WHAT BRAIN ITSELF PROVABLY PRODUCES (one possible fulfilment, never the reason for a route; performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use OWNER or SUBCONTRACTOR routes'}.`,
     ctx.held.length ? `ALREADY HELD for this goal (propose different routes): ${ctx.held.slice(0, 20).join(' | ')}` : '',
     ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not propose these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
-    `Propose ${k} concrete, different commercial routes that could each collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers plausibly pay, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and roughly how many such buyers exist. No two routes may share a buyer type, and use at least three different mechanisms — not variations of one idea. Derive the buyers from the owner's own words (their skills, assets, location and refusals) rather than from buyers you would propose for any objective; a route that would fit any request equally is a poor route. Each route states in ownerFit how it uses or respects what the owner said (skills, assets, location, what they will not do). Prefer fast cash, repeat buyers, and work Brain or a paid subcontractor does.`,
     'Reply with exactly one JSON object and nothing else:',
-    `{"routes":[{"title":"short name","mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${ctx.currency} (per month when billed monthly),"monthly":true|false,"channel":"how buyers are reached","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"capital":number tied up before the first payment,"ownerHoursPerDeal":number of the owner's own hours per sale (for a route billed monthly, per buyer per month),"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"why that count","assumptions":"what this route assumes that research must check","ownerFit":"how it uses or respects the owner's stated skills, assets, location and refusals","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]}}]}`,
+    `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"routes":[${ROUTE_SHAPE(ctx.currency)}]}`,
     'Figures are your estimates and will be researched; never present them as facts.',
   ]
     .filter(Boolean)
@@ -321,6 +390,7 @@ export const ROUTE_REJECTION_RULES = {
   EXCLUDED: 'excluded by the owner',
   OWNER_FIT: 'no owner fit',
   DUPLICATE: 'duplicate buyer or offer',
+  CRITIQUE: 'failed the critique',
 } as const;
 export type RouteRejectionRule = keyof typeof ROUTE_REJECTION_RULES;
 export interface RejectedRoute {
@@ -468,14 +538,17 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       continue;
     }
     const searches = (r['searches'] && typeof r['searches'] === 'object' ? r['searches'] : {}) as Record<string, unknown>;
+    const kind = str(r['buyerKind'], 40)?.toUpperCase().replace(/[^A-Z]+/g, '_');
     routes.push({
       key,
       title,
+      buyerKind: (BUYER_KINDS as readonly string[]).includes(kind ?? '') ? (kind as BuyerKind) : null,
       mechanism: mechanism as CashMechanism,
       industry,
       payer,
       offer,
       price,
+      priceAnchor: str(r['priceAnchor'], 240) ?? '',
       monthly,
       channel,
       performer,
@@ -495,6 +568,214 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
   return { routes, rejected };
 }
 
+/** What the owner's words say, as a model read them: the profile every route must use. */
+export interface OwnerProfile {
+  skills: string[];
+  assets: string[];
+  location: string | null;
+  hours: string | null;
+  capital: string | null;
+  refusals: string[];
+}
+
+const NOT_STATED = /^(not stated|none|n\/a|unknown|unspecified|-)$/i;
+const stated = (v: unknown, max: number): string | null => {
+  const one = str(v, max);
+  return one && !NOT_STATED.test(one) ? one : null;
+};
+const statedList = (v: unknown): string[] => (Array.isArray(v) ? strs(v, 12) : typeof v === 'string' ? [v] : []).filter((one) => !NOT_STATED.test(one.trim()));
+
+/** Every balanced JSON object in a reply, the whole reply first. */
+function objectsIn(text: string): Record<string, unknown>[] {
+  const cleaned = text.replace(/```[a-zA-Z]*\s*/g, '').replace(/```/g, '').trim();
+  const out: Record<string, unknown>[] = [];
+  const whole = parsed(cleaned);
+  if (whole && typeof whole === 'object' && !Array.isArray(whole)) out.push(whole as Record<string, unknown>);
+  let tries = 0;
+  for (let i = 0; i < cleaned.length && tries < 40; i += 1) {
+    if (cleaned[i] !== '{') continue;
+    tries += 1;
+    const value = parsed(balancedAt(cleaned, i));
+    if (value && typeof value === 'object' && !Array.isArray(value)) out.push(value as Record<string, unknown>);
+  }
+  return out;
+}
+
+/** The owner profile a reply carries under `owner`, or null when it carries none that says anything. Pure. */
+export function ownerProfileOf(text: string): OwnerProfile | null {
+  for (const obj of objectsIn(text)) {
+    const raw = obj['owner'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const o = raw as Record<string, unknown>;
+    const profile: OwnerProfile = {
+      skills: statedList(o['skills']),
+      assets: statedList(o['assets']),
+      location: stated(o['location'], 160),
+      hours: stated(o['hours'], 160),
+      capital: stated(o['capital'], 160),
+      refusals: statedList(o['refusals']),
+    };
+    if (profile.skills.length || profile.assets.length || profile.location || profile.hours || profile.capital || profile.refusals.length) return profile;
+  }
+  return null;
+}
+
+/** "skills: Spanish; assets: a van; location: Columbus, Ohio". Pure. */
+export function ownerProfileLine(profile: OwnerProfile): string {
+  return [
+    `skills: ${profile.skills.join(', ') || 'not stated'}`,
+    `assets: ${profile.assets.join(', ') || 'not stated'}`,
+    `location: ${profile.location ?? 'not stated'}`,
+    `hours: ${profile.hours ?? 'not stated'}`,
+    `capital: ${profile.capital ?? 'not stated'}`,
+    `refusals: ${profile.refusals.join(', ') || 'not stated'}`,
+  ].join('; ');
+}
+
+/** One route as the critique judged it. */
+export interface RouteReview {
+  /** 1-based, as the routes were numbered to the critic. */
+  index: number;
+  verdict: 'KEEP' | 'REPAIR' | 'DROP';
+  /** 0–5 per rule (`ROUTE_RULES`); a rule it did not score is absent. */
+  scores: Partial<Record<RouteRule, number>>;
+  failed: RouteRule[];
+  why: string;
+  /** Fields that replace the route's own when it is repaired. */
+  repair: Record<string, unknown> | null;
+}
+
+export interface RouteCritique {
+  owner: OwnerProfile | null;
+  reviews: RouteReview[];
+  /** 1-based indices, best first. */
+  ranking: number[];
+}
+
+/** A score at or under this, on any rule, is that rule failed, whatever verdict the critic wrote. */
+export const CRITIQUE_FAIL_SCORE = 1;
+const RULE_KEYS = Object.keys(ROUTE_RULES) as RouteRule[];
+const ruleOf = (v: unknown): RouteRule | null => {
+  const key = typeof v === 'string' ? v.toUpperCase().replace(/[^A-Z]+/g, '_').replace(/^_|_$/g, '') : '';
+  return (RULE_KEYS as string[]).includes(key) ? (key as RouteRule) : null;
+};
+
+/** A critic's reply, read as tolerantly as `routesJson` reads a proposal; null when it holds no review. Pure. */
+export function critiqueJson(text: string, routeCount: number): RouteCritique | null {
+  for (const obj of objectsIn(text)) {
+    const list = Object.entries(obj).find(([key, v]) => /^reviews?$/i.test(key) && Array.isArray(v))?.[1] as unknown[] | undefined;
+    if (!list) continue;
+    const reviews: RouteReview[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const r = item as Record<string, unknown>;
+      const index = amount(r['index'] ?? r['route']);
+      if (index === null || index < 1 || index > routeCount || reviews.some((one) => one.index === Math.round(index))) continue;
+      const scoresRaw = (r['scores'] && typeof r['scores'] === 'object' ? r['scores'] : {}) as Record<string, unknown>;
+      const scores: Partial<Record<RouteRule, number>> = {};
+      for (const [key, v] of Object.entries(scoresRaw)) {
+        const rule = ruleOf(key);
+        const n = amount(v);
+        if (rule && n !== null) scores[rule] = Math.max(0, Math.min(5, n));
+      }
+      const failed = [...new Set([...(Array.isArray(r['failed']) ? r['failed'] : []).map(ruleOf).filter((one): one is RouteRule => !!one), ...RULE_KEYS.filter((rule) => (scores[rule] ?? 5) <= CRITIQUE_FAIL_SCORE)])];
+      const verdictRaw = str(r['verdict'], 20)?.toUpperCase() ?? '';
+      const repair = r['repair'] && typeof r['repair'] === 'object' && !Array.isArray(r['repair']) && Object.keys(r['repair'] as object).length > 0 ? (r['repair'] as Record<string, unknown>) : null;
+      const verdict: RouteReview['verdict'] = verdictRaw.startsWith('DROP') ? 'DROP' : verdictRaw.startsWith('REPAIR') && repair ? 'REPAIR' : verdictRaw.startsWith('KEEP') ? 'KEEP' : repair ? 'REPAIR' : 'DROP';
+      reviews.push({ index: Math.round(index), verdict, scores, failed, why: str(r['why'], 300) ?? '', repair });
+    }
+    if (reviews.length === 0) continue;
+    const rankingRaw = Object.entries(obj).find(([key, v]) => /^rank(ing|ed)?$/i.test(key) && Array.isArray(v))?.[1] as unknown[] | undefined;
+    const ranking = [...new Set((rankingRaw ?? []).map(amount).filter((n): n is number => n !== null && n >= 1 && n <= routeCount).map(Math.round))];
+    return { owner: ownerProfileOf(text), reviews, ranking };
+  }
+  return null;
+}
+
+/** The critic's prompt: the owner's words, their profile, the limits and rules, and the routes, numbered. Pure. */
+export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute[], owner: OwnerProfile | null): string {
+  const listed = routes.map((route, i) => {
+    const { key: _key, searches: _searches, ...rest } = route;
+    return `${i + 1}. ${JSON.stringify(rest)}`;
+  });
+  return [
+    `THE OWNER'S OWN WORDS (verbatim): ${ctx.objective}`,
+    owner ? `OWNER PROFILE (as the proposer read those words; correct it in "owner" where it misreads them): ${ownerProfileLine(owner)}` : 'OWNER PROFILE: none was given; read the words above yourself and write it in "owner".',
+    ctx.today ? `DATE: ${calendarLine(ctx.today)}` : '',
+    `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
+    `RULES (score each route 0–5 on each; ${CRITIQUE_FAIL_SCORE} or less is a failure):\n${RULE_KEYS.map((rule) => `- ${rule}: ${ROUTE_RULES[rule]}`).join('\n')}`,
+    `ROUTES PROPOSED:\n${listed.join('\n')}`,
+    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first.",
+    'Reply with exactly one JSON object and nothing else:',
+    `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"reviews":[{"index":1,"verdict":"KEEP"|"REPAIR"|"DROP","scores":{${RULE_KEYS.map((rule) => `"${rule}":0-5`).join(',')}},"failed":["rule names it fails"],"why":"one sentence","repair":{"field":"new value"}|null}],"ranking":[indices of kept or repaired routes, best first]}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** A route that survived its critique, with the place the critique gave it. */
+export interface RankedRoute {
+  route: ProposedRoute;
+  /** 1 is best. */
+  rank: number;
+  /** The critique's scores summed, or null for a replacement nobody critiqued. */
+  score: number | null;
+  why: string;
+  repaired: boolean;
+}
+
+/**
+ * Apply a critique to the routes it judged: a dropped route is rejected with
+ * the rules it failed; a repaired one is re-read through `parseRoutes`, so a
+ * repair is held to every limit exactly as the original was; the survivors
+ * are ordered by the critic's ranking, then by score. Pure.
+ */
+export function applyCritique(routes: readonly ProposedRoute[], critique: RouteCritique, ctx: RouteContext): { ranked: RankedRoute[]; dropped: RejectedRoute[] } {
+  const dropped: RejectedRoute[] = [];
+  const survivors: { route: ProposedRoute; index: number; score: number; why: string; repaired: boolean }[] = [];
+  routes.forEach((route, i) => {
+    const review = critique.reviews.find((one) => one.index === i + 1);
+    if (!review) {
+      dropped.push({ title: route.title, why: 'the critique did not review it', rule: 'CRITIQUE' });
+      return;
+    }
+    const failing = review.failed.length ? ` (fails ${review.failed.join(', ')})` : '';
+    if (review.verdict === 'DROP' || (review.verdict === 'KEEP' && review.failed.length > 0)) {
+      dropped.push({ title: route.title, why: `the critique dropped it${failing}: ${review.why}`.slice(0, 400), rule: 'CRITIQUE' });
+      return;
+    }
+    let kept = route;
+    if (review.verdict === 'REPAIR' && review.repair) {
+      const { key: _key, ...raw } = route;
+      const again = parseRoutes({ routes: [{ ...raw, ...review.repair }] }, ctx);
+      if (!again.routes[0]) {
+        dropped.push({ title: route.title, why: `its repair${failing} broke a limit: ${again.rejected[0]?.why ?? 'unreadable'}`.slice(0, 400), rule: 'CRITIQUE' });
+        return;
+      }
+      kept = again.routes[0];
+    }
+    const score = RULE_KEYS.reduce((sum, rule) => sum + (review.scores[rule] ?? 0), 0);
+    survivors.push({ route: kept, index: i + 1, score, why: review.why, repaired: kept !== route });
+  });
+  const placeOf = (index: number) => {
+    const at = critique.ranking.indexOf(index);
+    return at < 0 ? Number.POSITIVE_INFINITY : at;
+  };
+  survivors.sort((a, b) => placeOf(a.index) - placeOf(b.index) || b.score - a.score || a.index - b.index);
+  return { ranked: survivors.map((one, i) => ({ route: one.route, rank: i + 1, score: one.score, why: one.why, repaired: one.repaired })), dropped };
+}
+
+/** The ask for replacements, naming what failed and what is kept. Pure. */
+export function replacementPrompt(ctx: RouteContext, k: number, kept: readonly ProposedRoute[], failed: readonly RejectedRoute[]): string {
+  return [
+    routePrompt(ctx, k),
+    `AN EARLIER ANSWER FAILED REVIEW — do not propose these again or near-copies; fix what made them fail:\n- ${failed.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}`,
+    kept.length ? `KEPT (propose routes to different buyers): ${kept.map((one) => `${one.title} (${one.payer})`).join(' | ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 export interface RouteDeps {
   /** The chat to ask; production: each operator model in the challenger's order (`modelsFor`). */
   chats?: () => Promise<{ label: string; chat: ChatFn }[]>;
@@ -511,7 +792,7 @@ export type RouteOutcome =
   | { kind: 'NOT_DUE'; reason: string }
   | { kind: 'NO_MODEL'; reason: string }
   | { kind: 'NO_ANSWER'; reason: string }
-  | { kind: 'PROPOSED'; filed: string[]; existing: string[]; rejected: RejectedRoute[]; model: string; dived: string[] };
+  | { kind: 'PROPOSED'; filed: string[]; existing: string[]; rejected: RejectedRoute[]; model: string; dived: string[]; critique: CritiqueRecord['outcome'] };
 
 /**
  * Whether a recorded ask yielded no route: no model answered (NO_ANSWER), or
@@ -630,7 +911,7 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
 }
 
 /** One route, filed as one goal-scoped opening with RECOMMENDATION facts only. Returns its id. */
-async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: string, ownerUserId: string, route: ProposedRoute, model: string): Promise<string> {
+async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: string, ownerUserId: string, route: ProposedRoute, model: string, place: { rank: number; of: number; why: string } | null): Promise<string> {
   const kind = DELIVERABLE_KINDS.find((one) => DELIVERABLE_LABEL[one] === route.brainDeliverable);
   const created = await createOpportunity({
     projectId: target.projectId,
@@ -675,6 +956,9 @@ async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: st
     ...(route.performer === 'BRAIN' ? [['delivery', `A ${route.brainDeliverable} Brain produces.`] as [string, string]] : []),
     ...(route.buyerCount !== null ? [['buyerVolume', `${route.buyerCount.toLocaleString('en-US')} ${route.payer}${route.volumeBasis ? ` (${route.volumeBasis})` : ''}`] as [string, string]] : []),
     [ROUTE_SEARCHES_FIELD, [...route.searches.price, ...route.searches.demand, ...route.searches.volume].join('; ')],
+    ...(route.priceAnchor ? [['priceAnchor', route.priceAnchor] as [string, string]] : []),
+    // The critique's place for it among this ask's routes: what the plan prefers before any route is researched.
+    ...(place ? [[ROUTE_RANK_FIELD, `${place.rank} of ${place.of}${place.why ? `: ${place.why}` : ''}`] as [string, string]] : []),
   ];
   for (const [field, value] of facts) {
     if (!value.trim()) continue;
@@ -687,9 +971,126 @@ async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: st
     kind: 'CASH_ROUTE_PROPOSED',
     actorRef: 'BRAIN',
     summary: `Brain proposed this route for a goal from its objective: ${route.title}. Every figure on it is a hypothesis until research establishes or refutes it.`.slice(0, 400),
-    detail: { goalId: goal.id, key: route.key, model, performer: route.performer, price: route.price, monthly: route.monthly, ownerFit: route.ownerFit },
+    detail: { goalId: goal.id, key: route.key, model, performer: route.performer, price: route.price, monthly: route.monthly, ownerFit: route.ownerFit, buyerKind: route.buyerKind, rank: place?.rank ?? null },
   });
   return id;
+}
+
+const PROPOSER_SYSTEM =
+  "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
+const CRITIC_SYSTEM =
+  "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.";
+/** Routes a critique must leave standing; with fewer, replacements are asked for once. */
+export const ROUTES_MIN_SURVIVING = 3;
+
+/** What the critique pass did, as the goal's record keeps it. */
+export interface CritiqueRecord {
+  /** CRITIQUED: a critic judged and ranked the routes. FAILED: no critic answered, so the single pass stands. SKIPPED: nothing to judge. */
+  outcome: 'CRITIQUED' | 'FAILED' | 'SKIPPED';
+  model: string | null;
+  reason: string | null;
+  reviews: { title: string; verdict: RouteReview['verdict']; score: number; failed: RouteRule[]; why: string }[];
+  /** Route titles, best first, as filed. */
+  ranking: string[];
+  replacementsAsked: boolean;
+  replacements: number;
+}
+
+type Ask = (chat: ChatFn, system: string, content: string, maxTokens: number) => Promise<{ content: string; error?: string | null }>;
+
+/**
+ * The second look at a proposal: a critic scores every route against
+ * `ROUTE_RULES` and the owner's profile, repairs or drops what fails and ranks
+ * the rest; with fewer than `ROUTES_MIN_SURVIVING` left, replacements are asked
+ * for once, naming what failed. Inside the same budget and chat path as the
+ * proposal; when no critic answers in time the proposal stands as it was,
+ * unranked, and the record says why.
+ */
+async function critiqueAndRevise(
+  ctx: RouteContext,
+  first: { routes: ProposedRoute[]; model: string; owner: OwnerProfile | null },
+  chats: readonly { label: string; chat: ChatFn }[],
+  ask: Ask,
+  left: () => number,
+): Promise<{ ranked: RankedRoute[]; rejected: RejectedRoute[]; owner: OwnerProfile | null; critique: CritiqueRecord }> {
+  const record = (outcome: CritiqueRecord['outcome'], fields: Partial<CritiqueRecord>): CritiqueRecord => ({ outcome, model: null, reason: null, reviews: [], ranking: [], replacementsAsked: false, replacements: 0, ...fields });
+  const asProposed = (outcome: CritiqueRecord['outcome'], reason: string) => ({
+    ranked: first.routes.map((route, i) => ({ route, rank: i + 1, score: null, why: '', repaired: false })),
+    rejected: [] as RejectedRoute[],
+    owner: first.owner,
+    critique: record(outcome, { reason }),
+  });
+  if (first.routes.length === 0) return asProposed('SKIPPED', 'no route passed the limits to critique');
+  // The model that proposed critiques first; the others after it, in their order.
+  const order = [...chats.filter((one) => one.label === first.model), ...chats.filter((one) => one.label !== first.model)];
+  const failures: string[] = [];
+  let critique: RouteCritique | null = null;
+  let critic: string | null = null;
+  for (const { label, chat } of order) {
+    if (left() < 5_000) {
+      failures.push('out of time');
+      break;
+    }
+    const r = await ask(chat, CRITIC_SYSTEM, critiquePrompt(ctx, first.routes, first.owner), 3000);
+    if (r.error) {
+      failures.push(`${label}: ${r.error.slice(0, 80)}`);
+      continue;
+    }
+    critique = critiqueJson(r.content, first.routes.length);
+    if (critique) {
+      critic = label;
+      break;
+    }
+    failures.push(`${label}: no parseable critique`);
+  }
+  if (!critique) return asProposed('FAILED', failures.join('; ').slice(0, 240) || 'out of time');
+  const owner = critique.owner ?? first.owner;
+  const applied = applyCritique(first.routes, critique, ctx);
+  const ranked = [...applied.ranked];
+  const rejected = [...applied.dropped];
+  let replacementsAsked = false;
+  let replacements = 0;
+  if (ranked.length < ROUTES_MIN_SURVIVING && left() >= 5_000) {
+    replacementsAsked = true;
+    const content = replacementPrompt(ctx, ROUTES_PER_ASK - ranked.length, ranked.map((one) => one.route), applied.dropped);
+    for (const { label, chat } of order) {
+      if (left() < 5_000) break;
+      const r = await ask(chat, PROPOSER_SYSTEM, content, 4000);
+      if (r.error) {
+        failures.push(`replacements, ${label}: ${r.error.slice(0, 80)}`);
+        continue;
+      }
+      const more = parseRoutes(routesJson(r.content), ctx);
+      if (more.routes.length === 0 && more.rejected.length === 0) {
+        failures.push(`replacements, ${label}: no parseable routes`);
+        continue;
+      }
+      rejected.push(...more.rejected);
+      for (const route of more.routes) {
+        if (ranked.some((one) => one.route.key === route.key || routeKey(one.route.payer, '') === routeKey(route.payer, ''))) {
+          rejected.push({ title: route.title, why: 'a replacement to the same buyer as a route the critique kept', rule: 'DUPLICATE' });
+          continue;
+        }
+        ranked.push({ route, rank: ranked.length + 1, score: null, why: 'a replacement asked for after the critique, ranked after the routes it kept', repaired: false });
+        replacements += 1;
+      }
+      break;
+    }
+  }
+  const titleOf = (index: number) => first.routes[index - 1]?.title ?? `#${index}`;
+  return {
+    ranked,
+    rejected,
+    owner,
+    critique: record('CRITIQUED', {
+      model: critic,
+      reason: failures.length ? failures.join('; ').slice(0, 240) : null,
+      reviews: critique.reviews.map((one) => ({ title: titleOf(one.index), verdict: one.verdict, score: RULE_KEYS.reduce((sum, rule) => sum + (one.scores[rule] ?? 0), 0), failed: one.failed, why: one.why })),
+      ranking: ranked.map((one) => one.route.title),
+      replacementsAsked,
+      replacements,
+    }),
+  };
 }
 
 /**
@@ -729,19 +1130,15 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     await record(`Routes: none proposed — ${reason}.`, { outcome: 'NO_MODEL', reason });
     return { kind: 'NO_MODEL', reason };
   }
+  read.ctx.today = now.toISOString().slice(0, 10);
   const prompt = routePrompt(read.ctx);
   const failures: string[] = [];
-  let parsed: { routes: ProposedRoute[]; rejected: RejectedRoute[]; model: string } | null = null;
+  const ask = (chat: ChatFn, system: string, content: string, maxTokens: number) =>
+    chat([{ role: 'system', content: system }, { role: 'user', content }], undefined, maxTokens).catch((error: unknown) => ({ content: '', error: String((error as Error)?.message ?? error) }));
+  let parsed: { routes: ProposedRoute[]; rejected: RejectedRoute[]; model: string; owner: OwnerProfile | null } | null = null;
   for (const { label, chat } of chats) {
     if (deadline - clock() < 5_000) break;
-    const r = await chat(
-      [
-        { role: 'system', content: "You are Brain's commercial strategist. You propose whole, concrete routes to money inside the owner's limits. Answer with exactly one JSON object." },
-        { role: 'user', content: prompt },
-      ],
-      undefined,
-      4000,
-    ).catch((error: unknown) => ({ content: '', error: String((error as Error)?.message ?? error) }));
+    const r = await ask(chat, PROPOSER_SYSTEM, prompt, 4000);
     if (r.error) {
       failures.push(`${label}: ${r.error.slice(0, 80)}`);
       continue;
@@ -751,7 +1148,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       failures.push(`${label}: no parseable routes`);
       continue;
     }
-    parsed = { ...one, model: label };
+    parsed = { ...one, model: label, owner: ownerProfileOf(r.content) };
     break;
   }
   if (!parsed) {
@@ -759,22 +1156,35 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     await record(`Routes: none proposed — ${reason}.`, { outcome: 'NO_ANSWER', reason });
     return { kind: 'NO_ANSWER', reason };
   }
+  const reviewed = await critiqueAndRevise(read.ctx, parsed, chats, ask, () => deadline - clock());
+  const rejected = [...parsed.rejected, ...reviewed.rejected];
   const existingKeys = new Set(read.routes.map((one) => (one.externalRecordId ?? '').slice(goalRoutePrefix(goal.id).length)));
   const filed: string[] = [];
   const existing: string[] = [];
-  for (const route of parsed.routes) {
-    if (existingKeys.has(route.key)) {
-      existing.push(route.title);
+  for (const one of reviewed.ranked) {
+    if (existingKeys.has(one.route.key)) {
+      existing.push(one.route.title);
       continue;
     }
     if (filed.length >= room) break;
-    filed.push(await fileRoute(goal, target, gate.mode.id, gate.mode.ownerUserId, route, parsed.model));
-    existingKeys.add(route.key);
+    const place = reviewed.critique.outcome === 'CRITIQUED' ? { rank: one.rank, of: reviewed.ranked.length, why: one.why } : null;
+    filed.push(await fileRoute(goal, target, gate.mode.id, gate.mode.ownerUserId, one.route, parsed.model, place));
+    existingKeys.add(one.route.key);
   }
   // Each rejected route keeps its rule and reason in the detail, and the summary counts them by rule, so a later read shows why.
   await record(
-    `Routes: ${filed.length} proposed from the objective and filed as openings${existing.length ? `, ${existing.length} already held` : ''}${parsed.rejected.length ? `, ${parsed.rejected.length} rejected (${rejectionSummary(parsed.rejected)})` : ''}.`,
-    { outcome: 'PROPOSED', model: parsed.model, filed, existing, rejected: parsed.rejected, rejectedByRule: rejectionCounts(parsed.rejected), refutedShown: read.ctx.refuted.length },
+    `Routes: ${filed.length} proposed from the objective and filed as openings${existing.length ? `, ${existing.length} already held` : ''}${rejected.length ? `, ${rejected.length} rejected (${rejectionSummary(rejected)})` : ''}${reviewed.critique.outcome === 'CRITIQUED' ? ', ranked by a critique' : `; no critique (${reviewed.critique.reason ?? 'unavailable'})`}.`,
+    {
+      outcome: 'PROPOSED',
+      model: parsed.model,
+      filed,
+      existing,
+      rejected,
+      rejectedByRule: rejectionCounts(rejected),
+      refutedShown: read.ctx.refuted.length,
+      owner: reviewed.owner,
+      critique: reviewed.critique,
+    },
   );
   /*
    * The routes' deep dives start now, inside the project's dive room, rather
@@ -788,7 +1198,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     const start = deps.startDives ?? (async (projectId: string) => (await import('../cash/validation.ts')).startValidations({ projectId }));
     dived = (await start(target.projectId).catch(() => [])).map((one) => one.opportunityId);
   }
-  return { kind: 'PROPOSED', filed, existing, rejected: parsed.rejected, model: parsed.model, dived };
+  return { kind: 'PROPOSED', filed, existing, rejected, model: parsed.model, dived, critique: reviewed.critique.outcome };
 }
 
 const inFlight = new Map<string, Promise<RouteOutcome | null>>();

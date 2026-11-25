@@ -37,7 +37,8 @@ import { notePlanEffects } from '../knowledge/apply.ts';
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink, workstreamEventsOfKind } from '../../repos/register.ts';
-import { isRouteOpening } from '../../domain/routeOrigin.ts';
+import { isRouteOpening, ROUTE_RANK_FIELD, routeRankOf } from '../../domain/routeOrigin.ts';
+import { cardFact } from '../../repos/cashCardFacts.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { recordPathwayAsk } from '../cash/answers.ts';
 // A plan is a reading: it asks whether an action is granted and performs none, so
@@ -2644,6 +2645,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   recordMateriality(goal.id, target.remainingCents / 100, considered);
   trace('considered openings judged');
   const strategies: StrategyReading[] = [];
+  /** Strategies whose every member is a route still awaiting its research, with those members. */
+  const awaitingResearch = new Map<string, ModelledOpportunity[]>();
   for (const spec of model.definition.strategies) {
     const members = withoutSpareCapitalLots(
       withoutSpareOwnerWork(
@@ -2696,6 +2699,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
      * could, the plan is waiting on that research (NEEDS_EVIDENCE), not refuted.
      */
     const awaitingDive = members.filter(({ one }) => researchBeforeSale(one) !== null && !priceSupported(one));
+    if (members.length > 0 && awaitingDive.length === members.length) awaitingResearch.set(spec.key, members.map(({ one }) => one));
     const reachOf = (counting: ReadonlySet<ModelledOpportunity>) =>
       members.reduce((sum, { one, deals }) => {
         const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft;
@@ -2853,9 +2857,36 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const awardIds = new Set(model.included.filter((one) => one.competitiveAward).map((one) => one.opportunity.id));
   const awards = (s: StrategyReading) => s.opportunityIds.filter((id) => awardIds.has(id)).length;
   const rank = (s: StrategyReading) => (s.verdict === 'RECOMMENDABLE' ? 0 : s.verdict === 'NEEDS_EVIDENCE' ? 1 : 2);
+  /*
+   * Before any route is researched, every figure on it is the proposal's own
+   * hypothesis, so the numbers below cannot tell a strong route from a weak
+   * one. Independent judge, 2026-11-25: in each of the 3 goals that held a
+   * credible route, the plan chose a weaker one. Between two strategies made
+   * only of routes awaiting research, the one whose routes its critique
+   * ranked best (`ROUTE_RANK_FIELD`, on average) comes first; anything researched is
+   * judged on its evidence as before.
+   */
+  const routeRanks = new Map<string, number>();
+  for (const id of new Set([...awaitingResearch.values()].flat().map((one) => one.opportunity.id))) {
+    const place = routeRankOf((await cardFact(id, ROUTE_RANK_FIELD).catch(() => null))?.value);
+    if (place !== null) routeRanks.set(id, place);
+  }
+  const meanRouteRank = (s: StrategyReading) => {
+    const members = awaitingResearch.get(s.key);
+    if (!members) return null;
+    const ranks = members.map((one) => routeRanks.get(one.opportunity.id)).filter((n): n is number => n !== undefined);
+    // The mean place: a strategy that adds weaker routes to the best one ranks after the best one alone.
+    return ranks.length === members.length ? ranks.reduce((sum, n) => sum + n, 0) / ranks.length : null;
+  };
+  const byRouteRank = (a: StrategyReading, b: StrategyReading) => {
+    const ra = meanRouteRank(a);
+    const rb = meanRouteRank(b);
+    return ra !== null && rb !== null ? ra - rb : 0;
+  };
   const ordered = [...strategies].sort(
     (a, b) =>
       rank(a) - rank(b) ||
+      byRouteRank(a, b) ||
       (b.conservativeSettled ?? -1) - (a.conservativeSettled ?? -1) ||
       awards(a) - awards(b) ||
       a.links.filter((one) => !one.ok).length - b.links.filter((one) => !one.ok).length ||

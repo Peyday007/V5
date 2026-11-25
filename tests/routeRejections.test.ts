@@ -80,7 +80,8 @@ const CODING_ROUTES = [
 function stub(answer: unknown): { deps: RouteDeps; prompts: string[] } {
   const prompts: string[] = [];
   const chat: ChatFn = async (messages) => {
-    prompts.push(String((messages[1] as { content: string }).content));
+    // The proposals only: the critique's ask is a second turn, and this answer is no critique, so the proposal stands.
+    if (/strategist/.test(String((messages[0] as { content: string }).content))) prompts.push(String((messages[1] as { content: string }).content));
     return { content: JSON.stringify(answer), toolCalls: [], ms: 1, completionTokens: 1, error: null };
   };
   return { prompts, deps: { chats: async () => [{ label: 'stub', chat }], delivers: async () => [], startDives: async () => [] } };
