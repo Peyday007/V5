@@ -2687,23 +2687,37 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const sweep = sweepOf(result, spec.key);
     // The best case is computed from established numbers only — every offered
     // buyer agreeing — never from the bounds a sweep happened to test.
-    const best = members.reduce((sum, { one, deals }) => {
-      const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft;
-      // An award not yet shown to pay in time is not reach: it must be won first.
-      const unproven = one.competitiveAward && one.daysToCash.provenance !== 'EVIDENCE' && one.daysToCash.provenance !== 'HISTORICAL';
-      if (late) return sum;
-      // Agreed money is reach. New deals are reach only at a price buyers are
-      // shown to pay — never at a guessed or listed one.
-      // A repeatable play takes no more deals than research shows the market holds.
-      // A counted market already holds the buyers who agreed: they are agreed money, never fresh deals too (`buyersLeft`).
-      const taken = volumeEstablished(one) && one.repeatable ? Math.min(deals, buyersLeft(one) ?? deals) : deals;
-      const fresh = unproven || !priceSupported(one) ? 0 : taken;
-      // On a net target the best case is net too: the top price less the lowest cost of each deal, agreed ones included.
-      const kept = net ? agreedToward(one, true, 'LOW') - fresh * costPerDeal(one, 'LOW') : one.agreedValue;
-      return sum + kept + fresh * (one.price.high ?? one.price.value ?? 0);
-    }, 0);
+    /*
+     * A route Brain proposed whose deep dive has not settled (`researchBeforeSale`)
+     * has no price buyers are shown to pay because nobody has looked yet, not
+     * because research found none. Production, 2026-11-25: goals holding only
+     * such routes read NOT_VIABLE "at most 0". Its hypothesis is never reach;
+     * it only says whether the research could make the plan reach, and while it
+     * could, the plan is waiting on that research (NEEDS_EVIDENCE), not refuted.
+     */
+    const awaitingDive = members.filter(({ one }) => researchBeforeSale(one) !== null && !priceSupported(one));
+    const reachOf = (counting: ReadonlySet<ModelledOpportunity>) =>
+      members.reduce((sum, { one, deals }) => {
+        const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft;
+        // An award not yet shown to pay in time is not reach: it must be won first.
+        const unproven = one.competitiveAward && one.daysToCash.provenance !== 'EVIDENCE' && one.daysToCash.provenance !== 'HISTORICAL';
+        if (late) return sum;
+        // Agreed money is reach. New deals are reach only at a price buyers are
+        // shown to pay — never at a guessed or listed one.
+        // A repeatable play takes no more deals than research shows the market holds.
+        // A counted market already holds the buyers who agreed: they are agreed money, never fresh deals too (`buyersLeft`).
+        const taken = volumeEstablished(one) && one.repeatable ? Math.min(deals, buyersLeft(one) ?? deals) : deals;
+        const fresh = unproven || !(priceSupported(one) || counting.has(one)) ? 0 : taken;
+        // On a net target the best case is net too: the top price less the lowest cost of each deal, agreed ones included.
+        const kept = net ? agreedToward(one, true, 'LOW') - fresh * costPerDeal(one, 'LOW') : one.agreedValue;
+        return sum + kept + fresh * (one.price.high ?? one.price.value ?? 0);
+      }, 0);
+    const best = reachOf(new Set());
+    let pendingDives: string[] = [];
     if (best < target.remainingCents / 100) {
-      constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed${net ? ' (net of direct costs)' : ''} at prices buyers are shown to pay, even if every buyer it offers to agreed (at most ${Math.round(best)})`);
+      const ifResearchHolds = awaitingDive.length > 0 ? reachOf(new Set(awaitingDive.map(({ one }) => one))) : best;
+      if (ifResearchHolds >= target.remainingCents / 100) pendingDives = awaitingDive.map(({ one }) => one.opportunity.title);
+      else constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed${net ? ' (net of direct costs)' : ''} at prices buyers are shown to pay, even if every buyer it offers to agreed (at most ${Math.round(best)})`);
     }
     bestReach = Math.max(bestReach, best);
     /*
@@ -2793,6 +2807,15 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         test: `This plan ties up about ${Math.round(cons.exposure!)} ${target.currency} before it pays. Say how much this goal may commit, or that it may commit none.`,
         by: 'PERSON',
         blocker: 'The owner has not said how much money this goal may commit.',
+      };
+    } else if (verdict === 'NEEDS_EVIDENCE' && pendingDives.length > 0) {
+      // The plan reaches only if its routes' research holds: that research is the step, and Brain is doing it.
+      const names = pendingDives.slice(0, 4).map((title) => `"${title.slice(0, 60)}"`).join(', ');
+      nextTest = {
+        link: 'OFFER_AND_PRICE',
+        test: `Research first: the deep dive${pendingDives.length === 1 ? '' : 's'} on ${names}${pendingDives.length > 4 ? ` and ${pendingDives.length - 4} more` : ''} establish${pendingDives.length === 1 ? 'es' : ''} or refute${pendingDives.length === 1 ? 's' : ''} the buyer, price and demand each route proposal assumed; the plan is judged on what they find.`,
+        by: 'BRAIN',
+        blocker: null,
       };
     } else if (verdict === 'NEEDS_EVIDENCE') {
       if (missing) {
@@ -2991,7 +3014,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
             ? `"${chosen.label}" is a qualified candidate, not an accepted plan: ${acceptance.sentence}${hypotheticalNote}`
             : verdict === 'NOT_VIABLE'
               ? `No modelled strategy can work under the current limits: ${chosen?.constraintsFailed[0] ?? 'every one fails a limit'}.${hypotheticalNote}`
-              : `Not yet proven. The closest plan is "${chosen?.label}", and what it is missing first is ${CHAIN_LABEL[(chosen?.nextTest ?? legacyNext)?.link ?? 'OFFER_AND_PRICE']}.${hypotheticalNote}`;
+              : `Not yet proven. The closest plan is "${chosen?.label}", and what it is missing first is ${CHAIN_LABEL[(chosen?.nextTest ?? legacyNext)?.link ?? 'OFFER_AND_PRICE']}.${chosen?.nextTest?.test.startsWith('Research first:') ? ` ${chosen.nextTest.test}` : ''}${hypotheticalNote}`;
   const summary = `${summaryHead}${presentedNote}`;
   // The adopted plan's first step is the goal's next step, unless an owner's own decision about the goal comes first.
   const ownerDecision = chosen?.nextTest && chosen.nextTest.by === 'PERSON' && chosen.nextTest.link === 'ECONOMICS' ? chosen.nextTest : null;
@@ -6404,6 +6427,22 @@ export async function advanceGoalPlans(
     // re-read, no search round, no construction (an operator PAUSE must stop
     // the planning and discovery spend, not only the queue's priority).
     if (pausedAt) continue;
+    /*
+     * A goal with no route and a last route ask that yielded none is asked
+     * again on any pass, whatever this pass reads or widens. The ask was armed
+     * only from `widenGoalSearch`, which runs only after a read that wants more
+     * openings or a top-up with spare surfaces and a reading held in this
+     * process — so after a restart, under a read cap or while the scenario slot
+     * was busy, nothing armed it. Production, 2026-11-25: a goal whose ask
+     * failed at 04:07 had none recorded by 06:50, 40 minutes after a deploy.
+     * In the background and bounded by the goal's own record (`routeAskDue`).
+     */
+    {
+      const heldNow = lastReadings.get(id);
+      if (heldNow?.acceptance.status !== 'ACCEPTED' && !heldNow?.target.achieved) {
+        armRouteProposal(id, heldNow?.considered.map((one) => one.title) ?? [], now, {}, { retryOnly: true });
+      }
+    }
     if (options.maxReads !== undefined && read >= options.maxReads) continue;
     const last = await getDb().get<{ at: string | null }>(
       `SELECT MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?`,

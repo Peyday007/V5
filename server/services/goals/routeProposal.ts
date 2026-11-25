@@ -125,6 +125,12 @@ export interface RouteContext {
   capitalLimit: number | null;
   /** The owner's hours for the whole window; null when nobody set a limit. */
   hoursLimit: number | null;
+  /**
+   * The owner's hours a week, when the goal states them that way ("10 hours a
+   * week"); `hoursLimit` is then this over the window. A monthly route's hours
+   * recur every month, so they are compared with this, never with the total.
+   */
+  hoursPerWeek?: number | null;
   resources: string | null;
   industry: string | null;
   recurring: boolean;
@@ -141,6 +147,30 @@ const num = (v: unknown): number | null => {
 const str = (v: unknown, max: number): string | null => (typeof v === 'string' && v.trim() ? v.replace(/\s+/g, ' ').trim().slice(0, max) : null);
 const strs = (v: unknown, n: number): string[] => (Array.isArray(v) ? v.map((one) => str(one, 160)).filter((one): one is string => !!one).slice(0, n) : []);
 const money = (n: number, currency: string) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(n).toLocaleString('en-US')}`;
+/** Weeks in a month, on average: a weekly figure and a monthly one are compared in one unit. */
+const WEEKS_PER_MONTH = 52 / 12;
+const DAYS_PER_MONTH = 365 / 12;
+const weeklyToMonthly = (perWeek: number) => perWeek * WEEKS_PER_MONTH;
+/**
+ * A figure as a model writes it: a number, or text such as "$1,500/month",
+ * "1500 per month" or "1000-2000" — its first figure, so a range reads as its
+ * lower end and nothing is read larger than the model wrote. Null when there
+ * is none.
+ */
+const amount = (v: unknown): number | null => {
+  const whole = num(v);
+  if (whole !== null || typeof v !== 'string') return whole;
+  const first = /\d[\d,]*(?:\.\d+)?/.exec(v);
+  return first ? num(first[0]) : null;
+};
+/**
+ * Whether a reply says a route is billed monthly: `true`, the text "true",
+ * "yes" or "monthly", or — when the flag is absent — a price written per month.
+ */
+const isMonthly = (v: unknown, price: unknown): boolean =>
+  v === true ||
+  (typeof v === 'string' && /^(true|yes|monthly|per month)$/i.test(v.trim())) ||
+  ((v === undefined || v === null) && typeof price === 'string' && /monthly|(?:\ba|\bper|\/)\s*(?:month|mo)\b/i.test(price));
 
 /** The stable key of a route within a goal: who pays for what, never its wording. Pure. */
 export function routeKey(payer: string, offer: string): string {
@@ -157,7 +187,11 @@ export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): stri
   const limits = [
     `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s).`,
     ctx.capitalLimit !== null ? `Capital: at most ${money(ctx.capitalLimit, ctx.currency)} may be tied up before money comes back. A route needing more is not allowed.` : 'Capital: the owner set no figure; prefer routes that tie up little.',
-    ctx.hoursLimit !== null ? `Owner's time: at most ${ctx.hoursLimit} hour(s) of the owner's own work in the whole window. Routes must fit inside it.` : 'Owner\'s time: no figure set; the owner does no routine personal work.',
+    ctx.hoursPerWeek
+      ? `Owner's time: at most ${ctx.hoursPerWeek} hour(s) a week of the owner's own work (about ${Math.round(weeklyToMonthly(ctx.hoursPerWeek))} a month), every route's work together. Routes must fit inside it.`
+      : ctx.hoursLimit !== null
+        ? `Owner's time: at most ${ctx.hoursLimit} hour(s) of the owner's own work in the whole window. Routes must fit inside it.`
+        : 'Owner\'s time: no figure set; the owner does no routine personal work.',
     ctx.resources ? `What the owner said they have, verbatim: ${ctx.resources}` : '',
     `Time: the first money must settle inside ${ctx.daysLeft} day(s). A buyer who pays in arrears, on invoice terms or after a long sales cycle that would land later is not allowed.`,
     ctx.industry ? `The owner confined this goal to: ${ctx.industry}. Every route must be in it.` : 'No industry is excluded: choose on economics, time to cash and whether it can be done.',
@@ -173,7 +207,7 @@ export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): stri
     ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not propose these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
     `Propose ${k} concrete, different commercial routes that could each collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers plausibly pay, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and roughly how many such buyers exist. No two routes may share a buyer type, and use at least three different mechanisms — not variations of one idea. Derive the buyers from the owner's own words (their skills, assets, location and refusals) rather than from buyers you would propose for any objective; a route that would fit any request equally is a poor route. Each route states in ownerFit how it uses or respects what the owner said (skills, assets, location, what they will not do). Prefer fast cash, repeat buyers, and work Brain or a paid subcontractor does.`,
     'Reply with exactly one JSON object and nothing else:',
-    `{"routes":[{"title":"short name","mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${ctx.currency},"monthly":true|false,"channel":"how buyers are reached","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"capital":number tied up before the first payment,"ownerHoursPerDeal":number,"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"why that count","assumptions":"what this route assumes that research must check","ownerFit":"how it uses or respects the owner's stated skills, assets, location and refusals","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]}}]}`,
+    `{"routes":[{"title":"short name","mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${ctx.currency} (per month when billed monthly),"monthly":true|false,"channel":"how buyers are reached","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"capital":number tied up before the first payment,"ownerHoursPerDeal":number of the owner's own hours per sale (for a route billed monthly, per buyer per month),"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"why that count","assumptions":"what this route assumes that research must check","ownerFit":"how it uses or respects the owner's stated skills, assets, location and refusals","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]}}]}`,
     'Figures are your estimates and will be researched; never present them as facts.',
   ]
     .filter(Boolean)
@@ -271,14 +305,75 @@ export function routesJson(text: string): { routes: unknown[] } | null {
   return salvaged.length > 0 ? { routes: salvaged } : null;
 }
 
+/** The rule a rejected route broke, so a reader of the goal's record can count why. */
+export const ROUTE_REJECTION_RULES = {
+  INCOMPLETE: 'incomplete',
+  MECHANISM: 'unknown mechanism',
+  PRICE: 'no price',
+  BRAIN_DELIVERABLE: 'not a proved deliverable',
+  DAYS: 'no days to first cash',
+  DEADLINE: 'first cash after the deadline',
+  CAPITAL: 'over the capital limit',
+  NOT_MONTHLY: 'not billed monthly',
+  MARGIN: 'cost not below price',
+  HOURS: 'over the owner hours',
+  PHYSICAL: "owner's physical work",
+  EXCLUDED: 'excluded by the owner',
+  OWNER_FIT: 'no owner fit',
+  DUPLICATE: 'duplicate buyer or offer',
+} as const;
+export type RouteRejectionRule = keyof typeof ROUTE_REJECTION_RULES;
+export interface RejectedRoute {
+  title: string;
+  why: string;
+  rule: RouteRejectionRule;
+}
+
+/** How many rejected routes broke each rule, most first. Pure. */
+export function rejectionCounts(rejected: readonly RejectedRoute[]): Partial<Record<RouteRejectionRule, number>> {
+  const counts = new Map<RouteRejectionRule, number>();
+  for (const one of rejected) counts.set(one.rule, (counts.get(one.rule) ?? 0) + 1);
+  return Object.fromEntries([...counts].sort((a, b) => b[1] - a[1])) as Partial<Record<RouteRejectionRule, number>>;
+}
+
+/** "3 over the owner hours, 2 not billed monthly". Pure. */
+export function rejectionSummary(rejected: readonly RejectedRoute[]): string {
+  return Object.entries(rejectionCounts(rejected))
+    .map(([rule, n]) => `${n} ${ROUTE_REJECTION_RULES[rule as RouteRejectionRule]}`)
+    .join(', ');
+}
+
+/**
+ * The owner hours a route needs and the limit they are held to, both in the
+ * unit the goal states its limit in, or null when nobody set one. A route
+ * billed monthly recurs: every buyer the run-rate takes is served every month
+ * at once, so its hours are a monthly load against the owner's monthly time
+ * (from the weekly figure when the goal gave one, else the window's total
+ * spread over its months). A one-off sale's hours add up over the window
+ * against the window's total. Pure.
+ */
+export function routeHours(
+  route: { price: number; directCost: number; ownerHoursPerDeal: number; monthly: boolean },
+  ctx: RouteContext,
+): { needed: number; allowed: number; unit: string; deals: number } | null {
+  const perWeek = ctx.hoursPerWeek && ctx.hoursPerWeek > 0 ? ctx.hoursPerWeek : null;
+  if (ctx.hoursLimit === null && perWeek === null) return null;
+  const deals = Math.max(1, Math.ceil(ctx.remaining / Math.max(1, route.price - route.directCost)));
+  const needed = route.ownerHoursPerDeal * deals;
+  const months = Math.max(1, ctx.daysLeft / DAYS_PER_MONTH);
+  if (route.monthly) return { needed, allowed: perWeek !== null ? weeklyToMonthly(perWeek) : ctx.hoursLimit! / months, unit: 'a month', deals };
+  return { needed, allowed: ctx.hoursLimit ?? weeklyToMonthly(perWeek!) * months, unit: 'in the window', deals };
+}
+
 /**
  * The routes a model's answer proposes, each checked against the limits; a
- * route that breaks one is rejected with the reason, never adjusted to fit.
- * Pure.
+ * route that breaks one is rejected with the reason and the rule it broke,
+ * never adjusted to fit. Every limit is compared in the unit the goal states
+ * it in (`routeHours`). Pure.
  */
-export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteContext): { routes: ProposedRoute[]; rejected: { title: string; why: string }[] } {
+export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteContext): { routes: ProposedRoute[]; rejected: RejectedRoute[] } {
   const routes: ProposedRoute[] = [];
-  const rejected: { title: string; why: string }[] = [];
+  const rejected: RejectedRoute[] = [];
   const raw = obj && Array.isArray(obj['routes']) ? (obj['routes'] as unknown[]) : [];
   const exclusions = ctx.exclusions;
   for (const item of raw.slice(0, ROUTES_PER_ASK * 2)) {
@@ -289,87 +384,87 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
     const offer = str(r['offer'], 300);
     const channel = str(r['channel'], 200);
     const name = title ?? offer ?? '(untitled)';
-    const reject = (why: string) => rejected.push({ title: name, why });
+    const reject = (why: string, rule: RouteRejectionRule) => rejected.push({ title: name, why, rule });
     if (!title || !payer || !offer || !channel) {
-      reject('a route needs a title, a payer, an offer and a channel');
+      reject('a route needs a title, a payer, an offer and a channel', 'INCOMPLETE');
       continue;
     }
     const mechanism = str(r['mechanism'], 40)?.toUpperCase();
     if (!mechanism || !(CASH_MECHANISMS as readonly string[]).includes(mechanism)) {
-      reject(`mechanism "${mechanism ?? ''}" is not one Brain records`);
+      reject(`mechanism "${mechanism ?? ''}" is not one Brain records`, 'MECHANISM');
       continue;
     }
-    const price = num(r['price']);
+    const price = amount(r['price']);
     if (price === null || price <= 0) {
-      reject('no positive price');
+      reject('no positive price', 'PRICE');
       continue;
     }
     const performerRaw = str(r['performer'], 20)?.toUpperCase();
     const performer: Performer = (PERFORMERS as readonly string[]).includes(performerRaw ?? '') ? (performerRaw as Performer) : 'SUBCONTRACTOR';
-    const monthly = r['monthly'] === true;
-    const directCost = Math.max(0, num(r['directCost']) ?? 0);
-    const capital = Math.max(0, num(r['capital']) ?? 0);
-    const ownerHoursPerDeal = Math.max(0, num(r['ownerHoursPerDeal']) ?? (performer === 'OWNER' ? 1 : 0));
-    const days = num(r['daysToFirstCash']);
-    const buyerCount = num(r['buyerCount']);
+    const monthly = isMonthly(r['monthly'], r['price']);
+    const directCost = Math.max(0, amount(r['directCost']) ?? 0);
+    const capital = Math.max(0, amount(r['capital']) ?? 0);
+    const ownerHoursPerDeal = Math.max(0, amount(r['ownerHoursPerDeal']) ?? (performer === 'OWNER' ? 1 : 0));
+    const days = amount(r['daysToFirstCash']);
+    const buyerCount = amount(r['buyerCount']);
     const delivered = str(r['brainDeliverable'], 60);
     const brainDeliverable = performer === 'BRAIN' ? (ctx.delivers.find((one) => one.toLowerCase() === (delivered ?? '').toLowerCase()) ?? null) : null;
     if (performer === 'BRAIN' && !brainDeliverable) {
-      reject('Brain performs it, but it is none of the deliverables Brain has proved');
+      reject('Brain performs it, but it is none of the deliverables Brain has proved', 'BRAIN_DELIVERABLE');
       continue;
     }
     if (days === null || days < 0) {
-      reject('no days to first cash');
+      reject('no days to first cash', 'DAYS');
       continue;
     }
     if (days >= ctx.daysLeft) {
-      reject(`the first money settles after ${days} day(s), beyond the ${ctx.daysLeft} left`);
+      reject(`the first money settles after ${days} day(s), beyond the ${ctx.daysLeft} left`, 'DEADLINE');
       continue;
     }
     if (ctx.capitalLimit !== null && capital > ctx.capitalLimit) {
-      reject(`ties up ${money(capital, ctx.currency)}, more than the ${money(ctx.capitalLimit, ctx.currency)} allowed`);
+      reject(`ties up ${money(capital, ctx.currency)}, more than the ${money(ctx.capitalLimit, ctx.currency)} allowed`, 'CAPITAL');
       continue;
     }
     if (ctx.recurring && !monthly) {
-      reject('the target is monthly recurring revenue and this is not billed monthly');
+      reject('the target is monthly recurring revenue and this is not billed monthly', 'NOT_MONTHLY');
       continue;
     }
     if (directCost >= price) {
-      reject('its direct cost is not below its price');
+      reject('its direct cost is not below its price', 'MARGIN');
       continue;
     }
-    if (ctx.hoursLimit !== null) {
-      const deals = Math.max(1, Math.ceil(ctx.remaining / Math.max(1, price - directCost)));
-      const hours = ownerHoursPerDeal * deals;
-      if (hours > ctx.hoursLimit) {
-        reject(`needs about ${Math.round(hours)} owner hour(s) for the ${deals} sale(s) the target takes, more than the ${ctx.hoursLimit} allowed`);
-        continue;
-      }
+    const hours = routeHours({ price, directCost, ownerHoursPerDeal, monthly }, ctx);
+    if (hours && hours.needed > hours.allowed) {
+      reject(
+        `needs about ${Math.round(hours.needed)} owner hour(s) ${hours.unit} for the ${hours.deals} ${monthly ? 'buyer(s)' : 'sale(s)'} the target takes, more than the ${Math.round(hours.allowed)} allowed ${hours.unit}`,
+        'HOURS',
+      );
+      continue;
     }
     const fulfiller = str(r['fulfiller'], 200) ?? (performer === 'BRAIN' ? `Brain (${brainDeliverable})` : performer === 'OWNER' ? 'The owner' : 'A subcontractor to be named');
     const industry = str(r['industry'], 80) ?? 'unspecified';
     const fit = operatingFit(operatingFactsOf({ title, offerScope: offer, fulfillmentOwner: performer === 'OWNER' ? 'The owner, personally' : fulfiller, mechanism }));
     if (breaksOperatingModel(fit)) {
-      reject(`needs the owner's physical work: ${fit.because}`);
+      reject(`needs the owner's physical work: ${fit.because}`, 'PHYSICAL');
       continue;
     }
     const excluded = excludedBy(`${title} ${payer} ${offer} ${industry}`, exclusions as never);
     if (excluded) {
-      reject(`the owner excluded ${EXCLUSION_CLASSES[excluded].label}`);
+      reject(`the owner excluded ${EXCLUSION_CLASSES[excluded].label}`, 'EXCLUDED');
       continue;
     }
     const ownerFit = str(r['ownerFit'], 300);
     if (!ownerFit) {
-      reject("it does not say how it uses or respects the owner's stated skills, assets, location and refusals");
+      reject("it does not say how it uses or respects the owner's stated skills, assets, location and refusals", 'OWNER_FIT');
       continue;
     }
     const key = routeKey(payer, offer);
     if (routes.some((one) => one.key === key)) {
-      reject('the same buyer and offer as another route in this answer');
+      reject('the same buyer and offer as another route in this answer', 'DUPLICATE');
       continue;
     }
     if (routes.some((one) => routeKey(one.payer, '') === routeKey(payer, ''))) {
-      reject('the same buyer type as another route in this answer');
+      reject('the same buyer type as another route in this answer', 'DUPLICATE');
       continue;
     }
     const searches = (r['searches'] && typeof r['searches'] === 'object' ? r['searches'] : {}) as Record<string, unknown>;
@@ -416,28 +511,51 @@ export type RouteOutcome =
   | { kind: 'NOT_DUE'; reason: string }
   | { kind: 'NO_MODEL'; reason: string }
   | { kind: 'NO_ANSWER'; reason: string }
-  | { kind: 'PROPOSED'; filed: string[]; existing: string[]; rejected: { title: string; why: string }[]; model: string; dived: string[] };
+  | { kind: 'PROPOSED'; filed: string[]; existing: string[]; rejected: RejectedRoute[]; model: string; dived: string[] };
+
+/**
+ * Whether a recorded ask yielded no route: no model answered (NO_ANSWER), or
+ * one answered and every route it gave was rejected (PROPOSED with nothing
+ * filed and nothing already held). Production, 2026-11-25: a fresh goal's one
+ * answer had all six routes rejected, and that read as answered — the next ask
+ * was six hours away for a goal with nothing to research.
+ */
+export function askYieldedNothing(detail: Record<string, unknown>): boolean {
+  if (detail['outcome'] === 'NO_ANSWER') return true;
+  const filed = detail['filed'];
+  const existing = detail['existing'];
+  return detail['outcome'] === 'PROPOSED' && Array.isArray(filed) && filed.length === 0 && (!Array.isArray(existing) || existing.length === 0);
+}
 
 /**
  * Whether a goal's routes may be asked for now, from its own recorded asks
- * (newest first). After an ask a model answered: once per
- * `ROUTE_PROPOSAL_EVERY_MS`. After one no model answered (NO_ANSWER): again
- * after `ROUTE_RETRY_AFTER_FAILURE_MS`, at most `ROUTE_FAILED_ASKS_PER_DAY` in
- * any day, then the ordinary interval. NO_MODEL is configuration, not a
- * failed answer, and waits the ordinary interval. Pure.
+ * (newest first). After an ask that filed or held routes: once per
+ * `ROUTE_PROPOSAL_EVERY_MS`. After one that yielded none (`askYieldedNothing`):
+ * again after `ROUTE_RETRY_AFTER_FAILURE_MS`, at most
+ * `ROUTE_FAILED_ASKS_PER_DAY` in any day, then the ordinary interval. NO_MODEL
+ * is configuration, not a failed answer, and waits the ordinary interval.
+ *
+ * `retryOnly` is the plan pass's own check, made for every goal on every pass:
+ * due only for a goal never asked or whose last ask yielded nothing — the
+ * ordinary interval stays the search pass's (`widenGoalSearch`). Pure.
  */
-export function routeAskDue(asks: readonly { createdAt: string; detail: Record<string, unknown> }[], now: Date): { due: true } | { due: false; reason: string } {
+export function routeAskDue(
+  asks: readonly { createdAt: string; detail: Record<string, unknown> }[],
+  now: Date,
+  options: { retryOnly?: boolean } = {},
+): { due: true } | { due: false; reason: string } {
   const last = asks[0];
   if (!last) return { due: true };
   const since = now.getTime() - Date.parse(last.createdAt);
-  const failed = last.detail['outcome'] === 'NO_ANSWER';
-  const failedToday = asks.filter((one) => one.detail['outcome'] === 'NO_ANSWER' && now.getTime() - Date.parse(one.createdAt) < DAY).length;
+  const failed = askYieldedNothing(last.detail);
+  if (options.retryOnly && !failed) return { due: false, reason: `routes were last asked for at ${last.createdAt} and that ask yielded routes or found no model` };
+  const failedToday = asks.filter((one) => askYieldedNothing(one.detail) && now.getTime() - Date.parse(one.createdAt) < DAY).length;
   const wait = failed && failedToday < ROUTE_FAILED_ASKS_PER_DAY ? ROUTE_RETRY_AFTER_FAILURE_MS : ROUTE_PROPOSAL_EVERY_MS;
   if (since >= wait) return { due: true };
   return {
     due: false,
     reason: failed
-      ? `routes were last asked for at ${last.createdAt} and no model answered (${failedToday} failed ask(s) today); asked again ${Math.round(wait / 60_000)} minutes after`
+      ? `routes were last asked for at ${last.createdAt} and it yielded no route (${failedToday} such ask(s) today); asked again ${Math.round(wait / 60_000)} minutes after`
       : `routes were last asked for at ${last.createdAt}`,
   };
 }
@@ -499,6 +617,7 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
       daysLeft: target.daysLeft,
       capitalLimit: capitalCents === null ? null : capitalCents / 100,
       hoursLimit: target.hoursCeiling,
+      hoursPerWeek: target.scope?.hoursPerWeek ?? null,
       resources: target.resources,
       industry: target.scope?.industry ?? null,
       recurring: target.scope?.recurring === 'MONTHLY',
@@ -577,20 +696,24 @@ async function fileRoute(goal: Workstream, target: TargetReading, cashModeId: st
  * Propose and file a goal's routes, once per interval and within the daily
  * bound. Never throws on a model failure; records what happened on the goal.
  */
-export async function proposeGoalRoutes(input: { goalId: string; now?: Date; heldTitles?: readonly string[] }, deps: RouteDeps = {}): Promise<RouteOutcome> {
+export async function proposeGoalRoutes(input: { goalId: string; now?: Date; heldTitles?: readonly string[]; retryOnly?: boolean }, deps: RouteDeps = {}): Promise<RouteOutcome> {
   const now = input.now ?? new Date(deps.clock?.() ?? Date.now());
   const goal = await getWorkstream(input.goalId);
   if (!goal || goal.archivedAt || goal.cancelledAt) return { kind: 'NOT_DUE', reason: 'no live goal' };
   if (goal.pausedAt) return { kind: 'NOT_DUE', reason: 'the goal is paused' };
+  // The goal's own record first: it is the cheap answer on most passes, and the target is read only when an ask is due.
+  const asks = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - Math.max(DAY, ROUTE_PROPOSAL_EVERY_MS)).toISOString(), 50);
+  const due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true });
+  if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
   const target = await readTarget(goal, now);
   if (!target || target.achieved) return { kind: 'NOT_DUE', reason: 'no target still open' };
   const gate = await discoveryAllowed(target.projectId);
   if (!gate.allowed || !gate.mode) return { kind: 'NOT_DUE', reason: gate.reason ?? 'the project is not searching' };
-  const asks = await workstreamEventsOfKind(goal.id, ROUTE_EVENT, new Date(now.getTime() - Math.max(DAY, ROUTE_PROPOSAL_EVERY_MS)).toISOString(), 50);
-  const due = routeAskDue(asks, now);
-  if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
   const read = await routeContext(goal, target, input.heldTitles ?? [], deps);
   if (!read) return { kind: 'NOT_DUE', reason: 'no time or money left to plan for' };
+  if (input.retryOnly && read.routes.some((one) => one.state !== 'ARCHIVED' && one.state !== 'DECLINED')) {
+    return { kind: 'NOT_DUE', reason: 'the goal already holds live routes; the search pass asks on the ordinary interval' };
+  }
   const filedToday = read.routes.filter((one) => now.getTime() - Date.parse(one.createdAt) < DAY).length;
   const room = ROUTES_PER_DAY - filedToday;
   if (room <= 0) return { kind: 'NOT_DUE', reason: `${filedToday} routes were filed for this goal in the last day` };
@@ -607,7 +730,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   }
   const prompt = routePrompt(read.ctx);
   const failures: string[] = [];
-  let parsed: { routes: ProposedRoute[]; rejected: { title: string; why: string }[]; model: string } | null = null;
+  let parsed: { routes: ProposedRoute[]; rejected: RejectedRoute[]; model: string } | null = null;
   for (const { label, chat } of chats) {
     if (deadline - clock() < 5_000) break;
     const r = await chat(
@@ -647,9 +770,10 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     filed.push(await fileRoute(goal, target, gate.mode.id, gate.mode.ownerUserId, route, parsed.model));
     existingKeys.add(route.key);
   }
+  // Each rejected route keeps its rule and reason in the detail, and the summary counts them by rule, so a later read shows why.
   await record(
-    `Routes: ${filed.length} proposed from the objective and filed as openings${existing.length ? `, ${existing.length} already held` : ''}${parsed.rejected.length ? `, ${parsed.rejected.length} rejected for breaking a limit` : ''}.`,
-    { outcome: 'PROPOSED', model: parsed.model, filed, existing, rejected: parsed.rejected, refutedShown: read.ctx.refuted.length },
+    `Routes: ${filed.length} proposed from the objective and filed as openings${existing.length ? `, ${existing.length} already held` : ''}${parsed.rejected.length ? `, ${parsed.rejected.length} rejected (${rejectionSummary(parsed.rejected)})` : ''}.`,
+    { outcome: 'PROPOSED', model: parsed.model, filed, existing, rejected: parsed.rejected, rejectedByRule: rejectionCounts(parsed.rejected), refutedShown: read.ctx.refuted.length },
   );
   /*
    * The routes' deep dives start now, inside the project's dive room, rather
@@ -668,7 +792,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
 
 const inFlight = new Map<string, Promise<RouteOutcome | null>>();
 /** Goals waiting for a place, in the order they asked: each asks when one frees. */
-const waiting = new Map<string, { heldTitles: readonly string[]; deps: RouteDeps; resolve: (outcome: RouteOutcome | null) => void; ask: Promise<RouteOutcome | null> }>();
+const waiting = new Map<string, { heldTitles: readonly string[]; deps: RouteDeps; retryOnly: boolean; resolve: (outcome: RouteOutcome | null) => void; ask: Promise<RouteOutcome | null> }>();
 
 /** Tests: every ask running or waiting in this process, settled. */
 export async function settleRouteAsks(): Promise<void> {
@@ -677,8 +801,8 @@ export async function settleRouteAsks(): Promise<void> {
   }
 }
 
-function startAsk(goalId: string, heldTitles: readonly string[], now: Date | null, deps: RouteDeps): Promise<RouteOutcome | null> {
-  const run = proposeGoalRoutes({ goalId, ...(now ? { now } : {}), heldTitles }, deps)
+function startAsk(goalId: string, heldTitles: readonly string[], now: Date | null, deps: RouteDeps, retryOnly: boolean): Promise<RouteOutcome | null> {
+  const run = proposeGoalRoutes({ goalId, ...(now ? { now } : {}), heldTitles, retryOnly }, deps)
     .catch((error: unknown) => {
       console.warn(`goal ${goalId}: route proposal: ${String((error as Error)?.message ?? error)}`);
       return null;
@@ -690,7 +814,7 @@ function startAsk(goalId: string, heldTitles: readonly string[], now: Date | nul
         const [nextId, held] = next.value;
         waiting.delete(nextId);
         // Asked when its place frees, so it reads its own clock then.
-        void startAsk(nextId, held.heldTitles, null, held.deps).then(held.resolve);
+        void startAsk(nextId, held.heldTitles, null, held.deps, held.retryOnly).then(held.resolve);
       }
     });
   inFlight.set(goalId, run);
@@ -705,17 +829,27 @@ function startAsk(goalId: string, heldTitles: readonly string[], now: Date | nul
  * Production, 2026-11-25: twelve goals created together, two places, and two
  * of the goals had no route ask recorded 70 minutes later. Returns the ask
  * (waiting included), for a caller that wants to wait. Never throws.
+ *
+ * `retryOnly`: the plan pass's own call, made for every live goal on every
+ * pass whatever it reads or widens (`advanceGoalPlans`) — an ask only for a
+ * goal never asked, or with no live route and a last ask that yielded none
+ * (`routeAskDue`).
  */
-export function armRouteProposal(goalId: string, heldTitles: readonly string[], now: Date, deps: RouteDeps = {}): Promise<RouteOutcome | null> {
+export function armRouteProposal(goalId: string, heldTitles: readonly string[], now: Date, deps: RouteDeps = {}, options: { retryOnly?: boolean } = {}): Promise<RouteOutcome | null> {
+  const retryOnly = options.retryOnly === true;
   const running = inFlight.get(goalId);
   if (running) return running;
   const queued = waiting.get(goalId);
-  if (queued) return queued.ask;
-  if (inFlight.size < ROUTE_MAX_IN_FLIGHT) return startAsk(goalId, heldTitles, now, deps);
+  if (queued) {
+    // The search pass's ordinary ask outranks the plan pass's retry-only one for the same goal.
+    if (!retryOnly) queued.retryOnly = false;
+    return queued.ask;
+  }
+  if (inFlight.size < ROUTE_MAX_IN_FLIGHT) return startAsk(goalId, heldTitles, now, deps, retryOnly);
   let resolve: (outcome: RouteOutcome | null) => void = () => undefined;
   const ask = new Promise<RouteOutcome | null>((done) => {
     resolve = done;
   });
-  waiting.set(goalId, { heldTitles, deps, resolve, ask });
+  waiting.set(goalId, { heldTitles, deps, retryOnly, resolve, ask });
   return ask;
 }
