@@ -542,6 +542,38 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
         'published, submit that as NEGATIVE_EXISTENCE naming where you looked.',
       necessity: 'CONDITIONAL',
     },
+    /*
+     * The three a whole commercial route needs that no lane above asks
+     * (PLANNING-9-10 §2): how many such buyers there are, a dated sign they
+     * want it now, and who fulfils it. A plan needs the first two together.
+     */
+    {
+      id: 'buyer_volume',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'How many buyers of this kind exist — a sourced count of the businesses, organisations ' +
+        'or people who buy this (a register, directory, census or association count), with its ' +
+        'date. A market’s money size or growth rate is not a count of buyers; say so where ' +
+        'that is all there is.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'current_demand',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A dated sign that buyers of this kind want it now — a posting, request, tender, review, ' +
+        'announcement or listing from the last few months — quoted with the date the source ' +
+        'prints. An undated page is not a sign of current demand.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'fulfiller',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Who can deliver it: a named supplier, subcontractor, platform or tool that publishes ' +
+        'that it does this work, with its published price or terms where it states them.',
+      necessity: 'CONDITIONAL',
+    },
   ],
   expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
   failureConditions: [
