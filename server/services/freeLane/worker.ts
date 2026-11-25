@@ -45,7 +45,7 @@ import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
 import { liveGoalWorkItemSql } from '../goals/goalWork.ts';
 import { laneFitFailure } from '../research/gate.ts';
-import { isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
+import { fragmentSearchRoom, isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, servedRoute, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { answeredBy, isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
@@ -3394,7 +3394,52 @@ export function resetFailedBy(): void {
   failedBy.clear();
 }
 
+/**
+ * Research fragments this process is working now, against `fragmentSearchRoom`:
+ * a fragment is admitted only while web search can feed it, and one that cannot
+ * stays QUEUED — no lease, no attempt, no model call — while the slot takes
+ * other work. Counted synchronously at admission (`FragmentSlot`), so slots
+ * claiming in the same tick cannot all pass one reading.
+ */
+let fragmentsInFlight = 0;
+
+/** Tests: fragments this process holds a search reservation for. */
+export function fragmentsWorkedNow(): number {
+  return fragmentsInFlight;
+}
+
+/** The reason a fragment is declined while web search cannot feed another one. */
+export const SEARCH_CANNOT_FEED = 'web search can feed no more fragments now; this one waits queued for it';
+
+/**
+ * Whether one more research fragment may be admitted: fewer are being worked
+ * than web search can feed (`fragmentSearchRoom`). Pure.
+ */
+export function fragmentAdmissible(inFlight: number, room: number): boolean {
+  return inFlight < room;
+}
+
+/** One claim's reservation of a fragment's place under `fragmentSearchRoom`. */
+interface FragmentSlot {
+  held: boolean;
+}
+
+function releaseFragmentSlot(slot: FragmentSlot): void {
+  if (!slot.held) return;
+  slot.held = false;
+  fragmentsInFlight = Math.max(0, fragmentsInFlight - 1);
+}
+
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
+  const slot: FragmentSlot = { held: false };
+  try {
+    return await takeOneWith(input, slot);
+  } finally {
+    releaseFragmentSlot(slot);
+  }
+}
+
+async function takeOneWith(input: TakeInput, fragmentSlot: FragmentSlot): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   // Shutting down: a lease taken now would only be stranded (`returnInFlightLeases`).
   if (draining) return { claimed: null, ok: false, ms: 0 };
@@ -3413,6 +3458,21 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const admit = async (item: WorkItemRow) => {
     if (!input.spillover && workerFor(workers, item) !== index) {
       return { ok: false, reason: 'the other free worker takes this role' };
+    }
+    /*
+     * A fragment is started only while web search can feed it. Production, 24 h
+     * to 2026-11-25 06:00Z: 2,627 GPU fragments handed back RELEASED_TRANSIENT
+     * against 342 submitted — with the keyed ceiling spent and DuckDuckGo
+     * refusing, each was claimed, cost its model calls and two refused searches,
+     * found nothing ("no readable source … none from web search", or "0
+     * claim(s) offered" over encyclopedia pages), was refunded and was claimed
+     * again by the next free slot. The place is reserved here, before any
+     * await, so concurrent claims cannot all pass one reading.
+     */
+    if (item.work_type === 'RESEARCH_FRAGMENT' && !fragmentSlot.held) {
+      if (!fragmentAdmissible(fragmentsInFlight, fragmentSearchRoom())) return { ok: false, reason: SEARCH_CANNOT_FEED };
+      fragmentSlot.held = true;
+      fragmentsInFlight += 1;
     }
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
     const held = routeHold(worker.model);
@@ -3521,7 +3581,16 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   // the order it gives before the ordinary priority scan, so the decision moves
   // the free lane's compute and not only bins (RES-07, review F1).
   const shifts = await researchShiftsInForce();
-  for (const types of asksByPriority(claimAsks(workers, index, input.spillover), waiting)) {
+  // With no room for another fragment, fragments are not asked for at all: each ask is a bounded scan.
+  const fragmentsFed = fragmentAdmissible(fragmentsInFlight, fragmentSearchRoom());
+  if (!fragmentsFed && waiting.has('RESEARCH_FRAGMENT')) {
+    const key = `${worker.model}: ${SEARCH_CANNOT_FEED.slice(0, 80)}`;
+    skipTally.set(key, (skipTally.get(key) ?? 0) + 1);
+  }
+  const asks = claimAsks(workers, index, input.spillover)
+    .map((types) => (fragmentsFed ? types : types.filter((type) => type !== 'RESEARCH_FRAGMENT')))
+    .filter((types) => types.length > 0);
+  for (const types of asksByPriority(asks, waiting)) {
     if (shifts) {
       for (const id of await allocatedPackets(projectIds, types, shifts)) {
         one = await ask(types, id);
@@ -3533,6 +3602,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if (one) break;
   }
   if (!one) return { claimed: null, ok: false, ms: 0 };
+  // The reservation was for a fragment; another kind of item does not hold it while it is worked.
+  if (one.workType !== 'RESEARCH_FRAGMENT') releaseFragmentSlot(fragmentSlot);
   const started = Date.now();
   const meterKey = `${one.workItemId}:${one.leaseId}`;
   const usage = itemMeters.open(meterKey);

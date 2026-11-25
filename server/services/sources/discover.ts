@@ -115,6 +115,19 @@ export function pauseAfterRefusals(streak: number): number {
 const MAX_RESULTS = 8;
 /** The same query within ten minutes is answered from memory: dead links on one site repeat. */
 const RESULT_TTL_MS = 10 * 60_000;
+/**
+ * A query that returned pages is answered from memory for six hours. The keyed
+ * provider's daily ceiling was spent in the first hour of the UTC day
+ * (production, 2026-11-25) partly on the same fragments' same queries, each
+ * re-run of a handed-back fragment buying its two searches again once ten
+ * minutes had passed. Result pages do not change in hours; an empty answer is
+ * still asked again after ten minutes.
+ */
+const ANSWERED_TTL_MS = 6 * 3_600_000;
+/** How long a remembered answer stands. Pure. */
+export function rememberedFor(urls: readonly string[]): number {
+  return urls.length > 0 ? ANSWERED_TTL_MS : RESULT_TTL_MS;
+}
 
 let chain: Promise<unknown> = Promise.resolve();
 let waiting = 0;
@@ -159,6 +172,38 @@ function emit(event: SearchEvent): void {
  */
 export function webSearchRefusing(env: NodeJS.ProcessEnv = process.env, now = Date.now()): boolean {
   return ENDPOINTS.every((one) => (refusalStreak.get(one.name) ?? 0) > 0) && availableKeyedProvider(env, now) === null;
+}
+
+/** The web searches one research fragment asks for its candidates (`searchQueries` in the free lane). */
+export const SEARCHES_PER_FRAGMENT = 2;
+/**
+ * Fragments that may still run while web search is refusing: enough that
+ * search's recovery is found by a fragment's own query, and that a question an
+ * encyclopedia or a remembered page can answer still is, without the rest of
+ * the queue being worked against a search that answers nobody.
+ */
+export const SEARCH_OUTAGE_FRAGMENTS = 2;
+
+/**
+ * How many research fragments web search can feed at once now: unbounded while
+ * a keyed provider can answer; `SEARCH_OUTAGE_FRAGMENTS` while every DuckDuckGo
+ * endpoint is refusing; otherwise as many as the search queue can hold the
+ * searches of (`maxWaiters`), because a search past it comes back empty unsent.
+ *
+ * Production, 24 h to 2026-11-25 06:00Z: the GPU free lane handed 2,627
+ * research fragments back RELEASED_TRANSIENT and submitted 342. The keyed
+ * provider's daily ceiling was spent within the first hour of the UTC day;
+ * after it DuckDuckGo answered 202 to most queries, and 1,773 fragment runs
+ * ended "no readable source … none from web search" and most of the rest "0
+ * claim(s) offered" over encyclopedia and remembered pages — each run the
+ * lane's model calls and two more refused searches, re-queued and claimed again
+ * by the next free slot. Pure over the module's state; exported for the lane's
+ * admission and for tests.
+ */
+export function fragmentSearchRoom(env: NodeJS.ProcessEnv = process.env, now = Date.now()): number {
+  if (availableKeyedProvider(env, now) !== null) return Number.POSITIVE_INFINITY;
+  if (webSearchRefusing(env, now)) return SEARCH_OUTAGE_FRAGMENTS;
+  return Math.max(SEARCH_OUTAGE_FRAGMENTS, Math.floor(maxWaiters() / SEARCHES_PER_FRAGMENT));
 }
 
 /** The current spacing between searches, for tests and `sources search`. */
@@ -229,7 +274,7 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
   const q = query.replace(/\s+/g, ' ').trim().slice(0, 240);
   if (!q) return [];
   const known = remembered.get(q);
-  if (known && now() - known.at < RESULT_TTL_MS) {
+  if (known && now() - known.at < rememberedFor(known.urls)) {
     searchStats.cached += 1;
     return known.urls;
   }

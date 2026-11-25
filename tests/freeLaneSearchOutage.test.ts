@@ -16,8 +16,27 @@ import { createFragments, createOrchestration } from '../server/repos/research.t
 import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
-import { freeLaneTick, resetFreeLaneFitness } from '../server/services/freeLane/worker.ts';
-import { readWithoutAnswerFor, resetSearchState, webSearch, webSearchRefusing } from '../server/services/sources/discover.ts';
+import {
+  ensureFreeWorkers,
+  fragmentAdmissible,
+  fragmentsWorkedNow,
+  freeLaneSkips,
+  freeLaneTick,
+  resetFreeLaneFitness,
+  SEARCH_CANNOT_FEED,
+  takeOne,
+} from '../server/services/freeLane/worker.ts';
+import {
+  fragmentSearchRoom,
+  maxWaiters,
+  readWithoutAnswerFor,
+  rememberedFor,
+  resetSearchState,
+  SEARCH_OUTAGE_FRAGMENTS,
+  SEARCHES_PER_FRAGMENT,
+  webSearch,
+  webSearchRefusing,
+} from '../server/services/sources/discover.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 
@@ -222,5 +241,91 @@ describe('a fragment whose model read only encyclopedia pages and listed nothing
     expect(opened.filter((url) => WIKI.includes(url))).toEqual([]);
     const [row] = await events(again);
     expect(row?.reason).toMatch(/no readable source among 0 candidate page\(s\).*READ_BEFORE_NO_CLAIM/);
+  });
+});
+
+/*
+ * Production, 24 h to 2026-11-25 06:00Z: the GPU free lane handed 2,627
+ * research fragments back RELEASED_TRANSIENT and submitted 342. With the keyed
+ * provider's daily ceiling spent and DuckDuckGo answering 202, 1,773 runs ended
+ * "no readable source … none from web search" and most of the rest "0 claim(s)
+ * offered" over encyclopedia pages — each run its model calls and two refused
+ * searches, refunded, and claimed again at once by the next free slot. A
+ * fragment is now started only while web search can feed it; the rest wait
+ * QUEUED with no lease, no attempt and no model call.
+ */
+describe('how many fragments web search can feed', () => {
+  it('is what the search queue holds, a few while search refuses, and unbounded while a keyed provider answers', async () => {
+    expect(fragmentSearchRoom({})).toBe(Math.floor(maxWaiters() / SEARCHES_PER_FRAGMENT));
+    expect(fragmentSearchRoom({ BRAIN_SEARCH_API_KEY: 'AIzaSyTEST-not-a-real-key-0123456789abc', BRAIN_SEARCH_ENGINE_ID: 'a1b2c3d4e5f6g7h8i' })).toBe(Number.POSITIVE_INFINITY);
+    await searchRefuses();
+    expect(fragmentSearchRoom({})).toBe(SEARCH_OUTAGE_FRAGMENTS);
+    expect(fragmentAdmissible(SEARCH_OUTAGE_FRAGMENTS - 1, fragmentSearchRoom({}))).toBe(true);
+    expect(fragmentAdmissible(SEARCH_OUTAGE_FRAGMENTS, fragmentSearchRoom({}))).toBe(false);
+  });
+
+  it('a query that returned pages is not bought again for hours; an empty answer is asked again after ten minutes', async () => {
+    expect(rememberedFor(['https://a.example/'])).toBe(6 * 3_600_000);
+    expect(rememberedFor([])).toBe(10 * 60_000);
+    const clock = { t: Date.parse('2026-11-25T01:00:00Z') };
+    let sent = 0;
+    const answers = (async () => {
+      sent += 1;
+      return new Response('<a href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fpages.example%2Frates">r</a>', { status: 200 });
+    }) as unknown as typeof fetch;
+    const deps = { fetchImpl: answers, nowMs: () => clock.t, env: {} as NodeJS.ProcessEnv, sleepMs: async () => {} };
+    expect(await webSearch('pa dep reclamation contractor award values', deps)).toEqual(['https://pages.example/rates']);
+    clock.t += 60 * 60_000;
+    expect(await webSearch('pa dep reclamation contractor award values', deps)).toEqual(['https://pages.example/rates']);
+    expect(sent).toBe(1);
+  });
+});
+
+describe('while web search is refusing', () => {
+  it('works only the fragments it can feed, and the next waits queued, unleased and unspent until search answers', async () => {
+    await searchRefuses();
+    const ids: string[] = [];
+    for (let i = 0; i < SEARCH_OUTAGE_FRAGMENTS + 1; i += 1) ids.push(await fragmentQueued());
+    const workers = await ensureFreeWorkers(CONFIG);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let entered = 0;
+    let allIn!: () => void;
+    const working = new Promise<void>((resolve) => (allIn = resolve));
+    // Each admitted fragment's first model call waits, so the admitted ones are all in flight together.
+    const held: Completer = async (config, name, system, prompt, options) => {
+      if (prompt.includes('Name up to') && entered < SEARCH_OUTAGE_FRAGMENTS) {
+        entered += 1;
+        if (entered === SEARCH_OUTAGE_FRAGMENTS) allIn();
+        await gate;
+      }
+      return completer(config, name, system, prompt, options);
+    };
+    const base = { workers, completer: held, fetchSource, search: async () => [], config: CONFIG };
+    const admitted = Array.from({ length: SEARCH_OUTAGE_FRAGMENTS }, () => takeOne({ ...base, worker: workers[0]!, index: 0 }));
+    await working;
+    expect(fragmentsWorkedNow()).toBe(SEARCH_OUTAGE_FRAGMENTS);
+    expect((await takeOne({ ...base, worker: workers[0]!, index: 0 })).claimed).toBeNull();
+    expect((await takeOne({ ...base, worker: workers[1]!, index: 1, spillover: true })).claimed).toBeNull();
+    expect(Object.keys(freeLaneSkips()).some((key) => key.includes(SEARCH_CANNOT_FEED.slice(0, 40)))).toBe(true);
+    release();
+    const done = await Promise.all(admitted);
+    expect(done.every((one) => one.claimed?.workType === 'RESEARCH_FRAGMENT')).toBe(true);
+    expect(fragmentsWorkedNow()).toBe(0);
+
+    const waiting = ids.filter((id) => !done.some((one) => one.claimed?.workItemId === id));
+    expect(waiting).toHaveLength(1);
+    const row = await getDb().get<{ state: string; attempt_count: number; lease_generation: number }>(
+      'SELECT state, attempt_count, lease_generation FROM work_items WHERE id = ?',
+      [waiting[0]!],
+    );
+    expect(row).toMatchObject({ state: 'QUEUED', attempt_count: 0, lease_generation: 0 });
+    expect(await events(waiting[0]!)).toEqual([]);
+
+    // Search answers again: the waiting fragment is worked.
+    resetSearchState();
+    const next = await takeOne({ workers, worker: workers[0]!, index: 0, completer, fetchSource, search: async () => [], config: CONFIG });
+    expect(next.claimed?.workItemId).toBe(waiting[0]);
+    expect(fragmentsWorkedNow()).toBe(0);
   });
 });
