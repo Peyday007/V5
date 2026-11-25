@@ -213,6 +213,17 @@ export function payerHeldWords(payer: string | null | undefined): string[] {
  */
 export function payerNounWords(payer: string | null | undefined): string[] {
   if (!payer) return [];
+  /*
+   * A parenthesis lists the payer's kinds, never its head (decisive-10 d03,
+   * 2026-11-25): "Michigan local governments (cities, townships, counties)"
+   * is counted by "nearly 200 Michigan local governments" — before, the head
+   * was read as "counties)", so a market research had sized read as unsized.
+   * The head is read outside the parenthesis and each listed kind is a head of
+   * its own.
+   */
+  const inner = [...payer.matchAll(/\(([^)]*)\)/g)].flatMap((m) => m[1]!.split(/,|\s+(?:and|or)\s+/));
+  const outer = payer.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  if (inner.length > 0) return [...new Set([outer, ...inner].flatMap((part) => payerNounWords(part.trim())))];
   const head = payer.split(/\s+(?:and|or|who|that|which|with|without|in|of|for|on|at|across|from|by|to|renting|running|using|buying|selling|needing|seeking|looking|operating|owning|managing|entering|filing|submitting|ordering|hiring|booking)\b/i)[0]!.trim();
   const word = head.split(/\s+/).pop()?.toLowerCase().replace(/[^a-z-]/g, '') ?? '';
   // The same refusal as `industryBuyerWords`: a word for what is sold or done never counts buyers.

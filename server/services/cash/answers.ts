@@ -446,7 +446,13 @@ export async function writeEvidenceAnswer(input: {
   claim: ResearchClaim;
   needId: string | null;
 }): Promise<boolean> {
-  const column = COLUMN[input.field];
+  /*
+   * The buying signal is written to its own column below, with its date
+   * (decisive-10, 2026-11-25): `COLUMN` has no entry for it, so this returned
+   * false at the first line and every dated current-demand answer a dive filed
+   * was dropped — CURRENT_DEMAND stayed open on 9 of 10 fresh goals.
+   */
+  const column = COLUMN[input.field] ?? (input.field === 'buyingEvidence' ? 'buying_signal' : undefined);
   const engineOnly = !column && (NEED_RESEARCHABLE_ENGINE_FIELDS as readonly string[]).includes(input.field);
   if (!column && !engineOnly) return false;
 

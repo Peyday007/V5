@@ -61,7 +61,15 @@ const COMPENSATION = /\b(?:restitution|compensation for|damages|penalt(?:y|ies)|
 /** Pay to an employee: the employer is buying a job, not a supplier's deliverable. */
 const EMPLOYMENT = /\b(?:salar(?:y|ies)|wages?|annual pay|base pay|per year in pay|hourly wage)\b/i;
 /** Words that make the money a price somebody is charged. */
-const PURCHASE = /\b(?:charges?|charged|priced|pricing|price|fees?|costs?|invoices?|invoiced|retainers?|subscriptions?|commissions?|quotes?|quoted|per (?:hour|project|order|month|unit|item|page|word|seat|user|license|licence)|buys?|bought|purchases?|purchased|sells?|sold|hires?|hired|rates?|a (?:year|month)|annually|monthly|platform)\b/i;
+/*
+ * A rate per unit of work is what the work is bought at, with up to two words
+ * qualifying the unit (decisive-10, 2026-11-25): "$165 per crew hour" from a
+ * moving platform to its fleet partners and "$121.28 per qualified lead" from
+ * a pay-per-call network to its publishers are what those payers pay suppliers.
+ * Before, only a bare "per hour" counted, so both read as no exchange shown and
+ * the plan modelled them at no price at all.
+ */
+const PURCHASE = /\b(?:charges?|charged|priced|pricing|price|fees?|costs?|invoices?|invoiced|retainers?|subscriptions?|commissions?|quotes?|quoted|per (?:[a-z-]+ ){0,2}?(?:hour|project|order|month|unit|item|page|word|seat|user|license|licence|lead|call|job|move|delivery|load|booking|task|visit|appointment|transaction|shift)s?|buys?|bought|purchases?|purchased|sells?|sold|hires?|hired|rates?|a (?:year|month)|annually|monthly|platform)\b/i;
 
 /**
  * What a figure's claim says the money is paid for. Non-purchase cues are

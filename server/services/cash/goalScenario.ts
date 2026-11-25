@@ -2441,7 +2441,7 @@ export async function modelOpportunity(
   // Research answers "how much goes out before any comes back" as requiredCapital.
   const capitalFact = fact('requiredCapital');
   const capitalFigures = capitalFact ? readMoneyFigures(capitalFact.value, currency).filter((one) => !one.perUnit) : [];
-  const capital =
+  let capital: ModelInput =
     opportunity.peakFundingCents !== null
       ? known(opportunity.peakFundingCents / 100, kindToProvenance(exposure).provenance === 'UNKNOWN' ? 'ASSUMPTION' : kindToProvenance(exposure).provenance, kindToProvenance(exposure).source ?? ref, 'money tied up before it pays')
       : capitalFigures.length > 0
@@ -2467,10 +2467,24 @@ export async function modelOpportunity(
 
   const costFact = fact('directCosts');
   const costFigures = costFact ? readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit) : [];
+  const statedFree = !!costFact && costFact.kind !== 'RECOMMENDATION' && costFigures.length === 0 && statesNoCost(costFact.value);
   const directCost =
     costFigures.length > 0
       ? known(Math.max(...costFigures.map((one) => one.cents)) / 100, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'the highest published direct cost')
+      : statedFree
+        ? known(0, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'the source states no fee or cost to take part')
       : inferOr(knowledge, 'costShare', opportunity, now, unknown(0, Math.max(1, top * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the price'), top, ' as a share of the top price');
+  /*
+   * Nothing goes out before the buyer pays when a source states taking part
+   * costs nothing and nothing else is published as money tied up (decisive-10,
+   * 2026-11-25: "Lugg charges fleets no lead fees and no bidding"). Brain's own
+   * reading of the money tied up is "at most the direct costs above", so a
+   * stated zero cost settles it at zero; a published capital figure or a person's
+   * exposure still decides first.
+   */
+  if (statedFree && opportunity.peakFundingCents === null && capitalFigures.length === 0 && (!capitalFact || capitalFact.kind === 'RECOMMENDATION')) {
+    capital = known(0, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'nothing goes out before the buyer pays: the source states no fee or cost to take part');
+  }
 
   const agreements = (await agreementsFor(opportunity.id, opportunity.projectId ?? undefined)).filter((one) => !one.releasedAt);
   const lesson = lessons.find((one) => one.mechanism === opportunity.mechanism && one.contacts >= LESSON_MIN_SAMPLE);
@@ -3404,4 +3418,18 @@ export function dealsFromOffers(one: Pick<ModelledOpportunity, 'close'>, buyers:
   const close = measuredClose(one);
   const rate = close !== null ? Math.min(1 / OUTREACH_MULTIPLE, close) : 1 / OUTREACH_MULTIPLE;
   return Math.ceil(buyers * rate - 1e-9);
+}
+
+/**
+ * Whether a cost statement says taking part costs nothing (decisive-10,
+ * 2026-11-25): "charges fleets no lead fees and no bidding", "free to join",
+ * "no sign-up fee". Only an explicit statement counts; a sentence that merely
+ * names no figure says nothing about the cost and stays unknown (invariant 39).
+ * A free tier beside paid ones is not a statement that it is free — the figure
+ * reader handles that sentence. Pure.
+ */
+export function statesNoCost(text: string): boolean {
+  const t = text.replace(/\s+/g, ' ');
+  if (/\b(?:paid|premium|upgrade|tiers?|plans? (?:start|from))\b/i.test(t)) return false;
+  return /\b(?:no|zero|without)\s+(?:[\w-]+\s+){0,2}?(?:fees?|costs?|charges?|commissions?|subscriptions?|investment|upfront payment)\b|\bfree (?:to (?:join|sign up|register|apply|list|use)|of charge)\b|\b(?:costs?|charges?) nothing\b|\bis free\b/i.test(t);
 }
