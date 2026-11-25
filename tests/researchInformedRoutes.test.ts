@@ -95,6 +95,9 @@ describe('scouting: directions before anything is priced', () => {
     expect(prompt).toMatch(/no spread of buyer kinds or business models is required/);
     expect(prompt).not.toMatch(/"price":number/);
     expect(prompt).toMatch(/"decisiveUnknown"/);
+    // A stated licence, certification or trade is sold directly by at least one direction and one route.
+    expect(prompt).toMatch(/licence, certification or trade, at least one direction sells that licensed or trade work itself/);
+    expect(routePrompt(ctx())).toMatch(/licence, certification or trade, at least one route sells that licensed or trade work itself/);
   });
 
   it('keeps a whole direction and refuses one without a decisive unknown', () => {
