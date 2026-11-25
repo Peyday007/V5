@@ -372,6 +372,47 @@ async function stall(): Promise<void> {
       (SELECT COUNT(*) FROM research_claims c WHERE c.orchestration_id = o.id AND c.accepted = 1) AS acc
      FROM research_orchestrations o LEFT JOIN russell_missions m ON m.orchestration_id = o.id
     WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp} ORDER BY o.completed_at DESC LIMIT 20`, [like]);
+  /*
+   * The claim → card fact → plan chain, per filed packet (read-only): which accepted
+   * claims became which card facts and of which kind, which became construction
+   * facts (a goal price question's route into the plan), and what each claim was.
+   */
+  const filedSql = `SELECT o.id FROM research_orchestrations o WHERE o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS') AND ${evp}`;
+  await q('chain_facts', `SELECT c.orchestration_id AS orc, cf.opportunity_id AS op, cf.field, cf.kind, cf.decided_by AS by_, cf.need_id AS need, cf.claim_id AS claim, cf.updated_at AS at
+     FROM cash_card_facts cf JOIN research_claims c ON c.id = cf.claim_id WHERE c.orchestration_id IN (${filedSql}) ORDER BY 1, 2, 3 LIMIT 80`, [like]);
+  await q('chain_claims', `SELECT c.orchestration_id AS orc, COALESCE(c.evidence_lane, '-') AS lane, COALESCE(c.claim_type, '-') AS type, COALESCE(c.structural_subject, '-') AS subj,
+      CASE WHEN c.structural_amount_cents IS NULL THEN 0 ELSE 1 END AS amount, CASE WHEN c.source_url IS NULL THEN 0 ELSE 1 END AS src, CASE WHEN c.source_date IS NULL THEN 0 ELSE 1 END AS dated,
+      (SELECT f.status FROM research_fragments f WHERE f.id = c.fragment_id) AS frag,
+      (SELECT COUNT(*) FROM cash_card_facts cf WHERE cf.claim_id = c.id) AS card,
+      (SELECT COUNT(*) FROM construction_facts x WHERE x.source_claim_id = c.id) AS cons,
+      COUNT(*) AS n
+     FROM research_claims c WHERE c.accepted = 1 AND c.orchestration_id IN (${filedSql}) GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ORDER BY 1, 2 LIMIT 120`, [like]);
+  await q('chain_cons', `SELECT c.orchestration_id AS orc, x.fact_key, x.segment, x.status, x.low, x.high, x.created_at FROM construction_facts x JOIN research_claims c ON c.id = x.source_claim_id WHERE c.orchestration_id IN (${filedSql}) ORDER BY 1 LIMIT 40`, [like]);
+  await q('chain_needs', `SELECT o.id AS orc, m.candidate_id AS cand, nd.id AS need, nd.request_key AS rk, nd.state, nd.opportunity_id AS op, SUBSTR(COALESCE(nd.resolution, ''), 1, 160) AS res,
+      SUBSTR(k.title, 1, 140) AS title, SUBSTR(k.statement, 1, 160) AS stmt, (SELECT COUNT(*) FROM industry_nodes n WHERE n.project_id = o.project_id AND n.kind = 'BUYER_TYPE' AND n.retired_at IS NULL) AS buyer_types
+     FROM research_orchestrations o JOIN russell_missions m ON m.orchestration_id = o.id LEFT JOIN cash_needs nd ON nd.candidate_id = m.candidate_id LEFT JOIN russell_candidates k ON k.id = m.candidate_id
+    WHERE o.id IN (${filedSql}) ORDER BY 1 LIMIT 40`, [like]);
+  await q('chain_claim_text', `SELECT c.orchestration_id AS orc, c.id, c.evidence_lane AS lane, c.claim_type AS type, c.structural_subject AS subj, c.structural_amount_cents AS cents, SUBSTR(COALESCE(c.structural_qualifier, ''), 1, 80) AS qual, SUBSTR(c.claim, 1, 200) AS claim
+     FROM research_claims c WHERE c.accepted = 1 AND c.orchestration_id IN (${filedSql}) AND NOT EXISTS (SELECT 1 FROM cash_card_facts cf WHERE cf.claim_id = c.id) ORDER BY 1, 3 LIMIT 60`, [like]);
+  // The workflow's `case` input carries the opening for `stall`.
+  const opening = flag('opening') ?? flag('case');
+  if (opening && /^cop_[a-f0-9]{1,40}$/.test(opening)) {
+    await q('chain_opening', `SELECT op.*, p.name AS project_name FROM cash_opportunities op JOIN projects p ON p.id = op.project_id WHERE op.id = ?`, [opening]);
+    await q('chain_opening_facts', `SELECT field, kind, claim_id, need_id, decided_by, created_at, updated_at, SUBSTR(value, 1, 140) AS value FROM cash_card_facts WHERE opportunity_id = ? ORDER BY updated_at`, [opening]);
+    await q('chain_opening_events', `SELECT kind, created_at, SUBSTR(summary, 1, 160) AS summary FROM cash_events WHERE opportunity_id = ? ORDER BY created_at DESC LIMIT 30`, [opening]);
+    const ws = await getDb().get<{ id: string }>(`SELECT w.id FROM workstreams w JOIN cash_opportunities op ON op.project_id = w.project_id WHERE op.id = ? AND w.archived_at IS NULL ORDER BY w.created_at LIMIT 1`, [opening]).catch(() => null);
+    if (ws) {
+      await q('chain_readings', `SELECT created_at, verdict, chosen_strategy, digest, LENGTH(strategies) AS slen, CASE WHEN strategies LIKE ? THEN 1 ELSE 0 END AS names_op FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 25`, [`%${opening}%`, ws.id]);
+      try {
+        const { readGoalPlan } = await import('../server/services/goals/plan.ts');
+        const reading = await readGoalPlan({ goalId: ws.id, persist: false });
+        const mine = reading?.considered.find((one) => one.opportunityId === opening) ?? null;
+        console.log(`STALL chain_live ${JSON.stringify({ goal: ws.id, verdict: reading?.verdict, chosen: reading?.chosen ?? null, considered: reading?.considered.length, opening: mine, steps: clip((reading as unknown as Record<string, unknown> | null)?.['steps'] ?? null) })}`);
+      } catch (error) {
+        console.log(`STALL chain_live ${JSON.stringify({ error: String((error as Error)?.message ?? error).slice(0, 300) })}`);
+      }
+    }
+  }
   await q('evidence_facts', `SELECT cf.kind, cf.field, COUNT(*) AS n FROM cash_card_facts cf JOIN cash_opportunities op ON op.id = cf.opportunity_id WHERE op.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [like]);
   await q('needs', `SELECT nd.state, COUNT(*) AS n FROM cash_needs nd WHERE nd.project_id IN (SELECT id FROM projects WHERE name LIKE ?) GROUP BY 1`, [like]);
   // What `answerUnaskedParks` selects Brain-wide (its own WHERE, without the grace), in its order, and what it decided lately.

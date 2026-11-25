@@ -2586,6 +2586,7 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
       }
     }
     await withdrawAbsencesWrittenAsAnswers(projectId, opportunity);
+    await withdrawPricesReadFromARate(projectId, opportunity);
     /*
      * The opening's evidence moved, so its per-position reading is taken again
      * (RES-15-4, S-0150) — appended, never edited, and only for an opening that
@@ -2655,6 +2656,45 @@ async function withdrawAbsencesWrittenAsAnswers(
       });
     });
   }
+}
+
+/**
+ * Take back a card price that research's claim states only as a rate.
+ *
+ * The price write takes a figure only when it is not stated per something
+ * (or is one billing period's price), and the reader once missed a range's
+ * unit: "$0.01 to $0.05 per email" gave a $0.01 whole-purchase price, which
+ * production carried as the card's price (cop_a167f9eb396f43268de4,
+ * 2026-11-25) and the plan read as an established offer worth USD 0.01. When
+ * the claim the price fact names, read by the current rule, states the card's
+ * figure only per unit, the fact and the column are cleared — each guarded on
+ * the value it replaces, in one transaction — and the correction is an
+ * append-only event carrying what it replaced. Nothing is written in its
+ * place: the price is unknown until something states one. A replay finds no
+ * such fact and changes nothing.
+ */
+async function withdrawPricesReadFromARate(projectId: string, opportunity: CashOpportunity): Promise<void> {
+  const cents = opportunity.priceCents;
+  if (cents === null) return;
+  const fact = (await cardFactsFor(opportunity.id)).find((one) => one.field === 'price');
+  if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId || fact.decidedBy !== 'BRAIN') return;
+  const claim = await getClaim(fact.claimId);
+  if (!claim) return;
+  const stated = readMoneyFigures(claim.claim, opportunity.currency).filter((one) => one.cents === cents);
+  if (stated.length === 0 || stated.some((one) => !one.perUnit || one.perPeriod === true)) return;
+  await getDb().transaction(async () => {
+    if (!(await withdrawEvidenceFact({ opportunityId: opportunity.id, field: 'price', claimId: claim.id }))) return;
+    await getDb().run('UPDATE cash_opportunities SET price_cents = NULL WHERE id = ? AND price_cents = ?', [opportunity.id, cents]);
+    const composed = await withdrawRecommendationsResting({ opportunityId: opportunity.id, claimId: claim.id });
+    await recordCashEvent({
+      projectId,
+      opportunityId: opportunity.id,
+      kind: 'CASH_CARD_FACT_WITHDRAWN',
+      actorRef: 'BRAIN',
+      summary: `The price on this card was ${stated[0]!.text} read from a rate ("${clampText(claim.claim, 160)}"), not what one purchase costs. It is unknown again.`,
+      detail: { field: 'price', claimId: claim.id, value: fact.value, priceCents: cents, withdrawnRecommendations: composed },
+    });
+  });
 }
 
 /** Whether a dive's fragment offered its worker the `ruled_out` lane. */

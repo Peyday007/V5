@@ -166,6 +166,9 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       new RegExp(`(${number})\\s?${boundary}${mark}${boundary}`, 'gi'),
     ];
   });
+  // The rest of a range after its low end: `to $0.05`, `-$0.05`, `– 0.05 USD`.
+  const anyMark = markers.map(escape).join('|');
+  const rangeTail = new RegExp(`^\\s*(?:to|through|-|–|—)\\s*(?:${anyMark})?\\s?(?:${number})(?:\\s?(?:${anyMark})\\b)?`, 'i');
 
   const found: MoneyFigure[] = [];
   const seen = new Set<number>();
@@ -191,10 +194,20 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       const cents = amountOf(raw);
       if (cents === null || seen.has(cents)) continue;
       seen.add(cents);
-      const perParticipant = PER_PARTICIPANT.test(rest);
-      const perMeasure = PER_MEASURE.test(rest);
-      const perPeriod = !perParticipant && !perMeasure && PER_PERIOD.test(rest);
-      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || perMeasure || perPeriod || PER_UNIT.test(rest), ...(perParticipant ? { perParticipant } : {}), ...(perMeasure ? { perMeasure } : {}), ...(perPeriod ? { perPeriod } : {}) });
+      /*
+       * A range's unit is written once, after its upper end: "$0.01 to $0.05
+       * per email" states two per-email rates. Read after the low end only,
+       * the $0.01 was a whole purchase's price, and production filed it as
+       * the card's price (cop_a167f9eb396f43268de4, 2026-11-25: a 10k-contact
+       * cleaning job priced at USD 0.01). The low end takes the unit the range
+       * states.
+       */
+      const range = rangeTail.exec(rest);
+      const unit = range ? rest.slice(range[0].length) : rest;
+      const perParticipant = PER_PARTICIPANT.test(unit);
+      const perMeasure = PER_MEASURE.test(unit);
+      const perPeriod = !perParticipant && !perMeasure && PER_PERIOD.test(unit);
+      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || perMeasure || perPeriod || PER_UNIT.test(unit), ...(perParticipant ? { perParticipant } : {}), ...(perMeasure ? { perMeasure } : {}), ...(perPeriod ? { perPeriod } : {}) });
     }
   }
   return found.sort((a, b) => a.cents - b.cents);
