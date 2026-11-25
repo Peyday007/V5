@@ -346,6 +346,24 @@ export async function opportunityForClaim(
 }
 
 /**
+ * The openings whose `external_record_id` starts with this prefix, in one
+ * project, newest first. `substr` rather than `LIKE`, so an id's own `_` or
+ * `%` is never read as a wildcard; the same in both dialects.
+ */
+export async function opportunitiesWithRecordPrefix(
+  projectId: string,
+  prefix: string,
+): Promise<CashOpportunity[]> {
+  const rows = await getDb().all<CashOpportunityRow>(
+    `SELECT * FROM cash_opportunities
+      WHERE project_id = ? AND substr(external_record_id, 1, ?) = ?
+      ORDER BY created_at DESC, id DESC`,
+    [projectId, prefix.length, prefix],
+  );
+  return rows.map(mapOpportunity);
+}
+
+/**
  * The opportunities a Russell idea belongs to.
  *
  * Reads `candidate_id` only. `discovered_by_candidate_id` names the broad

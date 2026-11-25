@@ -119,6 +119,7 @@ import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrity
 import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrityInput.ts';
 import { committeeOf, type CommitteeContext, type CommitteeReading } from './committee.ts';
 import { armSpecialistReview, committeeContextOf } from './committeeSpecialists.ts';
+import { armRouteProposal } from './routeProposal.ts';
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
@@ -5523,6 +5524,16 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
    * the next lens. Both are new-opening work; the existing openings' paths are
    * researched separately below, so one never crowds the other out.
    */
+  /*
+   * Whole routes reasoned from the objective (PLANNING-9-10 §4.1): with no
+   * accepted plan, Brain's operator model proposes concrete routes inside the
+   * owner's limits and each is filed as one opening its deep dive researches
+   * as a unit. In the background — the pass never waits on a model — and
+   * bounded by the goal's own record (`routeProposal.ts`).
+   */
+  if (reading.acceptance.status !== 'ACCEPTED' && !reading.target.achieved) {
+    armRouteProposal(goal.id, reading.considered.map((one) => one.title), now);
+  }
   // A transaction constructed from a held opening's own evidence comes first (§93): it is the nearest to a sale.
   const fromPathways = await askPathwayConstructions(goal, reading, now, MAX_LIVE_GOAL_ROUNDS + spare);
   const constructed = [...fromPathways, ...(await askConstructedArrangements(goal, reading, now, Math.max(1, Math.ceil(attempts / 2)), MAX_LIVE_GOAL_ROUNDS + spare))];
