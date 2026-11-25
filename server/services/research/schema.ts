@@ -578,6 +578,18 @@ export function validateMeasurement(input: {
   return { ok: true, value: { measurementMethod: method.value, sampleSize, limitations: limitations.value, validUntil, invalidatedBy: invalidatedBy.value } };
 }
 
+/**
+ * The route a claim names, trimmed and bounded, or null. Free text by design: it
+ * only has to be the same on every claim about one way (`routeEvidence.ts`), and a
+ * worker that names none leaves its claims joined only by source or by a fragment
+ * that found one way.
+ */
+export function routeName(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, 160) : null;
+}
+
 export interface ParsedClaim {
   claim: string;
   /** What kind of claim this is, which decides what would count as evidence. */
@@ -597,6 +609,8 @@ export interface ParsedClaim {
   evidenceLane: string | null;
   /** The kind of opening this claim establishes, or null for context. */
   opportunitySignal: OpportunitySignal | null;
+  /** The way money would be made this claim describes, named identically on every claim about it. */
+  route?: string | null;
   /** The deadline the source publishes for that opening, YYYY-MM-DD, or null. */
   closesOn?: string | null;
   /** How the figure was measured, on how many cases, its limits, its window, what voids it (W-11). */
@@ -994,6 +1008,7 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       confidence: confidence.value ?? 0,
       evidenceLane: lane.value || null,
       opportunitySignal,
+      route: routeName(row['route']),
       monetizationMethod: method.value,
       closesOn: closesOn.value,
       ...measurement.value,

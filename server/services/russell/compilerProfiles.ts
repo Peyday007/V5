@@ -643,6 +643,55 @@ const COMMERCIAL_VALIDATION_SCREEN: CompilerProfile = {
  * when somebody says what kind of opening it is. Same envelope, same source
  * classes, same gate, the same verification and audit roles.
  */
+/** The route parts a goal's own round asks for, one lane each (see `GOAL_MECHANISM`). */
+export const ROUTE_LANES = [
+  {
+    id: 'route_channel',
+    description:
+      'How the buyers of a way found here are reached: the published directory, register, ' +
+      'association list, marketplace or platform where they are listed or buy, with its URL. ' +
+      'Name the population the claim is about.',
+    necessity: 'CONDITIONAL' as const,
+  },
+  {
+    id: 'route_fulfiller',
+    description:
+      'Who performs, produces or supplies the work for a way found here: a named supplier, a ' +
+      'kind of contractor with published rates, or a marketplace where such work is bought, with ' +
+      'its URL. Name the population the claim is about.',
+    necessity: 'CONDITIONAL' as const,
+  },
+  {
+    id: 'route_cost',
+    description:
+      'The published direct cost of one sale of a way found here: what the supplier, platform ' +
+      'or input costs per order, as a stated figure with its source. Name the population.',
+    necessity: 'CONDITIONAL' as const,
+  },
+  {
+    id: 'route_effort',
+    description:
+      'The published effort one sale of a way found here takes: the hours, or the turnaround, the ' +
+      'fulfiller states for one order. Name the population the claim is about.',
+    necessity: 'CONDITIONAL' as const,
+  },
+  {
+    id: 'route_volume',
+    description:
+      'How many buyers of the kind a way found here sells to exist in the reachable market, and ' +
+      'how often each buys, as a count a directory, register, census or association publishes. ' +
+      'Name the population the count is about.',
+    necessity: 'CONDITIONAL' as const,
+  },
+  {
+    id: 'route_settlement',
+    description:
+      'When buyers of a way found here pay: published payment terms (at checkout, a deposit at ' +
+      'signing, net 30, a platform payout schedule), stated as days. Name the population.',
+    necessity: 'CONDITIONAL' as const,
+  },
+];
+
 const GOAL_MECHANISM: CompilerProfile = {
   ...MARKET_DISCOVERY,
   id: 'GOAL_MECHANISM',
@@ -670,6 +719,17 @@ const GOAL_MECHANISM: CompilerProfile = {
         'market is large is neither.',
       necessity: 'CONDITIONAL',
     },
+    /*
+     * The parts of a route the goal's question asks for and no lane carried
+     * (trace break point 2, 2026-11-25). The question asked, in prose, how buyers
+     * are reached, who does the work, what it costs, how many buyers there are
+     * and when the money settles; the profile gave those answers nowhere to go,
+     * so a worker that found them filed them as context the harvest could not
+     * read. Each lane maps to one card field (`ROUTE_FIELD_BY_LANE`,
+     * server/services/cash/routeEvidence.ts), and the harvest writes an accepted
+     * claim filed here onto the opening of the same buyer population.
+     */
+    ...ROUTE_LANES,
   ],
   /*
    * Saying what a pattern is, at the end of the job a worker reads first (§83).
@@ -688,6 +748,13 @@ const GOAL_MECHANISM: CompilerProfile = {
       'opening: set its opportunity_signal to RECURRING_OUTSOURCED_WORK (or a more specific ' +
       'kind where one fits). A statement that a market is large is still context and carries ' +
       'none.',
+    'For each way found, file what the sources establish about its other parts in their own ' +
+      'lanes — the price buyers are shown paying (economics), how those buyers are reached ' +
+      '(route_channel), who performs or supplies the work (route_fulfiller), the cost per sale ' +
+      '(route_cost), the effort one sale takes (route_effort), how many such buyers exist ' +
+      '(route_volume) and when they pay ' +
+      '(route_settlement) — and give every claim about one way the same population: the kind ' +
+      'of buyer it is about. A part no source settles is left out, never estimated.',
   ],
   failureConditions: [
     'Neither a specific open request nor a repeating pattern of buyers paying for the same ' +

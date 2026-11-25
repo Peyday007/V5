@@ -2515,11 +2515,20 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
      * proposal made mid-dive would stand over the better one the finished dive
      * would have made.
      */
-    if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED') {
+    const fact = await cardFactMap(opportunity.id);
+    /*
+     * Or no dive has started, and the harvest assembled the route from the
+     * answer that found it (`routeEvidence.ts`, 2026-11-25): its payer is
+     * already gated evidence, so the capture thesis is composed from facts that
+     * are on the card exactly as a finished dive's would be — and waiting for a
+     * dive to re-establish them left every such route SIGNAL, outside the plan.
+     * A dive in flight still holds every proposal back.
+     */
+    const assembled = !opportunity.validationState && fact('payer')?.kind === 'EVIDENCE';
+    if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED' && !assembled) {
       continue;
     }
 
-    const fact = await cardFactMap(opportunity.id);
     const price = fact('revenueRange');
     const costs = fact('directCosts');
     const payer = fact('payer');

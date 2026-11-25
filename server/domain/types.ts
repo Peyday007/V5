@@ -2283,6 +2283,8 @@ export interface ResearchClaimRow {
   opportunity_signal: string | null;
   monetization_method: string | null;
   closes_on: string | null;
+  /** Migration 163 (SQLite) / 154 (Postgres): the route the claim is about. Absent on a row read before it ran. */
+  route?: string | null;
   /** Migration 154 (W-11/W-12). Absent on a row read before it ran. */
   measurement_method?: string | null;
   sample_size?: number | null;
@@ -3471,6 +3473,13 @@ export interface ResearchClaim {
    * which is correct rather than a gap: nobody was asked.
    */
   monetizationMethod: MonetizationMethod | null;
+  /**
+   * The way money would be made that this claim describes, as the worker named it —
+   * the kind of buyer and what they pay for — given identically on every claim about
+   * one way, so the harvest joins one way's parts onto one opening (`routeEvidence.ts`).
+   * Null where none was named.
+   */
+  route?: string | null;
   /**
    * The deadline the source publishes for the opening this claim establishes,
    * as YYYY-MM-DD, or null.

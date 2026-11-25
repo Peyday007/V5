@@ -108,6 +108,7 @@ export async function recordFragmentClaims(input: {
         evidenceLocator: claim.evidenceLocator ?? null,
         evidenceLane: claim.evidenceLane ?? null,
         opportunitySignal: claim.opportunitySignal ?? null,
+        route: claim.route ?? null,
         /*
          * And how the source says money would be made from that opening.
          *

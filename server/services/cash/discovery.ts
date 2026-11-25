@@ -67,6 +67,7 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
+import { joinRouteEvidence } from './routeEvidence.ts';
 import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
@@ -2143,7 +2144,8 @@ export async function harvest(input: {
       // from the source's sentence, which is kept whole as the buying signal.
       title: openingTitle({
         signal,
-        population: claim.population,
+        // The route the worker named is what this opening is; the fragment's population is only its scope.
+        population: claim.route ?? claim.population,
         deliverable: context?.bucket.deliverable ? DELIVERABLE_LABEL[context.bucket.deliverable] : null,
         publisher: claim.sourcePublisher,
         sourceUrl: claim.sourceUrl,
@@ -2207,6 +2209,20 @@ export async function harvest(input: {
       signal_observed_at: timing.observedAt,
     });
 
+    /*
+     * The rest of the route, from the same answer (trace break points 1–3,
+     * 2026-11-25). The claims the same fragment established beside this one —
+     * who pays, the price, how buyers are reached, who does the work, what it
+     * costs, how many buyers there are, when the money settles — are written
+     * onto this opening's card as evidence, by lane, instead of being left for
+     * ten separate missions to establish again. A twin is a linked record of an
+     * opening that already has its own card, so it is not joined.
+     */
+    const joined = twin ? { written: [] } : await joinRouteEvidence({ opportunity: withSignal ?? created, claim, orchestrationId: entry.orchestrationId, fragmentId: entry.fragmentId }).catch((error) => {
+      console.warn(`route evidence join failed for ${created.id}: ${String((error as Error)?.message ?? error)}`);
+      return { written: [] };
+    });
+
     const missionId = await missionFor(entry.orchestrationId);
     await recordCashEvent({
       projectId: input.projectId,
@@ -2224,6 +2240,7 @@ export async function harvest(input: {
         fragmentId: entry.fragmentId,
         missionId,
         sourceUrl: claim.sourceUrl,
+        routeFields: joined.written.map((one) => one.field),
       },
     });
 

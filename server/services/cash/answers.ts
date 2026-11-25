@@ -81,6 +81,7 @@ import { questionKey } from './conditions.ts';
 import { closeNeed } from './needs.ts';
 import { DELIVERABLE_CAPABILITY_PREFIX, readCapabilities } from './capabilities.ts';
 import { formatMoney, readMoneyFigures } from './figures.ts';
+import { readHours } from '../quant/knowledge.ts';
 import { NON_HUMAN_LAYERS } from '../../domain/types.ts';
 import { isBuyerRequestSignal } from '../../domain/opportunitySignals.ts';
 import type {
@@ -413,6 +414,32 @@ async function applyOne(input: {
   need: CashNeed;
   claim: ResearchClaim;
 }): Promise<boolean> {
+  if (!(await writeEvidenceAnswer({ opportunity: input.opportunity, field: input.field, claim: input.claim, needId: input.need.id }))) return false;
+  await closeNeed({
+    needId: input.need.id,
+    to: 'RESOLVED',
+    resolution: `Established by research: ${clamp(input.claim.claim, 200)}`,
+    actorUserId: BRAIN,
+    verifiedBy: 'BRAIN_READ_THE_ROW',
+  });
+  return true;
+}
+
+/**
+ * Write one gated claim as the evidence for one card field of one opening: the
+ * column where the field has one (a money field through `figureFor`, the buying
+ * signal with its date), the EVIDENCE card fact and its event. The one writer a
+ * research answer goes through, whether a need asked for it (`applyOne`) or the
+ * harvest found it beside the claim that established the opening
+ * (`joinRouteEvidence`). False when the field has nowhere to go, an earlier
+ * answer outranks it (`mayReplace`), or a money field's claim states no figure.
+ */
+export async function writeEvidenceAnswer(input: {
+  opportunity: CashOpportunity;
+  field: string;
+  claim: ResearchClaim;
+  needId: string | null;
+}): Promise<boolean> {
   const column = COLUMN[input.field];
   const engineOnly = !column && (NEED_RESEARCHABLE_ENGINE_FIELDS as readonly string[]).includes(input.field);
   if (!column && !engineOnly) return false;
@@ -444,6 +471,18 @@ async function applyOne(input: {
     patch['signal_observed_at'] = input.claim.sourceDate ?? input.claim.retrievedAt ?? null;
     if (!patch['signal_observed_at']) return false;
   }
+  /*
+   * Hours a source states reach the column the plan reads (2026-11-25). The
+   * plan reads `human_hours`, and only a person's edit wrote it, so research
+   * that established how long one deal takes left the FULFILMENT link reading
+   * "the hours are unknown" for ever. The high end of a stated range, because
+   * more hours is the unfavourable reading; a sentence with no figure writes
+   * the fact and leaves the column.
+   */
+  if (input.field === 'hours' && input.opportunity.humanHours === null) {
+    const stated = readHours(input.claim.claim);
+    if (stated) patch['human_hours'] = stated.high;
+  }
   if (Object.keys(patch).length > 0) await updateOpportunity(input.opportunity.id, patch as never);
 
   await recordCardFact({
@@ -453,7 +492,7 @@ async function applyOne(input: {
     kind: 'EVIDENCE',
     value,
     claimId: input.claim.id,
-    needId: input.need.id,
+    needId: input.needId,
     decidedBy: BRAIN,
   });
 
@@ -466,17 +505,9 @@ async function applyOne(input: {
     detail: {
       field: input.field,
       claimId: input.claim.id,
-      needId: input.need.id,
+      needId: input.needId,
       sourceUrl: input.claim.sourceUrl,
     },
-  });
-
-  await closeNeed({
-    needId: input.need.id,
-    to: 'RESOLVED',
-    resolution: `Established by research: ${clamp(input.claim.claim, 200)}`,
-    actorUserId: BRAIN,
-    verifiedBy: 'BRAIN_READ_THE_ROW',
   });
   return true;
 }
