@@ -38,6 +38,7 @@ import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
+import { recordPathwayAsk } from '../cash/answers.ts';
 // A plan is a reading: it asks whether an action is granted and performs none, so
 // every check here passes { record: false } — no AUTHORITY_DECISION row and no
 // approval request is written by a plan pass (AUTH-34: did versus proposed).
@@ -5649,6 +5650,8 @@ export async function askPathwayConstructions(
     });
     if (round) {
       opened.push(round.candidateId);
+      // Which opening and field asked, so the round's answers return to its card (`applyPathwayAnswers`).
+      await recordPathwayAsk({ projectId: t.projectId, opportunityId: pathway.opportunityId, field: move.field, gap: move.gap, candidateId: round.candidateId, bucketId: round.bucketId });
       note(`asked mx-${key}: ${move.construct.slice(0, 100)}`);
     } else note(`mx-${key} not opened (its cool-off, the live cap, the focus cap or a closed discovery gate)`);
   }

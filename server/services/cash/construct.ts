@@ -49,7 +49,7 @@ import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { namesOnlyAPlace, statesNamedIn } from '../../domain/jurisdiction.ts';
-import { buyerNameKey, namesABuyerPopulation } from '../../domain/industry.ts';
+import { buyerNameKey, namesABuyerPopulation, namesAMarketPart } from '../../domain/industry.ts';
 import { isNonPurchasePayment, wrongWayPrice } from '../../domain/paymentNature.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
@@ -727,7 +727,7 @@ export function addGraphParts(
 ): void {
   for (const one of kept) {
     const hood = norm(one.neighborhood);
-    if (!hood || !safeName(one.neighborhood) || !allowed(one.neighborhood)) continue;
+    if (!hood || !safeName(one.neighborhood) || !allowed(one.neighborhood) || !namesAMarketPart(one.neighborhood)) continue;
     const s = sector(one.neighborhood);
     const push = (list: Primitive[], name: string, path: string): void => {
       if (list.length >= SIGNAL_PARTS_PER_SECTOR || list.some((p) => p.path === path)) return;
@@ -738,6 +738,8 @@ export function addGraphParts(
       const name = actor.name?.trim();
       if (!name || !safeName(name) || !allowed(name)) continue;
       if (actor.role !== 'SUPPLIER' && actor.role !== 'PARTNER' && !namesABuyerPopulation(name)) continue;
+      // A supplier or partner is a kind of supplier or one named firm, never a sentence or a list (`namesAMarketPart`).
+      if ((actor.role === 'SUPPLIER' || actor.role === 'PARTNER') && !namesAMarketPart(name)) continue;
       if (actor.role === 'SUPPLIER' || actor.role === 'PARTNER') push(s.supply, name, `GRAPH_SUPPLY:${hood}>${norm(name)}`);
       else push(s.demand, name, `GRAPH_BUYER:${hood}>${norm(name)}`);
     }
@@ -794,6 +796,8 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const addNode = (node: IndustryNode, tree: Map<string, IndustryNode>, from: 'INDUSTRY_MAP' | 'BRAIN_MAP', claimId: string | null): void => {
     if (!safeName(node.name) || !allowed(node.name)) return;
     if (node.kind === 'BUYER_TYPE' && !namesABuyerPopulation(node.name)) return;
+    // A supply or need node filed before `absorb` checked its kind (production 2026-11-24) is read the same way here.
+    if ((node.kind === 'BOTTLENECK' || node.kind === 'FULFILMENT_SOURCE') && !namesAMarketPart(node.name)) return;
     const root = rootOf(node, tree);
     if (!allowed(root.name)) return;
     const list = node.kind === 'BUYER_TYPE' ? 'demand' : node.kind === 'BOTTLENECK' ? 'needs' : node.kind === 'FULFILMENT_SOURCE' ? 'supply' : null;

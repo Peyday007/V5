@@ -78,6 +78,7 @@ import {
   buyerNameKey,
   buyerPopulationName,
   namesABuyerPopulation,
+  namesAMarketPart,
   isCapitalMechanism,
   isCapitalRequirement,
   isConstraintKind,
@@ -716,6 +717,11 @@ async function file(input: {
     out.refused.push({ claimId: claim.id, why: `"${subject}" is a sentence fragment or an unknown party, not a kind of buyer a list can be built of.` });
     return false;
   }
+  if ((kind === 'FULFILMENT_SOURCE' || kind === 'BOTTLENECK') && !namesAMarketPart(subject)) {
+    // A supplier or a need is a kind a construction can be built over, never a claim sentence (production, 2026-11-24).
+    out.refused.push({ claimId: claim.id, why: `"${subject.slice(0, 120)}" is a sentence or a list, not a kind of ${kind === 'BOTTLENECK' ? 'need' : 'supplier'}.` });
+    return false;
+  }
   if (kind) {
     const created = await createNode({
       projectId: input.projectId,
@@ -1312,8 +1318,8 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
  * buyers are not a live map buyer type, is skipped.
  */
 type RoundBuyer =
-  | { buyer: IndustryNode; reason?: undefined; unmatchedBuyer?: undefined; sides: ArrangementSides }
-  | { buyer: null; reason: string; unmatchedBuyer?: string; sides?: undefined };
+  | { buyer: IndustryNode; reason?: undefined; unmatchedBuyer?: undefined; sides: ArrangementSides; asked?: AskedPopulation }
+  | { buyer: null; reason: string; unmatchedBuyer?: string; sides?: undefined; asked?: undefined };
 
 /** Who an arrangement sells to and who it buys fulfilment from, as its stored design names them. */
 export interface ArrangementSides {
@@ -1333,12 +1339,13 @@ export interface ArrangementSides {
  * the map holds no such population there is no key the plan reads, and the
  * claim is refused with the population named — never filed against a guess.
  * A pathway round (`mx-pw…`, `PATHWAY_KEY_PREFIX` in goals/plan.ts) is keyed by a hash of an opening and a gap and
- * names no arrangement, so it has no buyer to file against.
+ * names no arrangement, so it has no buyer to file against here: its accepted claims answer the asking
+ * opening's field instead (`applyPathwayAnswers`, cash/answers.ts).
  */
 async function constructedRoundBuyer(projectId: string, bucketId: string, nodes: readonly IndustryNode[]): Promise<RoundBuyer> {
   const key = arrangementKeyOfBucket(bucketId);
   if (!key) {
-    return { buyer: null, reason: bucketId.includes(`${ARRANGEMENT_BUCKET_MARK}pw`) ? 'round is a pathway construction, which names no arrangement' : 'round names no arrangement key' };
+    return { buyer: null, reason: bucketId.includes(`${ARRANGEMENT_BUCKET_MARK}pw`) ? 'round is a pathway construction, which names no arrangement: its answers go to the opening that asked (`applyPathwayAnswers`)' : 'round names no arrangement key' };
   }
   const arrangement = await arrangementForLegacyKey(projectId, key);
   if (!arrangement) return { buyer: null, reason: 'round’s arrangement is not in the library' };
@@ -1351,7 +1358,28 @@ async function constructedRoundBuyer(projectId: string, bucketId: string, nodes:
   if (!demand && mapped) demand = mapped.name;
   if (!demand) return { buyer: null, reason: 'round’s arrangement names no buyers' };
   const buyer = planBuyerType(demand, nodes);
-  return buyer ? { buyer, sides } : { buyer: null, reason: 'round’s arrangement buyers are no live map buyer type, so the plan reads no fact for them', unmatchedBuyer: demand };
+  if (buyer) return { buyer, sides };
+  /*
+   * Buyers the map does not hold yet (an opening's payer, an event-graph
+   * buyer): put on the map exactly as an answer to a price question about a
+   * population is (`mapAskedPopulation`), established by the accepted claim
+   * that files against it, so the plan reads the fact for this arrangement's
+   * demand. Production 2026-11-24: these numbers were refused instead. A
+   * name that is no buyer population, or one the plan would not read a fact
+   * for, is still refused — nothing is mapped from a sentence.
+   */
+  const probe = { id: '', parentId: null, kind: 'BUYER_TYPE', name: demand, retiredAt: null, createdAt: '' } as unknown as IndustryNode;
+  if (namesABuyerPopulation(demand) && planBuyerType(demand, [probe])) {
+    const opening = arrangement.opportunityId ? await getOpportunity(arrangement.opportunityId) : null;
+    const asked: AskedPopulation = {
+      ref: `arrangement:${key}`,
+      name: demand,
+      industry: opening && opening.projectId === projectId ? opening.industry : null,
+      opportunityId: opening && opening.projectId === projectId ? opening.id : null,
+    };
+    return { buyer: probe, sides, asked };
+  }
+  return { buyer: null, reason: 'round’s arrangement buyers are no live map buyer type, so the plan reads no fact for them', unmatchedBuyer: demand };
 }
 
 function arrangementSides(design: Record<string, unknown>): ArrangementSides {
@@ -1510,7 +1538,13 @@ async function constructedRoundDecisions(
       countsAsSkipped: true,
     });
   }
-  return out.map((decision, i) => shareOrCountDecision(decision, rows[i]!.claim, buyerByBucket.get(rows[i]!.bucketId)?.buyer ?? null));
+  return out.map((decision, i) => {
+    const resolved = buyerByBucket.get(rows[i]!.bucketId);
+    const judged = shareOrCountDecision(decision, rows[i]!.claim, resolved?.buyer ?? null);
+    // A population still to be mapped: the writer maps it (`mapAskedPopulation`) and files against it; the dry run only reports it.
+    if (!judged.candidate || !resolved?.asked) return judged;
+    return { ...judged, candidate: { ...judged.candidate, buyer: null, askedPopulation: resolved.asked } };
+  });
 }
 
 /**

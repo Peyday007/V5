@@ -412,7 +412,7 @@ export function candidateFromArrangement(a: ConstructedArrangement, modelled: Mo
     dimensions: {
       mechanism: `${a.design.base} ${a.design.funding}`,
       channel: a.design.aggregation,
-      fulfilment: supplier ?? 'Brain',
+      fulfilment: arrangementFulfilment(a),
       risk: `${exposure} ${a.sector ?? buyer}`,
       revenue: a.design.repeat,
     },
@@ -443,6 +443,23 @@ export function candidateFromArrangement(a: ConstructedArrangement, modelled: Mo
     transfers: a.precedent ? [`the design of ${a.precedent.title}, carried to a different buyer`] : [],
     stopsTransferringWhen: a.stress.failures.map((f) => f.effect).slice(0, 6),
   };
+}
+
+/**
+ * An arrangement's fulfilment dimension, from the kind of its supply part and
+ * never its name (production 2026-11-24: `supply.name` is a map node's or an
+ * event-graph actor's free text, and a claim sentence filed as a supplier
+ * reached the signature as "fulfilment=ad agency broadcaster committee
+ * company …"). The vocabulary is `pathwayDimensions`', so an arrangement and
+ * an opening with the same economic shape compare as one: Brain's own
+ * capability (or no supply, which the arrangement reads as Brain fulfilling
+ * it), an outside supplier a gated claim establishes, or one nothing has
+ * established yet. Pure.
+ */
+export function arrangementFulfilment(a: Pick<ConstructedArrangement, 'supply'>): string {
+  const supply = a.supply;
+  if (!supply || supply.from === 'CAPABILITY') return 'brain';
+  return supply.claimId ? 'external' : 'unestablished';
 }
 
 /**
