@@ -29,6 +29,7 @@
  * Brain to them.
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
+import type { SqlParam } from '../server/db/driver.ts';
 import { createProject, listProjects } from '../server/repos/projects.ts';
 import { listUsers } from '../server/repos/identity.ts';
 import { createGoal } from '../server/services/goals/decide.ts';
@@ -286,7 +287,7 @@ async function stall(): Promise<void> {
   const run = safeId(flag('run'), '--run');
   // `--run all` reads every evaluation run's goals together.
   const like = run === 'all' ? 'Planning evaluation %' : `Planning evaluation ${run} %`;
-  const q = async (label: string, sql: string, params: unknown[] = []): Promise<void> => {
+  const q = async (label: string, sql: string, params: SqlParam[] = []): Promise<void> => {
     const rows = await getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }]);
     console.log(`STALL ${label} ${JSON.stringify(rows)}`);
   };
