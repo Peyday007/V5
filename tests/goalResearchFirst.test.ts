@@ -21,7 +21,7 @@ import { createBin, listDispatchableBins } from '../server/repos/bins.ts';
 import { createCandidate } from '../server/repos/russellCandidates.ts';
 import { pauseGoal } from '../server/repos/goals.ts';
 import { goalFirstSql } from '../server/services/goals/goalWork.ts';
-import { servesGoalSearch } from '../server/services/research/packetRunner.ts';
+import { GOAL_PLAN_READ_BOOST, GOAL_PRIORITY_BOOST, goalResearchBoost, servesGoalSearch } from '../server/services/research/packetRunner.ts';
 import { judgeParkedPacketIds } from '../server/services/research/judgeRound.ts';
 
 let t: TestProject;
@@ -177,5 +177,52 @@ describe('a live goal’s linked research', () => {
     expect(await judgeParkedPacketIds()).toEqual([oldest, goals]);
     await link(goal, 'PACKET', goals);
     expect(await judgeParkedPacketIds()).toEqual([goals, oldest]);
+  });
+
+  /*
+   * Production 2026-11-25 16:30Z: 469 evaluation-goal fragments queued at one
+   * priority, drained FIFO two at a time, so a goal's route dives and price
+   * questions waited behind every goal's narrow questions and no plan read an
+   * EVIDENCE fact for hours. What the plan reads goes one step further up.
+   */
+  it('lifts what the plan reads — a linked opening’s dive, its price question — above the goal’s other questions', async () => {
+    const goal = await liveGoal();
+    const at = new Date().toISOString();
+    const mode = `cm_${++n}`;
+    await getDb().run(
+      `INSERT INTO cash_modes (id, project_id, owner_user_id, objective, horizon_days, envelope_id, state, activated_at, created_by_user_id, created_at, updated_at)
+       VALUES (?, ?, 'u', 'cash', 30, 'env', 'ACTIVE', ?, 'u', ?, ?)`,
+      [mode, t.project.id, at, at, at],
+    );
+    const diveIdea = await createCandidate({ title: 'Deep dive: the opening', statement: 'who pays for it, at what price', projectId: t.project.id });
+    const opening = `opp_${++n}`;
+    await getDb().run(
+      `INSERT INTO cash_opportunities (id, project_id, cash_mode_id, owner_user_id, title, mechanism, currency, required_capabilities, state, candidate_id, created_at, updated_at)
+       VALUES (?, ?, ?, 'u', 'A route the goal proposed', 'SERVICE', 'USD', '[]', 'DISCOVERED', ?, ?, ?)`,
+      [opening, t.project.id, mode, diveIdea.id, at, at],
+    );
+    await link(goal, 'OPPORTUNITY', opening);
+    const divePacket = await packet('dive');
+    await mission(divePacket, diveIdea.id);
+    // A validation packet of the same opening, reached through the opening itself.
+    const validation = await packet('validation');
+    await getDb().run(`UPDATE cash_opportunities SET validation_orchestration_id = ? WHERE id = ?`, [validation, opening]);
+    // A narrow question the goal links: goal work, not what its plan reads.
+    const narrow = await createCandidate({ title: 'a narrow question', statement: 'how many such firms exist', projectId: t.project.id });
+    await link(goal, 'CANDIDATE', narrow.id);
+    const narrowPacket = await packet('narrow');
+    await mission(narrowPacket, narrow.id);
+    const backlog = await packet('backlog');
+
+    expect(await goalResearchBoost(divePacket)).toBe(GOAL_PRIORITY_BOOST + GOAL_PLAN_READ_BOOST);
+    expect(await goalResearchBoost(validation)).toBe(GOAL_PRIORITY_BOOST + GOAL_PLAN_READ_BOOST);
+    expect(await goalResearchBoost(narrowPacket)).toBe(GOAL_PRIORITY_BOOST);
+    expect(await goalResearchBoost(backlog)).toBe(0);
+    // A fragment (stored at 6) of the dive outranks the narrow question's, which outranks backlog: the queue drains in that order.
+    expect(Math.min(9, 6 + (await goalResearchBoost(divePacket)))).toBeGreaterThan(Math.min(9, 6 + (await goalResearchBoost(narrowPacket))));
+
+    // Paused, the goal's research is ordinary again.
+    expect(await pauseGoal(goal, 'not now')).toBe(true);
+    expect(await goalResearchBoost(divePacket)).toBe(0);
   });
 });

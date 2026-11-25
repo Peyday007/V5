@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'create | read | update'
+        description: 'create | read | update | stall'
         required: true
         default: read
       run:
@@ -38,7 +38,7 @@ on:
         default: ''
 
 concurrency:
-  group: brain-planning-eval
+  group: brain-planning-eval-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -64,7 +64,7 @@ jobs:
         run: |
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          case "$E_COMMAND" in create|read|update) ;; *) echo "::error::Refusing '$E_COMMAND'."; exit 1 ;; esac
+          case "$E_COMMAND" in create|read|update|stall) ;; *) echo "::error::Refusing '$E_COMMAND'."; exit 1 ;; esac
           for value in "$E_RUN" "$E_CASE" "$E_GOAL"; do
             case "$value" in '') ;; *[!A-Za-z0-9_-]*) echo "::error::Refusing an id that is not letters, digits, underscore or dash."; exit 1 ;; esac
           done

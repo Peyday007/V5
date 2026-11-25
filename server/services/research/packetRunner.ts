@@ -38,7 +38,7 @@
  * approval is a separate entry point a person calls, and the ordinary advance
  * refuses to queue a PLANNED fragment.
  */
-import { goalIdeaSql } from '../goals/goalWork.ts';
+import { goalDiveSql, goalIdeaSql, goalPriceSql, liveGoalOpeningIdsSql } from '../goals/goalWork.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { envelopeAvailable, getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
 import { getProject } from '../../repos/projects.ts';
@@ -687,6 +687,52 @@ export async function servesGoalSearch(orchestrationId: string): Promise<boolean
   }
 }
 
+/**
+ * How much further a live goal's plan-read research is lifted, beyond
+ * `GOAL_PRIORITY_BOOST`: the packets whose answer a goal's plan reads directly
+ * — its own price and plan questions, and the deep dive (or validation) of an
+ * opening the goal links, which files the opening's EVIDENCE card facts.
+ *
+ * Production 2026-11-25 16:30Z (read-only `planningEval stall --run all`): 552
+ * evaluation-goal missions RUNNING and 9 DONE; 469 of their research fragments
+ * QUEUED, every one at priority 8 (6 + the goal boost), oldest 07:59Z, while
+ * the free lane — admitting two or three fragments at a time Brain-wide because
+ * the day's keyed web search was spent (`fragmentSearchRoom`) — finished 6–20
+ * evaluation fragments an hour. At one priority the shared queue is FIFO, so a
+ * goal created at 12:00Z queued behind ~400 older fragments of other goals'
+ * narrow questions (a day at that rate), its route dives were judged but held
+ * no slot, and after hours it had 0 EVIDENCE facts and 0 harvested answers.
+ * The plan reads a dive and a price or plan question; it reads a narrow
+ * question only through them. The step is the queue's own priority, honoured by
+ * every claimant, so no second scheduler is involved.
+ */
+export const GOAL_PLAN_READ_BOOST = 1;
+
+/** Whether a packet answers what a live goal's plan reads: its price or plan question, or a linked opening's dive or validation. */
+export async function servesGoalPlanRead(orchestrationId: string): Promise<boolean> {
+  try {
+    const row = await getDb().get<{ one: number }>(
+      `SELECT 1 AS one FROM russell_missions m JOIN russell_candidates c ON c.id = m.candidate_id
+        WHERE m.orchestration_id = ? AND (${goalPriceSql('c')} OR ${goalDiveSql('c')})
+       UNION ALL
+       SELECT 1 AS one FROM cash_opportunities vop
+        WHERE vop.validation_orchestration_id = ? AND vop.id IN (${liveGoalOpeningIdsSql()})
+       LIMIT 1`,
+      [orchestrationId, orchestrationId],
+    );
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
+/** The priority step a packet's work items take: the goal boost, and the plan-read step on top of it. */
+export async function goalResearchBoost(orchestrationId: string): Promise<number> {
+  // What a live goal's plan reads is that goal's research by definition, so it is asked first.
+  if (await servesGoalPlanRead(orchestrationId)) return GOAL_PRIORITY_BOOST + GOAL_PLAN_READ_BOOST;
+  return (await servesGoalSearch(orchestrationId)) ? GOAL_PRIORITY_BOOST : 0;
+}
+
 async function enqueueResearchItem(input: {
   orchestration: ResearchOrchestration;
   type: string;
@@ -696,7 +742,7 @@ async function enqueueResearchItem(input: {
   bundleKey?: string | null;
 }): Promise<{ workType: string; workItemId: string; fragmentKey: string | null }> {
   const definition = workType(input.type);
-  const boost = (await servesGoalSearch(input.orchestration.id)) ? GOAL_PRIORITY_BOOST : 0;
+  const boost = await goalResearchBoost(input.orchestration.id);
   const item = await enqueueWork({
     projectId: input.orchestration.projectId,
     workType: input.type,
