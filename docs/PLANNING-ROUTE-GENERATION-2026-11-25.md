@@ -70,14 +70,43 @@ Goals workflow with an administrator's `--admin` identity.
   established most parts; the plan concluded NOT_VIABLE with evidenced reasons
   (agency invoices settle in 30 days > 21; outplacement needs capital); Brain's own
   recovery opened a consumer round. Result of round 2: pending.
-- Decisive-10 (`d01–d10`, independent reviewer, sealed routes unread): round-1
-  research running.
+- Decisive-10 (`d01–d10`, sealed routes unread), local harness, real web research,
+  one discovery round + one validation-dive round (20 dives):
+  - every goal was read and every goal's round produced routes (31 openings, 1–4
+    modelled strategies per goal; before the route work: 0 modelled);
+  - by Brain's own owner-usable standard (every link but CONVERSION established):
+    **1/10** (d03: bid a live Michigan local-government wage study through MITN;
+    price, payer, channel, fulfiller, settlement and market size all sourced);
+  - the dives exposed readers that dropped evidence research had filed, all fixed
+    (`tests/decisiveReaders.test.ts`): payer heads with a parenthesised kind
+    list; per-unit-of-work rates a platform pays suppliers; the dive's dated
+    current-demand answer never reached the buying signal (no column);
+    payout schedules ("end of every workday", weekly, monthly + lag); stated
+    no-fee costs; one-time costs read per deal; per-unit-per-month prices;
+    award words before a qualified service ("grant prospect research");
+  - after the fixes the remaining open links are research gaps, not reading
+    defects: market size for the owner's own geography (d01, d02, d04), hours of
+    a subcontracted fulfiller (d02, d05, d06), demand dated in the window
+    (d01, d04, d05), owner capital of zero against a route that needs setup
+    money (d07), inventory capital over the owner's limit (d08). Each needs a
+    second research round, which Brain opens itself (`next`).
+- Research budget: the local evaluation's web-search allowance (200 searches per
+  session) was exhausted by the 20 dives, so further local rounds cannot run in
+  this session. The decisive test's next rounds must run on production research.
+- P2 (production research): stuck fragments were released forever with no attempt
+  charged (1,255 released vs 746 succeeded in 6h), holding each project's grant
+  slots; owner-directed goals were a hard-coded list. Both fixed (`87d4a433`,
+  `3eee7672`).
+- P3 (supplied routes): 33 → 40 / 40 owner-usable, 0 regressions; all 80 cases
+  69 → 76 (`0ba2ef69`).
 
 ## 5. Next executable actions
 
-1. File decisive-10 round-1 answers (`e2e.mts file`), run dives, recovery rounds;
-   grade with the independent grader; report the goal-only rate.
-2. Merge `claude/p1-route-synthesis` (+ P2 `claude/p2-research-execution`, P3
-   `claude/p3-planner-residuals` when they report) after `test:impacted`; release.
+1. Release the integrated branch (`claude/p1-route-synthesis`, P2 and P3 merged)
+   after `test:impacted`; verify on production that free-lane releases fall and
+   goal rounds harvest.
+2. Decisive-10 round 2: Brain's own recovery rounds (`e2e.mts next`) on the nine
+   goals without a usable plan — on production research (local search budget is
+   spent); grade all ten with the independent grader (`GRADER-BRIEF.md`).
 3. Production decisive test: create the 10 goals in production (operator path or
    Goals workflow `create` with `--admin`), watch research complete, grade.
