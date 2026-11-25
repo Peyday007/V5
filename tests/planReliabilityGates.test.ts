@@ -80,6 +80,15 @@ describe('2. money tied up is the peak held at once', () => {
     expect(peakConcurrentLots(0.4, 21, 10)).toBe(0.4);
   });
 
+  it('frees a lot paid the day it is sold for the next day’s lot (planner residuals, 2026-11-25: r09)', () => {
+    // 27 deals over 180 days, each paid at signing: one lot's capital is held at a time, never 27.
+    expect(peakConcurrentLots(27, 0, 180)).toBe(1);
+    expect(lotsUnderCeiling(27, 0, 180, 600, 15_000)).toEqual({ atOnce: 1, inWindow: 27 });
+    // Still all at once when more lots than days must run, or when the timing is unknown.
+    expect(peakConcurrentLots(27, 0, 10)).toBe(3);
+    expect(peakConcurrentLots(27, null, 180)).toBe(27);
+  });
+
   it('two signed $8,000 lots paid in 21 days hold $8,000 at once over 60 days, inside a $10,000 limit (fam-16)', () => {
     const one = opening('restaurant', { price: fixed(14_000), directCost: fixed(8000), capital: fixed(8000), daysToCash: fixed(21), hours: fixed(0), agreedValue: 28_000, agreedDeals: 2 });
     const cons = conservative([{ one, deals: 0 }], { daysLeft: 60 });

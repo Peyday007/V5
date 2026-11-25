@@ -148,3 +148,14 @@ describe('a recurring goal from words', () => {
     expect(reading.scope?.capitalAssumed).toMatchObject({ cents: 100_000, phrase: 'little up-front capital' });
   });
 });
+
+describe('what moves a monthly run-rate (planner residuals, 2026-11-25)', () => {
+  it('keeps the business the objective itself names', async () => {
+    const { namedByObjective } = await import('../server/services/cash/goalScenario.ts');
+    const objective = 'Launch a mobile dog-grooming dispatch service where contracted groomers do the work, reaching 4,000 dollars a month within 3 months.';
+    expect(namedByObjective(objective, 'Mobile dog-grooming dispatch')).toBe(true);
+    // A one-off the objective does not name is still left out.
+    expect(namedByObjective(objective, 'Kennel website rebuild')).toBe(false);
+    expect(namedByObjective(objective, 'Dispatch')).toBe(false);
+  });
+});

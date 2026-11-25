@@ -221,6 +221,131 @@ export function payerNounWords(payer: string | null | undefined): string[] {
   return [...new Set([word, one])];
 }
 
+/**
+ * The head noun of every kind of buyer a payer lists, as count words (planner residuals,
+ * 2026-11-25): a payer of "Small contractors, landscapers and cleaners" is counted by "900
+ * landscapers" as much as by "900 contractors", and a payer of "Workers and residents at
+ * warehouses, auto shops and apartment laundries" — reached one site at a time — by "2,000
+ * warehouses". Before, only the payer's first head counted ("Small contractors,
+ * landscapers" ended on "landscapers"; "Workers and residents …" on "workers"), so a market
+ * sized in another listed kind read as unsized. Each listed segment is cut at its first
+ * qualifier exactly as `payerNounWords` cuts the whole ("Contractors renting
+ * mini-excavators" is still contractors), and the same refusals apply. Pure.
+ */
+export function payerListWords(payer: string | null | undefined): string[] {
+  if (!payer) return [];
+  const out = new Set<string>();
+  for (const segment of payer.split(/\s*,\s*|\s+(?:and|or|plus|&|at)\s+/i)) {
+    if (!segment.trim()) continue;
+    for (const w of payerNounWords(segment)) out.add(w);
+  }
+  return [...out];
+}
+
+/**
+ * The payer's content words, singular, for judging whether a licensed or registered
+ * population is the payer's: "Assisted-living and memory-care communities in metro
+ * Detroit" yields assisted-living, memory-care, communitie(s)→community… Words that name no
+ * kind of buyer — places, sizes, connectives — never match. Pure.
+ */
+const NOT_A_KIND = /^(?:the|and|for|with|without|that|who|which|their|them|they|from|into|over|under|small|large|local|independent|metro|area|areas|region|regional|national|nationally|state|county|counties|city|cities|town|towns|north|south|east|west|new|active|other|some|many|most|more|than|such|like|each|every|about|around|needing|seeking|looking|wanting|using|people|individuals)$/;
+function singularOf(word: string): string {
+  if (/ies$/.test(word)) return `${word.slice(0, -3)}y`;
+  if (/(?:s|x|ch|sh)es$/.test(word)) return word.slice(0, -2);
+  if (/[^s]s$/.test(word)) return word.slice(0, -1);
+  return word;
+}
+function kindWords(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const [i, raw] of (text.match(/[A-Za-z][A-Za-z-]{3,}/g) ?? []).entries()) {
+    // A capitalized word past the first names a place or an agency ("Detroit", "FMCSA"), never a kind of buyer.
+    if (i > 0 && /^[A-Z]/.test(raw)) continue;
+    const w = raw.toLowerCase();
+    if (NOT_A_KIND.test(w)) continue;
+    out.add(singularOf(w));
+  }
+  return out;
+}
+
+/**
+ * The largest count a reader takes. A consumer platform's buyers are counted in hundreds of
+ * millions ("200 million monthly shoppers"), so the bound sits above every real buyer
+ * population and below the figures that are not counts at all.
+ */
+const MAX_COUNT = 1_000_000_000;
+
+/** A licence, registration or operating authority: what a licensed population is counted in. */
+const LICENCE_NOUNS = 'licen[cs]es|registrations|authorities|permits|certifications|certificates|charters';
+const LICENCE_SINGULAR = /^(?:licen[cs]e|registration|authority|permit|certification|certificate|charter)$/;
+/** A sentence naming a licensing or registering act or record. */
+const LICENSING = /\b(?:licen[cs](?:e|es|ed|ing|ee|ees)|regist(?:ry|ries|er|ers|ered|ration|rations)|permit(?:s|ted)?|authorit(?:y|ies)|certif(?:y|ies|ied|ication|ications)|charter(?:s|ed)?|accredit(?:s|ed|ation)?|grants?|issues?|issued)\b/i;
+
+/**
+ * A population an authority licenses or registers, counted as the payer when it is the
+ * payer (planner residuals, 2026-11-25). "LARA licenses about 420 assisted-living and adult
+ * foster care homes" counts a payer of assisted-living communities; "the contractor registry
+ * holds over 40,000 active licenses" counts a payer of contractors, one licence to a
+ * holder; "FMCSA grants about 4,000 new for-hire motor carrier authorities every month,
+ * most to fleets of one to five trucks" is a flow of new holders, so a payer of small
+ * fleets with that authority gains 4,000 new buyers a month. The licensed noun phrase (or,
+ * for a count of licences themselves, the sentence naming their holder) must share a kind
+ * word with the payer: a licensed population that is not the payer — the sellers'
+ * licences, a count of permits for something else — never counts. Each licence is one
+ * holder, which a holder of several only overstates, so the count is read as stated and the
+ * smallest such count is taken, as with every count. Returns the count and, for a flow, its
+ * period's length in days. Pure.
+ */
+const LICENSED_COUNT = new RegExp(
+  `(?<![$£€\\d.,])${COUNT}\\s+((?:[A-Za-z&'’-]+,?\\s+){0,7}?)([A-Za-z-]{3,}s)\\b((?:\\s+[A-Za-z-]+){0,3}?\\s+(?:a|per|each|every)\\s+(day|week|month|quarter|year)\\b)?`,
+  'gi',
+);
+interface LicensedPopulation {
+  n: number;
+  flowDays: number | null;
+  basis: string;
+  /** Where the count's phrase stands, so a flow's own period is not read as a purchase frequency. */
+  at: number;
+  end: number;
+}
+function licensedPopulations(text: string, payer: string | null): LicensedPopulation[] {
+  if (!payer) return [];
+  const payerKinds = kindWords(payer);
+  if (payerKinds.size === 0) return [];
+  const out: LicensedPopulation[] = [];
+  for (const m of text.matchAll(LICENSED_COUNT)) {
+    const at = m.index ?? 0;
+    if (/^\s*%/.test(text.slice(at + m[1]!.length))) continue;
+    const sentence = sentenceAt(text, at);
+    if (!LICENSING.test(sentence.text)) continue;
+    const head = m[3]!.toLowerCase();
+    if (!/s$/.test(head) || NOT_A_BUYER_NOUN.test(head) || MEASURE_NOUNS.test(head)) continue;
+    const between = m[2]!.split(/[\s,]+/).filter(Boolean);
+    if (between.some((w) => MEASURE_NOUNS.test(w))) continue;
+    const end = at + m[0]!.length;
+    if (SUPPLYING_AFTER.test(text.slice(end))) continue;
+    if (SPREAD_ACROSS_BEFORE.test(text.slice(sentence.start, at))) continue;
+    const isLicence = new RegExp(`^(?:${LICENCE_NOUNS})$`, 'i').test(head);
+    // The licensed noun phrase itself must be the payer's kind; a count of licences takes its holder from the sentence.
+    const phrase = isLicence ? sentence.text : `${m[2]!} ${head}`;
+    // Shared with the payer, never through a word for the licence itself.
+    const shared = [...kindWords(phrase)].filter((w) => payerKinds.has(w) && !LICENCE_SINGULAR.test(w));
+    if (shared.length === 0) continue;
+    // Licensed holders are licensed for something: a phrase with no licensing word near it is a count of something else.
+    if (!isLicence && !LICENSING.test(text.slice(Math.max(sentence.start, at - 60), end + 40))) continue;
+    const n = toInt(m[1]!);
+    if (!(n > 0 && n < MAX_COUNT)) continue;
+    const period = m[5]?.toLowerCase();
+    out.push({
+      n,
+      flowDays: period ? PERIOD_DAYS[period]! : null,
+      at,
+      end,
+      basis: `${n} ${isLicence ? `${head} held by the payer's kind (${shared.join(', ')})` : `licensed or registered ${head}`}${period ? ` newly granted a ${period}` : ''}`,
+    });
+  }
+  return out;
+}
+
 /** Head nouns that name a business by what it does: "moving companies", "roofing contractors". */
 const TRADE_HEAD = /^(?:companies|company|firms|firm|businesses|business|contractors|services|operators|shops|outfits|crews)$/i;
 
@@ -323,7 +448,7 @@ function buyerCounts(text: string, pattern: RegExp): Array<{ at: number; n: numb
     const sentence = sentenceAt(text, at);
     if (SPREAD_ACROSS_BEFORE.test(text.slice(sentence.start, at))) continue;
     const n = toInt(m[1]!);
-    if (n > 0 && n < 50_000_000) out.push({ at, n });
+    if (n > 0 && n < MAX_COUNT) out.push({ at, n });
   }
   return out;
 }
@@ -423,7 +548,7 @@ function publishedCount(text: string): string {
 export function readVolume(raw: string, windowDays: number, payer: string | null = null, industry: string | null = null): VolumeReading | null {
   if (!raw || !(windowDays > 0)) return null;
   const text = publishedCount(raw);
-  const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer), ...payerAgentWords(payer), ...industryBuyerWords(industry)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
+  const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer), ...payerListWords(payer), ...payerAgentWords(payer), ...industryBuyerWords(industry)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
   const buyerWords = held.length === 0 ? BUYER_WORDS : `${BUYER_WORDS}|${held.join('|')}`;
   const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+${BETWEEN}(?:${buyerWords})\\b`, 'gi');
   const window = Math.max(1, Math.floor(windowDays));
@@ -456,6 +581,17 @@ export function readVolume(raw: string, windowDays: number, payer: string | null
    * payer's own words counted, so an evidenced market of "investors" or "facilities" read as
    * unsized and left MARKET_VOLUME open (2026-11-24 investigation: 3 of 10 fresh requests).
    */
+  /*
+   * A population an authority licenses or registers counts the payer when it is the payer's
+   * kind, and a flow of new licences per period is that many new buyers each period, so the
+   * window holds the flow's share of them — never the stock of every holder.
+   */
+  const licensed = licensedPopulations(text, payer).map((p) => ({
+    ...p,
+    n: p.flowDays === null ? p.n : Math.floor((p.n * window) / p.flowDays),
+  })).filter((p) => p.n >= 1);
+  const stated = counts;
+  counts = [...counts, ...licensed.map((p) => p.n)];
   if (counts.length === 0) {
     const each = EACH_BUYS.exec(text);
     if (each) counts = [toInt(each[1]!)];
@@ -465,14 +601,21 @@ export function readVolume(raw: string, windowDays: number, payer: string | null
   const share = buyingShare(text);
   const buyers = share === null ? counted : Math.floor(counted * share);
   if (buyers < 1) return null;
-  const of = share === null ? '' : ` (${Math.round(share * 100)}% of ${counted} stated to buy)`;
+  const from = stated.includes(counted) ? undefined : licensed.find((p) => p.n === counted);
+  const of = (share === null ? '' : ` (${Math.round(share * 100)}% of ${counted} stated to buy)`) + (from ? ` (${from.basis}${from.flowDays === null ? '' : `, ${counted} in ${window} days`})` : '');
 
+  // A flow's own period ("4,000 new authorities every month") says how often buyers arrive, never how often one buys.
+  // Nor does a frequency naming the counted population ("200 million monthly shoppers" are counted over a month, not buying monthly).
+  const cadence = (from && from.flowDays !== null ? text.slice(0, from.at) + text.slice(from.end) : text).replace(
+    new RegExp(`\\b(?:daily|weekly|monthly|yearly|annual)\\s+(?:active\\s+|unique\\s+)?(?=(?:${buyerWords})\\b)`, 'gi'),
+    '',
+  );
   let everyDays: number | null = null;
-  const times = TIMES.exec(text);
+  const times = TIMES.exec(cadence);
   if (times) {
     const n = times[1] ? toInt(times[1]) : /^twice$/i.test(times[2]!) ? 2 : 1;
     everyDays = PERIOD_DAYS[times[3]!.toLowerCase()]! / Math.max(1, n);
-  } else for (const [pattern, days] of WORD_DAYS) if (pattern.test(text)) { everyDays = days; break; }
+  } else for (const [pattern, days] of WORD_DAYS) if (pattern.test(cadence)) { everyDays = days; break; }
   /*
    * A buyer whose purchases research says fall due spread through its cycle
    * buys inside a shorter window only when its own date falls there

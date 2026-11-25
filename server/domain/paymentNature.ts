@@ -304,8 +304,14 @@ const SUPPLIER_RECIPIENT = new RegExp(String.raw`\b(?:${SERVICE_ROLE}|${SELLER_S
 const PAYS_OUT = /\bfunds?\b[^.;]{0,15}\bpays?\b|\b(?:donate|donates|donated|pledge|pledges|pledged)\b/i;
 /** A job: an employer paying an employee. */
 const EMPLOYMENT_FRAME = /\bW-?2\b|\b\d+\s+hours (?:a|per) week\b|\b(?:with|plus|and) (?:full |health )?benefits\b|\bhealth benefits\b|\b(?:job|career) (?:postings?|boards?|listings?|openings?)\b|\bcareers? pages?\b|\bpaid time off\b|\b(?:part|full)[- ]time\b|\bhiring (?:seasonal |temporary |full-time |part-time )?(?:staff|employees|workers|associates)\b/i;
-/** A body whose role is to pay out: a funder, a fund, a programme, a donor. */
-const FUNDER_BODY = /\b(?:foundations?|endowments?|grantmakers?|funds?|arts councils?|development councils?|institutes?|institute of|programs?|programmes?|donors?|supporters?)\b/i;
+/**
+ * A body whose role is to pay out: a funder, a fund, a programme, a donor. A funder word
+ * that modifies a trade is the trade, never a funder: "foundation-repair contractors" fix
+ * foundations (planner residuals, 2026-11-25: a lead service for roofing, HVAC and
+ * foundation-repair contractors read as paid by a grant-making foundation, so its price was
+ * no price and the plan could not reach anything).
+ */
+const FUNDER_BODY = /\b(?:foundations?(?!\s+(?:repair|repairs|crack|cracks|waterproofing|leveling|levelling|inspection|inspections|contractors?|work|works|drilling|pouring)\b)|endowments?|grantmakers?|funds?|arts councils?|development councils?|institutes?|institute of|programs?|programmes?|donors?|supporters?)\b(?!-)/i;
 /** Text that shows somebody being paid as a supplier, or buying through procurement or a sale. */
 const SUPPLIER_SIGNAL = (t: string): boolean =>
   SUPPLIER_PRICE_FRAME.test(t) || PAYS_SUPPLIER.test(t) || PROCUREMENT.test(t) || /\b(?:sells?|sold|hires?|hired|retains?|retained|subscriptions?)\b/i.test(t);
