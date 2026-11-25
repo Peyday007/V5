@@ -18,7 +18,8 @@ import { getCashMode } from '../server/repos/cashMode.ts';
 import { createOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { researchGoalPaths, MAX_OPEN_PATH_QUESTIONS } from '../server/services/goals/pathResearch.ts';
-import type { ChainLink, ConsideredOpening, PlanReading } from '../server/services/goals/plan.ts';
+import type { PathResearchReading } from '../server/services/goals/pathResearch.ts';
+import type { ChainLink, ConsideredOpening } from '../server/services/goals/plan.ts';
 
 let projectId = '';
 let userId = '';
@@ -61,9 +62,13 @@ function considered(id: string, missing: ChainLink[], supportedReach: number): C
   };
 }
 
-/** The smallest reading the pass reads: a target, the considered openings, nothing else ranked. */
-function reading(openings: ConsideredOpening[], remainingCents = 1_000_000): PlanReading {
-  return { considered: openings, target: { remainingCents }, researchPriority: [], sales: [], executionPolicy: 'BUILD' } as unknown as PlanReading;
+/**
+ * Every field the pass reads, typed and with no cast: a target, the considered
+ * openings, nothing else ranked. When the pass reads a new field it joins
+ * `PathResearchReading` and this stops compiling until it is supplied here.
+ */
+function reading(openings: ConsideredOpening[], remainingCents = 1_000_000): PathResearchReading {
+  return { considered: openings, target: { remainingCents }, researchPriority: [], sales: [], executionPolicy: 'EVIDENCE_FIRST', portfolio: null, pathways: null };
 }
 
 async function askedOn(id: string): Promise<string[]> {

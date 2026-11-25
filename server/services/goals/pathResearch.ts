@@ -146,8 +146,19 @@ export function planFieldsFor(reading: Pick<PlanReading, 'researchPriority'>, op
   ];
 }
 
+/**
+ * The part of a plan reading this pass reads, and nothing more. A full
+ * `PlanReading` satisfies it; a caller that builds one by hand — a test —
+ * must supply every field here, so a field the pass starts reading has to be
+ * added to this type and then to every hand-built reading, instead of a cast
+ * hiding that the reading no longer has production's shape.
+ */
+export type PathResearchReading = Pick<PlanReading, 'considered' | 'researchPriority' | 'executionPolicy' | 'sales' | 'portfolio' | 'pathways'> & {
+  target: Pick<PlanReading['target'], 'remainingCents'>;
+};
+
 export async function researchGoalPaths(input: {
-  reading: PlanReading;
+  reading: PathResearchReading;
   projectId: string;
   now?: Date;
   /** Each opening's outcome in words, for the operator readout. */
