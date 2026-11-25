@@ -145,6 +145,9 @@ describe('routes from findings', () => {
     expect(prompt).toMatch(/"rethink"/);
     // Unlawful or terms-breaking routes fail a rule the critic scores (dev4, 2026-11-25: paid reviews proposed).
     expect(prompt).toMatch(/fake, paid or incentivised reviews/);
+    // Platform resale and unnamed referral commissions are not routes (dev4, 2026-11-25: six Fiverr/Upwork resale routes).
+    expect(prompt).toMatch(/reselling gigs, services or products another platform already sells/);
+    expect(prompt).toMatch(/referral commission without a named partner programme/);
   });
 
   it('keeps only cited refs the prompt showed, and reads demand as comparable unless the reply says exact', () => {
