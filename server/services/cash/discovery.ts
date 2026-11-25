@@ -1473,13 +1473,26 @@ export async function staleUnlaunchedRounds(rounds: readonly CashDiscoveryRound[
  * whose rounds waited on the grant held its whole cap with research that was
  * not running and opened nothing: production read 0 of 20 goals short of a
  * recommendable plan opening a round in the window ("live cap full of stalled
- * rounds"). A goal's lens rounds now count slots this way. At most `cap` of them yield, so a goal never holds more than twice
+ * rounds"). A goal's lens rounds now count slots this way, while the grant
+ * is full. At most `cap` of them yield, so a goal never holds more than twice
  * its cap open however long the grant stays shut, and the grant's own cap
  * still decides every launch. A round with a mission keeps its slot.
  */
 export async function roundsHoldingSlots(rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<number> {
   const researching = await roundsStillResearching(rounds);
   if (researching === 0) return 0;
+  /*
+   * Only while the research grant's slots are all held. That is the one state
+   * in which a goal round past its stall threshold is still OPEN: with a slot
+   * free, the discovery pass that runs before every goal pass retires it
+   * (`expireUnlaunchedGoalRound`, after `UNLAUNCHED_GOAL_ROUND_MS`) and its slot
+   * is free by the ordinary rule. Yielding in any other state would answer a
+   * reading production cannot reach, and let a goal open past rounds the
+   * harvest is about to retire (review F3, 2026-11-25).
+   */
+  const projectId = rounds[0]?.projectId;
+  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
+  if (!projectId || (await researchMissionSlotsFull(projectId).catch(() => null)) !== true) return researching;
   return researching - Math.min(await staleUnlaunchedRounds(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS), Math.max(0, cap));
 }
 
