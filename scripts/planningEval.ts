@@ -537,7 +537,7 @@ async function statedPriceProbe(like: string): Promise<void> {
       return { open: list.length, withClaims: list.filter((one) => one.claims > 0).length, wouldAnswer: list.filter((one) => one.answered).length };
     };
     console.log(`STALL stated_price_needs ${JSON.stringify({ all: sum(false), eval: sum(true) })}`);
-    console.log(`STALL stated_price_detail ${JSON.stringify([...needs].filter(([, one]) => one.claims > 0).slice(0, 40).map(([need, one]) => ({ need, ...one })))}`);
+    console.log(`STALL stated_price_detail ${JSON.stringify([...needs].filter(([, one]) => one.answered).slice(0, 40).map(([need, one]) => ({ need, ...one })))}`);
   } catch (error) {
     console.log(`STALL stated_price_needs ${JSON.stringify({ error: String((error as Error)?.message ?? error).slice(0, 300) })}`);
   }
