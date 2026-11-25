@@ -2543,6 +2543,60 @@ export function endFreeLaneCooldowns(): void {
 }
 const transientStrikes = new Map<string, number>();
 
+/**
+ * How many times one item may be handed back with its attempt refunded before
+ * a further failure is charged as an attempt.
+ *
+ * A refund says "the provider, Brain's database or web search failed, not the
+ * work", and the in-process strike count that bounded it is lost on every
+ * restart and was skipped outright for a search outage. Production, 2026-11-25
+ * 00:20Z: RESEARCH_FRAGMENT wki_18acf737c7fe460a8c9f (an evaluation goal's
+ * research, prj_630132c1875545548727) at lease generation 26 with attempt
+ * count 0; over the 6 h before 01:05Z the lane ended 1,255 leases RELEASED
+ * against 746 SUCCEEDED, 1,155 of the GPU's jobs "not accepted" — almost all
+ * RELEASED_TRANSIENT fragments that found no readable source or listed no
+ * claims while search refused. Such an item never fails, so its packet never
+ * synthesizes, its mission holds one of the project's few grant slots, and the
+ * goal's rounds expire unlaunched behind it.
+ *
+ * The bound is durable because it is read from the item's own row: a claim
+ * raises `lease_generation` and `attempt_count` together, a release refunds
+ * only the attempt, so `leaseGeneration - attemptNumber` at a claim is the
+ * refunded hand-backs so far. Past the bound the failure is charged
+ * (`brain_fail_work`, retryable), so the item ends within its own attempt
+ * budget and the packet's gap path takes over. A route outage (provider busy)
+ * and Brain's own database being unavailable say nothing about the item and
+ * stay refunded: the route's breaker and cooldowns bound those.
+ */
+export const MAX_REFUNDED_RELEASES = 6;
+
+/** Refunded hand-backs this item has had before the current claim, from its own row. Pure. */
+export function refundedReleasesSoFar(claimed: Pick<ClaimedWork, 'leaseGeneration' | 'attemptNumber'>): number {
+  return Math.max(0, claimed.leaseGeneration - claimed.attemptNumber);
+}
+
+/**
+ * Whether a failed item is handed back with its attempt refunded. Pure.
+ *
+ * `strikes` is this process's count for the item; `releasesSoFar` the durable
+ * count from its row (`refundedReleasesSoFar`).
+ */
+export function refundsFailure(input: {
+  transient: boolean;
+  brainUnavailable: boolean;
+  searchOutage: boolean;
+  providerFailure: boolean;
+  strikes: number;
+  releasesSoFar: number;
+}): boolean {
+  const { transient, brainUnavailable, searchOutage, providerFailure, strikes, releasesSoFar } = input;
+  if (!(transient || brainUnavailable || searchOutage)) return false;
+  // A route outage (which includes Brain's database being unavailable): not the item's, bounded by the route's breaker.
+  if (providerFailure) return true;
+  if (releasesSoFar >= MAX_REFUNDED_RELEASES) return false;
+  return strikes < 3 || searchOutage;
+}
+
 /** Models whose recent free-lane items all failed, from the lane's own events. */
 async function failingModels(now = Date.now()): Promise<Set<string>> {
   const since = new Date(now - 30 * 60_000).toISOString();
@@ -3577,7 +3631,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     one.workType === 'RESEARCH_FRAGMENT' &&
     ((/^no readable source among/.test(ctx.why) && webSearchRefusing()) || ctx.searchStarved === true);
   const strikes = transient || brainUnavailable || searchOutage ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
-  const refund = (transient || brainUnavailable || searchOutage) && (strikes < 3 || providerFailure || searchOutage);
+  const refund = refundsFailure({ transient, brainUnavailable, searchOutage, providerFailure, strikes, releasesSoFar: refundedReleasesSoFar(one) });
   // Recorded before the cooldowns are touched: one answer from a route whose recent calls still
   // mostly failed is its re-probe, and does not reopen it to every cooled item (CAP-16-3).
   // A check voided because a producer answered it says nothing about the route's health.
