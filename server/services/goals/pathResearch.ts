@@ -17,9 +17,15 @@
  * and money in the account, who decides it, how long it takes and the payment
  * terms — because that is what turns "3 to 60 days" into a fact.
  *
+ * Who pays, the published channel that reaches them, and a dated sign that
+ * they want it now are published facts, and are asked: an opening missing its
+ * REACHABLE_BUYER or CURRENT_DEMAND link had no question that could establish
+ * it, so outside a deep dive it read "no payer" and "undated signal" for ever
+ * (CAPABILITY:GOAL_PLAN.EVIDENCE.BUYER_PRICE, 0 of 56).
+ *
  * What research cannot settle is not asked here: whether these buyers will say
- * yes is a test, and reaching them is a permission. How often comparable buyers
- * said yes is published, and is asked.
+ * yes is a test, and contacting them is a permission. How often comparable
+ * buyers said yes is published, and is asked.
  */
 import { isArrangementId } from '../cash/goalScenario.ts';
 import { getOpportunity, listNeeds } from '../../repos/cashPortfolio.ts';
@@ -51,6 +57,37 @@ export const REASK_AFTER_MS = 24 * 60 * 60 * 1000;
 export const MAX_ASKINGS = 3;
 
 const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> = {
+  /*
+   * The answers land on the columns the link is judged on (answers.ts COLUMN:
+   * `payer` -> payer, `access` -> reachable_channel), through the evidence gate.
+   */
+  REACHABLE_BUYER: [
+    {
+      field: 'payer',
+      ask:
+        'Name who pays for exactly this: the kind of organisation or person that is published as buying it, the role inside it that ' +
+        'decides and pays, with a source and date for each. A buyer only described as "businesses" or "companies" is not a payer.',
+    },
+    {
+      field: 'access',
+      ask:
+        'Find the published channel through which these buyers can be reached for this offer — a directory, register, marketplace ' +
+        'category, association list or the buyers’ own published contact pages — with its source, and how many buyers it reaches.',
+    },
+  ],
+  /*
+   * `buyingEvidence` writes buying_signal with signal_observed_at taken from the
+   * claim's own date, and answers.ts refuses one without a date.
+   */
+  CURRENT_DEMAND: [
+    {
+      field: 'buyingEvidence',
+      ask:
+        'Find a dated public sign that buyers of exactly this kind want it now — a posted request, job or RFQ, a tender, a forum or ' +
+        'marketplace post asking for it — quoting it with its source and the date it was published. The date is when the request ' +
+        'was posted, never when the page was last modified or retrieved; an undated sign is not evidence.',
+    },
+  ],
   SETTLES_IN_TIME: [
     {
       field: 'timeToFirstCash',
@@ -255,6 +292,8 @@ export async function researchGoalPaths(input: {
       // No supported price big enough yet: what buyers actually pay decides
       // whether anything else about it is worth asking, so ask that alone.
       asks = [FIELDS_FOR.OFFER_AND_PRICE![0]!];
+      // Who pays is asked beside what they pay: a price with no payer behind it stays a guess ("price a guess").
+      if (one.missing.includes('REACHABLE_BUYER')) asks = [...asks, FIELDS_FOR.REACHABLE_BUYER![0]!];
       // Small per sale with volume unknown: how many buyers, how often, is asked beside the price.
       if (!sizeKnown) asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
     } else if (!one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
