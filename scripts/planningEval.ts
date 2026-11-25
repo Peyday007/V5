@@ -396,6 +396,26 @@ async function stall(): Promise<void> {
     WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN') AND o.status = 'NEEDS_HUMAN'
     ORDER BY CASE WHEN m.state = 'NEEDS_HUMAN' THEN 1 ELSE 0 END, m.updated_at LIMIT 6`);
   await q('park_events_6h', `SELECT e.event_type, COUNT(*) AS n, MAX(e.created_at) AS last FROM project_events e WHERE e.created_at >= ? AND e.event_type IN ('RUSSELL_MISSION_FAILED', 'RUSSELL_MISSION_PARKED', 'RUSSELL_ROUTINE_DECISION', 'RUSSELL_HUMAN_REQUESTED') GROUP BY 1`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]);
+  // Judge parks (PATCH / MORE_RESEARCH): what `assessJudgeRound` says of each, and the resume pass's room.
+  try {
+    const judge = await import('../server/services/research/judgeRound.ts');
+    const readings = await judge.judgeParkReadings();
+    const evalIds = new Set((await getDb().all<{ id: string }>(`SELECT o.id FROM research_orchestrations o WHERE o.status = 'NEEDS_HUMAN' AND ${evp}`, [like])).map((r) => r.id));
+    const tally = new Map<string, number>();
+    for (const { orchestration, assessed } of readings) {
+      const why = assessed.kind === 'PERSON' || assessed.kind === 'CONTINUED_ELSEWHERE' ? assessed.reason.slice(0, 90) : assessed.kind === 'RESUME' ? `round ${assessed.round} followUps=${assessed.followUps.length} corrections=${assessed.corrections.length}` : '';
+      const key = `${evalIds.has(orchestration.id) ? 'eval' : 'other'}|${orchestration.unresolvedGapPolicy ?? '-'}|${assessed.kind}|${why}`;
+      tally.set(key, (tally.get(key) ?? 0) + 1);
+    }
+    console.log(`STALL judge_parks ${JSON.stringify([...tally].map(([k, n]) => ({ k, n })).sort((a, b) => b.n - a.n))}`);
+    console.log(`STALL judge_cap ${JSON.stringify({ cap: await judge.liveJudgeRoundCap() })}`);
+  } catch (error) {
+    console.log(`STALL judge_parks ${JSON.stringify([{ error: String((error as Error)?.message ?? error).slice(0, 300) }])}`);
+  }
+  await q('judge_resumed', `SELECT o.status, COALESCE(o.current_pass, '-') AS pass, COUNT(*) AS n, MIN(e.created_at) AS first_resume, MAX(e.created_at) AS last_resume
+     FROM project_events e JOIN research_orchestrations o ON e.payload LIKE '%' || o.id || '%'
+    WHERE e.event_type = 'RESEARCH_ROUND_RESUMED' AND e.created_at >= ? GROUP BY 1, 2 ORDER BY n DESC`, [new Date(Date.now() - 7 * 24 * 3_600_000).toISOString()]);
+  await q('judge_resumed_daily', `SELECT SUBSTR(e.created_at, 1, 10) AS day, COUNT(*) AS n FROM project_events e WHERE e.event_type = 'RESEARCH_ROUND_RESUMED' AND e.created_at >= ? GROUP BY 1 ORDER BY 1`, [new Date(Date.now() - 7 * 24 * 3_600_000).toISOString()]);
   await q('capacity', `SELECT model, target, stable_high, updated_at, SUBSTR(reason, 1, 200) AS reason FROM free_lane_capacity ORDER BY model`);
 }
 
