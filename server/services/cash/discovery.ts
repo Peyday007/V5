@@ -1157,21 +1157,19 @@ export async function openGoalDiscovery(input: {
   const mine = (await listRounds(t.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
   /*
-   * Rounds that never launched hold no slot of the lens search
-   * (`roundsHoldingSlots`): production 2026-11-25 read 0 of 20 goals short of
-   * a recommendable plan opening a round, the live cap full of stalled rounds.
-   * Constructed rounds keep their own rule (`openConstructedRound`).
-   */
-  /*
-   * Past the yield the oldest stalled round gives its place to the next lens
-   * (`retireOldestStalledRound`), so a goal whose rounds stall from a cause
-   * that persists keeps searching rather than stopping at twice its cap. It is
-   * retired only once a lens to ask in its place has been chosen, below.
+   * A goal's cap held by rounds that research nothing stopped its search
+   * (production 2026-11-25: 0 of 20 goals short of a recommendable plan opened
+   * a round, "live cap full of stalled rounds"). No round yields a slot
+   * (`roundsHoldingSlots`): with the cap held, a lens round stalled behind a
+   * full research grant gives its place to the next lens, one for one
+   * (`retireOldestStalledRound`), retired only once that lens has been chosen,
+   * below. With a grant slot free the discovery pass retires stalled rounds
+   * itself. Constructed rounds keep their own rule (`openConstructedRound`).
    */
   const replaceStalled = (await roundsHoldingSlots(mine, now, liveCap)) >= liveCap;
   // Only a lens round gives its place to a lens: constructed rounds keep their own share (`openConstructedRound`).
   const lensRounds = mine.filter((one) => !isConstructedRound(one, prefix));
-  if (replaceStalled && !(await stalledPastYield(lensRounds, now, liveCap))) return null;
+  if (replaceStalled && !(await stalledBehindFullGrant(lensRounds, now))) return null;
   /*
    * The fixed angles are a starting point, not the whole map: Brain's own
    * industry map (`industry_nodes`, filled from classification systems and
@@ -1252,7 +1250,7 @@ export async function openGoalDiscovery(input: {
   const choice = choices[0];
   if (!choice) return null;
   // The chosen lens has no OPEN round, so the round retired here is never the one asked next.
-  if (replaceStalled && !(await retireOldestStalledRound(t.projectId, lensRounds, now, liveCap))) return null;
+  if (replaceStalled && !(await retireOldestStalledRound(t.projectId, lensRounds, now))) return null;
   const { lens, id, history, next } = choice;
   const origins: OpportunityOrigin[] = [lens.origin];
   const seedKeys = lens.seedKey ? [lens.seedKey] : [];
@@ -1482,79 +1480,56 @@ async function unlaunchedRoundsPast(rounds: readonly CashDiscoveryRound[], now: 
 }
 
 /**
- * How many of these rounds hold a slot of a live cap of `cap`: those still
- * researching (`roundsStillResearching`), less those that never launched
- * (`staleUnlaunchedRounds`, past `STALLED_ROUND_YIELDS_AFTER_MS`) — queued
- * for the research grant, researching nothing.
+ * How many of these rounds hold a slot of a live cap of `cap`: every round
+ * still researching (`roundsStillResearching`). No round yields its slot.
  *
- * Until 2026-11-25 only a price re-ask was let past such rounds, so a goal
- * whose rounds waited on the grant held its whole cap with research that was
- * not running and opened nothing: production read 0 of 20 goals short of a
- * recommendable plan opening a round in the window ("live cap full of stalled
- * rounds"). A goal's lens rounds now count slots this way, while the grant
- * is full. At most `cap` of them yield, so a goal never holds more than twice
- * its cap open however long the grant stays shut, and the grant's own cap
- * still decides every launch. A round with a mission keeps its slot.
+ * A goal round unlaunched past `UNLAUNCHED_GOAL_ROUND_MS` is in one of two
+ * states. With a research slot free, the discovery pass that runs before every
+ * goal pass retires it (`expireUnlaunchedGoalRound`) and its slot frees by the
+ * ordinary rule. With every slot of the grant held it is queued, and letting
+ * it yield admitted up to `cap` more rounds behind a grant that could launch
+ * none of them: admission without capacity (review F1, 2026-11-25; Breakwater,
+ * DAGOR). A short goal still keeps searching then, but by replacing its
+ * oldest stalled lens round one for one (`retireOldestStalledRound`), so the
+ * questions queued behind the grant are renewed and never multiplied. `cap`
+ * is kept for callers; it no longer changes the count.
  */
-export async function roundsHoldingSlots(rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<number> {
-  const researching = await roundsStillResearching(rounds);
-  if (researching === 0) return 0;
-  /*
-   * Only while the research grant's slots are all held. That is the one state
-   * in which a goal round past its stall threshold is still OPEN: with a slot
-   * free, the discovery pass that runs before every goal pass retires it
-   * (`expireUnlaunchedGoalRound`, after `UNLAUNCHED_GOAL_ROUND_MS`) and its slot
-   * is free by the ordinary rule. Yielding in any other state would answer a
-   * reading production cannot reach, and let a goal open past rounds the
-   * harvest is about to retire (review F3, 2026-11-25).
-   */
-  const projectId = rounds[0]?.projectId;
-  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
-  if (!projectId || (await researchMissionSlotsFull(projectId).catch(() => null)) !== true) return researching;
-  return researching - Math.min(await staleUnlaunchedRounds(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS), Math.max(0, cap));
+export async function roundsHoldingSlots(rounds: readonly CashDiscoveryRound[], _now: string, _cap: number): Promise<number> {
+  return roundsStillResearching(rounds);
 }
 
 /**
- * Whether these rounds have more stalled rounds than their yield covers, in
- * the one state a stalled round survives the discovery pass: the research
- * grant's slots all held (`roundsHoldingSlots`). With a slot free the
- * discovery pass retires them itself (`expireUnlaunchedGoalRound`).
+ * Whether one of these rounds is stalled behind a full research grant: unlaunched
+ * past `UNLAUNCHED_GOAL_ROUND_MS` while every slot of the grant is held, the one
+ * state in which the expiry keeps it queued (`unlaunchedWaitIsTheGrants`).
  */
-async function stalledPastYield(rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<boolean> {
-  if ((await staleUnlaunchedRounds(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS)) <= Math.max(0, cap)) return false;
+async function stalledBehindFullGrant(rounds: readonly CashDiscoveryRound[], now: string): Promise<boolean> {
+  if ((await staleUnlaunchedRounds(rounds, now, UNLAUNCHED_GOAL_ROUND_MS)) === 0) return false;
   const projectId = rounds[0]?.projectId;
-  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
-  return !!projectId && (await researchMissionSlotsFull(projectId).catch(() => null)) === true;
+  return !!projectId && (await unlaunchedWaitIsTheGrants(projectId));
 }
 
 /**
- * Retire the oldest stalled lens round of a goal whose stalled lens rounds
- * have used up their yield (`roundsHoldingSlots`), so the next lens takes its
- * place. One for one, and never a constructed round: replacing one of those
- * with a lens would let lens rounds grow past twice the cap while
- * construction reopens inside its own share.
+ * Retire the oldest stalled lens round of a goal whose live cap is held, so
+ * the next lens takes its place: one for one, never a constructed round, and
+ * only while the research grant is full (`stalledBehindFullGrant`) — with a
+ * slot free the discovery pass retires stalled rounds itself.
  *
- * The yield alone bounded a goal at twice its cap and then stopped it for
- * good: a goal whose rounds stalled from a cause that persisted (the research
- * grant shut, a launch queue never reached) opened nothing again after one
- * burst — the "live cap full of stalled rounds" failure, one step later. The
- * bound now holds the newest questions instead of the oldest: past it, one
- * round unlaunched past `STALLED_ROUND_YIELDS_AFTER_MS` is retired exactly as
- * `expireUnlaunchedGoalRound` retires one — its idea REJECTED first, guarded on
- * the state read, so it can never launch beside the round asked in its place;
- * the round closed ABANDONED, which is no evidence about its lens (§53, §65),
- * so the lens is asked again after its cool-off. Only while the grant is full
- * (`stalledPastYield`): with a slot free the discovery pass retires them. Nothing is deleted, nothing
- * is launched, and the grant's own cap still decides every launch. A round
- * with a mission, or not yet stalled, is never touched.
+ * A goal whose rounds stalled from a cause that persisted (the grant shut, a
+ * launch queue never reached) otherwise opened nothing for as long as it
+ * lasted: "live cap full of stalled rounds". Replacing rather than adding keeps
+ * the goal's queued questions at its cap (review F1): the search moves on to a
+ * new lens without admitting work the grant cannot launch. The idea is retired
+ * by the expiry's own rule (`rejectUnlaunchedIdea`); the round closes
+ * ABANDONED, which is no evidence about its lens (§53, §65), so the lens is
+ * asked again after its cool-off. Nothing is deleted or launched. A round with
+ * a mission, or not yet stalled, is never touched.
  */
-async function retireOldestStalledRound(projectId: string, rounds: readonly CashDiscoveryRound[], now: string, cap: number): Promise<boolean> {
-  if (!(await stalledPastYield(rounds, now, cap))) return false;
-  const stalled = await unlaunchedRoundsPast(rounds, now, STALLED_ROUND_YIELDS_AFTER_MS);
+async function retireOldestStalledRound(projectId: string, rounds: readonly CashDiscoveryRound[], now: string): Promise<boolean> {
+  if (!(await stalledBehindFullGrant(rounds, now))) return false;
+  const stalled = await unlaunchedRoundsPast(rounds, now, UNLAUNCHED_GOAL_ROUND_MS);
   for (const round of stalled) {
-    const candidate = await getCandidate(round.candidateId);
-    if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) continue;
-    if (!(await transitionCandidate({ candidateId: round.candidateId, from: candidate.state, to: 'REJECTED' }))) continue;
+    if (!(await rejectUnlaunchedIdea(round.candidateId))) continue;
     const found = (await listOpportunities({ projectId })).filter((one) => one.discoveryRoundId === round.id).length;
     if (!(await closeRound({ id: round.id, to: 'ABANDONED', found }))) continue;
     const cause = abandonedRoundCause({ mission: null, expired: true });
@@ -1564,8 +1539,8 @@ async function retireOldestStalledRound(projectId: string, rounds: readonly Cash
       actorRef: 'BRAIN',
       summary:
         `Discovery round ${round.round} of "${round.bucketId}" stopped without finishing (its idea never launched in ` +
-        `${STALLED_ROUND_YIELDS_AFTER_MS / 3_600_000} hours and the goal's stalled rounds had used their yield, so the oldest ` +
-        `gave its place to the next lens), having filed ${found} opening(s). The bucket will be asked again after its cool-off.`,
+        `${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000} hours behind a full research grant, so the oldest of the goal's ` +
+        `stalled rounds gave its place to the next lens), having filed ${found} opening(s). The bucket will be asked again after its cool-off.`,
       detail: {
         roundId: round.id,
         bucketId: round.bucketId,
@@ -1585,14 +1560,6 @@ async function retireOldestStalledRound(projectId: string, rounds: readonly Cash
   }
   return false;
 }
-
-/**
- * How long a goal round may wait with no mission before its slot is given to
- * the next lens (`roundsHoldingSlots`). Longer than a price re-ask's hour: an
- * ordinary lens round is not one answer from the plan, so it waits out several
- * grant cycles before another is asked beside it.
- */
-export const STALLED_ROUND_YIELDS_AFTER_MS = 6 * 60 * 60 * 1000;
 
 /** How long after its last round settled an arrangement may be re-asked for its missing price. */
 export const PRICE_REASK_AFTER_MS = 6 * 60 * 60 * 1000;
@@ -2740,6 +2707,30 @@ export async function recordAbandonedRoundDiagnosis(projectId: string): Promise<
  */
 export const UNLAUNCHED_GOAL_ROUND_MS = 6 * 60 * 60 * 1000;
 
+/** The stall threshold a goal's lens search reads (`retireOldestStalledRound`): the expiry's own clock, not a second one. */
+export const STALLED_ROUND_YIELDS_AFTER_MS = UNLAUNCHED_GOAL_ROUND_MS;
+
+/**
+ * Whether an unlaunched goal round's wait is the research grant's rather than
+ * its idea's: every research mission slot is held, so the round is simply
+ * queued. The expiry keeps such a round; the goal search may only replace it.
+ */
+async function unlaunchedWaitIsTheGrants(projectId: string): Promise<boolean> {
+  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
+  return (await researchMissionSlotsFull(projectId).catch(() => null)) === true;
+}
+
+/**
+ * Move an unlaunched round's idea to REJECTED, guarded on the state read, so
+ * it can never launch beside the round asked in its place. False when it has
+ * moved on (launched, or already settled).
+ */
+async function rejectUnlaunchedIdea(candidateId: string): Promise<boolean> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) return false;
+  return transitionCandidate({ candidateId, from: candidate.state, to: 'REJECTED' });
+}
+
 /**
  * Retire a goal round whose idea never launched, so it stops holding a slot.
  *
@@ -2754,11 +2745,8 @@ async function expireUnlaunchedGoalRound(round: CashDiscoveryRound, candidateId:
   if (Date.now() - Date.parse(round.openedAt) < UNLAUNCHED_GOAL_ROUND_MS) return false;
   // Not while every research mission slot is held: that wait is the grant's, not the idea's,
   // and rejecting the idea for it would discard a question that was simply queued.
-  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
-  if ((await researchMissionSlotsFull(round.projectId).catch(() => null)) === true) return false;
-  const candidate = await getCandidate(candidateId);
-  if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) return false;
-  return transitionCandidate({ candidateId, from: candidate.state, to: 'REJECTED' });
+  if (await unlaunchedWaitIsTheGrants(round.projectId)) return false;
+  return rejectUnlaunchedIdea(candidateId);
 }
 
 function clamp(text: string, max: number): string {
