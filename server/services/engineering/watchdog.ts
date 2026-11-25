@@ -14,7 +14,7 @@ import { ADMISSION_REFUSED_WINDOW_MS, DISPATCHABLE_SQL, FIREABLE_SQL, notAdmissi
 import { recordIntervention } from '../../repos/engineering.ts';
 import { idleCheck } from '../../domain/engineering.ts';
 import { capacityReading } from '../fleet/capacity.ts';
-import { dispatchTick } from '../dispatch/loop.ts';
+import { DISPATCHER_DEFERRAL_KINDS, dispatchTick } from '../dispatch/loop.ts';
 
 export const IDLE_RECORD_WINDOW_MS = 10 * 60_000;
 /** A bin the router refused this recently waits on that refusal's named limit, not on idle capacity. */
@@ -28,6 +28,8 @@ export interface IdleReading {
   /**
    * Work-ready bins left out of `executableWork` because the dispatcher itself
    * deferred their current intent and its backoff has not run out, by refusal.
+   * A failed fire's backoff is not a deferral and is not here: it is still
+   * executable work (repair-F3).
    */
   dispatchWaits: Record<string, number>;
   idle: boolean;
@@ -65,6 +67,13 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   // audit role no surface's next session can take, recorded as
   // `DISPATCH_DEFERRED`), read as idle capacity and earned a dispatch pass that
   // could fire nothing. One predicate with the dispatcher, not a second reader.
+  //
+  // Only a *deferral* — a refusal the dispatcher recorded as its own decision to
+  // wait (`DISPATCHER_DEFERRAL_KINDS`) — is excluded. A fire that failed and is
+  // backing off (`AUTH`, `NETWORK`, `NO_SHOW`, …) carries the same future
+  // `next_attempt_at`, but nobody decided that wait: a failed fire beside free
+  // surfaces is a fault, so it stays executable work and keeps earning the idle
+  // record (repair-F3).
   const unroutedSince = new Date(now.getTime() - UNROUTED_WINDOW_MS).toISOString();
   const readyBins = `FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
         AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)
@@ -73,23 +82,24 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
           SELECT 1 FROM fleet_routines r JOIN fleet_accounts a ON a.id = r.account_id
            WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`;
   const readyParams = [iso, iso, iso, iso, unroutedSince, new Date(now.getTime() - ADMISSION_REFUSED_WINDOW_MS).toISOString()];
+  const deferralKinds = DISPATCHER_DEFERRAL_KINDS.map(() => '?').join(', ');
   const deferredIntent = `SELECT 1 FROM bin_dispatch d WHERE d.bin_id = bins.id AND d.lease_generation = bins.lease_generation
-          AND d.state = 'PENDING' AND d.next_attempt_at > ?`;
+          AND d.state = 'PENDING' AND d.next_attempt_at > ? AND d.last_error_kind IN (${deferralKinds})`;
   const executable = await getDb().get<{ n: number | string }>(
     `SELECT COUNT(*) AS n ${readyBins} AND NOT EXISTS (${deferredIntent})`,
-    [...readyParams, iso],
+    [...readyParams, iso, ...DISPATCHER_DEFERRAL_KINDS],
   );
-  const waits = await getDb().all<{ refusal: string | null; n: number | string }>(
+  const waits = await getDb().all<{ refusal: string; n: number | string }>(
     `SELECT d.last_error_kind AS refusal, COUNT(*) AS n
        FROM bin_dispatch d JOIN bins ON bins.id = d.bin_id AND d.lease_generation = bins.lease_generation
-      WHERE d.state = 'PENDING' AND d.next_attempt_at > ?
+      WHERE d.state = 'PENDING' AND d.next_attempt_at > ? AND d.last_error_kind IN (${deferralKinds})
         AND bins.id IN (SELECT bins.id ${readyBins})
       GROUP BY d.last_error_kind
       ORDER BY n DESC`,
-    [iso, ...readyParams],
+    [iso, ...DISPATCHER_DEFERRAL_KINDS, ...readyParams],
   );
   const dispatchWaits: Record<string, number> = {};
-  for (const one of waits) dispatchWaits[one.refusal ?? 'BACKOFF'] = Number(one.n);
+  for (const one of waits) dispatchWaits[one.refusal] = Number(one.n);
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",
     [iso],

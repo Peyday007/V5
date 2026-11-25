@@ -90,7 +90,13 @@ import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
 import { rearmStrandedIntents } from './rearm.ts';
-import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
+import {
+  OPERATOR_RESOLVED_ROUTING_REFUSALS,
+  REFUSAL_WAIT,
+  refusalEndsBurst,
+  waitsForOperator,
+  type RoutingRefusal,
+} from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
   claimRoutineFireSlot,
@@ -125,6 +131,31 @@ import {
 export const OPERATOR_RESOLVED_KINDS: readonly string[] = [
   ...OPERATOR_RESOLVED_ROUTING_REFUSALS,
   ...OPERATOR_RESOLVED_FIRE_FAILURES,
+];
+
+/**
+ * The refusals this loop records through `markDispatchDeferred` — the
+ * dispatcher's own decision to wait — as opposed to a fire that failed and is
+ * backing off (`markDispatchFailed`'s provider vocabulary, `NO_SHOW`).
+ *
+ * Both land in `last_error_kind` with a future `next_attempt_at`, and only the
+ * first is a wait somebody already explained. A fire that failed while
+ * surfaces sit free is a fault, and the watchdog must keep reading it as idle
+ * capacity beside executable work rather than file it under a deferral
+ * (repair-F3). Composed from the router's own table plus the loop's four, and
+ * `tests/watchdogDispatchWait.test.ts` refuses a `markDispatchDeferred` call in
+ * this file whose refusal is missing here.
+ */
+export const LOOP_DEFERRAL_REFUSALS = [
+  'NO_CLAIMABLE_WORK',
+  'NO_ELIGIBLE_AUDIT_SESSION',
+  'BIN_REFIRE_GUARD',
+  'SLOT_LOST',
+] as const;
+
+export const DISPATCHER_DEFERRAL_KINDS: readonly string[] = [
+  ...(Object.keys(REFUSAL_WAIT) as RoutingRefusal[]),
+  ...LOOP_DEFERRAL_REFUSALS,
 ];
 
 /** Ten minutes, because the re-arm is what ends this wait rather than the clock. */

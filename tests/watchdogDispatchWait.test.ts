@@ -11,6 +11,7 @@
  * read neither. It now reads the same `next_attempt_at` `claimDispatchIntent`
  * reads, so the two cannot disagree.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ passes: 0 }));
@@ -44,9 +45,11 @@ import {
   getBin,
   listDispatchesForBin,
   markDispatchDeferred,
+  markDispatchFailed,
   recordBinEvent,
 } from '../server/repos/bins.ts';
 import { brainUtilization, idleCounts, watchIdle, watchUtilization } from '../server/services/engineering/watchdog.ts';
+import { DISPATCHER_DEFERRAL_KINDS } from '../server/services/dispatch/loop.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -126,12 +129,12 @@ describe('a bin the dispatcher deferred is not idle capacity', () => {
   it('a routing refusal deferred past the fifteen-minute unrouted window still waits', async () => {
     const { binId, intentId } = await readyBinWithIntent();
     await markDispatchDeferred(intentId, {
-      refusal: 'PROJECT_NOT_IN_SCOPE',
+      refusal: 'NO_SURFACE_SERVES_THIS_PROJECT',
       message: 'no surface serves this project',
       retryAfterMs: 60 * 60_000,
     });
     // The refusal itself was recorded twenty minutes ago: outside the unrouted window.
-    await recordBinEvent({ eventType: 'DISPATCH_UNROUTED', binId, projectId, outcome: 'PROJECT_NOT_IN_SCOPE', reason: 'test' });
+    await recordBinEvent({ eventType: 'DISPATCH_UNROUTED', binId, projectId, outcome: 'NO_SURFACE_SERVES_THIS_PROJECT', reason: 'test' });
     await getDb().run("UPDATE bin_events SET at = ? WHERE bin_id = ? AND event_type = 'DISPATCH_UNROUTED'", [
       new Date(Date.now() - 20 * 60_000).toISOString(),
       binId,
@@ -165,5 +168,45 @@ describe('work the dispatcher could fire now is still idle capacity (positive co
     const counts = await idleCounts();
     expect(counts.executableWork).toBe(1);
     expect(counts.dispatchWaits).toEqual({});
+  });
+});
+
+/**
+ * repair-F3: the exclusion was "any PENDING intent with a future
+ * next_attempt_at", which swept a failed fire's backoff in with the
+ * dispatcher's own deferrals. A failed fire beside free surfaces is a fault
+ * nobody explained, so it stays executable work and keeps the idle record.
+ */
+describe('a failed fire backing off is not a deferral', () => {
+  it.each(['NETWORK', 'SERVER', 'NO_SHOW'])('a %s backoff stays executable, idle and recorded', async (kind) => {
+    const { intentId } = await readyBinWithIntent();
+    if (kind === 'NO_SHOW') {
+      await getDb().run(
+        "UPDATE bin_dispatch SET state = 'PENDING', last_error_kind = 'NO_SHOW', next_attempt_at = ? WHERE id = ?",
+        [new Date(Date.now() + 40 * 60_000).toISOString(), intentId],
+      );
+    } else {
+      const state = await markDispatchFailed(intentId, { kind, message: 'the provider failed', retryAfterMs: 40 * 60_000 });
+      expect(state).toBe('PENDING');
+    }
+
+    const reading = await watchIdle({});
+    expect(reading.executableWork).toBe(1);
+    expect(reading.dispatchWaits).toEqual({});
+    expect(reading.idle).toBe(true);
+    expect(await idleRecords()).toBe(1);
+    expect(state.passes).toBe(1);
+  });
+
+  it('every refusal the dispatch loop defers on is in the deferral vocabulary', () => {
+    const source = readFileSync(new URL('../server/services/dispatch/loop.ts', import.meta.url), 'utf8');
+    const literal = [...source.matchAll(/markDispatchDeferred\(intent\.id, \{\s*refusal: '([A-Z_]+)'/g)].map((m) => m[1]);
+    expect(literal.length).toBeGreaterThanOrEqual(4);
+    for (const refusal of literal) expect(DISPATCHER_DEFERRAL_KINDS).toContain(refusal);
+    // The one non-literal call defers on a routing refusal, which the router's table enumerates.
+    expect(DISPATCHER_DEFERRAL_KINDS).toContain('NO_SURFACE_SERVES_THIS_PROJECT');
+    for (const failure of ['NETWORK', 'SERVER', 'AUTH', 'NO_SHOW', 'SUPERSEDED']) {
+      expect(DISPATCHER_DEFERRAL_KINDS).not.toContain(failure);
+    }
   });
 });
