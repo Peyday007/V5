@@ -190,3 +190,43 @@ labour. The same branch also removes the per-pass claim read #1322 added.
 
 No plan can complete until research returns claims: 0 evidence facts on 118 Brain-created openings
 across four runs. Restoring research is the coordinator's critical-path fix.
+
+## 8. Two-hour sprint (2026-11-25, 21:30–23:30Z)
+
+**Direct intelligence comparison.** Blind grading against GRADER-BRIEF on the ten dec1125 goals,
+with feasibility checked against the sealed notes.
+
+| | usable plans | goals with ≥ 1 credible route | critical errors |
+|---|---|---|---|
+| Claude + live web search (two agents, about 4 minutes per goal) | **7 / 10** | 10 / 10 | 2 (an hours overrun; a refundable deposit counted as revenue) |
+| Brain, previous build (dec1125b) | 0 / 10 | 5 / 10 | 0 |
+| Brain, research-informed loop (dec1125c) | 0 / 10 | 7 / 10 | 0 |
+
+Model choice was isolated by running Brain's identical direction prompt, graded blind:
+
+| | goals with ≥ 1 credible direction | credible directions |
+|---|---|---|
+| Claude | 10 / 10 | 27 / 33 |
+| gpt-oss-120b (production) | 5 / 10 | 6 / 31 |
+
+Brain's rules and gates are not the gap. The gap is the reasoning model behind proposals and
+research that can read the web.
+
+**Production state at the deadline:**
+- Keyed Google search is unconfigured: `BRAIN_SEARCH_API_KEY` and `BRAIN_SEARCH_ENGINE_ID` are
+  missing. Research is left with DuckDuckGo, which refuses Brain, and Firecrawl at about 15 a day.
+- Routine-bound workers are members of no evaluation project, so they were refused goal bins
+  1,137 times in 6 hours.
+- The claim → card fact → plan link chain was proven by the coordinator on cop_a167: 13 EVIDENCE
+  facts, and three links turned. The first broken link it found (a per-unit range read as a whole
+  price) is fixed in #1329.
+
+**Shipped in batch #1330 (788142a):**
+- The strong route model, inert until `ANTHROPIC_API_KEY` and `BRAIN_ROUTE_MODEL` are both set.
+- A review of directions, tolerant parsing, stated activity hours read as owner labour, and the
+  claim count only when needed.
+
+**Owner prerequisites:**
+1. The search secrets.
+2. The Anthropic key and the model name.
+3. `admin access grant` for the routine workers' project membership.
