@@ -192,10 +192,11 @@ fragments attempted).
 
 ### Corrections (branch `claude/owner-labour-consistency`)
 
-1. A cancelled goal's research is claimed after all other work. It is not
-   deleted, still runs on idle capacity, and returns to its place if the goal
-   is reinstated (`stoppedGoalWorkItemSql`; `claimWork`, free-lane packet
-   scans).
+1. The queue defect is fixed by the coordinator on
+   `fix/cancelled-goal-research-yields`: `cancel()` drops a goal's queued
+   items to base priority, `reinstate()` lifts them back, and `retire` applies
+   it to goals cancelled earlier. That makes the ordering change first written
+   here redundant, so it was withdrawn.
 2. When a goal offers the owner's labour, the route prompt states one rule
    (`operatingModelSentenceFor`): unskilled work is allowed.
 3. A route is refused on hours only when a single sale does not fit. The plan

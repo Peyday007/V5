@@ -58,7 +58,7 @@ import { getDb } from '../db/database.ts';
 import { recordEvent } from './events.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
-import { liveGoalWorkItemSql, stoppedGoalWorkItemSql } from '../services/goals/goalWork.ts';
+import { liveGoalWorkItemSql } from '../services/goals/goalWork.ts';
 import type {
   ActorType,
   ClaimedWork,
@@ -588,7 +588,7 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
         WHERE ${CLAIMABLE_SQL}
           AND project_id IN (${projectIds.map(() => '?').join(', ')})${typeClause}
           AND (target_worker_id IS NULL OR target_worker_id = ?)${seenClause}
-        ORDER BY CASE WHEN ${stoppedGoalWorkItemSql()} THEN 1 ELSE 0 END, priority DESC, CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END, available_at, created_at, id
+        ORDER BY priority DESC, CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END, available_at, created_at, id
         LIMIT ${pageLimit}`,
       params,
     );
