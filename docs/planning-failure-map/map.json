@@ -1036,9 +1036,9 @@
    "test": "Profile contradicts owner words; is it corrected?",
    "expected": "Code compares profile to words and drops inventions.",
    "status": "FAIL",
-   "evidence": "No check exists (code).",
+   "evidence": "Controlled proof run (2026-11-26, C01-C42 agent): the owner-profile reader drops only fields its own reply marks 'not stated'/'none'/'n/a'; it never compares the profile with the owner's words, so a skill or asset the model invents is kept and reaches the route ask. The map's expected behaviour (a profile contradicting the owner's words is corrected) is not implemented.",
    "component": "ownerProfileOf",
-   "rc": "RC3",
+   "rc": "RC17",
    "proof": "UNPROVEN"
   },
   {

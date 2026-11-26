@@ -113,7 +113,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C02-P | Can Brain perform it correctly? | Owner profile in the reply for 30 requests. | Every skill/asset/refusal appears in the owner's words; "not stated" otherwise. | **FAIL** | 4/4 fallback replies invented refusals; p02 run-1 "no physical work". | UNPROVEN | route prompt STEP 1 | RC3 |
 | C02-R | Does the result reach every component that needs it? | Is the profile stored and read by the next ask/critic/discovery? | One profile per goal, read by all. | **FAIL** | Integration diag: profile kept only in event detail, re-derived each ask. | UNPROVEN | routeProposal record | RC7 |
 | C02-I | Does the result change later decisions correctly? | Owner states a licence; do routes sell the licensed work? | At least one route sells it. | **RECHECK** | p02: every output led with Part 107 aerial work. / REVIEW 2: test-validity review: rests on one example, a field existing, or a contract — not a demonstration. | UNPROVEN | ROUTE_RULES.OWNER_FIT | — |
-| C02-F | Does Brain recognise and recover when it fails? | Profile contradicts owner words; is it corrected? | Code compares profile to words and drops inventions. | **FAIL** | No check exists (code). | UNPROVEN | ownerProfileOf | RC3 |
+| C02-F | Does Brain recognise and recover when it fails? | Profile contradicts owner words; is it corrected? | Code compares profile to words and drops inventions. | **FAIL** | Controlled proof run (2026-11-26, C01-C42 agent): the owner-profile reader drops only fields its own reply marks 'not stated'/'none'/'n/a'; it never compares the profile with the owner's words, so a skill or asset the model invents is kept and reaches the route ask. The map's expected behaviour (a profile contradicting the owner's words is corrected) is not implemented. | UNPROVEN | ownerProfileOf | RC17 |
 | C02-X | Does it still work combined with the other capabilities? | Owner with no stated skill + $0 + place. | Means = time, place; direct paid work considered. | **FAIL** | p06: no output proposed the owner's own paid work. | UNPROVEN | directionPrompt | RC5 |
 | C02-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same p06 prompt to the control model. | Control reads the owner correctly. | **RECHECK** | Model exam: given complete facts, Claude Opus reads constraints with 3 violations in 30; gpt-oss 8, fallback 22. The 4/4 invented refusals were the fallback's. / REVIEW 2: test-validity review: rests on one example, a field existing, or a contract — not a demonstration. | UNPROVEN | model | RC14 |
 
@@ -878,7 +878,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **Owner of the correction:** server/domain/operatingModel.ts; cash/discovery.ts (REMOTE_AI_FOCUS)
 - **How a correction is proved:** Owner profiles in replies carry no refusal the owner did not state; discovery questions for an owner with stated labour/equipment are not online-only.
 - **Evidence:** Integration diagnosis: 4/4 fallback replies invented refusals; 30Q p02 run 1 owner profile "no physical work" for a drone pilot. Partly repaired d5beaf6 (route prompt); discovery unchanged (code).
-- **Questions it explains (9):** C01-X, C02-P, C02-F, C03-P, C03-R, C03-I, C07-P, C07-X, C11-P
+- **Questions it explains (8):** C01-X, C02-P, C03-P, C03-R, C03-I, C07-P, C07-X, C11-P
 
 ### RC4 Verified findings are lost on the way to the planner (software)
 
@@ -990,7 +990,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **Owner of the correction:** routeProposal.ts operatorChats / critiqueAndRevise
 - **How a correction is proved:** No route ask is answered or critiqued by a model below the planning bar; production route events show the fallback never serves.
 - **Evidence:** Root-cause challenge: 6 of 12 probes and 2 of 3 question sets served by the fallback; routeProposal.ts "The model that proposed critiques first".
-- **Questions it explains (3):** C25-P, C31-P, C41-F
+- **Questions it explains (4):** C02-F, C25-P, C31-P, C41-F
 
 ### RC18 The evaluation was underpowered and its grading standard drifted (measurement)
 

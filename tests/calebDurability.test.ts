@@ -291,7 +291,13 @@ async function exhaustedSiblings(routines: Routine[]): Promise<void> {
   for (const r of routines) expect(exhausted.has(r.id)).toBe(true);
 }
 
-describe("Caleb's account over simulated time", () => {
+/*
+ * A simulated week of hourly work, refreshes and outages. On the Postgres
+ * suite it measured 26.7, 33.0, 26.9, 28.1, 17.6 and 34.2 s over six runs
+ * (2026-11-26), so the suite's 30 s default failed it by chance (run
+ * 45801657958). The bound is the work's, not a loosened assertion.
+ */
+describe("Caleb's account over simulated time", { timeout: 120_000 }, () => {
   it('once Caleb fixes 3-B, 3-C and 3-D, Brain\'s daily check lifts each one with nobody pressing anything, and 3-A never notices', async () => {
     const { a, b, c, d } = await caleb();
     let conn = await connector(research, 'https://brain.example/mcp');
