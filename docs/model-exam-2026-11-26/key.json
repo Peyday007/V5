@@ -1,0 +1,389 @@
+[
+ {
+  "id": "Q01",
+  "caps": [
+   1,
+   12
+  ],
+  "key": "(a) COMPLIES - owner said HE personally will not call; a rep calling is delegation, not a violation.\n(b) COMPLIES - $2,400 on net-30 with no upfront cash is within the $3,000; (note risk of having to pay if unsold within 30 days, but still within capital).\n(c) INVENTED RESTRICTION - owner restricted only his own phone calls; email-only and no-visits are not stated constraints.\n(d) COMPLIES - 6 h/week within 10.\n(e) VIOLATES - $4,200 upfront exceeds the $3,000 capital.\n(f) INVENTED RESTRICTION / wrong - the constraint is legality in Ohio; a $25 vendor's license makes it legal and is required; avoiding licensed businesses is not an owner constraint and would wrongly exclude this very plan. Correct move: obtain the license.\n(g) COMPLIES - delegation to a contractor is legitimate.\nCorrected plan: drop the trade show (or find one within budget), remove email-only/no-visit rule, get the vendor's license, keep rep and technician.",
+  "critical": [
+   "Marks (a) as a violation (treats delegated calls as owner calls)",
+   "Marks (e) as compliant",
+   "Accepts (f) as a valid constraint"
+  ]
+ },
+ {
+  "id": "Q02",
+  "caps": [
+   2,
+   17,
+   8
+  ],
+  "key": "Expected strategies: (A) Booking/brokerage of overflow tests: owner sells and schedules tests to overdue/waiting properties (property managers first, using the public overdue register), subcontracts to adjacent-county testers at $70, charges ~$95-$150 -> $25-$80 margin per device, near-zero capital, starts immediately. (B) Owner (or hire) becomes certified: $3,050 cost + ~1 month, then $95-150/device at up to 8/day but owner has only 20h/week (~2.5 days -> ~20 devices/week), plus repair revenue. (C) Compliance-management/annual scheduling service sold to property managers (recurring) possibly combined with A. Demand signal: 920 overdue + local capacity shortage (waitlists). Payer: property owner/manager (not utility). Good recommendation: start with A (brokerage) immediately for cash, targeting property managers with multiple devices, potentially pursue B later. Economics sanity: e.g., 920 overdue x $50 margin ~ $46k gross potential; capacity of overflow testers matters (assumption).",
+  "critical": [
+   "Says the owner cannot do anything until licensed / rejects the opportunity because owner lacks a license",
+   "Identifies the utility or county as the payer",
+   "Only one strategy offered"
+  ]
+ },
+ {
+  "id": "Q03",
+  "caps": [
+   3
+  ],
+  "key": "S1 SUPPORTED: 640 x 1.15 = $736.\nS2 PARTLY: $1,850 is the average sold price across all 23 listings, mixing serviced and unserviced; what an unserviced/serviced unit from us fetches is assumption.\nS3 UNSUPPORTED (or at most suggestive): facts give counts of serviced listings but not price by condition; need price split.\nS4 UNSUPPORTED: no defect rate given.\nS5 SUPPORTED/PARTLY: 23 in 90 days = ~7.7/month for those models on that marketplace (historical sold count; capacity to absorb extra supply is assumption). Either SUPPORTED with that caveat or PARTLY is acceptable.\nS6 PARTLY/UNSUPPORTED: 1,850 - 736 - 220 - 140 - 140 = $614 before marketplace fees, defects, unknown fee; \"comfortably over 500\" depends on fees (unknown) and price; with a 10% fee (assumed) 614-185=429 < 500. Must recognize fee/defects not given. Correct classification: not supported.\nS7 UNSUPPORTED: fee not in facts.\nS8 UNSUPPORTED: sell-through time not given.",
+  "critical": [
+   "Classifies S7 (10% fee) or S4 (defect rate) as supported",
+   "Classifies S6 as supported without noting the fee/defect unknowns"
+  ]
+ },
+ {
+  "id": "Q04",
+  "caps": [
+   4,
+   16
+  ],
+  "key": "(i) Not available - city pays no one (F2); city fines restaurants.\n(ii) Wrong direction - the hauler PAYS the facility $48/ton tipping fee (F3): a cost.\n(iii) Not available - grant reimburses composting/AD facility capital for permit holders (F4); a hauler's truck is ineligible.\n(iv) Real revenue - restaurants (covered businesses) pay the hauler under private contract (F1, F2), motivated by the $500/month fine.\n(v) Not available - facilities sell compost (F3); the hauler does not own compost.\n(vi) Plausible add-on revenue - restaurants must file (F5); preparing the report is a service a restaurant could pay for (price not given, assumption).\nActual model: restaurant pays hauler; costs include $48/ton tipping, permit $1,200/yr, truck, insurance, labor. Price per pickup not given.",
+  "critical": [
+   "Treats the city as a payer",
+   "Treats tipping fees as revenue",
+   "Says the truck is grant-eligible"
+  ]
+ },
+ {
+  "id": "Q05",
+  "caps": [
+   5
+  ],
+  "key": "(a) Processing per 300-unit payment: 0.029 x 4,350 + 0.30 = $126.45 -> $0.4215/unit. Contribution = 14.50 - 6.40 - 0.55 - 0.42 = ~$7.13/unit.\n(b) Day 35 delivery + 45 = day 80 payment + 2 settlement = day 82 (accept 80-82 if reasoning clear about settlement).\n(c) Cash out per unit = 6.40 + 0.55 = $6.95; one 500 run = $3,475; 2 runs = $6,950 <= $8,000; 3 runs = $10,425 > $8,000 -> 1,000 units max.\n(d) ~1,000 units per ~82 days -> ~366 units/month -> ~$2,600/month contribution (accept $2,450-$2,750).\n(e) Customer deposit = $7.25/unit at day 0 vs owner outlay $3.20 day 0 + $3.75 day 14 -> customer cash exceeds owner's cash outlay per unit; capital need per unit ~0 (self-funding, net positive ~$0.30/unit minus processing on deposit). Growth then limited by demand/sales capacity, MOQ batching and the share of customers who accept deposit terms, not capital.",
+  "critical": [
+   "Ignores the 500 MOQ in (c) (e.g., 1,151 units)",
+   "Cycle off by more than 10 days",
+   "Contribution off by more than $0.15"
+  ]
+ },
+ {
+  "id": "Q06",
+  "caps": [
+   6,
+   5
+  ],
+  "key": "Batches bought days 1,8,15,22,29,36,43 deliver days 15..57; day-50 purchase would deliver day 64 > 60. 7 batches x 12 = 84 beds max. Contribution/bed = 1,150-410-180-95 = $465. 84 x 465 = $39,060 - fixed (600x2 + 300 = $1,500) = $37,560 < $40,000 -> UNREACHABLE. Binding constraint: supplier cap (and 14-day lead time), not demand (135) or capital. Price capped at $1,150 by GPO. To reach $40k would need ~90 beds (6 more; i.e. a second supplier) or ~$29-30 more per bed, which the cap forbids. Team member confused revenue with profit. Realistic: ~$37.5k.",
+  "critical": [
+   "Declares the $40k reachable",
+   "Max beds not 84 (e.g., 96 or 72) without justification",
+   "Accepts revenue as profit"
+  ]
+ },
+ {
+  "id": "Q07",
+  "caps": [
+   7,
+   4
+  ],
+  "key": "Viable as a brokerage/agency: owner sells to immigration law firms (and individuals), subcontracts translation to freelance translators who sign the certification; owner manages intake, QA (second-translator review or spot checks), delivery, invoicing. Payer: law firm (or client via firm), paid at order by card -> owner pays translator after; negative working capital. Per-page: 1-page order min $45 vs translator cost ~250 x $0.08-0.11 = $20-27.50 -> ~$18-25 margin (minus card fees); 3-page = 750 words x $0.20-0.25 = $150-187.50 (or $135 by minimum) vs translator $60-82.50 -> ~$70-105 margin. Capital: insurance $900 + small marketing; well under $4,000. Risks: accuracy (RFEs), translator reliability, attestation must be by translator (not owner), competition from agencies, volume uncertainty. Must NOT reject because owner doesn't speak Portuguese.",
+  "critical": [
+   "Rejects because owner does not speak Portuguese",
+   "Has the owner sign the certification of accuracy himself as translator"
+  ]
+ },
+ {
+  "id": "Q08",
+  "caps": [
+   8,
+   5
+  ],
+  "key": "A: profit per lot 5,600 - 448 - 300 - 3,500 = $1,352. 50-day cycle -> only lots bought ~day 1-40 cash out by day 90. Capital $10k allows 2 lots concurrently (7,000) -> cycle 1 cash by day ~51; a second cycle bought day 51 would cash at day ~101 (missed) -> 2 lots = $2,704 (if 2 concurrent; with all $10k alone 2 lots; a third lot later from proceeds also misses day 90 unless bought by day 40). Alone with $10k: 2 lots ($7,000) + nothing else -> $2,704.\nB: appointments weeks 4-8 paid by day 90 (week 8 ends day 56 +30 = 86; week 9 day 63+30 = 93 misses) -> 15 x 250 = $3,750 - 200 - 450 = $3,100. Capital ~$650.\nC: jobs completing days 28,35,...,84 paid by day 89 -> 9 jobs x $900 = $8,100 - $400 = $7,700; capital ~$1,700 (insurance + one sub payment float).\nBest single: C. Best overall: all three are compatible: peak capital ~7,000 + 400 + 1,300 float + ~500 = ~9,200 <= 10,000; hours fine (C 4/wk, B 3/wk, A ~12 total front-loaded). Combined ~ $13,500. Recommend C as anchor plus B and A. Accept answer recommending C+B (+A) with consistent math; choosing A alone or B alone is wrong.",
+  "critical": [
+   "Recommends A (or B) as the single best",
+   "Does not consider combining strategies"
+  ]
+ },
+ {
+  "id": "Q09",
+  "caps": [
+   9,
+   3
+  ],
+  "key": "Fee: $350 currently (S1+S3); S2 was correct in 2023 (pre-increase) - not wrong, just outdated. Volume: 1,240 applications (S4, 2024) vs 860 connected (S5): different measures - applications vs completed connections (withdrawn/pending/rejected), both valid. S6 \"2,000+ homes\" is county-wide (includes the municipal utility's 30% territory per S7) and \"went solar\" may count installs, so not a contradiction with co-op figure; also secondary source. Market for the business: ~1,240 apps/yr in co-op territory plus unknown municipal-utility applications (that utility's fee unknown). Uncertain: 2025 volume, municipal utility's fee/process, whether S6 is accurate.",
+  "critical": [
+   "Treats S2 as an error/untrustworthy instead of outdated",
+   "Picks 860 or 2,000 as application count without reconciling",
+   "Discards S5 or S6 as wrong without explaining the definitional difference"
+  ]
+ },
+ {
+  "id": "Q10",
+  "caps": [
+   10,
+   19
+  ],
+  "key": "C1 UNSUPPORTED - no evidence of saturation; three fleets requested service with signed quotes.\nC2 CONTRADICTED - fact 4: no license needed for broker; subcontractor licensed.\nC3 CONTRADICTED - $16/tire, 42% gross margin; fixed cost $1,100/yr is small.\nC4 SUPPORTED - 410 x 4.3 = 1,763 tires x $16 = ~$28.2k gross margin/yr.\nC5 CONTRADICTED - fleets pay net-30, sub paid net-45 -> owner receives before paying.\nC6 SUPPORTED (valid risk) - single subcontractor dependency is real; mitigate with backup sub. (Capacity 120/night far exceeds need.)\nVerdict: sound, proceed, with growth (more fleets) and backup subcontractor as real issues.",
+  "critical": [
+   "Accepts C1 or C2 or C5 as valid",
+   "Rejects the plan based on unsupported criticisms"
+  ]
+ },
+ {
+  "id": "Q11",
+  "caps": [
+   11
+  ],
+  "key": "(a) T1 Nov 2; T2 Nov 5; T4 Nov 11; T5 Nov 15; T6 Nov 17; T3 Nov 19; T7 starts Nov 22, 10 days: Nov 22,23,24,29,30, Dec 1,2,3,6,7 -> Dec 7; T8 Dec 8-10 -> delivery Fri Dec 10. Met, 5 business days slack.\n(b) Critical path T3 -> T7 -> T8 (sample chain has 2 days slack).\n(c) Rework: T4' Nov 18,19,22,23 -> Nov 23; T5' Nov 24, Nov 29 -> Nov 29; T6' Nov 30, Dec 1 -> Dec 1. T7 Dec 2-15 (Dec 2,3,6,7,8,9,10,13,14,15); T8 Dec 16,17,20 -> Mon Dec 20. Misses by 1 business day.\n(d) Expedited freight: arrives Dec 16 -> meets ($900). Overtime: 8 days Dec 2..13 -> freight Dec 14,15,16 -> meets ($1,200). Mill faster: no effect (sample chain now critical) -> does not meet. Cheapest: expedited freight $900.",
+  "critical": [
+   "Wrong earliest delivery date in (a)",
+   "Wrong date in (c) or claims deadline met in (c)",
+   "Recommends paying the mill"
+  ]
+ },
+ {
+  "id": "Q12",
+  "caps": [
+   12,
+   1,
+   8
+  ],
+  "key": "O1 violates 3 (tobacco/vape). O2 violates 1 (weekday lunchtime client meetings during unavailable hours). O3 violates 2 ($6,000 inventory) and 3 (sales to minors). O4 complies (mailbox address satisfies 5; subcontractor weekday jobs are not owner's time). O5 complies (no alcohol sold; $1,800 <= $2,000; spouse 5h/week on weekend <= 5; owner evenings) - note beer accessories are not alcohol; age restriction not stated but not a sale of alcohol; acceptable. O6 violates 2 ($4,000) and 1 (weekday pickups) unless delegated (pickup could be delegated - partial credit if noted, but inventory still violates). Best: O4 + O5 combined (inventory 1,800 total; profits 1,100 + 800 = $1,900/month; both profitable by month 3). Must not invent extra violations (e.g., saying O5 violates alcohol constraint).",
+  "critical": [
+   "Recommends O2, O3, O1 or O6",
+   "Marks O4 or O5 as violating without valid reason"
+  ]
+ },
+ {
+  "id": "Q13",
+  "caps": [
+   13
+  ],
+  "key": "E1 NOT: search interest != paying rental demand; need rental willingness to pay, hygiene concerns, purchase vs rent.\nE2 NOT: high rating suggests satisfied customers, not unmet demand; need wait times/capacity.\nE3 ESTABLISHES (largely): permits + mandatory inspection -> ~312 owners/yr need compliant fence (some already have one; conclusion says \"or have one\"). PARTLY acceptable if notes some permits not built.\nE4 NOT/PARTLY: \"would consider\" != will buy; sample of 40 respondents, selection bias; not 85% of population.\nE5 NOT: revenue rise could come from volume/other causes; one competitor's elasticity; brand; doesn't support pricing ABOVE competitor.\nE6 NOT: winners all had 10+ certified interpreters, suggesting a qualification barrier; evidence points against.\nE7 ESTABLISHES: 3 x 200 x $42 = $25,200 conditional on May 1 delivery (LOI non-binding caveat OK).",
+  "critical": [
+   "Says E1, E2, E4, E5 or E6 establishes its conclusion",
+   "Says E7 does not establish the $25,200 conditional figure"
+  ]
+ },
+ {
+  "id": "Q14",
+  "caps": [
+   14
+  ],
+  "key": "Top questions: (1) Volumes: broken pallets/week per warehouse and repaired pallets needed/week (sizes/grades e.g. GMA 48x40, Grade A/B). (2) Current price paid per repaired pallet and current vendor/what they pay or are paid for broken pallets (Corvane's pricing expectations). (3) Recycler: price it pays for broken pallets, sells repaired ones, capacity, whether it would subcontract/supply and whether it collects (truck) - the brokerage feasibility. (4) Contract term, exclusivity, volume commitment, and penalties/SLA for supply shortfall. (5) Pickup frequency, dock windows, trailer drop vs truck, site requirements, insurance requirements (COI amounts). (6) Whether Corvane already has a vendor and why switching. (7) Who owns broken pallets / credit for cores. (8) Net-60 implication -> working capital needed: what's the cash cycle vs recycler terms. Owner can conclude: net-60 means owner funds ~2 months of supply; $12k capital constrains volume; no truck -> needs transport partner/brokerage with recycler; 6-week start is feasible only if partner arranged; repair skill can be subcontracted.\nGrade: questions specific and decision-linked; no redundant questions (e.g., asking payment terms, start date or location).",
+  "critical": [
+   "Asks about already-given facts (payment terms, start time) as top questions",
+   "Fails to ask about volumes or prices"
+  ]
+ },
+ {
+  "id": "Q15",
+  "caps": [
+   15,
+   20
+  ],
+  "key": "Turn 1 graded lightly (any coherent plan). Turn 2 is the test: (1) Explicitly identify invalidated assumptions: permitted-install buyers can't use labels-removed panels; small-order residential shipping cost far higher than pallet LTL. (2) Recompute: 6-panel order at $95: revenue 570, fee 57, panels 228, freight 140 -> $145 profit (~$24/panel), vs earlier ~$243 if pallet freight allocated. (3) Change strategy: target non-permitted uses (RV, boats, sheds, off-grid where not required, agricultural fencing/pumps) or sell full pallets to such buyers at a dock / with residential surcharge, consider local pickup; possibly price adjustment; reduce volume to the 1/3 segment; disclose the missing UL label to buyers. Must not ignore the permit issue or advise misleading buyers.",
+  "critical": [
+   "Ignores the UL/permit evidence or continues targeting permitted installs without disclosure",
+   "Fails to recompute economics with new freight",
+   "Suggests hiding the missing label"
+  ]
+ },
+ {
+  "id": "Q16",
+  "caps": [
+   16
+  ],
+  "key": "1 REAL (contract, subcontracting allowed). 2 PRIZE/EVENT. 3 NOT ELIGIBLE (nonprofit-only). 4 REAL (commission sales agent - legit recurring revenue). 5 SPECULATIVE. 6 NOT A REVENUE SOURCE. 7 REAL (vendor registration is a channel to purchase orders - access to a real buyer; registration itself not revenue). 8 Not an opportunity itself - a marketing channel/cost (EVENT); could generate leads; not revenue. 9 SPECULATIVE. 10 REAL (recurring RFQ).",
+  "critical": [
+   "Classifies 2, 3, 5 or 9 as a real commercial opportunity",
+   "Classifies 4 or 10 as not real"
+  ]
+ },
+ {
+  "id": "Q17",
+  "caps": [
+   17,
+   7,
+   2
+  ],
+  "key": "Viable with hired on-call technicians. Payer: funeral homes (not families). Demand: 2,700 x 55% ~ 1,485 first calls/yr (~124/month) in county; outsourced share unknown (assumption); after-hours share assumption; 6 interested homes. Unit economics: base $175 (30-mile round trip -> within 25 miles one-way; mileage surcharge maybe 0) + $75 stairs/after-midnight common -> $175-$250; costs: 2 techs x $25 = $50; vehicle 30 x 0.45 = $13.50 -> contribution ~$110-$185/call. Fixed: vehicle $450/month, registration ~$12.50/month, insurance (not given - flag), phone/dispatch (assumption). Breakeven ~3-5 calls/month before insurance. Startup: register with Board, buy/convert vehicle ($2,000 down from $9k), train staff ($120 each), get insurance, sign funeral homes starting with 4 underserved by distant provider. Staffing: hire 2-4 part-time techs on call for nights; owner handles sales/admin daytime. Risks: response-time reliability, insurance cost unknown, staffing, seasonality, payment 30 days (working capital small). Go.",
+  "critical": [
+   "Rejects because owner is not available overnight or lacks funeral director license",
+   "Treats families as the payer"
+  ]
+ },
+ {
+  "id": "Q18",
+  "caps": [
+   18,
+   7
+  ],
+  "key": "Chain: lead list from inspection data (target high-volume/charbroil, inspection notes on grease) -> outreach/visit -> site survey/quote (hood length, ducts; may need crew input) -> service agreement with frequency per NFPA 96 -> schedule crew with >=7 days notice, overnight access arranged (keys/manager) -> crew cleans, before/after photos, certificate/sticker issued in crew's name -> owner invoices restaurant -> crew invoices owner, paid within 15 days -> restaurant pays 30 days (chains 45-60) -> recurring rebook quarterly/semiannual. Cash gap: owner pays sub ~55-60% (e.g. $330-$540 on $600 avg... ) about 15-45 days before restaurant pays -> gap ~15 days (independents) to 30-45 days (chains). Capital: $7,000 - $1,600 insurance = $5,400 -> ~10-16 concurrent unpaid sub invoices depending on job size (e.g., $5,400 / $360 ~ 15). Weakest link: sales/customer acquisition and/or cash timing with chains, or dependence on two crews/certificate in sub's name (customer relationship risk). Any well-argued weakest link acceptable if supported.",
+  "critical": [
+   "Chain omits collection or subcontractor payment",
+   "Has the owner perform cleaning/certify himself",
+   "No cash-gap computation"
+  ]
+ },
+ {
+  "id": "Q19",
+  "caps": [
+   19,
+   10
+  ],
+  "key": "Economics: $22 - $12 = $10/store/week. 30-store minimum route is the key constraint: 14 committed so far < 30 -> must sign ~16 more before the cleaner's terms work (or negotiate a smaller route at a higher rate). At 30 stores: $300/week gross margin (~$1,300/month) for ~ owner time on sales/billing. Monthly invoice -> owner pays cleaner (terms unspecified) before collecting -> small working capital need: 30 x $12 x ~4-5 weeks ~ $1,440-$1,800, near the $1,500 capital - flag. Incumbent cleaners at $25 may respond (speculative). Verdict: proceed/modify - proceed but gate launch on reaching 30 committed stores, keep invoicing terms tight. Must not reject for invented issues like licensing (none needed), insurance (cleaner has it), owner skills.",
+  "critical": [
+   "Abandons the plan",
+   "Invents a licensing or insurance problem contrary to facts",
+   "Misses the 30-store minimum issue"
+  ]
+ },
+ {
+  "id": "Q20",
+  "caps": [
+   20,
+   18,
+   5,
+   11,
+   12
+  ],
+  "key": "Key points: Contract pre-season by Nov 1 at $92/ton; capital $15,000 limits purchase: 15,000 - insurance 1,400 - yard (Nov-Mar 4,500, maybe monthly) -> ~$9-10k for salt -> ~100 tons (5 loads x 20 = 100 tons = $9,200) initially; freight $450/load = $22.50/ton. Delivered cost per ton: 92 + 22.5 + (95+60)/delivery of ~4 tons ~ $38.75 -> ~$153/ton; sell at $170 -> ~$17/ton margin (small) at 4-ton deliveries; at 6 tons: (155/6=25.8) -> ~$140/ton -> $30/ton margin. Demand: 260 lots x 3 tons = 780 tons/season, far above capital-limited volume. Peak capital and net-30 collection: salt revenue flows back from Dec; could buy more spot later at $135 -> delivered ~$196 > $170 -> unprofitable at $170 cap; so pre-season contract volume is THE decision; ideally maximize pre-season tonnage within capital (or seek PM prepayment/deposits to fund more). Fixed costs: yard 4,500 + insurance 1,400 = 5,900 -> with 100 tons x ~$20-30 margin = $2-3k gross -> LOSS. Strong answer notices fixed costs dominate and the yard may be avoidable (e.g., lift directly from terminal to PM via dump trucks - terminal lets buyers lift any time; storage at terminal? Facts say buyers can lift through Mar 31, so yard possibly unnecessary -> direct terminal-to-lot delivery with dump truck, cost of freight per delivery then?). Grade: credible plan must (1) respect Nov 1 deadline and prepay, (2) compute per-ton economics, (3) handle capital limit ~$15k and net-30, (4) recognise spot purchases are uneconomic at the $170 price cap, (5) confront fixed-cost problem / profitability honestly, (6) use subcontractors (no owner labor), (7) storm-supply guarantee satisfied by holding contracted salt. A plan claiming large profit without noticing the fixed-cost/capital squeeze is wrong.",
+  "critical": [
+   "Plans to buy spot salt after Nov 1 at a profit at <= $170",
+   "Ignores the $15,000 cap / prepayment requirement",
+   "Owner does physical labor",
+   "Total profit claim inconsistent with own unit economics"
+  ]
+ },
+ {
+  "id": "Q21",
+  "caps": [
+   4,
+   13
+  ],
+  "key": "Buyer: clinics/providers must provide interpreters free to patients -> patients will not (and should not be asked to) pay; selling subscriptions to patients conflicts with fact 1. Survey shows patients value interpreters, not willingness to pay; consistent with the obligation falling on providers. Medicaid: $18 x 4 = $72/hour reimbursed vs $55-$70 cost -> clinic net cost -$17 to -$2 per hour (net gain) on Medicaid patients for 1 hour; but 2-hour minimum for in-person means cost $110-$140 vs reimbursement for actual time; if appointment is 1 hour, reimbursement $72 -> net cost $38-$68. Good answer notes the minimum. Correct model: B2B interpreter agency/video service sold to clinics, emphasising Medicaid billing support.",
+  "critical": [
+   "Accepts the patient subscription model",
+   "Treats the survey as proof of paying demand"
+  ]
+ },
+ {
+  "id": "Q22",
+  "caps": [
+   5,
+   6
+  ],
+  "key": "Realistic peak: 30-day month x 60% = 18 rented days; mix ~80% daily: e.g. 14.4 daily days x $325 = $4,680 + 3.6 days at weekly rate (~$164/day) ~ $590 -> ~$5,270 rental revenue (accept $4.8k-$5.9k). Rentals of 1-3 days -> ~8 rentals/month -> 16 deliveries: margin $40 each -> +$640. Costs: commission 12% ~ $630; maintenance 18 x 28 = $504; insurance 210, GPS 35, interest ~ $230 (first months: 30,400 x 0.75%), depreciation 450. Net peak ~ $3,800-$4,300 (borderline). Winter: 25% -> ~7.5 days -> ~$2,200 revenue -> net ~ $700-$900. Average over the year well below $4,000; \"starting month 1\" each month: NOT achievable with one machine year-round (peak maybe borderline). Need ~2 machines in peak / more in winter; second machine needs another $7,600 down -> capital $10,000 covers only one down payment + reserve ($2,400 left) -> not feasible now. Cash view: loan payment $756.53 (principal ~$529) replaces interest+ depreciation; peak cash ~ similar. Key: answer must conclude goal not achievable every month with one machine and capital insufficient for two.",
+  "critical": [
+   "Concludes $4,000/month is achievable every month with one machine",
+   "Uses 100% utilization",
+   "Double counts loan payment and depreciation without noting it"
+  ]
+ },
+ {
+  "id": "Q23",
+  "caps": [
+   15,
+   5
+  ],
+  "key": "Import at 5,000: factory $3.80 + tariff 25% = $0.95 + freight (original $0.90 included 0 duty -> freight ~$0.90) -> landed $5.65; + engraving 2.20 + packaging 0.60 + fees 0.55 = $9.00; contribution $10.00. Capital per order: 5,000 x 3.80 = $19,000 to factory (30% + 70% before shipment) + tariff $4,750 at import + freight $4,500 -> ~$28,250 before engraving -> exceeds $20,000 capital; and 5,000 units vs 1,400 POs (maybe 2,800-4,200 holiday) -> inventory risk. Domestic: 7.40 + 0.25 + 2.20 + 0.60 + 0.55 = $11.00 -> contribution $8.00; no minimum, 5-day lead, capital per unit $7.65 + engraving, fast cycle (pay on order; buyer pays net-30 after delivery ~ 40 days) -> 1,400 units = ~$14,500 working capital: feasible. Failed assumptions: 0% duty, 2,000 MOQ/price, capital adequacy. Revised: switch to domestic for this quarter (fulfil the 1,400 + holiday orders as they arrive, order to PO), maybe revisit import when demand >5,000 and capital/financing allow. Could also raise price. Must not just continue the import plan.",
+  "critical": [
+   "Continues the import plan as feasible with $20k",
+   "Omits the tariff or MOQ from the recomputation"
+  ]
+ },
+ {
+  "id": "Q24",
+  "caps": [
+   9,
+   14
+  ],
+  "key": "(1) A 4,850 vs B 3,120: different universes - FOG program enrollment may include establishments the health dept doesn't permit as food service (schools, hospitals, churches, grocery delis, institutional kitchens), or count by location vs permit; both valid; cannot fully resolve - ask city. D \"monthly\" vs C \"at least every 90 days\": not contradictory; 90 days is a maximum interval; heavy users pump more often (25% rule); D is a marketing claim for \"most\" - unverified. E reconciles: only 1,970 have interceptors requiring pumping. (2) Minimum: 1,970 x 4 = 7,880 pump-outs/yr (at the 90-day minimum); x $275 ~ $2.17M minimum market (if F holds). (3) Questions: actual pump frequency distribution (city manifests/ hauler data), price by size (F is average, local prices), number of competing haulers and their share, disposal/dumping fees and capacity at receiving facility, licensing/permits for haulers and truck cost, interceptor size distribution, contract churn, payment terms.",
+  "critical": [
+   "Discards A or B as wrong without explaining definitional difference",
+   "Uses 4,850 or 3,120 as the pumping base",
+   "Treats D and C as contradictory and discards C"
+  ]
+ },
+ {
+  "id": "Q25",
+  "caps": [
+   11,
+   7,
+   12
+  ],
+  "key": "(a) Standard: day 1 = Wed Jan 26, 27, 28, 31, Feb 1 -> delivered 5 p.m. Feb 1 - after the 2 p.m. deadline -> late. Must order expedited ($150): Jan 26, 27 -> delivered Jan 27 5 p.m. -> on time. Do it today.\n(b) Submission Tue Feb 15 = day 1: Feb 15,16,17,18 (4), 22,23,24,25 (8) [Feb 21 holiday], 28,29, Mar 1,2,3 (13), Mar 6 (14), Mar 7 (15) -> cleared Tuesday March 7 -> cannot start March 6 with X.\n(c) 3 libraries x 6 nights = 18 cleaner-nights/week; max 5 per cleaner -> ceil(18/5) = 4 cleaners minimum (and 3 per night simultaneously). Y's 4 cleaners can just cover (20 capacity, 2 spare nights) with no backup for illness/turnover - risk.\n(d) Use Y for start (cost +8%), and submit X's cleaners' fingerprints on award day (Feb 15) to have backups cleared by March 7 and possibly transition/blend; or ask city to permit March 6 start... Also order expedited COI today. Include the proposal explaining staffing.",
+  "critical": [
+   "Says standard COI arrives in time",
+   "Says X's cleaners are cleared by March 6",
+   "Wrong number of cleaners required"
+  ]
+ },
+ {
+  "id": "Q26",
+  "caps": [
+   13,
+   3
+  ],
+  "key": "(1) Supported (recorder). (2) Wrong: not every sale -> mobile signing; 70% at title office; cash sales; also refinances omitted; also one sale may involve buyer and seller signings (assumption). (3) Partly/unsupported locally: national survey; local state facts show $75-$150 depending on channel. (4) Wrong (follows from 2,3). (5) Unsupported inference: commissioned notaries != loan-signing agents; competitors include title office staff; \"thin competition\" doesn't follow; 44 per notary meaningless. (6) Unsupported: no basis for 10% capture. Corrected: purchase closings with loans: 9,400 x 78% = 7,332; mobile 30% -> ~2,200; refis 6,100 x 30% = 1,830; total ~4,030 mobile signings/yr (cash sales: assumption they're at title office per facts) x $75-$150 -> ~$300k-$605k market. Year one revenue must be justified by title-company/signing-service relationships and booking volume (e.g., realistic signings/week).",
+  "critical": [
+   "Accepts 9,400 signings or $1.41M",
+   "Accepts 212 notaries as thin competition evidence",
+   "Corrected estimate omits refinances or the 30% mobile share"
+  ]
+ },
+ {
+  "id": "Q27",
+  "caps": [
+   17,
+   4,
+   18
+  ],
+  "key": "Customer/payer: the estate (via executor) pays through commission deducted from proceeds; decision-maker = executor, strongly influenced by probate attorney referrals (attorneys are the channel, not payer). Median sale $13,000 x 35% = $4,550 commission (30-40%: $3,900-$5,200). Costs: staff 4 x 10 x 3 = 120h x $20 = $2,400; pricing specialist 16 x 35 = $560; card fees 3% x 60% x 13,000 = $234 (who bears it? assume company) -> ~ $1,356 contribution (at 35%); insurance $158/month fixed. Haul-out charged to estate (pass-through). Cash: company collects at sale -> positive cash timing; pays estate within 14 days -> no working capital problem. Sales needed: (5,000 + 158 + marketing) / ~1,356 ~ 4 sales/month (3.8). Market: 1,050 x 40% = 420 sales/yr = 35/month; 5 competitors; waitlists indicate unmet capacity. Expertise: hire pricing specialist/appraiser (already in costs). 4 sales/month = 12 sale days + setup -> owner 25h/week tight; staff run sales. Go (with attorney referral channel), noting staffing/time and getting attorney trust as the key risk.",
+  "critical": [
+   "Says attorneys pay",
+   "Rejects due to lack of antiques expertise",
+   "Sales needed off by >1.5 from ~4 given own math"
+  ]
+ },
+ {
+  "id": "Q28",
+  "caps": [
+   6,
+   20,
+   12
+  ],
+  "key": "45 days from Nov 1 = Dec 16.\n1: max 4 pallets at a time ($4,400 capital - nearly all capital); profit per pallet 1,900 - 228 - 1,100 = $572; 30-day cycle -> ~1-1.5 cycles in 45 days -> ~4-6 pallets -> ~$2.3k-$3.4k; hours 10/pallet.\n2: 90-150 day cycle + 30 days pay -> $0 within 45 days.\n3: season Nov 15-Dec 16 within window ~ 32 days ~ 27 working days (6/wk) x 2 crews x 4 = ~216 jobs capacity by Dec 16 (or ~240 through Dec 20); owner time 1.5h/job x ~216 = 324h over ~6.5 weeks = ~50h/week > 30h -> owner hours bind: 30h/week x ~6.4 weeks = ~193 hours -> ~128 jobs (subtract hours for other options). Profit per job: 850 x 45% = $382.50 - $60 ads = $322.50 -> ~128 jobs ~ $41k?? Check: 128 x 322.5 = $41,280. Cash: 50% deposit at booking > ads cost; crew paid... fine. Demand assumption required (not given - must flag). So the target may be reachable on paper IF demand of ~78+ jobs exists: 25,000/322.5 = 78 jobs needed (~117 owner hours). Key: answer must flag demand for holiday lights is not verified; capacity and hours allow it. Also crew payment timing vs customer collection.\n4: 300 x 14 = $4,200 but paid 30 days after December events -> mostly after Dec 16 -> ~$0 cash within 45 days (profit accrues if events before Dec 16; ambiguity: \"profit within 45 days\" - accrual vs cash; should state).\nVerdict: reachable only through option 3 at >= ~78 jobs, conditional on unverified demand; best combination = 3 (primary) + 1 (small) within hours; 2 and 4 contribute ~nothing by Dec 16. A model saying \"unreachable\" with correct reasoning that demand is unverified gets partial credit; claiming reachable without noting the demand assumption is weaker; using option 2 is a critical error.",
+  "critical": [
+   "Counts solar commissions (option 2) as profit within 45 days",
+   "Ignores owner-hour constraint for option 3",
+   "Owner performs installation personally"
+  ]
+ },
+ {
+  "id": "Q29",
+  "caps": [
+   8,
+   10,
+   19
+  ],
+  "key": "P: 9,000 lb x $0.24 = $2,160/week; from week 3 to week 26 = 24 weeks -> $51,840 gross margin. Peak working capital: laundry paid weekly at $3,420/week; hotels pay net-30 (~4-5 weeks after invoice) -> fund ~5 weeks x $3,420 = ~$17,100 peak (if invoiced weekly; ~4.3 weeks + invoice lag). K1 invalid (thin per lb but large volume -> ~$52k). K2 partly valid (real risk, but trial already signed; 30 days notice limits exposure). K3 valid (~$15-17k working capital need; fits within $20k but uses most of it).\nQ: expected per machine attempted: 7/8 succeed -> profit per success 3,100-1,400-350 = $1,350; failure loses $1,400. Expected per attempt = 7/8 x 1,350 - 1/8 x 1,400 = 1,181.25 - 175 = $1,006.25. Machines: supply 24, demand 20 -> sell 20 needs ~23 attempts (20/0.875 = 22.9) <= 24 -> profit ~ 20 x 1,350 - 3 x 1,400 = 27,000 - 4,200 = ~$22,800. K4 invalid. K5: actually correct - demand (20) binds, not supply (24) - the critic's claim is valid (wording confused but conclusion that demand of 20 is the limit is right). Working capital Q: ~$1,750 per machine, paid on delivery -> small (~$7k for 4/month).\nK6 invalid. Do both? P peak ~$17k + Q ~$3.5-7k -> could exceed $20k at peak; can sequence (Q's quick cash) - recommend P as stronger (~$52k vs ~$23k), combine with Q if working capital allows (e.g., Q at 2 machines in flight). Accept \"P stronger; do both if capital sequencing works\".",
+  "critical": [
+   "Accepts K1 or K4 or K6",
+   "Selects Q as stronger",
+   "Ignores P's working-capital need"
+  ]
+ },
+ {
+  "id": "Q30",
+  "caps": [
+   20,
+   18,
+   7,
+   11
+  ],
+  "key": "Inspection route: owner cannot become registered inspector in time (needs 6 months' experience) - but can broker/schedule inspections with the 2 registered inspectors (capacity 2 x 6/day ~ 12/day; 410 needing by June 30 ~ 80 business days -> capacity OK) - owner revenue from coordination fee is an assumption (no evidence inspectors pay referral). Better: use inspection awareness as a lead-gen hook for remote self-managing owners. Core business: turnover management for self-managing remote owners: 410 x 42% not-PM ~ 172 STRs, of which out-of-town (70%) - ~120 targets (assumption on overlap). Unit economics: price ~$125 avg, crew ~$67.5 -> ~$57.5 - card fee 3.75 -> ~$54/turnover. Target $3,000/month -> ~56 turnovers/month -> at shoulder 4/STR/month -> ~14 STRs; peak 9/month -> ~6-7 STRs. Crew capacity: 25/week now (~100/month) - sufficient for shoulder. Plus restocking margin. Fixed: software 99 + insurance 150 -> ~$250/month. Working capital: crews paid weekly, owners pay month-end -> ~1 month of crew cost: e.g., peak 30 STRs x 9 x $67.5 = ~$18k > $12k -> capital constraint at peak - must flag and mitigate (weekly billing / deposits / cap STR count). Timeline: March: insurance, software, outreach to self-managing remote owners (inspection reminder hook), sign STRs; book crews by May 1 for peak capacity; April shoulder revenue; by June 4 need ~14 STRs in shoulder (May) or ~7 in June. Should conclude target achievable if ~15-20 STRs signed by May, contingent on sign-up rate (assumption). Must not have owner clean or inspect personally.",
+  "critical": [
+   "Plans for the owner to become the registered inspector before June 30",
+   "Owner performs cleaning",
+   "Ignores working-capital need from weekly crew pay vs month-end collection",
+   "No dated timeline"
+  ]
+ }
+]

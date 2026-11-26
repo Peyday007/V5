@@ -1,0 +1,1236 @@
+{
+ "claude_opus": {
+  "correct_of_30": 28,
+  "graded": 30,
+  "not_answered": [],
+  "mean_score_answered": 9.07,
+  "mean_score_all30": 9.07,
+  "dimensions_mean_0_2": {
+   "reasoning": 1.97,
+   "commercial": 1.97,
+   "evidence": 1.93,
+   "constraints": 1.9,
+   "strategy": 1.95,
+   "format": 2.0,
+   "revision": 2.0
+  },
+  "capabilities": {
+   "01 constraints without invented restrictions": "1/2 correct, mean 8.0",
+   "02 strategy discovery": "2/2 correct, mean 9.0",
+   "03 facts vs assumptions": "3/3 correct, mean 9.3",
+   "04 who pays": "4/4 correct, mean 9.2",
+   "05 economics, capital, settlement timing": "5/6 correct, mean 8.3",
+   "06 unreachable targets": "3/3 correct, mean 9.0",
+   "07 delegation / brokerage": "5/5 correct, mean 9.2",
+   "08 compare & select": "3/4 correct, mean 8.5",
+   "09 contradictions between sources": "2/2 correct, mean 9.5",
+   "10 unsupported criticism": "3/3 correct, mean 9.3",
+   "11 deadlines, dependencies, capacity": "4/4 correct, mean 9.2",
+   "12 constraint preservation": "4/5 correct, mean 8.6",
+   "13 evidence that does not establish the conclusion": "3/3 correct, mean 9.7",
+   "14 useful questions": "2/2 correct, mean 9.5",
+   "15 revision on new evidence": "2/2 correct, mean 9.0",
+   "16 real opportunity vs event/prize": "2/2 correct, mean 9.5",
+   "17 unfamiliar industries": "3/3 correct, mean 9.0",
+   "18 causal chain discovery->collection": "4/4 correct, mean 8.8",
+   "19 self-evaluation": "3/3 correct, mean 9.3",
+   "20 complete executable plan": "4/4 correct, mean 8.8"
+  },
+  "planning": "10/11 correct, mean 8.7",
+  "critical_errors": [
+   "Q05: Ignores the 500 MOQ in (c) (e.g., 1,151 units)"
+  ],
+  "constraint_violations": [
+   "Q05: Treats a 1,151-unit run or 500+651 runs as meeting the 500-unit minimum, instead of counting whole 500-unit runs",
+   "Q12: Treats O5 as a 'likely breach' of the 'involving alcohol' rule, a restriction the key does not support",
+   "Q12: Adds a minors-at-booth concern for O5"
+  ],
+  "evidence_errors": [
+   "Q09: Describes S2 as showing 'misinformation' circulating, although it elsewhere correctly calls S2 accurate historically"
+  ],
+  "unsupported_assumptions": [
+   "Q02: $110 price, $10 variable cost and $300/month overhead (labeled as assumptions)",
+   "Q02: Spring peak of March-May (labeled as inferred)",
+   "Q03: States outbound freight equals inbound $140, but flags this explicitly as its own assumption",
+   "Q04: Fine-equivalent pricing ceiling, though it is labeled as inference",
+   "Q05: Prepayment processed by card and settled on day 2",
+   "Q05: Runs can be any size of 500 or more",
+   "Q06: Rush-fee headroom math is internally inconsistent: it says 'under about $12/bed', then cites ~$32/bed of headroom",
+   "Q07: Reviewer rate of $0.04/word (labeled as an assumption)",
+   "Q07: 30\u201345 minutes of owner time per order (labeled as an assumption)",
+   "Q08: Tool fee billed on days 1, 31 and 61 (stated as an assumption)",
+   "Q09: S4 may include non-solar applications (flagged as an inference)",
+   "Q12: Beer accessories arguably 'involve alcohol'",
+   "Q14: $4,000-6,000 monthly cost ceiling is a self-labelled rough estimate",
+   "Q14: 50-100+ mile round trips are estimated without locations for the other sites",
+   "Q15: $75 illustrative non-UL price (labeled as an assumption)",
+   "Q15: Inference that the comps were UL-labeled panels (labeled as an inference)",
+   "Q17: $400/month insurance (clearly flagged)",
+   "Q17: 55% after-hours share (flagged)",
+   "Q18: Sales-cycle durations (explicitly flagged as estimates)",
+   "Q19: Assumes a second route would need its own 30-store minimum (flagged as 'presumably')",
+   "Q19: Assumes a 4-week sales window and a 33\u201335 store buffer (both labeled as assumptions)",
+   "Q20: 22 PMs commit their full 780 t need (A1)",
+   "Q20: PMs pay 60% deposits by Oct 26, flagged as the key untested assumption",
+   "Q20: Average drop size of 4.5 t, enforced by a 4 t minimum",
+   "Q22: Every rental is assumed delivered both ways, which A states and tests in sensitivity",
+   "Q22: The bootstrapped second-machine timeline (May\u2013June 2027) assumes sustained peak utilization",
+   "Q23: Freight stays $0.90/unit at 5,000 units (flagged as an assumption)",
+   "Q23: Capital turns about twice per quarter (flagged as an assumption)",
+   "Q23: Uses an environment date of Nov 26 that is not in the question (flagged as unconfirmed)",
+   "Q24: 51% monthly sensitivity scenario (explicitly labelled as an assumption)",
+   "Q26: High case treats the 30% mobile share as applying to all closings (labeled as an alternative reading), which pushes the ceiling to $697.5k, above the key's ~$605k",
+   "Q27: Owner spends ~40-45 hrs per sale (flagged as an assumption)",
+   "Q29: Assumes Q's buy-recondition-deliver cycle takes about 3 weeks (stated explicitly as an assumption)",
+   "Q30: $40 inspection coordination fee (labeled as an assumption)",
+   "Q30: Assistant at $600/month",
+   "Q30: Crews restock within the turnover visit at no extra charge"
+  ],
+  "failures": [
+   "Q05 (5/10): Concludes the maximum is 1,151 units ($8,000 \u00f7 $6.95) rather than 1,000 units in two 500-unit runs, which inflates (d) to 421 units and about $3,002 a month.",
+   "Q12 (6/10): Recommends O4 alone and makes the key's O4+O5 combination conditional on a speculative alcohol-association breach for O5."
+  ],
+  "counts": {
+   "critical_errors": 1,
+   "constraint_violations": 3,
+   "evidence_errors": 1,
+   "unsupported_assumptions": 36
+  },
+  "per_question": {
+   "Q01": [
+    10.0,
+    true
+   ],
+   "Q02": [
+    9.0,
+    true
+   ],
+   "Q03": [
+    10.0,
+    true
+   ],
+   "Q04": [
+    9.0,
+    true
+   ],
+   "Q05": [
+    5.0,
+    false
+   ],
+   "Q06": [
+    9.0,
+    true
+   ],
+   "Q07": [
+    9.0,
+    true
+   ],
+   "Q08": [
+    10.0,
+    true
+   ],
+   "Q09": [
+    9.0,
+    true
+   ],
+   "Q10": [
+    10.0,
+    true
+   ],
+   "Q11": [
+    10.0,
+    true
+   ],
+   "Q12": [
+    6.0,
+    false
+   ],
+   "Q13": [
+    10.0,
+    true
+   ],
+   "Q14": [
+    9.0,
+    true
+   ],
+   "Q15": [
+    9.0,
+    true
+   ],
+   "Q16": [
+    10.0,
+    true
+   ],
+   "Q17": [
+    9.0,
+    true
+   ],
+   "Q18": [
+    9.0,
+    true
+   ],
+   "Q19": [
+    9.0,
+    true
+   ],
+   "Q20": [
+    8.0,
+    true
+   ],
+   "Q21": [
+    10.0,
+    true
+   ],
+   "Q22": [
+    9.0,
+    true
+   ],
+   "Q23": [
+    9.0,
+    true
+   ],
+   "Q24": [
+    10.0,
+    true
+   ],
+   "Q25": [
+    10.0,
+    true
+   ],
+   "Q26": [
+    9.0,
+    true
+   ],
+   "Q27": [
+    9.0,
+    true
+   ],
+   "Q28": [
+    9.0,
+    true
+   ],
+   "Q29": [
+    9.0,
+    true
+   ],
+   "Q30": [
+    9.0,
+    true
+   ]
+  },
+  "reliability": {
+   "questions": 30,
+   "first_attempt_answer": 30,
+   "unanswered_after_all_attempts": []
+  }
+ },
+ "fallback_auto": {
+  "correct_of_30": 1,
+  "graded": 30,
+  "not_answered": [],
+  "mean_score_answered": 3.13,
+  "mean_score_all30": 3.13,
+  "dimensions_mean_0_2": {
+   "reasoning": 0.23,
+   "commercial": 0.5,
+   "evidence": 0.4,
+   "constraints": 1.1,
+   "strategy": 0.57,
+   "format": 1.37,
+   "revision": 0.33
+  },
+  "capabilities": {
+   "01 constraints without invented restrictions": "0/2 correct, mean 2.5",
+   "02 strategy discovery": "0/2 correct, mean 3.5",
+   "03 facts vs assumptions": "0/3 correct, mean 4.7",
+   "04 who pays": "0/4 correct, mean 3.2",
+   "05 economics, capital, settlement timing": "0/6 correct, mean 2.5",
+   "06 unreachable targets": "0/3 correct, mean 3.0",
+   "07 delegation / brokerage": "0/5 correct, mean 2.6",
+   "08 compare & select": "0/4 correct, mean 2.5",
+   "09 contradictions between sources": "0/2 correct, mean 5.0",
+   "10 unsupported criticism": "0/3 correct, mean 1.7",
+   "11 deadlines, dependencies, capacity": "0/4 correct, mean 1.2",
+   "12 constraint preservation": "0/5 correct, mean 2.0",
+   "13 evidence that does not establish the conclusion": "0/3 correct, mean 5.3",
+   "14 useful questions": "0/2 correct, mean 4.0",
+   "15 revision on new evidence": "0/2 correct, mean 3.0",
+   "16 real opportunity vs event/prize": "1/2 correct, mean 6.0",
+   "17 unfamiliar industries": "0/3 correct, mean 3.0",
+   "18 causal chain discovery->collection": "0/4 correct, mean 2.5",
+   "19 self-evaluation": "0/3 correct, mean 1.7",
+   "20 complete executable plan": "0/4 correct, mean 2.5"
+  },
+  "planning": "0/11 correct, mean 2.7",
+  "critical_errors": [
+   "Q01: Marks (a) as a violation (treats delegated calls as owner calls)",
+   "Q05: Contribution off by more than $0.15",
+   "Q07: Has the owner sign the certification of accuracy himself as translator",
+   "Q10: Accepts C1 or C2 or C5 as valid",
+   "Q11: Wrong earliest delivery date in (a)",
+   "Q11: Wrong date in (c) or claims deadline met in (c)",
+   "Q11: Recommends paying the mill",
+   "Q12: Marks O4 or O5 as violating without valid reason",
+   "Q14: Asks about already-given facts (payment terms, start time) as top questions",
+   "Q19: Misses the 30-store minimum issue",
+   "Q20: Ignores the $15,000 cap / prepayment requirement",
+   "Q20: Total profit claim inconsistent with own unit economics",
+   "Q22: Concludes $4,000/month is achievable every month with one machine",
+   "Q22: Double counts loan payment and depreciation without noting it",
+   "Q25: Says standard COI arrives in time",
+   "Q25: Says X's cleaners are cleared by March 6",
+   "Q25: Wrong number of cleaners required",
+   "Q27: Sales needed off by >1.5 from ~4 given own math",
+   "Q29: Selects Q as stronger"
+  ],
+  "constraint_violations": [
+   "Q01: Treats the owner's personal no-call constraint as a ban on third-party calls",
+   "Q01: Marks the invented email-only/no-visit rule (c) as COMPLIES, adopting an invented restriction",
+   "Q01: Corrected plan removes the phone rep, extending a restriction the owner never stated",
+   "Q02: Strategy 1 capacity of 160 devices/month implies full-time work, not 20 h/week",
+   "Q07: Assumes the owner translates Portuguese despite speaking only English",
+   "Q07: Assumes the owner has translation competence",
+   "Q08: Checks hours only as a 90-day total rather than against the 15 hours/week limit",
+   "Q11: Ignores the Nov 25-26 closure and weekends (schedules on weekend dates such as Nov 6-7)",
+   "Q12: Marks O1 as compliant with constraint 3 despite vape/tobacco",
+   "Q12: Invents address-privacy violations for O1, O3, O5, O6",
+   "Q15: Turn 1 capital plan buys 6 pallets plus freight (~$7,008), which exceeds the $6,000 capital",
+   "Q19: Treats the $1,500 capital as a cost to be paid back rather than an available constraint",
+   "Q20: Contracts only 20 t at $92 yet sells 312 t, which implies spot or uncontracted purchases",
+   "Q20: Peak capital need of $14,940 ignores the $28,704 prepayment required for 312 t",
+   "Q22: Ignores the physical one-machine day limit: bills 1.8 monthly rentals plus 3.6 weekly rentals within 18 rented days",
+   "Q23: Proposes buying 4,000-5,000 domestic units with no plan to fund about $44k-$55k from $20k of capital",
+   "Q25: Ignores the 2:00 p.m. deadline versus the 5:00 p.m. COI delivery",
+   "Q25: Treats cleaners as tied to a single library, inflating headcount to 6",
+   "Q28: Treats capital as binding for option 3 despite deposits self-funding ad spend",
+   "Q28: Projects profit realized by late January, outside the 45-day window",
+   "Q29: Claims Q needs $28,000 upfront, which exceeds the budget, despite the 4-per-month supplier cap",
+   "Q30: Timeline includes 'Register for town inspector program (if pursuing dual role)', although the owner cannot qualify in time"
+  ],
+  "evidence_errors": [
+   "Q01: Reads 'I personally will not make phone calls' as covering third parties",
+   "Q01: Says (c) aligns with the owner's 'preference' when the owner never limited contact to email",
+   "Q02: Treats $70 as a referral fee paid to the owner, but it is the rate the owner pays the adjacent-county testers",
+   "Q02: States local testers are 'willing to pay $70 for overflow work'",
+   "Q02: Payer flow is confused: says clients pay the referral fee to the tester",
+   "Q03: S3 classified SUPPORTED by misreading F4 to say the 9 serviced units averaged $1,850",
+   "Q03: S5 classified UNSUPPORTED although 23/90 days \u2248 7.7/month follows directly from F4",
+   "Q03: S1 downgraded over an invented 'all-in vs before freight' contradiction",
+   "Q03: S2 classified SUPPORTED despite the condition mix",
+   "Q04: Says line (iv) is 'not directly supported by any fact', ignoring the private contract in F2 and the mandate in F1",
+   "Q04: Line (ii) is classified as 'Not available' rather than as a cost in the line analysis",
+   "Q05: Applies the 2.9% fee to a single $14.50 unit and then divides it by 300",
+   "Q05: Counts receivables at selling price as capital tied up, on top of costs already paid",
+   "Q05: Treats the customer prepayment as a capital requirement",
+   "Q06: Binding constraint omits the 14-day lead time's role",
+   "Q07: Cites the 'owner's language skills' as a viability factor, contrary to the owner profile",
+   "Q07: Payment on delivery contradicts Fact 4 (card at order)",
+   "Q08: B tool costs double-counted ($350 setup + 3x$150 = $800 instead of $650)",
+   "Q08: C subtracts the $1,300 sub-payment float as a cost, giving $6,400 instead of $7,700",
+   "Q08: Says C runs 10 jobs in places, contradicting its own count of 9 paid jobs",
+   "Q09: Attributes the S4/S5 gap partly to 'approvals', which makes little sense as a cause of fewer connections",
+   "Q09: Speculates that S6 may include prior years",
+   "Q10: Marks C2 SUPPORTED although Fact 4 says no license is needed to broker.",
+   "Q10: Inverts the net-30/net-45 terms and claims the owner pays the subcontractor 15 days before the fleet pays.",
+   "Q10: Calls a 42% gross margin thin by comparing annual gross margin to startup capital.",
+   "Q11: Miscounts business days throughout (T2 completes 'Nov 10', T3 completes 'Nov 20')",
+   "Q11: States T6 completes Nov 29 and T7 completes Dec 11, which are inconsistent with the stated durations",
+   "Q11: Claims expedited freight and overtime do not meet the deadline",
+   "Q12: Claims O1 profit starts month 1 (not stated)",
+   "Q12: Treats market booths as exposing home address",
+   "Q12: States O2 satisfies constraints in the combination section, contradicting its own table",
+   "Q13: E7: describes LOIs as 'binding in the sense of committed demand'",
+   "Q14: Ranks 'Payment Terms Verification' #2 even though net-60 is already stated",
+   "Q14: Calls the 6-week window 'adequate for basic setup' with no truck, no experience and no partner arranged",
+   "Q15: Claims Facebook Marketplace or Craigslist avoids the verified 10% marketplace fee",
+   "Q15: Drops pallet inbound freight from the revised cost",
+   "Q15: Divides $140 by 8 panels but then projects 39 shipments of 4 panels (which is $35/panel)",
+   "Q15: Does not name the UL label removal as an invalidated assumption",
+   "Q16: Item 8 labeled SPECULATIVE instead of a marketing cost/event.",
+   "Q16: Item 7 says registration lets the LLC 'bid on' purchase orders; the facts say registered vendors may receive them.",
+   "Q17: Uses $250 'midpoint' revenue without checking the 30-mile round trip, which implies no mileage surcharge",
+   "Q17: Lists the vehicle purchase price as a row in the monthly fixed-cost table",
+   "Q18: Misstates the subcontractor share as 45-60% and then uses '50% average of 55-60%' = $312.50",
+   "Q18: Places subcontractor invoicing and payment (Link 4) before job execution (Link 5)",
+   "Q18: Says the subcontractor is paid within 15 days of receiving its invoice; the fact is 15 days of job completion",
+   "Q18: Insurance stated as $30.77/month",
+   "Q19: Treats the 31 stores that pay other cleaners as the owner's 'current customers'",
+   "Q19: Adds 31+14 to get 45 customers",
+   "Q19: Break-even calculation assumes all 85 stores are cleaned",
+   "Q19: Never mentions the cleaner's 30-store minimum",
+   "Q20: Applies 40% to the 260 lots, which are already owner-supplied, giving 104 lots",
+   "Q20: Yard rent shown starting both Nov 1 and Dec 1",
+   "Q20: Says contracting the 20 t minimum secures storm allocation for all volume",
+   "Q21: Labels the +$2 to +$17 surplus as a 'net cost' and says the clinic loses $2/hour at the $70 rate",
+   "Q21: Calls VRI at $117-$150/hour 'lower cost'",
+   "Q21: Notes the 2-hour minimum but never applies it",
+   "Q22: Treats rented-day shares as counts of weeks and months, producing $14,005 rental revenue from 18 days",
+   "Q22: Omits the owner's $110-per-leg hauler cost entirely",
+   "Q22: Assumes 18 round-trip deliveries",
+   "Q23: States the $19,000 capital need 'exceeds $20,000 limit', which is self-contradictory",
+   "Q23: Leaves the $4,750 tariff and $4,500 freight out of the capital-per-order figure",
+   "Q23: Gives import quarterly contribution as $5,000 instead of $50,000",
+   "Q23: Adds the 1,400 POs to the 2,800-4,200 holiday multiple to get 4,200-5,600 units of demand",
+   "Q23: Labels the $0.90 line 'freight + duty' while also adding a separate tariff",
+   "Q24: Says the FOG program 'likely covers a subset of all permitted establishments' even though A (4,850) is larger than B (3,120)",
+   "Q24: Treats D's marketing claim as 'current business reality'",
+   "Q24: Asks what share of in-ground interceptor owners self-clean, contradicting E",
+   "Q25: Business-day list skips Jan 27-28 and includes Jan 29-30 (a weekend)",
+   "Q25: Clearance count uses nonexistent business days (Feb 20, Feb 27, Mar 4, Mar 5 as weekdays)",
+   "Q25: Claims Y cannot staff the contract alone",
+   "Q26: Calls $100 the midpoint of $75-$150 (actual midpoint is $112.50)",
+   "Q26: Statement 2 critique omits that the memo leaves out refinances",
+   "Q26: Says the $141,000 projection overstates the market by more than 3x, conflating the revenue target with market size",
+   "Q27: Treats haul-out ($1,200) as a company cost, although the brief says it is charged to the estate",
+   "Q27: Claims the company fronts costs for 14 days, although buyers pay the company at the sale",
+   "Q27: Counts monthly insurance as a per-sale cost",
+   "Q28: Claims customers pay 30 days after completion for lights; actually 50% at booking and 50% at completion",
+   "Q28: Treats season Nov 15-Dec 20 as '45 days exactly' and computes 6 weeks of crew capacity",
+   "Q28: Counts option 4's $4,200 as max profit though payment falls after the window",
+   "Q29: Counts P over 26 weeks although volume starts in week 3",
+   "Q29: Assumes all 20 Q machines are bought upfront, which the supplier cap prevents",
+   "Q29: Says P's $17,100 need exceeds the $20,000 budget",
+   "Q30: Uses 6 turnovers/STR in May and June, contradicting shoulder (4/month) and peak (9/month)",
+   "Q30: Treats all 287 out-of-town owners as primary customers, including PM users",
+   "Q30: States 'Competition: Low (owners pay PMs 58%)', which is incoherent",
+   "Q30: Arithmetic errors, e.g., April revenue shown as $4,320 instead of 15\u00d74\u00d7$120 = $7,200"
+  ],
+  "unsupported_assumptions": [
+   "Q01: 'the owner's constraint implies no third-party calling either'",
+   "Q02: 40% market share in year one",
+   "Q02: Captures 50% of overflow work",
+   "Q03: Infers that serviced units command a premium because they appear in sold listings",
+   "Q07: About 1 hour per page of owner translation time",
+   "Q07: About $1,000 in computer/software costs",
+   "Q09: S6 may include systems connected in prior years",
+   "Q10: Claims $5,000-$10,000 of extra working capital is needed, which the facts do not support.",
+   "Q12: Online store and wholesale 'likely' expose home address",
+   "Q12: Combining O2 and O4 could exceed inventory",
+   "Q13: E1 rated PARTLY SUPPORTS on the basis of curiosity alone",
+   "Q13: E5 rated PARTLY SUPPORTS; does not note that volume fell or that the evidence does not support pricing above the competitor",
+   "Q13: E4 ignores the sample size and selection bias of the 40 respondents",
+   "Q14: Assumes a 20-mile distance suits weekly pickups without knowing volume or the other sites",
+   "Q15: $75 price",
+   "Q15: All 156 panels sell in month 1 to the one-third niche",
+   "Q15: 1.5 hours per shipment",
+   "Q16: Assumes the LLC can fulfill catering and key-card sleeve production.",
+   "Q17: 50% outsourcing rate",
+   "Q17: 40% after-hours share",
+   "Q17: $200/month insurance and misc. with no basis given",
+   "Q18: 'Realistic concurrent capacity: 6-8 jobs' with no valid derivation",
+   "Q19: Values owner time at $25/hour",
+   "Q19: Assumes a 7.5-week payback on the capital",
+   "Q20: All lots order by Oct 4",
+   "Q20: Insurance excluded from per-ton cost",
+   "Q20: 10% extra mid-season demand",
+   "Q21: Invents an unlimited-use subscription priced at $500/month without checking it covers costs",
+   "Q22: Rental mix of 70% daily, 20% weekly, 10% monthly applied as multiples of the rate units",
+   "Q23: Treats domestic capital need as 'minimal' despite pay-on-order terms",
+   "Q23: Says nothing about the capital needed for the proposed domestic holiday volume",
+   "Q24: Prefers 4,850 without a valid definitional explanation",
+   "Q25: Each library needs its own 2 dedicated cleaners",
+   "Q26: Asserts 'thin competition among mobile agents' without evidence",
+   "Q26: Treats a 10-15% capture as potentially achievable without justification",
+   "Q27: Owner can run at most ~1 sale every 2 weeks, ignoring that hired staff run the sales",
+   "Q28: Assumes demand for 83 light jobs without flagging that demand is unverified",
+   "Q29: Asserts Q has more predictable outcomes and lower risk without support",
+   "Q30: 15-20 clients signed by April 10",
+   "Q30: 50% deposits on annual contracts"
+  ],
+  "failures": [
+   "Q01 (3/10): Marks the commission rep (a) as a violation by claiming 'the owner's constraint implies no third-party calling either,' then removes the rep from the corrected plan.",
+   "Q02 (3/10): Brokerage revenue is computed as '$70 referral fee per device' when $70 is the subcontract cost; margin should be $25-$80.",
+   "Q03 (3/10): Classifies S3 as SUPPORTED by claiming the 9 serviced listings 'sold for an average of $1,850', which F4 never says, and in the same cell admits no price comparison exists.",
+   "Q04 (5/10): Calls restaurant collection fees 'not confirmed by the facts' and rejects compliance reporting as revenue, so it misses the core model the key requires.",
+   "Q05 (1/10): Says the owner cannot operate at all because 500 units need $9,125 at day 35, wrongly adding $14.50 per unit of receivables to costs already paid.",
+   "Q06 (6/10): The 'what would change' section is wrong: it says ~87 beds and ~14 beds/week using a nonsensical $703.33 cost, when 90 beds (6 more) are needed.",
+   "Q07 (1/10): States 'The owner signs the certification statement', which has the English-only owner falsely attest to Portuguese translation competence.",
+   "Q08 (4/10): Treats C's $1,700 working capital as an expense ($8,100 - $1,700 = $6,400), which understates the best strategy and the combined total ($12,054).",
+   "Q09 (6/10): Does not recognize that the business's market includes unknown municipal-utility applications, omits the municipal utility's unknown fee, and leaves S6's validity vague ('provide context').",
+   "Q10 (2/10): Asserts the 'Owner must pay subcontractor 15 days before receiving payment from fleet' despite net-45 payables versus net-30 receivables, which wrongly validates C5.",
+   "Q11 (0/10): Its calendar arithmetic is wrong from T2 onward, so it reports a baseline delivery of Dec 19 (late), a scenario (c) delivery of Dec 26, and then recommends paying the mill $700.",
+   "Q12 (2/10): Marks O5 as failing constraint 5 because a farmers market booth supposedly makes the address public, and misses O1's tobacco violation entirely.",
+   "Q13 (6/10): It rates E1 and E5 as PARTLY SUPPORTS, treating search curiosity and one competitor's revenue rise as partial support for strong paying demand and a 20% premium.",
+   "Q14 (4/10): Ranks verification of the already-stated net-60 terms as the second most decision-relevant question, while omitting recycler capacity and subcontracting, contract term and exclusivity, and pallet ownership.",
+   "Q15 (3/10): It invents fee-free selling and computes shipping as $140/8 while projecting 4-panel shipments, so the recomputed economics are internally wrong; it also never discloses the missing UL label to buyers.",
+   "Q17 (4/10): Computes $662.50 \u00f7 $186.50 \u2248 3.55 but labels it 'calls/day' and '~107 calls/month', then contradicts itself by calling 12.5 calls/month profitable.",
+   "Q18 (4/10): The capacity calculation '$5,400 \u00f7 ($312.50 \u00d7 30 days)' is dimensionally nonsensical and rests on a misread 50% subcontractor cost, giving an unsupported 6-8 jobs.",
+   "Q19 (2/10): Claims '31 current customers + 14 new conversions = 45 stores' by treating competitors' customers as already won, and ignores the 30-store minimum entirely.",
+   "Q20 (1/10): Buys only a 20-ton minimum by Nov 1 but projects selling 312 tons with $1,386 profit and a $14,940 peak capital need. Its cost lines actually sum to $52,654, not $51,654, so profit is about $386, and the plan ignores the $28.7k needed to prepay 312 t.",
+   "Q21 (5/10): It says the clinic 'loses $2 per hour' at $70, when $72 reimbursed minus $70 is a $2 gain.",
+   "Q22 (0/10): It bills 3.6 weeks and 1.8 months of rental within 18 rented days and omits delivery costs, concluding a single machine earns $15,769 in peak and $5,720 in winter.",
+   "Q23 (3/10): Says the import order needs only $19,000, which it claims 'exceeds $20,000', omitting tariff and freight cash, and then calls domestic capital 'minimal' while proposing 4,000-5,000 pay-on-order units.",
+   "Q24 (4/10): Resolves A vs B with an impossible subset claim and simply prefers 4,850, so the discrepancy is effectively left unexplained; it also omits the dollar floor and the disposal and licensing questions.",
+   "Q25 (1/10): Concludes the standard COI delivered at 5 p.m. meets a 2 p.m. deadline, and that X is cleared by March 5, with 6 cleaners required.",
+   "Q26 (5/10): It says 10-15% capture is achievable 'given the thin competition among mobile agents', which re-imports the memo's unsupported thin-competition claim, and it gives only a single-point market estimate at a miscomputed midpoint fee.",
+   "Q27 (2/10): Shows a median sale netting -$2, then concludes only 2.1 sales/month are needed for $5,000 net, which contradicts its own loss figure.",
+   "Q28 (3/10): It caps option 3 at 83 jobs by treating ad spend as unfunded capital, ignoring the booking deposits. It then has profit arriving in late January, so its 'YES' verdict contradicts its own window.",
+   "Q29 (1/10): Chooses Q as stronger even though it computes P's profit at more than three times Q's, and justifies this with an impossible $28k upfront purchase.",
+   "Q30 (3/10): Peak working capital is stated as $3,600 while 35 clients imply about $14k of monthly crew cost paid weekly against month-end collection, so the cash constraint is badly understated."
+  ],
+  "counts": {
+   "critical_errors": 19,
+   "constraint_violations": 22,
+   "evidence_errors": 86,
+   "unsupported_assumptions": 40
+  },
+  "per_question": {
+   "Q01": [
+    3.0,
+    false
+   ],
+   "Q02": [
+    3.0,
+    false
+   ],
+   "Q03": [
+    3.0,
+    false
+   ],
+   "Q04": [
+    5.0,
+    false
+   ],
+   "Q05": [
+    1.0,
+    false
+   ],
+   "Q06": [
+    6.0,
+    false
+   ],
+   "Q07": [
+    1.0,
+    false
+   ],
+   "Q08": [
+    4.0,
+    false
+   ],
+   "Q09": [
+    6.0,
+    false
+   ],
+   "Q10": [
+    2.0,
+    false
+   ],
+   "Q11": [
+    0.0,
+    false
+   ],
+   "Q12": [
+    2.0,
+    false
+   ],
+   "Q13": [
+    6.0,
+    false
+   ],
+   "Q14": [
+    4.0,
+    false
+   ],
+   "Q15": [
+    3.0,
+    false
+   ],
+   "Q16": [
+    7.0,
+    true
+   ],
+   "Q17": [
+    4.0,
+    false
+   ],
+   "Q18": [
+    4.0,
+    false
+   ],
+   "Q19": [
+    2.0,
+    false
+   ],
+   "Q20": [
+    1.0,
+    false
+   ],
+   "Q21": [
+    5.0,
+    false
+   ],
+   "Q22": [
+    0.0,
+    false
+   ],
+   "Q23": [
+    3.0,
+    false
+   ],
+   "Q24": [
+    4.0,
+    false
+   ],
+   "Q25": [
+    1.0,
+    false
+   ],
+   "Q26": [
+    5.0,
+    false
+   ],
+   "Q27": [
+    2.0,
+    false
+   ],
+   "Q28": [
+    3.0,
+    false
+   ],
+   "Q29": [
+    1.0,
+    false
+   ],
+   "Q30": [
+    3.0,
+    false
+   ]
+  },
+  "reliability": {
+   "questions": 30,
+   "first_attempt_answer": 30,
+   "first_attempt_failure_kinds": {},
+   "served_by_other_model": 0,
+   "truncated_at_limit": 0,
+   "unanswered_after_all_attempts": [],
+   "attempts_total": 30
+  }
+ },
+ "gptoss120b": {
+  "correct_of_30": 14,
+  "graded": 30,
+  "not_answered": [],
+  "mean_score_answered": 6.33,
+  "mean_score_all30": 6.33,
+  "dimensions_mean_0_2": {
+   "reasoning": 1.13,
+   "commercial": 1.2,
+   "evidence": 1.0,
+   "constraints": 1.67,
+   "strategy": 1.57,
+   "format": 1.87,
+   "revision": 1.0
+  },
+  "capabilities": {
+   "01 constraints without invented restrictions": "2/2 correct, mean 8.5",
+   "02 strategy discovery": "2/2 correct, mean 7.0",
+   "03 facts vs assumptions": "3/3 correct, mean 7.3",
+   "04 who pays": "2/4 correct, mean 6.8",
+   "05 economics, capital, settlement timing": "1/6 correct, mean 5.3",
+   "06 unreachable targets": "1/3 correct, mean 6.0",
+   "07 delegation / brokerage": "2/5 correct, mean 6.4",
+   "08 compare & select": "2/4 correct, mean 7.0",
+   "09 contradictions between sources": "2/2 correct, mean 7.5",
+   "10 unsupported criticism": "1/3 correct, mean 6.0",
+   "11 deadlines, dependencies, capacity": "1/4 correct, mean 5.2",
+   "12 constraint preservation": "3/5 correct, mean 7.0",
+   "13 evidence that does not establish the conclusion": "2/3 correct, mean 6.3",
+   "14 useful questions": "1/2 correct, mean 5.5",
+   "15 revision on new evidence": "0/2 correct, mean 6.0",
+   "16 real opportunity vs event/prize": "1/2 correct, mean 7.5",
+   "17 unfamiliar industries": "3/3 correct, mean 7.3",
+   "18 causal chain discovery->collection": "1/4 correct, mean 5.8",
+   "19 self-evaluation": "1/3 correct, mean 6.0",
+   "20 complete executable plan": "0/4 correct, mean 5.2"
+  },
+  "planning": "4/11 correct, mean 6.4",
+  "critical_errors": [
+   "Q11: Wrong date in (c) or claims deadline met in (c)",
+   "Q14: Asks about already-given facts (payment terms, start time) as top questions",
+   "Q19: Misses the 30-store minimum issue",
+   "Q20: Ignores the $15,000 cap / prepayment requirement",
+   "Q22: Double counts loan payment and depreciation without noting it"
+  ],
+  "constraint_violations": [
+   "Q01: Summary says 'keep owner's communication limited to email and non-phone methods', a residue of the invented email-only restriction",
+   "Q02: Days 13-18 plan of 100 calls/day (~5 h/day) exceeds 20 h/week",
+   "Q11: Schedules the rework T4 to start on 'Mon Nov 21', which is a Sunday",
+   "Q15: Commits nearly all $6,000 to 5 pallets with no cash reserve",
+   "Q19: Abandons the $22 monthly-invoice offer the 14 prospects asked for and imposes $25 with weekly cash collection",
+   "Q20: Pays for load 5 in installments during Nov 8-14, after the Nov 1 deadline, contrary to full prepayment at contracting",
+   "Q20: Phased payment relies on customer receipts that cannot exist before Nov 1",
+   "Q27: Suggests the owner act as pricing specialist despite having no antiques expertise"
+  ],
+  "evidence_errors": [
+   "Q02: Says the three local testers could take work at $70; only adjacent-county testers offered that rate",
+   "Q02: Cites the $70 overflow offer as Item 8 instead of Item 7",
+   "Q03: S2 classified SUPPORTED despite $1,850 mixing serviced and unserviced condition",
+   "Q04: States 10 tons/week is 'the minimum to be covered by the ordinance' when F1 sets the threshold at 1 ton/week per business",
+   "Q04: Labels the $48 + amortized permit total as 'variable cost'",
+   "Q04: Cites F6 rather than F2 for the restaurant payment",
+   "Q05: Staggering model counts only the $1,875 day-14 payment for older runs and drops the $1,600 deposit still tied up until day 82",
+   "Q06: Says price is 'sufficient' without noting that the GPO cap blocks the price lever",
+   "Q07: Cites the 'Arizona Board of Professional Engineers & Land Surveyors' as the relevant regulator, which is irrelevant",
+   "Q07: Claims a competitive edge from 'faster turnaround', but no agency turnaround is given",
+   "Q08: Counts all 18 appointments, including week 9, as paid by day 90, although a week-9 appointment on days 61-63 pays after day 90",
+   "Q08: Strategy A capital omits the $300 transport per lot ($7,000 instead of $7,600)",
+   "Q09: Labels S6 'valid for county-wide installations' without questioning the accuracy of a secondary trade newsletter",
+   "Q09: Says S6 'mixes installations with applications', which the source does not indicate",
+   "Q10: For C2, cites Fact 5 as the source for 'no license required to broker'; that statement is in Fact 4.",
+   "Q11: Gives T5 as Nov 16 and T6 as Nov 18 (should be Nov 15 and Nov 17)",
+   "Q11: Gives scenario (c) delivery as Dec 21 (should be Mon Dec 20)",
+   "Q11: Says expedited freight and overtime deliver on Dec 17 (should be Dec 16)",
+   "Q12: Says O6 uses a UPS-store mailbox (that fact belongs to O4)",
+   "Q12: Says O1 profit starts month 1 (not stated)",
+   "Q13: E7: asserts an LOI is a 'binding conditional commitment' that obligates the hotels; LOIs are typically non-binding",
+   "Q13: E3: says the conclusion assumes no owners already have a compliant fence, although the conclusion explicitly says 'or have one'",
+   "Q13: E5: treats a volume decline as unknown, when it follows arithmetically from a 20% price rise with 15% revenue growth",
+   "Q14: Q6 in the highest-impact group asks whether net-60 applies, which is already given",
+   "Q14: Middle-man model is inverted: 'buy broken pallets from the recycler, sell the repaired pallets back to the recycler'",
+   "Q14: Ranks pallet size and spec as low impact although it drives cost per pallet",
+   "Q15: Still projects selling 126 panels in month 1 even though demand is cut to one-third",
+   "Q15: Turn 1 claimed a '5-year warranty' that is not in the facts",
+   "Q15: Proposes shipping a $260 residential-liftgate pallet to a regional commercial dock, misreading the freight rates",
+   "Q17: Calls $225 the midpoint fee while also assuming no surcharges, which would make the fee $175",
+   "Q17: Says funeral homes 'invoice the removal service', reversing who invoices whom",
+   "Q17: Says overnight staff raise variable cost, though the per-call labor cost is the same $50",
+   "Q18: Treats the $1,600 annual insurance quote as a ~$133/month burn and leaves it out of the primary capacity calculation",
+   "Q18: Says the owner submits 'the client's required 7-day notice'; the 7-day notice is the subcontractor's requirement",
+   "Q19: Monthly inflow calculated as $660 instead of about $2,860, producing a false 'guaranteed loss'",
+   "Q19: Assumes the proposal targets all 85 stores",
+   "Q19: Claims the owner pays the cleaner weekly, though payment terms are unspecified",
+   "Q19: Presents liability exposure 'despite the subcontractor's insurance' as fact-backed",
+   "Q20: Loader cost treated as $60 per 20 t load instead of $60 per delivery",
+   "Q20: Says rationing affects only larger orders, but fact 2 says it affects new customers",
+   "Q20: Invoices $85,000 for the Oct 15-21 week before any deliveries",
+   "Q20: Collects payments in November for deliveries supposedly made Oct 22-31, before deliveries start",
+   "Q21: Mentions the 2-hour minimum but excludes it from the calculation",
+   "Q21: Muddled claim that video is \u2248$120/hour 'but often cheaper per minute'",
+   "Q22: 'Net profit (GAAP)' deducts the full loan payment (including principal) and also depreciation",
+   "Q22: Each rented day is treated as a separate 1-day rental with full delivery, which inflates delivery volume",
+   "Q23: Applies the 30%/70% factory payment terms to the full $9.00 unit cost (deposit $13,500, balance $31,500) instead of to the $19,000 factory price",
+   "Q23: States the capital need as $45,000 including engraving, packaging and fees, versus the key's ~$28,250 landed cash",
+   "Q24: Claims the ordinance 'allows a pump-out earlier (when 25% full) but does not require it'; C actually requires pumping at 25% full, whichever comes first",
+   "Q24: Explains A vs B only through new or seasonal or unpermitted restaurants, missing institutional or non-restaurant FSEs",
+   "Q25: Action dates have wrong weekdays: 'Fri Feb 23', 'Mon Feb 26', 'Fri Mar 1', 'Mon Mar 4' (a Saturday), 'Tue Mar 5' (a Sunday)",
+   "Q25: Says X is available 'from the second week onward', but clearance is Mar 7, the second day of service",
+   "Q26: Rates statement 5 'Partially Supported', and its wording about effective competition being 'higher than the 44 per notary figure suggests' is muddled",
+   "Q28: Option 3 max (~100 jobs) counts the season through Dec 20, beyond the Dec 16 window",
+   "Q28: Minor arithmetic: 71 x $322.50 = $22,897.50, not $22,712",
+   "Q29: Q plan buys 4 machines a month and sells all 4, ignoring that about 1 in 8 fail, so 20 sales need about 23 purchases",
+   "Q29: Q profit stated as $27,875 versus the key's ~$22,800",
+   "Q29: P peak working capital put at $13,680 (4 weeks); the key expects ~$15-17k",
+   "Q30: Computes the working-capital gap as 2 weeks, but owners pay at month-end, so the gap is about 1 month",
+   "Q30: Proposes an inspection add-on 'once owner obtains certification' even though the certificate needs 6 months' experience",
+   "Q30: Profit table omits card fees"
+  ],
+  "unsupported_assumptions": [
+   "Q01: Suggests a bridge loan or line of credit and checking whether a 12% commission needs telemarketing approval, neither supported by the facts",
+   "Q01: (b) reason cites the 10-hour limit, which is irrelevant to net-30 terms",
+   "Q02: Direct-tester model assumes 16 full weeks of fully booked demand despite the ~1-month certification delay",
+   "Q02: Adjacent-county tester capacity assumed ample (40/week) without flagging it as unknown",
+   "Q02: 30 minutes per booking",
+   "Q05: A new run can start every 18 days",
+   "Q07: A $1,000 freelancer pre-pay reserve 'while invoices are being collected', which contradicts its own card-at-order flow",
+   "Q07: Uses the whole $4,000 as required capital",
+   "Q07: QA by reading the first and last paragraph and a native-English grader cannot verify translation accuracy",
+   "Q08: All week-9 appointments occur by day 60",
+   "Q09: S6 may count systems connected in prior years",
+   "Q10: Assumes 5 work nights per week when estimating capacity.",
+   "Q12: Owner-hour estimates (about 6-7 h/week)",
+   "Q12: Vape accessories are 'typically sold to minors'",
+   "Q13: E1 rated PARTLY SUPPORTS although search interest says nothing about paying rental demand",
+   "Q13: E5 rated PARTLY SUPPORTS without addressing why pricing ABOVE the competitor does not follow",
+   "Q14: Lists a heat gun as needed repair equipment",
+   "Q15: $1/panel packaging cost",
+   "Q15: Mix of 12 local pickups and 9 shipped orders",
+   "Q15: Bundled accessories add $10 at negligible cost",
+   "Q16: Assumes the LLC can deliver catering for item 7 without noting the capability requirement.",
+   "Q17: 30% outsourced share labelled 'industry anecdote'",
+   "Q17: Insurance set to $0 in the base case (flagged as a gap)",
+   "Q18: Average subcontractor payment at Day 11",
+   "Q18: Owner might pay the subcontractor 'immediately' (Day 0) in the worst case",
+   "Q19: Assumes the owner must front up to 8 weeks of cleaner payments",
+   "Q19: Assumes two cleaning mornings conflict with the owner's sales time",
+   "Q20: 5-ton average delivery",
+   "Q20: Terminal will accept installment payment for the pre-season price",
+   "Q21: Treats patient interest as confirming the clinic's cost pain point",
+   "Q21: Illustrative clinic volumes are invented",
+   "Q22: The ~80% utilization figure needed to hit $4,000 rests on understated profit",
+   "Q22: The second machine is judged 'financially feasible' within 2\u20133 months, assuming sustained peak utilization",
+   "Q23: Buys 1,800 domestic units up front, including 400 speculative units, despite no minimum and 5-day delivery",
+   "Q23: Ignores the faster domestic cash cycle that would let capital recycle within the quarter",
+   "Q24: Assumes D's 'most' refers only to the professionally serviced segment",
+   "Q24: Expects the competitor (D) to share its frequency, contract and pricing data",
+   "Q26: Adopts 5-10% capture as 'conservative' after calling 10% optimistic",
+   "Q26: Presents $30k-$60k as a 'credible benchmark' without a bottom-up justification",
+   "Q27: Asserts that 25 hrs/week fits coordinating 4-5 sales/month without analysis",
+   "Q27: The 'price-on-sale' commission clause is odd and unsupported",
+   "Q28: Assumes light-job demand of 71+ bookings at $60 each without flagging that demand is unverified",
+   "Q29: Combined peak cash need is only ~$13,680 once Q is sequenced first",
+   "Q30: $10 consumables per turnover",
+   "Q30: $20 referral fee per STR accepted by PM firms",
+   "Q30: Owner list is public at $0 cost"
+  ],
+  "failures": [
+   "Q04 (6/10): Rejects line (vi) as 'not available' and misstates the ordinance threshold as 10 tons/week.",
+   "Q05 (4/10): Claims 2,000 units (four runs) can be in the pipeline because it undercounts capital per run at $1,875 instead of $3,475 for runs past day 14, which yields 833 units and about $5.9k a month.",
+   "Q07 (6/10): Internal inconsistency: it collects card payment up front yet budgets a $1,000 reserve to prepay translators while invoices are collected, and it miscomputes the 1-page margin ceiling as $25.50 instead of $25.",
+   "Q08 (6/10): Counts B as 18 appointments for $3,850, so the combined total is overstated at $14,254. Its own cash-flow table shows only part of the B payments, so the plan is internally inconsistent.",
+   "Q11 (4/10): A misaligned calendar shifts the rework chain by a day, giving a scenario (c) delivery of 'Tuesday December 21' instead of Monday December 20.",
+   "Q13 (5/10): It claims an LOI 'obligates the hotels to the stated purchase' and misreads E3 by ignoring the 'or have one' clause.",
+   "Q14 (4/10): Misreads the recycler relationship by proposing to buy broken pallets from it and sell repaired ones back to it, and pads a 28-item list with self-directed questions while asking the already-given payment terms as a top-impact item.",
+   "Q15 (6/10): It correctly recomputes the shipped 6-panel order (~$97.5) and adds disclosure, but keeps the 5-pallet, 126-panel first-month volume, ignoring that only one-third of buyers can use the panels.",
+   "Q18 (6/10): Headline capacity of 19 concurrent jobs divides the full $7,000 by $359 without first deducting the $1,600 insurance; only a hedged 15-16 falls in the key range. The chain also omits lead targeting by volume or grease notes and recurring rebooking.",
+   "Q19 (3/10): Calculates monthly invoice revenue as $660 (one week's billing) against $1,440 of monthly costs and concludes monthly invoicing is 'financially untenable'. It also never treats 14 committed stores versus the 30-store minimum as the gating issue.",
+   "Q20 (4/10): Claims the $17,650 outlay can be phased under $15k by paying for later loads after Nov 1 out of 30-day receipts, which contradicts both the full-prepayment rule and its own timeline (deliveries start Nov 1).",
+   "Q22 (4/10): Net profit = cash profit after the full $756.53 payment minus $450 depreciation, double-counting principal and depreciation, so peak is understated at ~$2,950.",
+   "Q23 (6/10): Computes the import cash need as 5,000 \u00d7 $9 = $45,000 and treats the 30% deposit as $13,500, misapplying the factory payment terms to the whole unit cost.",
+   "Q28 (6/10): It declares the target 'Achievable' and builds the plan on 71 light jobs without noting that demand for holiday-light jobs is unverified.",
+   "Q29 (6/10): Overstates Q profit at $27,875 by assuming all 20 purchased machines sell despite the 1-in-8 failure rate, and its conclusion contradicts its own K5 verdict (Valid in the table, 'partially valid' in the summary).",
+   "Q30 (5/10): May profit is projected at $2,227 (below $3,000), yet the answer declares the target met by June 4 using cumulative profit and June invoices, which misstates the test."
+  ],
+  "counts": {
+   "critical_errors": 5,
+   "constraint_violations": 8,
+   "evidence_errors": 61,
+   "unsupported_assumptions": 46
+  },
+  "per_question": {
+   "Q01": [
+    8.0,
+    true
+   ],
+   "Q02": [
+    7.0,
+    true
+   ],
+   "Q03": [
+    7.0,
+    true
+   ],
+   "Q04": [
+    6.0,
+    false
+   ],
+   "Q05": [
+    4.0,
+    false
+   ],
+   "Q06": [
+    8.0,
+    true
+   ],
+   "Q07": [
+    6.0,
+    false
+   ],
+   "Q08": [
+    6.0,
+    false
+   ],
+   "Q09": [
+    8.0,
+    true
+   ],
+   "Q10": [
+    9.0,
+    true
+   ],
+   "Q11": [
+    4.0,
+    false
+   ],
+   "Q12": [
+    9.0,
+    true
+   ],
+   "Q13": [
+    5.0,
+    false
+   ],
+   "Q14": [
+    4.0,
+    false
+   ],
+   "Q15": [
+    6.0,
+    false
+   ],
+   "Q16": [
+    9.0,
+    true
+   ],
+   "Q17": [
+    7.0,
+    true
+   ],
+   "Q18": [
+    6.0,
+    false
+   ],
+   "Q19": [
+    3.0,
+    false
+   ],
+   "Q20": [
+    4.0,
+    false
+   ],
+   "Q21": [
+    7.0,
+    true
+   ],
+   "Q22": [
+    4.0,
+    false
+   ],
+   "Q23": [
+    6.0,
+    false
+   ],
+   "Q24": [
+    7.0,
+    true
+   ],
+   "Q25": [
+    8.0,
+    true
+   ],
+   "Q26": [
+    7.0,
+    true
+   ],
+   "Q27": [
+    8.0,
+    true
+   ],
+   "Q28": [
+    6.0,
+    false
+   ],
+   "Q29": [
+    6.0,
+    false
+   ],
+   "Q30": [
+    5.0,
+    false
+   ]
+  },
+  "reliability": {
+   "questions": 30,
+   "first_attempt_answer": 19,
+   "first_attempt_failure_kinds": {
+    "http": 11
+   },
+   "served_by_other_model": 0,
+   "truncated_at_limit": 0,
+   "unanswered_after_all_attempts": [],
+   "attempts_total": 47
+  }
+ },
+ "qwen38_27b": {
+  "correct_of_30": 14,
+  "graded": 29,
+  "not_answered": [
+   "Q23"
+  ],
+  "mean_score_answered": 6.21,
+  "mean_score_all30": 6.0,
+  "dimensions_mean_0_2": {
+   "reasoning": 1.03,
+   "commercial": 1.28,
+   "evidence": 1.1,
+   "constraints": 1.66,
+   "strategy": 1.2,
+   "format": 1.79,
+   "revision": 1.5
+  },
+  "capabilities": {
+   "01 constraints without invented restrictions": "1/2 correct, mean 6.0",
+   "02 strategy discovery": "0/2 correct, mean 5.0",
+   "03 facts vs assumptions": "3/3 correct, mean 7.7",
+   "04 who pays": "2/4 correct, mean 6.5",
+   "05 economics, capital, settlement timing": "1/6 correct, mean 4.0",
+   "06 unreachable targets": "0/3 correct, mean 4.7",
+   "07 delegation / brokerage": "3/5 correct, mean 6.0",
+   "08 compare & select": "0/4 correct, mean 4.5",
+   "09 contradictions between sources": "2/2 correct, mean 7.5",
+   "10 unsupported criticism": "1/3 correct, mean 6.7",
+   "11 deadlines, dependencies, capacity": "2/4 correct, mean 5.5",
+   "12 constraint preservation": "2/5 correct, mean 5.2",
+   "13 evidence that does not establish the conclusion": "2/3 correct, mean 7.0",
+   "14 useful questions": "1/2 correct, mean 6.5",
+   "15 revision on new evidence": "0/2 correct, mean 2.5",
+   "16 real opportunity vs event/prize": "2/2 correct, mean 8.5",
+   "17 unfamiliar industries": "0/3 correct, mean 4.3",
+   "18 causal chain discovery->collection": "1/4 correct, mean 3.8",
+   "19 self-evaluation": "1/3 correct, mean 6.7",
+   "20 complete executable plan": "0/4 correct, mean 3.8"
+  },
+  "planning": "1/11 correct, mean 4.4",
+  "critical_errors": [
+   "Q06: Max beds not 84 (e.g., 96 or 72) without justification",
+   "Q12: Marks O4 or O5 as violating without valid reason",
+   "Q20: Total profit claim inconsistent with own unit economics",
+   "Q22: Double counts loan payment and depreciation without noting it",
+   "Q27: Rejects due to lack of antiques expertise"
+  ],
+  "constraint_violations": [
+   "Q02: Strategy 1 capacity assumes 5 days/week (40 tests/week), violating the 20 h/week limit",
+   "Q08: Assumes only 1 lot is possible, although $10k allows 2 concurrent lots (an invented restriction)",
+   "Q12: Labels O5 under 'Violation of Constraint 3' for beer accessories",
+   "Q12: Rejects O5 in favor of O4 alone",
+   "Q17: Executive summary frames the owner's overnight unavailability as raising fixed labor costs and as the primary constraint",
+   "Q25: Suggests hiring a 5th independent cleaner cleared by March 6, but no new worker can be cleared by then because fingerprints can only be submitted after award"
+  ],
+  "evidence_errors": [
+   "Q01: Labels (f) VIOLATES (Ohio law) rather than INVENTED RESTRICTION; the element itself is a self-imposed limitation, though it reaches the right fix of getting the license",
+   "Q02: Includes repair revenue in the tester model without evidence that the owner may perform repairs",
+   "Q02: Labels blended revenue of $188 as 'gross margin/test'",
+   "Q03: S2 classified SUPPORTED despite $1,850 blending 9 serviced and 14 unserviced listings",
+   "Q03: S6 table reports a $754 'gross margin' that omits outbound freight",
+   "Q06: The executive summary claims only 60 of 84 beds can be delivered by day 60 and a maximum profit of $18,900, contradicting its own body",
+   "Q06: It faults the team member for revenue-timing error even though 84 is exactly the deliverable count",
+   "Q08: Writes transport as $3,000 and gives a lot profit of $1,652 instead of $1,352",
+   "Q08: Says B needs 0 hours in week 1, although B takes 3 hours/week from setup",
+   "Q12: Frames O1's rejection partly as 'ethical ambiguity' instead of a clear tobacco violation",
+   "Q13: E6: treats the observed pattern of 10+ interpreters as a stated 'requirement' or 'rule' rather than an inferred barrier",
+   "Q14: Does not ask what Corvane currently pays per repaired pallet or who its incumbent vendor is",
+   "Q14: Asks volume only for broken pallets, not for repaired pallets needed",
+   "Q15: Keeps the $180 commercial-dock freight while storing panels in a garage or storage unit, and ignores the $260 residential liftgate rate",
+   "Q15: Keeps first-month volume at 26 panels despite saying the addressable market shrank by two-thirds",
+   "Q16: Item 8 labeled SPECULATIVE; the key treats the trade show as a marketing channel/cost (EVENT), not a speculative asset.",
+   "Q17: Claims the owner is 'short $7,000-$15,000' for the vehicle despite the financing at $2,000 down and $450/month",
+   "Q17: Initially treats $25-per-call technician pay as a $500/month fixed cost",
+   "Q17: Calls 25-30 calls/month the 'realistic breakeven target'",
+   "Q18: Reserves only $400 against an annual $1,600 insurance quote",
+   "Q18: States cleaning takes 1-3 hours",
+   "Q19: Says the original proposal relied on cash/card payment; that is the incumbents' practice in Fact 1, not the proposal's",
+   "Q19: Says capital poses 'no significant capital risk', missing the working-capital need created by monthly invoicing",
+   "Q20: Claims $15,000 cannot fund the minimum 20-ton order",
+   "Q20: Dismisses direct terminal-to-lot delivery without using fact 9",
+   "Q20: Cash-flow figures vary between $20,700, $25,200 and $19,750 peak",
+   "Q21: Claims video interpreting at $1.95-$2.50/minute lets the clinic 'profit significantly', but that is $117-$150/hour against $72 reimbursed",
+   "Q21: Ignores the 2-hour in-person minimum",
+   "Q22: Treats the full $756.53 loan payment (including ~$529 principal) as a P&L expense and also deducts $450 depreciation",
+   "Q22: Assumes only 3 round-trip deliveries for 12 rentals, which conflicts with the fact that rentals are mostly 1\u20133 days",
+   "Q24: Step 1 of the calculation says to 'use the total number of FSEs from Source A (4,850) as the base' before switching to 1,970",
+   "Q24: Names the Health Dept as the source for professional-servicing shares of under-sink traps",
+   "Q25: First states the standard COI arrives Jan 31 and is on time, then corrects this",
+   "Q25: Clearance count mislabels weekdays (Tue Mar 1, Fri Mar 4) and drops Feb 29, but still lands on Mar 7",
+   "Q26: Names DocVerify/Notarize as national signing services, which is questionable",
+   "Q27: Names the probate attorney as the hiring decision-maker rather than the executor",
+   "Q27: Claims ~$11,500 of working capital is needed to pay the estate, although the company already holds the buyers' $13,000",
+   "Q27: Ignores the budgeted pricing specialist when treating the expertise gap as fatal",
+   "Q28: Window end stated as Dec 15 rather than Dec 16",
+   "Q28: Counts pallet hours twice in the plan: 40h in Nov 1-14 and another 40h in Nov 15-Dec 15",
+   "Q29: Calls K5 invalid while conceding that demand (20) binds, which is the critic's actual claim",
+   "Q29: Q profit of $20,125 assumes only 20 purchases, yielding 17.5 sales, although supply of 24 allows all 20 demanded units to be sold",
+   "Q29: Joint cash-flow model starts laundry bills in week 1 (volume begins week 3) and receives a hotel payment in week 4, contradicting its own 4-week lag",
+   "Q30: Projects 450 turnovers/month at peak, ignoring crew capacity of ~25/week now and ~40/week if booked by May 1",
+   "Q30: Targets PM-managed owners as a secondary market",
+   "Q30: Uses 172 self-managers without the out-of-town overlap"
+  ],
+  "unsupported_assumptions": [
+   "Q01: (b) assumes the $2,400 payment is deferred 'until after revenue is generated' and does not address the case where nothing sells within 30 days",
+   "Q02: Adjacent testers will do repairs for $400",
+   "Q02: $300/month fuel for travel to the adjacent county",
+   "Q02: Owner files reports with the utility",
+   "Q07: 10 orders/week volume with no demand evidence",
+   "Q07: Second-reader review only 'if budget allows' rather than built in",
+   "Q08: Lots can only be bought sequentially",
+   "Q09: The implied municipal range of '1,140 to 2,000+' has a loosely reasoned upper bound",
+   "Q10: Claims a 40%+ gross margin is 'generally considered healthy' in service brokering, which is not in the facts.",
+   "Q12: Selling bottle openers and glassware counts as 'involving alcohol'",
+   "Q13: E3: assumes all permits resulted in completed, occupied pools as a 'standard business assumption'",
+   "Q14: Concludes the business 'is not currently viable' before having the data",
+   "Q14: Uses illustrative $2/$10 recycler prices",
+   "Q15: Buyers will pay a $140 freight pass-through on top of $95/panel",
+   "Q15: Local personal-vehicle delivery at $75-$100 exactly offsets its cost",
+   "Q15: Demand still clears a full pallet in month 1",
+   "Q16: Asserts the LLC is eligible to register as a university vendor without facts on eligibility.",
+   "Q16: Assumes the owner can deliver catering and source or manufacture key-card sleeves.",
+   "Q17: 40% after-hours share called a 'standard industry estimate'",
+   "Q17: 50% of calls after midnight",
+   "Q18: Insurance can be paid monthly",
+   "Q18: ~3 owner hours per job",
+   "Q19: Assumes the cleaner would charge $15/store for a 20-store route",
+   "Q19: Assumes 16 of the 31 incumbent customers will switch",
+   "Q20: 6-ton average deliveries",
+   "Q20: 200 t volume chosen arbitrarily",
+   "Q20: Shared-yard costs",
+   "Q21: Assumes a patient subscription means the clinic loses $55-$70/hour, when saving the fee and losing the $72 reimbursement nets only a $2-$17 loss",
+   "Q22: Most customers pick up the machine themselves",
+   "Q22: A full 7-day weekly rental is counted against an 18-day month while 20% long-term days is only 3.6 days",
+   "Q24: 30% professional uptake, 6 pumps per year and $200 price for under-sink traps in the example forecast",
+   "Q24: Treats the 4,850 as the market of potential customers without verification",
+   "Q26: 5-15% year-one capture called 'a common range for new B2B service providers' without support",
+   "Q26: Fee range uses channel midpoints ($87.50-$137.50) rather than the full $75-$150 range",
+   "Q27: Calls the market saturated despite 4-8 week waitlists",
+   "Q28: Final plan assumes 85 bookings are sold despite raising the demand risk",
+   "Q29: Combined peak of $17,260 rests on a mis-timed cash-flow schedule",
+   "Q30: $50 inspection coordination fee",
+   "Q30: 20 clients in April and 50 by June",
+   "Q30: 10% PM referral fee",
+   "Q30: Bridging finance via a credit line"
+  ],
+  "failures": [
+   "Q02 (5/10): Strategy 1 economics assume 160 tests/month on a 5-day week and count $575 repair revenue as margin, contradicting the 20 h/week constraint and the evidence; Month 2 '30 jobs/week = 60/month' is also an arithmetic error.",
+   "Q06 (5/10): The headline states 'maximum achievable net profit... is $18,900' with 'only 60 of those 84 beds' delivered, which contradicts its own correct $37,560 / 84-bed analysis.",
+   "Q08 (4/10): Strategy A is limited to one sequential lot with a miscomputed $1,652 profit, ignoring that 2 lots can run at once for $2,704.",
+   "Q12 (4/10): Headlines O5 as a 'Violation of Constraint 3' because it sells beer accessories, and so misses the O4+O5 combination.",
+   "Q14 (6/10): Never asks Corvane's current price or baseline, and declares the venture 'not currently viable' instead of identifying brokerage through the recycler as the launch model.",
+   "Q15 (5/10): It passes the $140 freight entirely to the buyer and declares per-order profit unchanged at $285 and ROI still 105%, so it never tests the realistic seller-absorbed or price-pressured case and never cuts volume for the one-third segment.",
+   "Q17 (5/10): Misreads the vehicle financing as a $7,000-$15,000 capital shortfall and first books per-call labor as a fixed cost, leaving the executive summary contradicting its own corrected breakeven of 3.1 calls.",
+   "Q19 (6/10): Misses the working-capital gap from monthly invoicing (about $1,440\u20131,800, close to the $1,500 capital) and calls capital risk insignificant.",
+   "Q20 (2/10): The executive summary claims $13,600 net profit and a $78/ton margin, while the body computes about $34 total profit and concludes the plan is not viable. The answer also wrongly says $15k cannot buy the 20-ton minimum.",
+   "Q21 (6/10): It recommends video at $1.95-$2.50/minute as profitable for clinics, but that costs $117-$150/hour against only $72 in Medicaid reimbursement.",
+   "Q22 (4/10): Net profit is computed as cash flow after the full loan payment minus depreciation, double-counting principal and depreciation and understating peak profit (~$2,442 vs the key's ~$3,800\u20134,300).",
+   "Q27 (3/10): Calls the 14-day estate payout a fatal working-capital gap, even though buyer proceeds are collected before the estate is paid, and cites the expertise gap as an insurmountable reason to reject.",
+   "Q28 (5/10): It opens with 'Feasibility Verdict: NO... approximately $11,400' and later concludes the target is 'achievable' at ~$29,700, giving no plain, consistent verdict.",
+   "Q29 (5/10): The combined cash-flow schedule receives the first hotel payment in week 4, contradicting the net-30 lag it had just modelled, so the claimed $17,260 peak is unreliable.",
+   "Q30 (3/10): Scales to 50 clients and 450 turnovers/month, far beyond stated crew capacity, which produces an unrealistic $25k/month projection and a $29k working-capital gap."
+  ],
+  "counts": {
+   "critical_errors": 5,
+   "constraint_violations": 6,
+   "evidence_errors": 46,
+   "unsupported_assumptions": 41
+  },
+  "per_question": {
+   "Q01": [
+    8.0,
+    true
+   ],
+   "Q02": [
+    5.0,
+    false
+   ],
+   "Q03": [
+    7.0,
+    true
+   ],
+   "Q04": [
+    9.0,
+    true
+   ],
+   "Q05": [
+    9.0,
+    true
+   ],
+   "Q06": [
+    5.0,
+    false
+   ],
+   "Q07": [
+    8.0,
+    true
+   ],
+   "Q08": [
+    4.0,
+    false
+   ],
+   "Q09": [
+    8.0,
+    true
+   ],
+   "Q10": [
+    9.0,
+    true
+   ],
+   "Q11": [
+    10.0,
+    true
+   ],
+   "Q12": [
+    4.0,
+    false
+   ],
+   "Q13": [
+    7.0,
+    true
+   ],
+   "Q14": [
+    6.0,
+    false
+   ],
+   "Q15": [
+    5.0,
+    false
+   ],
+   "Q16": [
+    8.0,
+    true
+   ],
+   "Q17": [
+    5.0,
+    false
+   ],
+   "Q18": [
+    7.0,
+    true
+   ],
+   "Q19": [
+    6.0,
+    false
+   ],
+   "Q20": [
+    2.0,
+    false
+   ],
+   "Q21": [
+    6.0,
+    false
+   ],
+   "Q22": [
+    4.0,
+    false
+   ],
+   "Q23": null,
+   "Q24": [
+    7.0,
+    true
+   ],
+   "Q25": [
+    7.0,
+    true
+   ],
+   "Q26": [
+    8.0,
+    true
+   ],
+   "Q27": [
+    3.0,
+    false
+   ],
+   "Q28": [
+    5.0,
+    false
+   ],
+   "Q29": [
+    5.0,
+    false
+   ],
+   "Q30": [
+    3.0,
+    false
+   ]
+  },
+  "reliability": {
+   "questions": 30,
+   "first_attempt_answer": 7,
+   "first_attempt_failure_kinds": {
+    "substituted": 8,
+    "empty": 15
+   },
+   "served_by_other_model": 44,
+   "truncated_at_limit": 0,
+   "unanswered_after_all_attempts": [
+    "Q23"
+   ],
+   "attempts_total": 99
+  }
+ }
+}
