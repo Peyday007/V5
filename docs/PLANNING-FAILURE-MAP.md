@@ -8,7 +8,7 @@ Rendered from `docs/planning-failure-map/map.py` by `render_md.py`; edit the dat
 
 - Capabilities required: **42**
 - Diagnostic questions (5 per capability, +1 model-isolation question for each of the 8 model-dependent ones): **218**
-- PASS 44 · FAIL 97 · NEEDS RECHECK 43 · UNKNOWN 34
+- PASS 45 · FAIL 96 · NEEDS RECHECK 43 · UNKNOWN 34
 - Root causes established: **15**
 
 ## A. What creating a successful plan requires (capability map)
@@ -66,7 +66,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 | id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
 |---|---|---|---|---|---|---|---|
-| C01-P | Can Brain perform it correctly? | Read 30 varied owner requests incl. "can't put any hours in", weekly vs total hours, "keeps going after". | Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed. | **FAIL** | Fresh batch fm1126a (30 goals, production 4dcef5c-era reader): 4 refused (monthly figure with a start month x2, "spending more than $1,000", "about two weeks"), 1 read as OTHER ("go from nothing to $3,500 a month"), "3 hours a week at most" read as 3 hours total, "zero time" / "not going to do any of the work" read as no limit. Repaired W1i; recheck on the next batch. | industry/construction/intent.ts readObjective | RC15 |
+| C01-P | Can Brain perform it correctly? | Read 30 varied owner requests incl. "can't put any hours in", weekly vs total hours, "keeps going after". | Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed. | **PASS** | fm1126b on a8c46995: 30 of 30 fresh goals read and created (fm1126a on the earlier reader: 26, with 3+ misread). Amount, window, capital and hours match a human reading on all 30 (local read of the batch). | industry/construction/intent.ts readObjective | RC15 |
 | C01-R | Does the result reach every component that needs it? | Does the reading reach proposer, critic, planner, committee? | Same figures in every prompt and plan reading. | **PASS** | 30Q probe objective lines; plan readings use target. | goals/target.ts | — |
 | C01-I | Does the result change later decisions correctly? | Change hours from 15 to 0 mid-course. | Next ask drops owner-performed routes. | **NEEDS RECHECK** | Same path as C38-R; not exercised on production. | planningEval update path | — |
 | C01-F | Does Brain recognise and recover when it fails? | Ambiguous request ("some money soon"). | Goal flags the unread field as a question to the owner, plans nothing on a guess. | **PASS** | fm1126a create log: unread phrases are named and the goal is refused rather than guessed ("nothing was created. Unread: …"). | readObjective unread[] | — |
@@ -648,3 +648,4 @@ C01-I, C01-X, C03-F, C04-I, C04-F, C06-P, C06-I, C06-F, C07-I, C07-F, C08-P, C08
 |---|---|---|---|
 | 2026-11-25 | dec1125c 10 goals, production | 0/10 | PLANNING-ROUTE-GENERATION-2026-11-25 |
 | 2026-11-26 | 30Q test p02/p06/p10, 12 Brain outputs, blind | 0/3 goals (0/12 outputs); 3/12 credible-incomplete | INTELLIGENCE-TEST-30Q-2026-11-26 |
+| 2026-11-26 06:24Z | fm1126b: 30 fresh goals created on frozen revision a8c46995; plans to be read and graded blind after research runs | pending | create log in scratchpad; read and grade to follow |

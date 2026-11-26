@@ -297,6 +297,12 @@
    "measure": "30Q test p02/p06/p10, 12 Brain outputs, blind",
    "usable": "0/3 goals (0/12 outputs); 3/12 credible-incomplete",
    "note": "INTELLIGENCE-TEST-30Q-2026-11-26"
+  },
+  {
+   "at": "2026-11-26 06:24Z",
+   "measure": "fm1126b: 30 fresh goals created on frozen revision a8c46995; plans to be read and graded blind after research runs",
+   "usable": "pending",
+   "note": "create log in scratchpad; read and grade to follow"
   }
  ],
  "capabilities": [
@@ -563,8 +569,8 @@
    "dim": "P",
    "test": "Read 30 varied owner requests incl. \"can't put any hours in\", weekly vs total hours, \"keeps going after\".",
    "expected": "Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed.",
-   "status": "FAIL",
-   "evidence": "Fresh batch fm1126a (30 goals, production 4dcef5c-era reader): 4 refused (monthly figure with a start month x2, \"spending more than $1,000\", \"about two weeks\"), 1 read as OTHER (\"go from nothing to $3,500 a month\"), \"3 hours a week at most\" read as 3 hours total, \"zero time\" / \"not going to do any of the work\" read as no limit. Repaired W1i; recheck on the next batch.",
+   "status": "PASS",
+   "evidence": "fm1126b on a8c46995: 30 of 30 fresh goals read and created (fm1126a on the earlier reader: 26, with 3+ misread). Amount, window, capital and hours match a human reading on all 30 (local read of the batch).",
    "component": "industry/construction/intent.ts readObjective",
    "rc": "RC15"
   },

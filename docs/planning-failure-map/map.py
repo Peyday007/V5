@@ -516,3 +516,10 @@ for qid,(st,ev) in _E.items():
             if qid in ('C33-R','C33-I','C33-X'): c[4][dim]['rc']='RC11,RC13'
             if qid in ('C41-R','C41-F'): c[4][dim]['rc']='RC1,RC14'
             if qid=='C42-P': c[4][dim]['rc']='RC13'
+
+# ---- fm1126b (2026-11-26 06:24Z, frozen revision a8c46995): intake ----
+for c in CAPS:
+    if c[0]=='C01':
+        c[4]['P']['status']='PASS'
+        c[4]['P']['evidence']='fm1126b on a8c46995: 30 of 30 fresh goals read and created (fm1126a on the earlier reader: 26, with 3+ misread). Amount, window, capital and hours match a human reading on all 30 (local read of the batch).'
+PROGRESS.append(dict(at='2026-11-26 06:24Z', measure='fm1126b: 30 fresh goals created on frozen revision a8c46995; plans to be read and graded blind after research runs', usable='pending', note='create log in scratchpad; read and grade to follow'))
