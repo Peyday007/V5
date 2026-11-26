@@ -48,7 +48,7 @@ import { createHash } from 'node:crypto';
 import type { OperatorModel } from '../../domain/operator.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
-import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, operatingModelSentenceFor, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
 import {
   BUYER_PROBLEM_FIELD,
   COMPARABLE_DEMAND_FIELD,
@@ -325,10 +325,17 @@ export function calendarLine(today: string): string {
   return `Today is ${today.slice(0, 10)} (${part} ${MONTHS[d.getUTCMonth()]}). Use the season and the calendar where the owner and the buyers are — weather, holidays, school terms, year-end budgets and closures — when choosing buyers, channels and timing, and keep any constraint the owner set for part of the window.`;
 }
 
+/** The window's last day, "24 February 2027", from today and the days left. Pure. */
+export function windowEnd(today: string, daysLeft: number): string {
+  const end = new Date(Date.parse(`${today.slice(0, 10)}T00:00:00.000Z`) + Math.max(0, Math.round(daysLeft)) * 86_400_000);
+  return `${end.getUTCDate()} ${MONTHS[end.getUTCMonth()]} ${end.getUTCFullYear()}`;
+}
+
 /** The owner's limits, stated as hard rules. Pure. */
 function limitLines(ctx: RouteContext): string[] {
   return [
-    `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s).`,
+    // The window's last day, written out (dec1125c p10): told only "90 day(s)" on 25 November, the critic dropped a snow route because "first snow is in December, after the window ends".
+    `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s)${ctx.today ? `, by ${windowEnd(ctx.today, ctx.daysLeft)}` : ''}.`,
     ctx.capitalLimit !== null ? `Capital: at most ${money(ctx.capitalLimit, ctx.currency)} may be tied up before money comes back. A route needing more is not allowed.` : 'Capital: the owner set no figure; prefer routes that tie up little.',
     ctx.hoursPerWeek
       ? `Owner's time: at most ${ctx.hoursPerWeek} hour(s) a week of the owner's own work (about ${Math.round(weeklyToMonthly(ctx.hoursPerWeek))} a month), every route's work together. Routes must fit inside it.`
@@ -340,10 +347,7 @@ function limitLines(ctx: RouteContext): string[] {
     ctx.industry ? `The owner confined this goal to: ${ctx.industry}. Every route must be in it.` : 'No industry is excluded: choose on economics, time to cash and whether it can be done.',
     ctx.recurring ? 'The target is monthly recurring revenue: every route must be billed monthly.' : '',
     ctx.exclusions.length ? `The owner excluded: ${ctx.exclusions.join('; ')}.` : '',
-    OPERATING_MODEL_SENTENCE,
-    ctx.ownerLabour?.offered
-      ? `For this goal only, the owner offered their own work ("${ctx.ownerLabour.evidence}"): routes the owner personally performs — in person included — are allowed, using only the skills and assets their words state and inside their stated hours. Set performer OWNER and count every one of those hours.`
-      : '',
+    operatingModelSentenceFor(ctx.ownerLabour ?? null),
   ].filter(Boolean);
 }
 
@@ -838,10 +842,20 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       reject('its direct cost is not below its price', 'MARGIN');
       continue;
     }
+    /*
+     * A route is refused on hours only when not even one sale fits the owner's
+     * time (dec1125c p06, 2026-11-26). It used to be refused when it could not
+     * carry the whole target alone inside the hours — but a plan is a set of
+     * routes whose hours the plan adds up and trims (`withoutSpareOwnerWork`),
+     * so two plasma donations, a five-hour labour shift and four hours of
+     * deliveries, each a third of $500 inside 15 hours together, were each
+     * refused for not being all of it. What the route alone would need is kept
+     * in the reason when it does break, and the plan holds the sum.
+     */
     const hours = routeHours({ price, directCost, ownerHoursPerDeal, monthly }, ctx);
-    if (hours && hours.needed > hours.allowed) {
+    if (hours && ownerHoursPerDeal > hours.allowed + 1e-9) {
       reject(
-        `needs about ${Math.round(hours.needed)} owner hour(s) ${hours.unit} for the ${hours.deals} ${monthly ? 'buyer(s)' : 'sale(s)'} the target takes, more than the ${Math.round(hours.allowed)} allowed ${hours.unit}`,
+        `one ${monthly ? 'buyer' : 'sale'} needs about ${Math.round(ownerHoursPerDeal * 10) / 10} owner hour(s) ${hours.unit}, more than the ${Math.round(hours.allowed)} allowed ${hours.unit} (the target would take ${hours.deals}, about ${Math.round(hours.needed)} hours)`,
         'HOURS',
       );
       continue;
@@ -1071,6 +1085,13 @@ export function critiqueJson(text: string, routeCount: number): RouteCritique | 
 }
 
 /** The critic's prompt: the owner's words, their profile, the limits and rules, and the routes, numbered. Pure. */
+/*
+ * The critic is told the plan adds routes up (dec1125c p06, 2026-11-26): with
+ * the facts supplied it dropped two plasma donations "far below the required
+ * $500" although the proposer had combined them with a labour shift and
+ * deliveries inside the owner's 15 hours — the same one-route-is-the-plan
+ * reading the hours rule had (`parseRoutes`).
+ */
 export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute[], owner: OwnerProfile | null): string {
   const refOf = new Map((ctx.findings ?? []).map((one) => [one.claimId, one.ref] as const));
   const listed = routes.map((route, i) => {
@@ -1087,7 +1108,7 @@ export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `RULES (score each route 0–5 on each; ${CRITIQUE_FAIL_SCORE} or less is a failure):\n${RULE_KEYS.map((rule) => `- ${rule}: ${ROUTE_RULES[rule]}`).join('\n')}`,
     `ROUTES PROPOSED:\n${listed.join('\n')}`,
-    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first, and between two close ones, the one more of whose figures rest on findings.",
+    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. The plan combines the routes you keep and holds their hours, capital and money together, so never drop a route only because it alone collects part of the money still needed; judge whether it pays inside the window. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first, and between two close ones, the one more of whose figures rest on findings.",
     'Reply with exactly one JSON object and nothing else:',
     `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"reviews":[{"index":1,"verdict":"KEEP"|"REPAIR"|"DROP","scores":{${RULE_KEYS.map((rule) => `"${rule}":0-5`).join(',')}},"failed":["rule names it fails"],"why":"one sentence","repair":{"field":"new value"}|null}],"ranking":[indices of kept or repaired routes, best first]}`,
   ]

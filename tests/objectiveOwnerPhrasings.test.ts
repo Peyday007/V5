@@ -85,6 +85,8 @@ describe('readObjective: the owner’s ordinary phrasings', () => {
     expect(o.capitalAssumed?.amount).toBe(0);
     expect(o.hoursCeiling).toBe(0);
     expect(read("Build $7,500 a month in recurring revenue within 5 months using up to $12,000. I don't want to put in any hours.").hoursCeiling).toBe(0);
+    expect(read("I want a business that does $20,000 in the next 90 days and keeps going after. I'm in Minneapolis, I have $5,000 to fund it, and I can't put any hours in myself at all, so it has to run without me.").hoursCeiling).toBe(0);
+    expect(read('Make $4,000 in 60 days with $1,000. I cannot spend any time on it.').hoursCeiling).toBe(0);
     expect(read("What's the fastest way to collect $2,000 in 14 days? I can spend a couple hundred bucks.").capitalAssumed?.amount).toBe(200);
   });
 

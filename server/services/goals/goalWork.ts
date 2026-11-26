@@ -311,18 +311,68 @@ export async function goalRoundsAwaitingLaunch(projectId: string): Promise<numbe
  */
 export const STOPPED_GOAL_RESEARCH_PRIORITY = 6;
 
-/** The packets one goal reaches, and the projects no other live goal works in, as a boolean over a `work_items` row (no alias). */
-function goalWorkItemSql(goalId: string): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(goalId)) throw new Error(`not a goal id: ${goalId}`);
-  const one = `SELECT '${goalId}'`;
-  return (
-    `(orchestration_id IN (${goalPacketIdsSql(one)})` +
-    ` OR project_id IN (SELECT g.project_id FROM workstreams g WHERE g.id = '${goalId}' AND g.project_id IS NOT NULL` +
-    ` UNION SELECT g2.target_project_id FROM workstreams g2 WHERE g2.id = '${goalId}' AND g2.target_project_id IS NOT NULL)` +
-    // A project another live goal works in is that goal's too: only the packets name this goal's share of it.
-    ` AND project_id NOT IN (SELECT lp.project_id FROM workstreams lp WHERE lp.id IN (${LIVE_GOAL_IDS_SQL}) AND lp.id <> '${goalId}' AND lp.project_id IS NOT NULL` +
-    ` UNION SELECT lp2.target_project_id FROM workstreams lp2 WHERE lp2.id IN (${LIVE_GOAL_IDS_SQL}) AND lp2.id <> '${goalId}' AND lp2.target_project_id IS NOT NULL))`
+/**
+ * The queued research one goal reaches: its packets, and the projects no other
+ * live goal works in. Read as plain id lists first and matched on the indexed
+ * columns, never as one nested UPDATE: production 2026-11-26, a `retire` of
+ * twelve goals whose UPDATE carried the goal-link unions inline was still
+ * running after 90 minutes on Postgres, beside a claim queue that took and
+ * held the same QUEUED rows. Each statement here is a short, bounded read or a
+ * write by primary key that re-checks the row's state.
+ */
+async function goalQueuedWork(goalId: string, priority: { above: number } | { equal: number }): Promise<Array<{ id: string; orchestration_id: string | null }>> {
+  const db = getDb();
+  const packets = (await db.all<{ ref: string }>(`SELECT x.ref FROM (${goalPacketIdsSql('?')}) x`, [goalId, goalId, goalId]))
+    .map((row) => row.ref)
+    .filter(Boolean);
+  const own = await db.all<{ project_id: string }>(
+    `SELECT project_id FROM workstreams WHERE id = ? AND project_id IS NOT NULL
+      UNION SELECT target_project_id FROM workstreams WHERE id = ? AND target_project_id IS NOT NULL`,
+    [goalId, goalId],
   );
+  // A project another live goal works in is that goal's too: only the packets name this goal's share of it.
+  const others = new Set(
+    (
+      await db.all<{ project_id: string }>(
+        `SELECT lg.project_id FROM workstreams lg WHERE lg.id IN (${LIVE_GOAL_IDS_SQL}) AND lg.id <> ? AND lg.project_id IS NOT NULL
+          UNION SELECT lg.target_project_id FROM workstreams lg WHERE lg.id IN (${LIVE_GOAL_IDS_SQL}) AND lg.id <> ? AND lg.target_project_id IS NOT NULL`,
+        [goalId, goalId],
+      )
+    ).map((row) => row.project_id),
+  );
+  const projects = own.map((row) => row.project_id).filter((id) => !others.has(id));
+  const [cmp, value] = 'above' in priority ? ['>', priority.above] : ['=', priority.equal];
+  const found = new Map<string, { id: string; orchestration_id: string | null }>();
+  const take = async (column: 'orchestration_id' | 'project_id', ids: string[]): Promise<void> => {
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const rows = await db.all<{ id: string; orchestration_id: string | null }>(
+        `SELECT id, orchestration_id FROM work_items
+          WHERE ${column} IN (${chunk.map(() => '?').join(', ')}) AND state = 'QUEUED' AND priority ${cmp} ?`,
+        [...chunk, value],
+      );
+      for (const row of rows) found.set(row.id, row);
+    }
+  };
+  await take('orchestration_id', packets);
+  await take('project_id', projects);
+  return [...found.values()];
+}
+
+/** Sets these QUEUED items' priority by id, re-checking state and the expected priority in the same statement. */
+async function setQueuedPriority(ids: string[], to: number, priority: { above: number } | { equal: number }): Promise<number> {
+  const [cmp, value] = 'above' in priority ? ['>', priority.above] : ['=', priority.equal];
+  let changes = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const result = await getDb().run(
+      `UPDATE work_items SET priority = ?
+        WHERE id IN (${chunk.map(() => '?').join(', ')}) AND state = 'QUEUED' AND priority ${cmp} ?`,
+      [to, ...chunk, value],
+    );
+    changes += result.changes;
+  }
+  return changes;
 }
 
 /**
@@ -341,21 +391,17 @@ function goalWorkItemSql(goalId: string): string {
  * whose packet also serves another live goal keeps its boost. Idempotent.
  */
 export async function yieldStoppedGoalResearch(goalId: string): Promise<number> {
-  const result = await getDb().run(
-    `UPDATE work_items SET priority = ?
-      WHERE state = 'QUEUED' AND priority > ? AND ${goalWorkItemSql(goalId)}
-        AND NOT ${liveGoalWorkItemSql()}`,
-    [STOPPED_GOAL_RESEARCH_PRIORITY, STOPPED_GOAL_RESEARCH_PRIORITY],
-  );
-  return result.changes;
+  const above = { above: STOPPED_GOAL_RESEARCH_PRIORITY };
+  const items = await goalQueuedWork(goalId, above);
+  if (items.length === 0) return 0;
+  const live = new Set((await getDb().all<{ ref: string }>(`SELECT x.ref FROM (${liveGoalPacketIdsSql()}) x`)).map((row) => row.ref));
+  const ids = items.filter((item) => !item.orchestration_id || !live.has(item.orchestration_id)).map((item) => item.id);
+  return setQueuedPriority(ids, STOPPED_GOAL_RESEARCH_PRIORITY, above);
 }
 
 /** The reverse, on reinstatement: the goal's queued research at base priority takes the goal boost again. */
 export async function restoreGoalResearch(goalId: string, boost: number): Promise<number> {
-  const result = await getDb().run(
-    `UPDATE work_items SET priority = ?
-      WHERE state = 'QUEUED' AND priority = ? AND ${goalWorkItemSql(goalId)}`,
-    [Math.min(9, STOPPED_GOAL_RESEARCH_PRIORITY + boost), STOPPED_GOAL_RESEARCH_PRIORITY],
-  );
-  return result.changes;
+  const equal = { equal: STOPPED_GOAL_RESEARCH_PRIORITY };
+  const items = await goalQueuedWork(goalId, equal);
+  return setQueuedPriority(items.map((item) => item.id), Math.min(9, STOPPED_GOAL_RESEARCH_PRIORITY + boost), equal);
 }
