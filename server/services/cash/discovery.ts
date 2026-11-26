@@ -68,7 +68,6 @@
  * rather than being asserted away by whoever created it.
  */
 import { joinRouteEvidence } from './routeEvidence.ts';
-import { writeEvidenceAnswer } from './answers.ts';
 import { OPERATING_MODEL_SENTENCE, ownerLabourOffer, ownerLabourWithHours } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
@@ -107,10 +106,10 @@ import { openWorldLensSeedsFor, type OpenWorldLensSeed, type OpenWorldRecord } f
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { commonTo, exclusionSentence, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
-import { GOAL_REQUEST_LANE, PATTERN_BUYING_WORDS, PATTERN_LANE, getClaim, signalledClaims } from '../../repos/research.ts';
+import { GOAL_REQUEST_LANE, getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
-import { mechanismForSignal, observationExpiry, openingTitle, sellersOwnPage } from '../../domain/opportunitySignals.ts';
+import { mechanismForSignal, observationExpiry, openingTitle } from '../../domain/opportunitySignals.ts';
 import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed, knowledgeResearchAllowed } from './lifecycle.ts';
 import { ARRANGEMENT_BUCKET_MARK, noteConstructedRoundOpened, noteConstructedRoundOutcome } from './arrangementLibrary.ts';
@@ -131,7 +130,6 @@ import type {
   CashOpportunity,
   IndustryNode,
   OpportunityConstraint,
-  ResearchClaim,
   RussellMission,
 } from '../../domain/types.ts';
 
@@ -2248,21 +2246,11 @@ export async function harvest(input: {
     staleBefore: new Date(now.getTime() - freshDays * 86_400_000).toISOString(),
   });
 
-  /*
-   * And a constructed round's pattern that names no buying word, filed only
-   * where its own fragment evidences who pays (`constructedPatternsWithPayer`).
-   * Read after the signalled claims, so a tagged or worded claim keeps its turn.
-   */
-  const entries: { claim: ResearchClaim; orchestrationId: string; fragmentId: string | null; payer?: ResearchClaim }[] = [
-    ...signalled,
-    ...(await constructedPatternsWithPayer({ projectId: input.projectId, limit: limit * 4 })),
-  ];
-
   const out: Harvested[] = [];
   /** What Brain has proved it produces here (`executionFrame`), read once, for the route join. */
   let delivers: readonly string[] | undefined;
 
-  for (const entry of entries) {
+  for (const entry of signalled) {
     if (out.length >= limit) break;
     const { claim } = entry;
     const signal = claim.opportunitySignal;
@@ -2375,11 +2363,9 @@ export async function harvest(input: {
       orchestrationId: entry.orchestrationId,
       fragmentId: entry.fragmentId,
       discoveryRoundId: context ? context.round.id : null,
-      nextAction: entry.payer
-        ? 'Establish how to reach the buyers who pay and who approves payment. The research names ' +
-          'who pays; it does not say who signs.'
-        : 'Establish who can approve payment and how to reach them. The source says somebody ' +
-          'asked; it does not say who pays.',
+      nextAction:
+        'Establish who can approve payment and how to reach them. The source says somebody ' +
+        'asked; it does not say who pays.',
     });
     if (!created) continue;
     if (context && context.round.state !== 'OPEN') {
@@ -2414,14 +2400,6 @@ export async function harvest(input: {
      * ten separate missions to establish again. A twin is a linked record of an
      * opening that already has its own card, so it is not joined.
      */
-    /*
-     * The payer the pattern's own fragment established, written first through the
-     * one evidence writer, so the route join below finds it answered and never
-     * replaces it with the fragment's population.
-     */
-    const payerWritten = entry.payer && !twin
-      ? await writeEvidenceAnswer({ opportunity: withSignal ?? created, field: 'payer', claim: entry.payer, needId: null }).catch(() => false)
-      : false;
     delivers ??= (await executionFrame(input.projectId, mode.currency).catch(() => null))?.delivers ?? [];
     const joined = twin ? { written: [] } : await joinRouteEvidence({ opportunity: withSignal ?? created, claim, orchestrationId: entry.orchestrationId, fragmentId: entry.fragmentId, delivers }).catch((error) => {
       console.warn(`route evidence join failed for ${created.id}: ${String((error as Error)?.message ?? error)}`);
@@ -2445,8 +2423,7 @@ export async function harvest(input: {
         fragmentId: entry.fragmentId,
         missionId,
         sourceUrl: claim.sourceUrl,
-        routeFields: [...(payerWritten ? ['payer'] : []), ...joined.written.map((one) => one.field)],
-        ...(entry.payer ? { payerClaimId: entry.payer.id } : {}),
+        routeFields: joined.written.map((one) => one.field),
       },
     });
 
@@ -2488,110 +2465,6 @@ export async function harvest(input: {
   }
   return out;
 }
-
-/**
- * A constructed round's accepted pattern that states no buying word, paired with
- * the payer its own fragment evidences (GOAL_PLAN.CONSTRUCTION.ROUNDS_FILE#2).
- *
- * `signalledClaims` reads a constructed (`goal-…-mx-…`) round's untagged
- * `demand_pattern` claim as an opening only when its sentence carries a buying
- * word. Production read 0 of 27 constructed rounds filing: the workers described
- * the repeating buyers ("HVAC firms repeatedly use setup agencies, examples …")
- * and filed who pays in the same fragment's `payer` lane, so every pattern stayed
- * context with its payer beside it ("pattern claims with no payer"). The payer is
- * the part the pattern itself lacks, so it is required here, never assumed: only
- * a fragment holding an accepted, sourced, non-absence claim in the `payer` lane
- * files, and that claim is what the card's payer rests on. Every other exclusion
- * of the signalled read is kept — a dive's own findings, a question about an
- * opening that exists, a claim already filed — and a seller's own page is dropped
- * exactly as an untagged signalled claim is. A pattern does not expire like one
- * request (`observationExpiry` on the lane), so no staleness bound applies.
- *
- * Paged until `limit` patterns survive the code checks, not one window. A
- * seller's own page is dropped here, after the read, and nothing marks the
- * row, so it returns at the head of this oldest-first read on every pass: one
- * window of such rows would starve every newer pattern behind it for ever —
- * the defect `signalledClaims` already fixed the same way (W17). Bounded by
- * `CONSTRUCTED_MAX_PAGES`, so a project of nothing but dropped rows costs a
- * fixed number of reads per pass.
- */
-async function constructedPatternsWithPayer(input: {
-  projectId: string;
-  limit: number;
-}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null; payer: ResearchClaim }[]> {
-  const want = Math.max(1, input.limit);
-  const out: { claim: ResearchClaim; orchestrationId: string; fragmentId: string | null; payer: ResearchClaim }[] = [];
-  for (let page = 0; page < CONSTRUCTED_MAX_PAGES && out.length < want; page += 1) {
-    const rows = await constructedPatternPage(input.projectId, want, page * want);
-    for (const row of rows) {
-      if (out.length >= want) break;
-      const [claim, payer] = await Promise.all([getClaim(row.claim_id), getClaim(row.payer_id)]);
-      if (!claim || !payer) continue;
-      if (sellersOwnPage(claim)) continue;
-      out.push({
-        claim: { ...claim, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' },
-        orchestrationId: claim.orchestrationId,
-        fragmentId: claim.fragmentId,
-        payer,
-      });
-    }
-    if (rows.length < want) break;
-  }
-  return out;
-}
-
-/** How many windows `constructedPatternsWithPayer` reads past rows its code checks drop. */
-const CONSTRUCTED_MAX_PAGES = 20;
-
-/** One oldest-first window of constructed-round patterns whose fragment holds a payer claim. */
-async function constructedPatternPage(projectId: string, limit: number, offset: number): Promise<{ claim_id: string; payer_id: string }[]> {
-  const noBuyingWord = PATTERN_BUYING_WORDS.map(() => 'LOWER(c.claim) NOT LIKE ?').join(' AND ');
-  return getDb().all<{ claim_id: string; payer_id: string }>(
-    `SELECT c.id AS claim_id,
-            (SELECT p.id FROM research_claims p
-              WHERE p.fragment_id = c.fragment_id AND p.accepted = 1 AND p.evidence_lane = ?
-                AND p.source_url IS NOT NULL AND p.claim_type <> 'NEGATIVE_EXISTENCE'
-              ORDER BY p.created_at, p.rowid LIMIT 1) AS payer_id
-       FROM research_claims c
-       JOIN research_fragments f ON f.id = c.fragment_id
-       JOIN research_orchestrations o ON o.id = c.orchestration_id
-      WHERE o.project_id = ? AND c.accepted = 1
-        AND c.evidence_lane = ? AND c.opportunity_signal IS NULL
-        AND ${noBuyingWord}
-        AND f.status IN ('ACCEPTED', 'BLOCKED')
-        AND c.source_url IS NOT NULL
-        AND c.claim_type <> 'NEGATIVE_EXISTENCE'
-        AND EXISTS (
-          SELECT 1 FROM russell_missions pm
-            JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
-           WHERE pm.orchestration_id = o.id AND pr.bucket_id LIKE ?)
-        AND EXISTS (
-          SELECT 1 FROM research_claims p
-           WHERE p.fragment_id = c.fragment_id AND p.accepted = 1 AND p.evidence_lane = ?
-             AND p.source_url IS NOT NULL AND p.claim_type <> 'NEGATIVE_EXISTENCE')
-        AND NOT EXISTS (SELECT 1 FROM cash_opportunities v WHERE v.validation_orchestration_id = o.id)
-        AND NOT EXISTS (
-          SELECT 1 FROM russell_missions m
-           WHERE m.orchestration_id = o.id
-             AND m.candidate_id IS NOT NULL
-             AND (
-               EXISTS (SELECT 1 FROM cash_needs n WHERE n.candidate_id = m.candidate_id)
-               OR EXISTS (SELECT 1 FROM monetization_commissions mc WHERE mc.candidate_id = m.candidate_id)
-               OR EXISTS (SELECT 1 FROM cash_opportunities q WHERE q.candidate_id = m.candidate_id)
-             )
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM cash_opportunities filed
-           WHERE filed.project_id = o.project_id AND filed.source_claim_id = c.id
-        )
-      ORDER BY c.created_at, c.rowid
-      LIMIT ? OFFSET ?`,
-    [PAYER_LANE, projectId, PATTERN_LANE, ...PATTERN_BUYING_WORDS.map((word) => `%${word}%`), 'goal-%-mx-%', PAYER_LANE, limit, offset],
-  );
-}
-
-/** The lane a research fragment declares for who pays (compiler profile `payer`). */
-const PAYER_LANE = 'payer';
 
 /**
  * Close every live round whose research has ended, so its bucket can be asked
