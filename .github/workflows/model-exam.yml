@@ -1,0 +1,42 @@
+# Isolated model examination (2026-11-26). Branch-only: runs on pushes to the exam
+# branch that touch exam/**. Calls each model directly over its OpenAI-compatible
+# endpoint with exam/run.mjs; imports and changes nothing in Brain. Prints no secret.
+name: Model exam
+on:
+  push:
+    branches: [claude/model-reasoning-evaluation-7soc7c]
+    paths: ['exam/**', '.github/workflows/model-exam.yml']
+jobs:
+  exam:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Run
+        env:
+          OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+          RUNPOD_VLLM_KEY: ${{ secrets.RUNPOD_VLLM_KEY }}
+          RUNPOD_VLLM_URL: ${{ secrets.RUNPOD_VLLM_URL }}
+        run: |
+          set -u
+          mkdir -p out
+          SW=https://northline-cheap.fly.dev/v1
+          POD=$(grep -m1 '^pod ' exam/targets.txt | cut -d' ' -f2)
+          GPU=${POD:+https://$POD-8000.proxy.runpod.net/v1}
+          node exam/run.mjs --discover --url "$SW" --key-env OMNIROUTE_API_KEY | tee out/discover.txt
+          [ -z "$GPU" ] || node exam/run.mjs --discover --url "$GPU" --key-env RUNPOD_VLLM_KEY | tee -a out/discover.txt
+          [ -z "${RUNPOD_VLLM_URL:-}" ] || node exam/run.mjs --discover --url "$RUNPOD_VLLM_URL" --key-env RUNPOD_VLLM_KEY | sed 's#https://[^ ]*#<secret-url>#' | tee -a out/discover.txt
+          pids=""
+          while IFS='|' read -r label ep model conc; do
+            case "$label" in ''|\#*|pod*) continue ;; esac
+            if [ "$ep" = gpu ]; then u="$GPU"; k=RUNPOD_VLLM_KEY; else u="$SW"; k=OMNIROUTE_API_KEY; fi
+            node exam/run.mjs --label "$label" --url "$u" --key-env "$k" --model "$model" --out "out/$label.json" --concurrency "${conc:-4}" > "out/$label.log" 2>&1 &
+            pids="$pids $!"
+          done < exam/targets.txt
+          for p in $pids; do wait $p || true; done
+          cat out/*.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: exam-results, path: out/ }
