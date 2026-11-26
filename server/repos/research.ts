@@ -1954,6 +1954,71 @@ export function patternStatesBuying(text: string): boolean {
   return PATTERN_BUYING_WORDS.some((word) => lower.includes(word));
 }
 
+/*
+ * What an untagged pattern that states no buying word must still say before a
+ * payer evidenced beside it lets it file (GOAL_PLAN.CONSTRUCTION.ROUNDS_FILE#2).
+ *
+ * `PATTERN_BUYING_WORDS` exists to keep definitions out of the pattern lane
+ * ("Shared services is the consolidation of business functions…"). A reader
+ * that files a buying-word-less pattern because its fragment holds a `payer`
+ * claim has replaced that bar with the sibling claim, and a sibling says who
+ * pays for *something* — it says nothing about whether this sentence describes
+ * buyers at all. So the sentence itself keeps the part of the bar the payer
+ * cannot supply: it names a buyer acting (`PATTERN_REPEAT_ACTS` — commissioning,
+ * engaging, using, ordering an outside supplier), says the act repeats
+ * (`PATTERN_REPEAT_MARKS`), and is not a definition
+ * (`PATTERN_DEFINITION_SHAPES` — "X is the…", "X is one of…", "refers to").
+ * The production shape files ("HVAC firms repeatedly use setup agencies,
+ * examples March and May 2026"); the two §89 definitions do not, whatever
+ * payer sits beside them, and whoever's page they came from.
+ *
+ * Every shape is matched as a substring of the claim lower-cased and padded
+ * with one space either side, in both readers, so the SQL and the function are
+ * one rule: `(' ' || LOWER(c.claim) || ' ') LIKE '%shape%'` in SQLite and
+ * Postgres alike, and `(' ' + text.toLowerCase() + ' ').includes(shape)` here.
+ * The leading space anchors a stem to a word start ("use " never matches
+ * "because"). No shape holds `%` or `_`, so none needs escaping.
+ */
+export const PATTERN_REPEAT_ACTS = [
+  ' commission', ' engag', ' use ', ' uses ', ' used ', ' using ', ' rely on', ' relies on', ' order', ' book',
+  ' request', ' renew', ' procur', ' source ', ' sources ', ' sourcing ', ' bring in', ' brings in',
+  ' turn to', ' turns to', ' send ', ' sends ', ' farm out', ' farms out', ' hand off', ' hands off', ' retain',
+] as const;
+export const PATTERN_REPEAT_MARKS = [
+  ' repeated', ' repeat', ' recurr', ' regular', ' every ', ' each ', ' monthly', ' weekly', ' quarterly',
+  ' annual', ' yearly', ' routine', ' ongoing', ' again', ' examples ', ' example ',
+] as const;
+export const PATTERN_DEFINITION_SHAPES = [
+  ' is the ', ' is a ', ' is an ', ' is one of ', ' are the ', ' are a ', ' are one of ', ' refers to ',
+  ' is defined as ', ' are defined as ', ' means ', ' is known as ', ' is a term ',
+] as const;
+
+/** Whether an untagged pattern's own text describes buyers repeatedly acting, and is no definition. */
+export function patternDescribesRepeatBuying(text: string): boolean {
+  const padded = ` ${text.toLowerCase()} `;
+  return (
+    PATTERN_REPEAT_ACTS.some((shape) => padded.includes(shape)) &&
+    PATTERN_REPEAT_MARKS.some((shape) => padded.includes(shape)) &&
+    !PATTERN_DEFINITION_SHAPES.some((shape) => padded.includes(shape))
+  );
+}
+
+/**
+ * The same rule as a positional-parameter SQL condition over a claim column
+ * (default `c.claim`), for a reader that files a pattern on its fragment's
+ * payer. AND it into that read; a row it refuses stays context, as before.
+ */
+export function patternDescribesRepeatBuyingSql(column = 'c.claim'): { sql: string; params: string[] } {
+  const padded = `(' ' || LOWER(${column}) || ' ')`;
+  const like = (shapes: readonly string[]) => shapes.map(() => `${padded} LIKE ?`);
+  const sql =
+    `((${like(PATTERN_REPEAT_ACTS).join(' OR ')}) ` +
+    `AND (${like(PATTERN_REPEAT_MARKS).join(' OR ')}) ` +
+    `AND NOT (${like(PATTERN_DEFINITION_SHAPES).join(' OR ')}))`;
+  const params = [...PATTERN_REPEAT_ACTS, ...PATTERN_REPEAT_MARKS, ...PATTERN_DEFINITION_SHAPES].map((shape) => `%${shape}%`);
+  return { sql, params };
+}
+
 export async function signalledClaims(input: {
   projectId: string;
   limit?: number;
