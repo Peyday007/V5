@@ -864,6 +864,31 @@ async function items(): Promise<void> {
 }
 
 /**
+ * judging --run R: whether Brain's idea judge is reaching a run's ideas, read
+ * only — the Russell cycle's last run and error, ideas judged Brain-wide by
+ * hour, the run's unjudged ideas by kind and age, and where the run's first
+ * unjudged ideas stand in the judge's own queue (`unjudgedGoalIdeas`).
+ */
+async function judging(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const out = (label: string, value: unknown) => console.log(`JUDGING ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[] = []): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  const projects = (await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id);
+  const marks = projects.map(() => '?').join(',') || "''";
+  out('cycle', await q(`SELECT state, pause_reason, last_ran_at, SUBSTR(COALESCE(last_error, ''), 1, 300) AS last_error, max_launches_per_cycle, lease_expires_at FROM russell_cycle`));
+  const since = new Date(Date.now() - 6 * 3_600_000).toISOString();
+  out('judged_by_hour', await q(`SELECT SUBSTR(updated_at, 1, 13) AS hour, COUNT(*) AS n FROM russell_candidates WHERE priority IS NOT NULL AND updated_at > ? GROUP BY 1 ORDER BY 1`, [since]));
+  out('run_ideas', await q(`SELECT state, CASE WHEN priority IS NULL THEN 'unjudged' ELSE priority END AS judged, COUNT(*) AS n, MIN(created_at) AS oldest FROM russell_candidates WHERE project_id IN (${marks}) GROUP BY 1, 2 ORDER BY n DESC`, projects));
+  const { unjudgedGoalIdeas } = await import('../server/services/russell/loop.ts');
+  const started = Date.now();
+  const head = await unjudgedGoalIdeas(400).catch((error: unknown) => [{ id: `error: ${String((error as Error)?.message ?? error).slice(0, 200)}` }]);
+  out('goal_queue', { ms: Date.now() - started, length: head.length, runIdeasInFirst40: head.slice(0, 40).filter((one) => projects.length && false).length });
+  const ids = head.map((one) => one.id);
+  const runSet = new Set((await q(`SELECT id FROM russell_candidates WHERE project_id IN (${marks})`, projects)).map((row) => String(row['id'])));
+  out('goal_queue_positions', { firstRunIdeaAt: ids.findIndex((id) => runSet.has(id)), runIdeasInQueue: ids.filter((id) => runSet.has(id)).length, queueProjects: (await q(`SELECT COUNT(DISTINCT project_id) AS n FROM russell_candidates WHERE id IN (${ids.slice(0, 200).map(() => '?').join(',') || "''"})`, ids.slice(0, 200)))[0] });
+}
+
+/**
  * focus --run R / unfocus: the owner's priority override (2026-11-26, "PRIORITY
  * OVERRIDE — BRAIN INTELLIGENCE COMPLETION MISSION"): every live goal outside
  * evaluation run R is paused so its bins stop taking research slots and model
@@ -922,6 +947,7 @@ try {
   else if (command === 'items') await items();
   else if (command === 'questions') await questions();
   else if (command === 'focus') await focus();
+  else if (command === 'judging') await judging();
   else if (command === 'unfocus') await unfocus();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
