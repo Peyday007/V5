@@ -134,6 +134,8 @@ async function readStream(res: Response, started: number): Promise<ChatResult> {
   let content = '';
   let completionTokens = 0;
   let error: string | null = null;
+  // A stream that ends without [DONE] or a finish reason was cut, and its answer is partial.
+  let finished = false;
   try {
     const decoder = new TextDecoder();
     let buffer = '';
@@ -149,9 +151,14 @@ async function readStream(res: Response, started: number): Promise<ChatResult> {
         buffer = buffer.slice(at + 1);
         if (!line.startsWith('data:')) continue;
         const data = line.slice(5).trim();
-        if (!data || data === '[DONE]') continue;
+        if (data === '[DONE]') {
+          finished = true;
+          continue;
+        }
+        if (!data) continue;
         try {
-          const event = JSON.parse(data) as { choices?: { delta?: { content?: string | null } }[]; usage?: { completion_tokens?: number }; error?: { message?: string } };
+          const event = JSON.parse(data) as { choices?: { delta?: { content?: string | null }; finish_reason?: string | null }[]; usage?: { completion_tokens?: number }; error?: { message?: string } };
+          if (event.choices?.[0]?.finish_reason) finished = true;
           if (event.error) error = String(event.error.message ?? 'stream error').slice(0, 200);
           content += event.choices?.[0]?.delta?.content ?? '';
           if (event.usage?.completion_tokens) completionTokens = event.usage.completion_tokens;
@@ -163,7 +170,8 @@ async function readStream(res: Response, started: number): Promise<ChatResult> {
   } catch (caught) {
     error = (caught as Error).message.slice(0, 200);
   }
-  return { content: stripThink(content), toolCalls: [], ms: Date.now() - started, completionTokens, error: content.trim() ? null : error };
+  if (!finished && !error) error = 'the stream ended before the answer did (no finish reason, no [DONE])';
+  return { content: stripThink(content), toolCalls: [], ms: Date.now() - started, completionTokens, error: content.trim() && finished ? null : error };
 }
 
 export function stripThink(text: string): string {

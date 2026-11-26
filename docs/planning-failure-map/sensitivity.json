@@ -1,230 +1,366 @@
 {
- "at": "2026-11-26T06:40:23.856Z",
+ "at": "2026-11-26T07:19:44.972Z",
  "results": [
   {
-   "id": "C21-P",
-   "rc": "RC4",
-   "why": "the old 40-finding cap",
-   "test": "tests/researchInformedRoutes.test.ts tests/planningFailureMapWave1.test.ts",
+   "id": "C01-F",
+   "rc": "RC15",
+   "why": "historical (own regression): \"I have more than $600 to spend\" read as a $600 ceiling",
+   "test": "tests/objectiveFreshPhrasings.test.ts",
+   "title": "an unnegated \"more than\" is a floor",
    "knownBadDetected": true,
    "causeNamed": true,
    "knownGoodAccepted": true,
    "verified": true,
-   "note": null,
    "failing": [
-    "RC4: every distinct verified finding can reach the planner > by default shows every one of 135 distinct verified findings (the intelligence test held 111, 111 and 135) 6ms",
-    "tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > by default shows every one of 135 distinct verified findings (the intelligence test held 111, 111 and 135)"
-   ]
+    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"without spending more than $X\" is the capital limit; an unnegated \"more than\" is a floor, never a ceiling"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
   },
   {
-   "id": "C21-X",
-   "rc": "RC4",
-   "why": "near-duplicates judged on the first 160 characters",
-   "test": "tests/planningFailureMapWave1.test.ts",
+   "id": "C01-I",
+   "rc": "RC15",
+   "why": "historical: \"over winter break, about two weeks\" read as a window ending 10 December",
+   "test": "tests/objectiveFreshPhrasings.test.ts",
+   "title": "a named break is the window",
    "knownBadDetected": true,
    "causeNamed": true,
    "knownGoodAccepted": true,
    "verified": true,
-   "note": null,
    "failing": [
-    "RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one 9ms",
-    "tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
-   ]
-  },
-  {
-   "id": "C19-I",
-   "rc": "RC4",
-   "why": "a refuted claim shown as a finding",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one 11ms",
-    "tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
-   ]
-  },
-  {
-   "id": "C12-R",
-   "rc": "RC4",
-   "why": "newest-first fill crowding out other lanes",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC4: every distinct verified finding can reach the planner > past its budget takes every lane in turn, so the newest round cannot crowd the rest out 8ms",
-    "tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > past its budget takes every lane in turn, so the newest round cannot crowd the rest out"
-   ]
-  },
-  {
-   "id": "C25-P",
-   "rc": "RC8",
-   "why": "a route whose buyers cost more than a sale earns accepted",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC8: a route is held to its own arithmetic by code > refuses a route whose buyers cost more to win than a sale earns (the 445-beanies-from-$3,000 route) 7ms",
-    "tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > refuses a route whose buyers cost more to win than a sale earns (the 445-beanies-from-$3,000 route)"
-   ]
-  },
-  {
-   "id": "C25-R",
-   "rc": "RC8",
-   "why": "the critic not told the computed first-cash date",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC8: a route is held to its own arithmetic by code > computes sales, buyer cost, hours and first-cash date for a sound route, and says them to the critic 6ms",
-    "tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > computes sales, buyer cost, hours and first-cash date for a sound route, and says them to the critic"
-   ]
-  },
-  {
-   "id": "C30-F",
-   "rc": "RC9",
-   "why": "a missing owner-fit sentence loses the route",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC9: a missing description is a gap, not a lost route > keeps a route without an owner-fit sentence and says it is unstated 8ms",
-    "tests/planningFailureMapWave1.test.ts > RC9: a missing description is a gap, not a lost route > keeps a route without an owner-fit sentence and says it is unstated"
-   ]
-  },
-  {
-   "id": "C31-F",
-   "rc": "RC2",
-   "why": "a WINDOW-only drop removes the route (the net-30 misreading)",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept 8ms",
-    "tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept"
-   ]
-  },
-  {
-   "id": "C26-F",
-   "rc": "RC2",
-   "why": "a disputed timing dropped instead of re-checked as a repair",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC2: the critic cannot veto on sums the code checked > re-checks a disputed figure as a repair: 30 days to cash still fits a 60-day window 8ms",
-    "tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > re-checks a disputed figure as a repair: 30 days to cash still fits a 60-day window"
-   ]
-  },
-  {
-   "id": "C23-F",
-   "rc": "RC1",
-   "why": "an empty reply not retried with a larger budget",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC1: an empty model turn is not an answer > asks once more with twice the budget, and uses that answer 11ms",
-    "tests/planningFailureMapWave1.test.ts > RC1: an empty model turn is not an answer > asks once more with twice the budget, and uses that answer"
-   ]
-  },
-  {
-   "id": "C23-P",
-   "rc": "RC1",
-   "why": "a non-streamed turn cut by the 100 s proxy idle",
-   "test": "tests/chatStreaming.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "a chat turn without tools is streamed > asks for a stream and joins the answer from its events 10ms",
-    "tests/chatStreaming.test.ts > a chat turn without tools is streamed > asks for a stream and joins the answer from its events"
-   ]
-  },
-  {
-   "id": "C11-X",
-   "rc": "RC5",
-   "why": "the owner's direct paid work never considered first",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC5 and RC3: the owner offering their own work is asked about first > the scouting and route asks put the owner's direct paid work before brokering 6ms",
-    "tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > the scouting and route asks put the owner's direct paid work before brokering"
-   ]
-  },
-  {
-   "id": "C03-I",
-   "rc": "RC3",
-   "why": "discovery online-only for an owner who offered work",
-   "test": "tests/planningFailureMapWave1.test.ts",
-   "knownBadDetected": true,
-   "causeNamed": true,
-   "knownGoodAccepted": true,
-   "verified": true,
-   "note": null,
-   "failing": [
-    "RC5 and RC3: the owner offering their own work is asked about first > discovery keeps the online focus unless the goal's words offer the owner's work 15ms",
-    "tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > discovery keeps the online focus unless the goal's words offer the owner's work"
-   ]
+    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > a named break is the window, and its stated length is not a second deadline"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
   },
   {
    "id": "C01-P",
    "rc": "RC15",
-   "why": "\"N hours a week at most\" read as a total of N",
+   "why": "historical: \"3 hours a week at most\" read as 3 hours in total",
    "test": "tests/objectiveFreshPhrasings.test.ts",
+   "title": "\"N hours a week at most\"",
    "knownBadDetected": true,
    "causeNamed": true,
    "knownGoodAccepted": true,
    "verified": true,
-   "note": null,
    "failing": [
-    "objective phrasings a fresh batch exposed > \"N hours a week at most\" is a rate, not a total of N 9ms",
-    "tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"N hours a week at most\" is a rate, not a total of N"
-   ]
+    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"N hours a week at most\" is a rate, not a total of N"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
   },
   {
-   "id": "C01-P2",
+   "id": "C01-R",
    "rc": "RC15",
-   "why": "a monthly figure with a start month refused for want of a deadline",
+   "why": "historical: a monthly figure with a start month refused",
    "test": "tests/objectiveFreshPhrasings.test.ts",
+   "title": "start month is due at the end of that month",
    "knownBadDetected": true,
    "causeNamed": true,
    "knownGoodAccepted": true,
    "verified": true,
-   "note": null,
    "failing": [
-    "objective phrasings a fresh batch exposed > a monthly figure with a start month is due at the end of that month 65ms",
-    "tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > a monthly figure with a start month is due at the end of that month"
-   ]
+    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > a monthly figure with a start month is due at the end of that month"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C01-X",
+   "rc": "RC15",
+   "why": "historical: \"I already work 40 hours a week … maybe 15 more\" read as 40 h a week",
+   "test": "tests/objectiveFreshBatchBlind.test.ts",
+   "title": "f07",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/objectiveFreshBatchBlind.test.ts > the objective reader agrees with blind human readings of 30 fresh requests > f07: I'm a licensed electrician in Denver. I need $6,000 by January 15th fo…"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C03-I",
+   "rc": "RC3",
+   "why": "historical: discovery online-only for an owner who offered work",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "discovery keeps the online focus unless",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > discovery keeps the online focus unless the goal's words offer the owner's work"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C03-P",
+   "rc": "RC3",
+   "why": "historical: 14 of 30 owners stating hours sent the no-physical-work rule",
+   "test": "tests/planningFailureMapWave2.test.ts",
+   "title": "like $800 a month starting in January",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I'd like $800 a month starting in January, working no more t…\" lifts the standing no-physical-work rule",
+    "× tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I need $5,000 in the next 60 days and can work 40 hours a we…\" lifts the standing no-physical-work rule"
+   ],
+   "at": "2026-11-26T07:19:44.972Z"
+  },
+  {
+   "id": "C11-X",
+   "rc": "RC5",
+   "why": "reproduction: the owner's direct paid work never considered first",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "direct paid work before brokering",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > the scouting and route asks put the owner's direct paid work before brokering"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C12-R",
+   "rc": "RC4",
+   "why": "historical: newest-first slice crowding out other lanes",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "takes every lane in turn",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > past its budget takes every lane in turn, so the newest round cannot crowd the rest out"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C19-I",
+   "rc": "RC4",
+   "why": "reproduction: a refuted claim shown as a finding (the SQL predicate is proven separately in code; no DB test yet)",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "drop a refuted one",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C21-P",
+   "rc": "RC4",
+   "why": "historical: the 40-finding cap",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "shows every one of 135 distinct verified findings",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > by default shows every one of 135 distinct verified findings (the intelligence test held 111, 111 and 135)"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C21-X",
+   "rc": "RC4",
+   "why": "historical: near-duplicates judged on the first 160 characters",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "share their first 160 characters",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C23-F",
+   "rc": "RC1",
+   "why": "historical: an empty reply counted as an answer path with no retry",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "asks once more with twice the budget",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC1: an empty model turn is not an answer > asks once more with twice the budget, and uses that answer"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C23-I",
+   "rc": "RC1",
+   "why": "reproduction: a cut stream returned as a complete answer",
+   "test": "tests/chatStreaming.test.ts",
+   "title": "keeps the partial text but names the cut",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/chatStreaming.test.ts > a stream cut before the answer ends is an error, not an answer > keeps the partial text but names the cut, so the turn is retried"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C23-P",
+   "rc": "RC1",
+   "why": "historical: non-streamed turns cut by the 100 s proxy idle (524)",
+   "test": "tests/chatStreaming.test.ts",
+   "title": "asks for a stream and joins the answer",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/chatStreaming.test.ts > a chat turn without tools is streamed > asks for a stream and joins the answer from its events"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C23-R",
+   "rc": "RC16",
+   "why": "historical: 2,500–4,000 token budgets exhausted by hidden reasoning",
+   "test": "tests/planningFailureMapWave2.test.ts",
+   "title": "gives a reasoning model room to reason",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave2.test.ts > no route ask is answered by a model measured unfit for it > gives a reasoning model room to reason and answer (exam at 16,000 tokens: 0 of 47 empty)"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C25-P",
+   "rc": "RC8",
+   "why": "historical: the 445-beanies-from-$3,000 route accepted",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "refuses a route whose buyers cost more to win",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > refuses a route whose buyers cost more to win than a sale earns (the 445-beanies-from-$3,000 route)"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C25-R",
+   "rc": "RC8",
+   "why": "historical: the critic never shown computed economics",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "computes sales, buyer cost, hours and first-cash date",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > computes sales, buyer cost, hours and first-cash date for a sound route, and says them to the critic"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C25-X",
+   "rc": "RC8",
+   "why": "reproduction: buyer acquisition beyond the capital accepted",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "capital and first buyer together exceed the limit",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > refuses a route whose capital and first buyer together exceed the limit, and says when buyers must be bought from proceeds"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C26-F",
+   "rc": "RC2",
+   "why": "historical: a disputed timing dropped instead of re-checked",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "re-checks a disputed figure as a repair",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > re-checks a disputed figure as a repair: 30 days to cash still fits a 60-day window"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C30-F",
+   "rc": "RC9",
+   "why": "historical: a missing owner-fit sentence loses the route",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "keeps a route without an owner-fit sentence",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC9: a missing description is a gap, not a lost route > keeps a route without an owner-fit sentence and says it is unstated"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C31-F",
+   "rc": "RC2",
+   "why": "historical: a WINDOW-only drop removes the route (net 30 read as outside 60 days)",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "keeps a route dropped only on WINDOW",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C31-X",
+   "rc": "RC2",
+   "why": "reproduction: a route kept against the critic outranks routes the critic kept",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "keeps a route dropped only on WINDOW",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C41-F",
+   "rc": "RC17",
+   "why": "historical: the 1/30 fallback proposed and critiqued its own routes",
+   "test": "tests/planningFailureMapWave2.test.ts",
+   "title": "names the production fallback combo",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "× tests/planningFailureMapWave2.test.ts > no route ask is answered by a model measured unfit for it > names the production fallback combo (model exam: 1 of 30, 0 of 11 on planning) as unfit"
+   ],
+   "at": "2026-11-26T07:18:58.628Z"
   }
  ]
 }

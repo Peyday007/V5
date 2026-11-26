@@ -1,0 +1,117 @@
+{
+  "reviewer": "REVIEWER 3 (root-cause challenge)",
+  "causes": [
+    {
+      "id": "RC1",
+      "verdict": "ROOT",
+      "why": "This is a real root cause, but the 'measured cause' it states is contradicted for the empty replies. The 100 s proxy idle cut produces HTTP 524s (model-exam REPORT.md, reliability table; questions/p02.questions.run1-oldscript.raw.txt:5 shows a 524 at 125085 ms). Every empty gpt-oss reply in the 30Q probes came back with error:null in 47-85 s, well under 100 s: probe1_p06_all.txt:7 at 55952 ms, probe1_p10_cap.txt:7 at 53998, final_p02_all.txt:8 at 48106, final_p02_cap.txt:8 at 85394, final_p06_cap.txt:8 at 47241, final_p10_all.txt:8 at 51584. Successful replies took a similar 46-73 s. That points to the output-token budget, not the proxy. Outside Brain at max_tokens 16000 gpt-oss gave 0 empty replies in 47 attempts (REPORT.md section D). Inside Brain it is asked with 2500-4000 tokens (routeProposal.ts:1874 critic 3000, :1898 4000, :2037 3500, :2062 2500, :2097 4000; planningEval.ts:699/706). The gpt-oss question replies that were 'unparsed' were cut off mid-JSON (p02.questions.raw.txt:6-7, 17125 chars, 0 questions; p10.questions.raw.txt:5-6). RESEARCH-STARVATION Round 2 (line 191) already suspected the 4,000-token budget. Commit 56f2699 (streaming) cures only the 524s. askModel's 2x retry (routeProposal.ts:1436-1446) gives at most 8000 tokens, which is still half the budget that worked in the exam. The second half of the root is that the fall-through accepts a model that scored 1/30 (see 'missing').",
+      "settlingTest": "Replay the six logged empty route prompts on gpt-oss, non-streamed, at max_tokens 4000, 8000 and 16000, three times each, and record finish_reason, reasoning tokens and content length. Budget is the mechanism if 4000 gives finish_reason=length with content '' and 16000 gives a full reply in under 100 s. Separately, streaming at 4000 tokens should leave the empty replies unchanged if streaming is not the fix."
+    },
+    {
+      "id": "RC2",
+      "verdict": "SYMPTOM_OF:RC1",
+      "why": "Most of the cited critic misreadings were written by the fallback model (laguna-xs-2.1, scored 1/30 and 0/4 on calendars in the exam), not by the primary. critiqueAndRevise has the model that proposed critique first (routeProposal.ts:1867). Each time gpt-oss came back empty, the fallback proposed and then critiqued its own routes. The 'net 30 / pay at shoot outside 60 days' and 'service agreements' drop is final_p02_all.txt:9-11 (fallback). The '$6,258 to reach 230 buyers' drop is final_p02_cap.txt:9-11 (fallback). 'Dec 3-7 after the 90-day window' is final_p10_all.txt:9-11 (fallback). The '445 buyers at $38.99 CPA' drop is probe1_p10_cap.txt:8-10 (fallback). Only the '$5 Craigslist fee' (final_p06_all.txt:8-10) and the '$73 licence' (probe1_p06_cap.txt:7-9) drops were gpt-oss critiques. REPORT.md section D reaches the same reading independently. So the veto is real, but its observed damage mostly comes from RC1 (fall-through) plus RC14 (the fallback's ceiling). One residual software point is real. The existing numeric-only overrule (applyCritique, routeProposal.ts:1268-1276) fires only when every failed rule is WINDOW or CAPITAL. The p02 drops paired WINDOW with CHANNEL/VALUE, so it would not have saved them.",
+      "settlingTest": "Re-run the 12 logged critiques (same routes, same findings) with the critic fixed to gpt-oss at 16k tokens, and again with a Claude critic. Count drops that rest on a false date, fee or capital claim, and outputs with zero survivors. If the zero-survivor rate falls from 9/12 to 2/12 or fewer with no change to applyCritique, RC2 is a symptom. If gpt-oss or Claude still drops sound routes on false assertions, RC2 is an independent root."
+    },
+    {
+      "id": "RC3",
+      "verdict": "ROOT",
+      "why": "Stronger than the map states. The map calls it 'partly repaired d5beaf6 (route prompt)', but every final 30Q route prompt, including the labour-offering p02 ('I can fly about 20 hours a week') and p06 ('I can put in 15 hours this week'), carried the standing 'This operation is run entirely online ... no performing a service' sentence (grep: final_p02_cap.txt, final_p06_cap.txt, final_p10_cap.txt, and all three control_prompt_*.txt). The current ownerLabourOffer matches both phrasings ({offered:true, 'I can fly about 20 hours a week'} / 'I can put in 15 hours'). Either the probe ran on a revision without the lift, or the ownerWords path (routeProposal.ts:1612) did not carry it. Either way the hard-rule LIMITS block (limitLines, routeProposal.ts:345-362) told every model, Claude Sonnet included, that the owner may not perform a service. That alone explains why no output, the strong control included, proposed the owner working as a Tasker on p06 (control_reply_p06.json: 'Brain doing the cleaning'). The invented refusals in fallback replies are partly the fallback's own weakness (exam Q01). gpt-oss mostly wrote refusals 'not stated' or [] (probe1_p02_*, final_p06_all.txt:8).",
+      "settlingTest": "Run the probe for p06 and p02 on the current revision and grep the emitted prompt for 'run entirely online' against 'For this goal the owner offered'. Then answer the identical p06 final prompt with Claude, once with the standing sentence and once with operatingModelSentenceFor({offered:true}). If only the second proposes owner-performed gig work (TaskRabbit), RC3 is the binding cause for p06."
+    },
+    {
+      "id": "RC4",
+      "verdict": "UNPROVEN",
+      "why": "The code facts are real. The cap and the 160-character filter are now replaced: FINDINGS_SHOWN is 120 with lane round-robin, the near-duplicate check compares whole statements, and refuted claims are filtered (routeProposal.ts:201, 1510-1560). But the outcome effect was never isolated. In the 30Q, the uncapped arm never beat the capped arm: final 0 usable / 0 credible uncapped against 1 credible capped, and round 1 was equal on p02 (INTELLIGENCE-TEST-30Q table lines 80-83). Every comparison is confounded by which model served it: final_p10_all fell through to the fallback (final_p10_all.txt:8-9), while final_p10_cap was served by gpt-oss (final_p10_cap.txt:8). The 'C' attributions are the grader's guess about what was missing, not a controlled measurement.",
+      "settlingTest": "With the served model held fixed (gpt-oss at 16k tokens, streamed), run p10 final with 40, 120 and all findings, 3 samples each, and grade blind. RC4 is proven only if the agency-pricing and CPA facts are cited, and the grade improves, only when they are shown."
+    },
+    {
+      "id": "RC5",
+      "verdict": "SYMPTOM_OF:RC3",
+      "why": "Neither anchoring case comes from the question prompt reasoning on its own. p06's 30 questions were written by gpt-oss (p06.questions.raw.txt:5, 100710 ms) under a LIMITS block that forbids the owner from 'performing a service' (RC3). Asking only about brokerage and digital work is the obedient answer to that rule, and the Sonnet control under the same rule also stayed digital. p10's questions were written by the fallback, after gpt-oss's reply was truncated (p10.questions.raw.txt:5-7). That part is a symptom of RC1/RC14. p02's questions (also from the fallback) were well spread across real-estate, survey and stock work, so the prompt does not force one menu when the rule is lifted. No evidence isolates a residual 'anchoring' defect in directionPrompt (routeProposal.ts:484-500).",
+      "settlingTest": "Regenerate the p06 and p10 question sets with gpt-oss at 16k tokens and the labour-lifted operating sentence, 3 samples each. Count questions about the owner's own direct paid work and the number of structurally different mechanisms. If p06 then includes Tasker or gig questions, RC5 is not an independent root."
+    },
+    {
+      "id": "RC6",
+      "verdict": "ROOT",
+      "why": "Proven for the production baseline: 0 relevant facts reached planning on all 3 goals (RESEARCH-STARVATION Part 1). The stated mechanism is partly mis-specified, though. Round 2 measured that research capacity exists Brain-wide (5,148 free-lane items a day, 740-2,351 claims accepted a day). The live goals were starved because older priority-9 items for cancelled goals were claimed first (lines 153-158), and that is fixed on fix/cancelled-goal-research-yields. The keyed-search gap and Firecrawl's 15 credits a day are real limits, but they are not shown to be the binding ones. RC6 is also not sufficient: with 79-135 verified facts supplied, 0/12 outputs were usable (30Q Answers 2).",
+      "settlingTest": "On the current revision, create a fresh goal and measure fragment completion and relevant verified facts in the route input within 6 h. If at least 20 facts arrive without keyed search and without a higher Firecrawl ceiling, the queue allocation was the root and the provider items are secondary."
+    },
+    {
+      "id": "RC7",
+      "verdict": "UNPROVEN",
+      "why": "Proven in code: rethink lessons and the owner profile have no reader, and the route ask gets only heldTitles (INTEGRATION section 2, 'present but unused'). None of the graded failures can be traced to it, because every 30Q probe was a single-shot ask with no earlier state. Whether reading lessons changes a later ask has never been measured.",
+      "settlingTest": "Replay p02 and p10 second asks with the first ask's rethink, the plan verdict and binding factor, and the critic's drop reasons injected into routeContext, against the same asks without them (fixed model, 3 samples each). RC7 is causal only if the routes or grades differ."
+    },
+    {
+      "id": "RC8",
+      "verdict": "SYMPTOM_OF:RC14",
+      "why": "Every concrete instance cited came from the fallback model. The 445 sales from $3k at $39 CPA beanie route is probe1_p10_cap.txt:8-10, fallback as both proposer and critic. The critic costing Facebook ads for 230 buyers is final_p02_cap.txt:9-11, fallback. gpt-oss's measured weakness is cash and timing arithmetic (exam cap 5: 1/6); Claude scored 5/6. A deterministic economics check is still worthwhile as a control, and partly exists already: economicsLine and the COMPUTED line in critiquePrompt (routeProposal.ts:1209-1236). But the observed failures go away with a competent model.",
+      "settlingTest": "On the 18 logged routes, have code compute price x volume against the target, CPA x sales against capital, and needed sales against buyer count, and compare with the model each route came from. If the flagged routes are almost all fallback-authored, the defect is RC14/RC1."
+    },
+    {
+      "id": "RC9",
+      "verdict": "ROOT",
+      "why": "Independent software defect, and gpt-oss produced the routes it rejected: in probe1_p10_all.txt:7-8 parseRoutes rejected both routes with OWNER_FIT ('does not say how it uses or respects the owner's stated skills...') for an owner who stated no skills or assets. ownerFit is vacuous for that owner. The output was lost with no repair ask (grade E).",
+      "settlingTest": "Feed the probe1_p10_all reply to parseRoutes with an ownerFit derived from the owner profile, and confirm both routes survive and reach the critic."
+    },
+    {
+      "id": "RC10",
+      "verdict": "ROOT",
+      "why": "Proven on the production knowledge view: 'Requesters' was linked to NAICS 5182 and fragment-shaped buyers were marked established (INTEGRATION section 2). Its reach is narrow. It feeds constructed arrangements only ('feeds arrangements only', INTEGRATION section 1), so it can affect the owner's plan only through RC13. It explains none of the 30Q route-path failures.",
+      "settlingTest": "Run knowledge/apply on the three cited fragment buyers and check that the result is ESTIMATE and that the buyer question stays open."
+    },
+    {
+      "id": "RC11",
+      "verdict": "SYMPTOM_OF:RC7",
+      "why": "The integration diagnosis itself says 'D [one selector] is the natural consequence of A [one goal working record]: A gives D somewhere to live' (section 6). The four 'best' answers on wst_db2e are what happens when faculties write their own stores with no shared per-goal decision record. It is the same mechanism as RC7, and its effect on graded plan usability is unmeasured.",
+      "settlingTest": "Once a single per-goal record exists, read wst_db2e again. If acceptance, committee, report and operator name one strategy with no further arbitration code, RC11 was RC7."
+    },
+    {
+      "id": "RC12",
+      "verdict": "CONTRADICTED",
+      "why": "This is a defect in the readiness signal, not a cause of unusable plans. Blind graders judged the plans on content, with no regard to the acceptance state, and they failed them on economics, channel and evidence use (grading/grade_result_*.json). COMPLETION-SPEC section 114 (CLAUDE.md finishing rule 10) defines done as planning reliability and explicitly not a goal's 90% ACCEPTED verdict. The 11-17 diagnosis F1 presents it as a measurement problem: 'cannot tell a fixed Brain from a broken one' (BRAIN-FAILURE-DIAGNOSIS line 73). Fixing it would change no plan the owner receives.",
+      "settlingTest": "Take one plan graded USABLE (or the closest, p10 Fcap) and confirm its grade does not depend on the acceptance state. Then remove RC12 from the causal chain for 'unusable plans' and track it as a metric defect."
+    },
+    {
+      "id": "RC13",
+      "verdict": "ROOT",
+      "why": "Proven in code. constructionInputFor (plan.ts:6126-6140) passes the constructor projectId, currency, delivers, capital, days, limits and exclusions, but not the objective, location, resources or hours. That makes it independent of research starvation: with full research the constructor still could not read the owner. It is therefore not RC6. But it becomes the owner's plan only 'until route openings exist', and route openings were missing because of the route path (RC1 fall-through, RC2 drops, RC9 rejections; 6/8 asks ended empty). RC13 is a root for 'generic', and the empty route path is the root for why the generic plan is the one shown.",
+      "settlingTest": "On fm1126a f01, add the owner's words, place and assets to constructionInputFor and see whether the arrangements change. Separately, supply one surviving owner-read route and check whether readGoalPlan then names it instead of the constructed designs."
+    },
+    {
+      "id": "RC14",
+      "verdict": "ROOT",
+      "why": "Measured blind with a model-free cross-check: gpt-oss 14/30, 4/11 planning, 0/4 complete plans; fallback 1/30; Opus 28/30 (REPORT.md headline). Two qualifications. (1) The exam gave gpt-oss 16k tokens and a neutral prompt, while Brain gives it 2.5-4k (see RC1), so in-Brain gpt-oss is probably below its exam ceiling. (2) The 30Q strong-model control (Sonnet) went 0/3 usable on Brain's own prompts, which carried the RC3 standing sentence. A stronger model is necessary but has not been shown sufficient inside Brain's prompt. 'No prompt or software repair raises a model past its own ceiling' is true, but the measured shortfall mixes ceiling with budget and prompt effects.",
+      "settlingTest": "Answer the 30Q final prompts with Opus twice: as-is, and with the labour-lifted operating sentence and 16k tokens. Grade blind. If the lifted run reaches 2/3 or more usable and the as-is run does not, the remaining gap is RC3 or prompt, not model."
+    },
+    {
+      "id": "RC15",
+      "verdict": "ROOT",
+      "why": "It was real: fm1126a refused 4 of 30 and misread 3 or more, and 'can't put any hours in' was not read as zero hours (STARVATION Round 2, p10 point 1). It is now repaired (bf94cd5, d5beaf6). The map's own C01-P reads PASS at 30/30 on fm1126b. It no longer explains any current failure.",
+      "settlingTest": "Already settled by the fm1126b 30/30 read. Keep it as a regression test only."
+    }
+  ],
+  "missing": [
+    {
+      "mechanism": "The output-token budget is too small for a reasoning model. Route, critic and direction asks give gpt-oss 2500-4000 max_tokens, so hidden reasoning uses the budget up and the reply is empty, or it is truncated JSON that the parser cannot read.",
+      "evidence": "Empty gpt-oss replies arrive in 47-85 s with error:null, below the 100 s proxy cut (planner/final_*.txt:8, probe1_*.txt:7). The exam at 16k tokens had 0/47 empty replies. gpt-oss question replies were cut off mid-JSON (questions/p02.questions.raw.txt:6-7, p10.questions.raw.txt:5-6). Budgets are set at routeProposal.ts:1874, 1898, 2037, 2062, 2097. The streaming fix 56f2699 targets only the 524s.",
+      "explains": ["RC1", "RC2", "RC3 (fallback refusals)", "RC5 (p02/p10 questions written by the fallback)", "RC8", "part of RC14's in-Brain gap"]
+    },
+    {
+      "mechanism": "The fall-through has no competence floor, and the critic order lets the proposer review itself. After one primary failure, a model scored 1/30 both proposes and critiques. A critic that is the proposer is not an independent check.",
+      "evidence": "routeProposal.ts:1867 'The model that proposed critiques first'. challengerModels includes free:auto/best-coding (routeProposal.ts:1450). 6 of 12 probes and 2 of 3 question sets were served by the fallback (planner/*.txt lines 8-9; questions/*.raw.txt).",
+      "explains": ["RC2", "RC3", "RC8", "RC5 (p10)"]
+    },
+    {
+      "mechanism": "The goal's labour or asset lift did not reach the prompts that were actually sent. Labour-offering owners got the 'run entirely online, no performing a service' rule as a hard LIMIT, and so did the strong control.",
+      "evidence": "The 'This operation is run entirely online' sentence appears in final_p02_cap.txt, final_p06_cap.txt and all three control_prompt_*.txt, while the current ownerLabourOffer returns offered:true for both owners' words. control_reply_p06.json stays digital ('Brain doing the cleaning').",
+      "explains": ["RC5 (p06 Tasker never asked or proposed)", "the 0/3 strong-model control", "RC3"]
+    },
+    {
+      "mechanism": "The evaluation is underpowered and the grader standard drifts. The evidence is 3 goals with one sample per arm, and each goal has one grader whose bar moved between days. That is not enough to attribute ~100 failed questions to specific causes.",
+      "evidence": "30Q Answers 1: 'The earlier 1/3 ... was not reproduced. Today's grader was stricter.' Exam limits: one sample per model, and differences of a few questions are within noise.",
+      "explains": ["Weak attributions in RC4, RC7 and RC8, and the 'NEEDS RECHECK'/'UNKNOWN' questions in the map"]
+    }
+  ]
+}

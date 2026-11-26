@@ -1,0 +1,245 @@
+{
+  "summary": "map.json is centred on the LLM route proposer/critic (routeProposal.ts). The deterministic quantitative planner that actually produces the owner's adopted plan (composeGoalModel -> evaluateGoalPortfolio -> judgeAcceptance -> reconstructionFor/exploreDirections/sweepVariables -> adoptReconstruction -> judgeFeasibility -> committee -> gateIntegrity -> planSteps -> continuationOf) is almost untested: 0 questions mention reconstruction, portfolio, simulation, sweep, exploration, integrity, continuation, signatures, lenses, specialists, reconsider, sprint or degraded.",
+  "gaps": [
+    {
+      "capability": "Constructed arrangement generation and candidate selection (the non-LLM generator)",
+      "question": "For 10 goals, of the arrangements constructArrangements/graphPass enumerate, how many reach selectCandidates' window, and does the HELD/EVIDENCED/RANKED slotting admit a candidate whose only weakness is no prior evidence (cold-start)?",
+      "code": "server/services/cash/construct.ts:constructArrangements (755), graphPass (1400), selectCandidates (1882), rotationWindow (1825)",
+      "why": "goalArrangements feeds composeGoalModel; the arrangement set is the main supply of openings the planner and reconstruction can adopt. HELD slots keep last readings' leaders, so a bad early leader can lock out alternatives.",
+      "observable": "Same leaders across consecutive readings with no new evidence; alternatives never enter the window; plan set shows <3 distinct legs while construction reports hundreds of candidates."
+    },
+    {
+      "capability": "Arrangement de-duplication by signature",
+      "question": "Do arrangementSignature/canonicalSignature collapse genuinely different arrangements (or keep near-identical ones) because signatures are built from tokenized claim text?",
+      "code": "server/services/cash/construct.ts:arrangementSignature (613), canonicalSignature (1531); server/services/cash/goalScenario.ts:samePopulationOfferKey (1714), modelledTwinKey (1746)",
+      "why": "Diversity of the plan set is decided here, not by the critic (C08 tests only the LLM). Diagnosis doc: 426 candidates -> 49 distinct, signatures like 'risk=are client marketplace one pay...'.",
+      "observable": "Hand-label 50 pairs collapsed/kept; measure false-merge and false-split rates; plan set dimensions (planSet.differingDimensions) show duplicates."
+    },
+    {
+      "capability": "Arrangement pre-screen in the quantitative model (deadline, capital, hours, loss per deal)",
+      "question": "Does screenArrangement/losesMoneyPerDeal/selectEstimatedArrangements cut arrangements for the right reason (settles after deadline, capital beyond limit, hours beyond owner's, every deal losing money), and are false cuts recoverable?",
+      "code": "server/services/cash/goalScenario.ts:screenArrangement (1548), losesMoneyPerDeal (1514), selectEstimatedArrangements (1818), cutReasonClass (1691)",
+      "why": "C09 tests parseRoutes only; this is the hard-limit filter for the openings the plan is actually built from. A wrong cut silently removes the winning structure.",
+      "observable": "Cut-reason histogram per goal; replay cut arrangements with corrected facts and see if any would have been adopted."
+    },
+    {
+      "capability": "Opening economic model (price, volume, close, days-to-cash, owner hours, supply cost)",
+      "question": "For 20 openings, do modelOpportunity's inferred price/close/volume/daysToCash and ownerHoursOf/reconstructedSupplyCostPerDeal match a hand computation from the cited evidence, and does priceContradiction fire when evidence conflicts?",
+      "code": "server/services/cash/goalScenario.ts:modelOpportunity (2419), ownerHoursOf (876), structuralDaysToCash (1110), reconstructedSupplyCostPerDeal (1032), priceContradiction (2383)",
+      "why": "C25/C26 test the LLM's arithmetic in parseRoutes; the plan's reach, p10 and steps come from this model instead.",
+      "observable": "Diff of modelled vs hand-computed inputs; openings whose daysToCash falls outside the window yet are counted toward reach."
+    },
+    {
+      "capability": "Portfolio simulation and the conservative settled figure",
+      "question": "Does evaluateGoalPortfolio (demandWorlds, sampler, settlementOf, stakeCycles) plus conservative() and the without* lot filters produce a p10/p50 a human would derive, with capital tied up as peak (peakConcurrentLots) not sum and net targets net of cost?",
+      "code": "server/services/goals/portfolio.ts:evaluateGoalPortfolio (1315), demandWorlds (873); server/services/goals/plan.ts:conservative (1446), withoutSpareOwnerWork (1309), withoutLossMakingLots (1358), withoutSpareCapitalLots (1385), withoutUnestablishedLots (1418), peakConcurrentLots (1240)",
+      "why": "Acceptance (the 90% defensible reach, §95) is read from this distribution; an error here flips ACCEPTED/CANDIDATE_ONLY regardless of route quality.",
+      "observable": "Hand-built 3-opening portfolios with known answers; compare p10/p50, capital held and owner hours; check net vs gross targets."
+    },
+    {
+      "capability": "Validation ladder / link checks per opening",
+      "question": "Does linkChecks/validationStage assign each opening the right missing link (demand, conversion, economics, settles, fulfilment, volume) and does nextTestFor name the cheapest test that would close it?",
+      "code": "server/services/goals/plan.ts:linkChecks (961), validationStage (872), currentDemandCheck (920), economicsState (1051), settlesState (1072), fulfilmentCheck (1093), volumeCheck (1116), nextTestFor (1185)",
+      "why": "Decides which openings are 'considered' vs held for research, and what the next test is; C35 tests readiness only at the judgeAcceptance level.",
+      "observable": "Ladder counts (ladderOf) per goal vs hand labels; openings stuck at the same stage across readings."
+    },
+    {
+      "capability": "Acceptance judgement and its calibration",
+      "question": "Does judgeAcceptance's 90% condition use measuredPlanChance/planCalibration correctly, and is a candidate's coverage ever reported as a probability (§60)?",
+      "code": "server/services/goals/plan.ts:judgeAcceptance (1648), measuredPlanChance (1557), planCalibration (2097), candidateSentence (1930), verdictOf (1921)",
+      "why": "The single readiness verdict the owner sees. Map C35-P only notes it is 'unattainable by research'; it does not test the decision logic or calibration.",
+      "observable": "Construct readings at 89%/91% p10 reach, with and without measured calibration rows; check status and sentence."
+    },
+    {
+      "capability": "Plan reconstruction when short of requirement (§99)",
+      "question": "When acceptance is not ACCEPTED, does reconstructPlan (partitionOpenings, gatesOf, buildOperators, wilsonLower) find structural changes (price, volume, prepayment, fulfilment) that a human strategist would, and are its fulfilmentQuestions/volumeQuestionsFor turned into research?",
+      "code": "server/services/goals/reconstruction.ts:reconstructPlan (333), partitionOpenings (309), gatesOf (798), prepaymentEligible (1174), fulfilmentQuestions (1197), volumeQuestionsFor (1268); server/services/goals/plan.ts:reconstructionFor (3274)",
+      "why": "This is Brain's main 'revise the plan' mechanism and produces the adopted candidate in most short goals; the map's C32 tests only the LLM replacement ask.",
+      "observable": "Reconstruction moves per goal, share that are measured vs assumed (Reconstruction.established), and whether their questions appear in the research queue."
+    },
+    {
+      "capability": "Evolutionary direction search (exploreDirections)",
+      "question": "Does exploreDirections (seedDirections, stanceQuotas, mutate, recombine, challengeProgram, scoreOf, diverseLeaders) converge on better and diverse structures than the baseline in its time budget, or return the seed when evaluations time out?",
+      "code": "server/services/goals/reasoning/directions.ts:exploreDirections (899), stanceQuotas (752), mutate (834), recombine (817), challengeProgram (622), scoreOf (891), diverseLeaders (1136)",
+      "why": "§101/§102 search over plan variants; its leader becomes the reconstruction's best. Not referenced by any question.",
+      "observable": "Lift of leader over baseline per goal, number of generations run before DEFAULT_MAX_MS, leader diversity (distance) and challenged vs bare score gap."
+    },
+    {
+      "capability": "Variable sweep (sweepVariables)",
+      "question": "Does discoverVariables/discoverConditions find the binding variables (price, volume, close, capital) and does narrowLevels + topInteractions identify the effect that matters, within MIN_EFFECT/REQUIREMENT_BOUND?",
+      "code": "server/services/goals/reasoning/variables.ts:sweepVariables (692), discoverVariables (589), discoverConditions (643), narrowLevels (189)",
+      "why": "Supplies the 'which lever moves reach' reading and price variables used by candidateStrategyReading; the binding factor shown to the owner comes from here.",
+      "observable": "Synthetic portfolio with a known binding variable; check the sweep names it; 'three binding diagnoses in one reading' (diagnosis doc) is a symptom."
+    },
+    {
+      "capability": "Strategist invention of new designs (inventDirections)",
+      "question": "When inventDue, do inventDirections' model calls produce parseable, in-scope designs (parseInvented/composeInventedDesigns), and how many are refused vs adopted?",
+      "code": "server/services/goals/reasoning/invent.ts:inventDirections (102), inventEnabled (98); server/services/goals/reasoning/directions.ts:parseInvented, composeInventedDesigns; server/services/goals/plan.ts:inventDue (3259); server/services/cash/goalScenario.ts:inventedFromArrangement (1185)",
+      "why": "A second LLM generator feeding the reconstruction, separate from the route proposer; C23 covers model failures only for route asks.",
+      "observable": "Per-run {calls, proposed, refused, error, rejections}; share of adopted reconstructions containing an invented design."
+    },
+    {
+      "capability": "Cross-goal reasoning-method learning (UCB library, stance prior)",
+      "question": "Does recordExploration write the lift of each method/stance, and do loadLibrary (ucb) and loadStancePrior actually shift the next goal's seeds toward methods that worked?",
+      "code": "server/services/goals/reasoning/learning.ts:recordExploration (146), ucb (50), loadLibrary (67), loadStancePrior (94), methodYield (182); directions.ts:stancePosterior (740)",
+      "why": "This is the only learning loop actually read back on the planning path; C37 tests only route 'rethink' lessons (which have no reader).",
+      "observable": "methodYield rows over time; seed allocation by stance before/after a run of wins; a stance with zero lift still receiving its full quota."
+    },
+    {
+      "capability": "Evaluator pool robustness",
+      "question": "When the worker-thread evaluator times out or a thread dies (EVALUATION_TIMEOUT_MS, REPLACEMENTS_PER_WINDOW), is the reconstruction marked degraded rather than silently returning a shallow search?",
+      "code": "server/services/goals/reasoning/evaluatorPool.ts:openEvaluator (133), sharedEvaluator, inlineEvaluator (112); server/services/goals/plan.ts:recordDegraded (3349)",
+      "why": "All exploration/sweep quality depends on enough evaluations completing; C39 does not cover the evaluator.",
+      "observable": "degraded[] entries on readings; evaluations completed vs requested (defaultEvaluations) per reading."
+    },
+    {
+      "capability": "Adopting one plan (reconstruction vs plan as held)",
+      "question": "Does adoptReconstruction adopt the reconstruction exactly when it is inside limits, not implausible and materially better on established (not assumed) moves, and is a hypothetical reconstruction never presented as the plan?",
+      "code": "server/services/goals/plan.ts:adoptReconstruction (3630), implausibility (3448), heldDistribution (1973), candidateStrategyReading (2001)",
+      "why": "The actual 'compare and select one strategy' step for the owner's plan. Map C33 points at applyCritique, which only ranks LLM routes.",
+      "observable": "Readings where the steps' leg differs from the candidate's leg, or 'four best strategies in one reading' (diagnosis doc)."
+    },
+    {
+      "capability": "Infeasibility by arithmetic and held-market ceilings",
+      "question": "Does judgeFeasibility/judgeHeldMarkets conclude NOT_VIABLE only when arithmetic (every estimate at its favourable end) cannot reach the requirement, never on a short pool, and does relaxAlso name the relaxation that would make it feasible?",
+      "code": "server/services/goals/plan.ts:judgeFeasibility (3743), judgeHeldMarkets (3889), heldCeiling (3845), agreedInReach (3809), everyCaseInfeasible (1518), relaxAlso (3960), notSupported (3967)",
+      "why": "A false NOT_VIABLE ends planning for the goal; a missed one keeps spending research on an impossible goal. Unmapped.",
+      "observable": "Goals with NOT_VIABLE whose later openings reached the target; goals the owner would call impossible still NEEDS_EVIDENCE after many rounds."
+    },
+    {
+      "capability": "Investment committee rule roles and answer settlement (§117)",
+      "question": "Do the six COMMITTEE_ROLES (reviewRole/reviewPlan) block plans on correct grounds, does evidencedReach recompute reach from legs, and does settleByAnswers settle a question when research answers it?",
+      "code": "server/services/goals/committee.ts:reviewPlan (669), reviewRole (653), evidencedReach (556), settleByAnswers (373), committeeTier (779); server/services/goals/plan.ts:refuseForCommittee (5451)",
+      "why": "The committee can refuse an ACCEPTED plan; the map only checks whether its questions are answered (C22-R), not whether its verdicts are right.",
+      "observable": "Blocks per role vs hand review on 10 readings; false blocks; questions settled vs answers on record."
+    },
+    {
+      "capability": "Committee model specialists",
+      "question": "When specialists are configured, do reviewWithSpecialists/parseSpecialist return usable independent findings, and does armSpecialistReview bind them into the next reading (state != NOT_RUN)?",
+      "code": "server/services/goals/committeeSpecialists.ts:reviewWithSpecialists (172), parseSpecialist (134), specialistReviewDue (277), armSpecialistReview, specialistsConfigured",
+      "why": "The only independent model critic of the whole plan (as opposed to single routes); production reads NOT_RUN.",
+      "observable": "specialists.state on readings; parse failures; agreement rate with rule roles (agreement is not evidence, §117)."
+    },
+    {
+      "capability": "Plan integrity gate",
+      "question": "Does gateIntegrity/integrityInput refuse every ACCEPTED reading that breaks a rule (lead price, membership, window), and only those?",
+      "code": "server/services/goals/plan.ts:gateIntegrity (5473), refuseForIntegrity (5431); server/services/goals/planIntegrityInput.ts:integrityInput, leadPrice",
+      "why": "Last filter before RECOMMENDABLE; a false pass shows the owner an invalid plan, a false refusal hides a valid one.",
+      "observable": "Seeded readings with one violation each; integrity.violations vs expected."
+    },
+    {
+      "capability": "Step-writing guards (window, figures, missing transaction stages, owner of each step)",
+      "question": "Do collectsOutsideWindow, withholdImplausibleFigures, missingTransactionStages and ownerOf (BRAIN vs PERSON) catch steps that collect after the window, print implausible figures, skip a transaction stage, or hand Brain's work to the owner?",
+      "code": "server/services/goals/plan.ts:planSteps (4207), collectsOutsideWindow (4654), withholdImplausibleFigures (4615), missingTransactionStages (4584), ownerOf (4052), killFor (4088); server/services/goals/arrangementSteps.ts",
+      "why": "C36 asks whether steps exist; these guards decide whether they are executable and correctly owned.",
+      "observable": "stepsMissing non-empty on RECOMMENDABLE readings; steps assigned PERSON that Brain operations could do; kill criteria absent."
+    },
+    {
+      "capability": "Plan set distinctness and resilience",
+      "question": "Does buildPlanSet produce plans that differ on DISTINCTNESS_DIMENSIONS, and does rebuildAfter/resilienceOf correctly say which plan survives a change (e.g. a leg refuted)?",
+      "code": "server/services/goals/planSet.ts:buildPlanSet (649), differingDimensions (549), resilienceOf (747), rebuildAfter (798), modelledShareReaching (562)",
+      "why": "The owner-facing alternatives and fallback; C08-R tests distinctness only through the critic.",
+      "observable": "Plan sets with 2+ plans differing on 0 dimensions; rebuildAfter verdicts vs recomputed plans after a refutation."
+    },
+    {
+      "capability": "Plan refresh trigger (inputs fingerprint)",
+      "question": "Does planInputsFingerprint change when any input a reading depends on changes (new claim, owner term change, dive answer), so planDue re-reads, and stay stable otherwise?",
+      "code": "server/services/goals/plan.ts:planInputsFingerprint (5722), planDue (5789), inputsTakenOver (5769), requestGoalPlanPass (5805)",
+      "why": "C38 tests route re-asks (routeAskDue); the plan itself only adapts if this fires.",
+      "observable": "Readings whose inputs changed but whose fingerprint did not (stale plan); excessive re-reads with identical inputs."
+    },
+    {
+      "capability": "Reconsideration of decisions when underlying facts change",
+      "question": "When a fact a decision record rests on changes, do changedFacts/dependentsOf find the dependent goals/openings and does reconcileFactChanges re-open them?",
+      "code": "server/services/goals/reconsider.ts:changedFacts (119), dependentsOf (154), reconcileFactChanges (343); wired from goals/tick.ts (reconcileFactChangesIfDue)",
+      "why": "The mechanism for C04-F/C38-I ('stale openings retired', 'new evidence changes plan'), but no question names it.",
+      "observable": "Change a price fact under a held opening; check a RECONSIDER event and a new reading within one pass."
+    },
+    {
+      "capability": "Prediction calibration and miss classification",
+      "question": "Does reconcileCalibration compare goal predictions with outcomes, classify misses (classifyMiss) and produce methodCorrections that the planner reads?",
+      "code": "server/services/goals/calibration.ts:reconcileCalibration (404), classifyMiss (129), methodCorrections (174); goals/plan.ts:recordGoalOutcome (5651)",
+      "why": "§108 'a decision is judged by what it predicted'; with no reader, Brain cannot learn its planning bias. Map C37-P mentions calibration lessons only as recorded.",
+      "observable": "Calibration pass reports per goal; whether any correction changes a later reading's inputs."
+    },
+    {
+      "capability": "Research worth / materiality filter",
+      "question": "Do notWorthResearching and tooSmallForGoals/recordMateriality skip research that cannot change a decision (too small a share, closes before a dive can finish) without excluding the opening that would decide the goal?",
+      "code": "server/services/cash/worthResearching.ts:notWorthResearching (247), goalLimitsFor (210), closesWithin (105); server/services/goals/materiality.ts:recordMateriality (27), tooSmallForGoals (63)",
+      "why": "This is the real implementation of C12's 'stop when research cannot change the decision'; untested.",
+      "observable": "Openings marked not-worth/too-small that later proved decisive; dives skipped by closing runway."
+    },
+    {
+      "capability": "Validation dive selection and ordering",
+      "question": "Do compareDiveValue/diveOrder/fieldsWorthResearching and startValidations start dives on the openings and fields with the highest decision value for live goals, and do capacity deferrals (recordCapacityDeferrals) push out the right ones?",
+      "code": "server/services/cash/validation.ts:startValidations (1238), compareDiveValue (997), diveOrder (1046), fieldsWorthResearching (880), capacityDeferralCandidates (1134), whyNotDiving (398)",
+      "why": "Dives establish buyer/price/demand the plan is judged on; the map tests dives only as a destination (C07-R, C10-R).",
+      "observable": "Dive starts ranked vs the planner's researchPriority/planResearchPriority; pending dives blocking the next test for days."
+    },
+    {
+      "capability": "Plan -> research priority handoff",
+      "question": "Do researchPriority/planResearchPriority/heldForResearch/diagnoseGoalResearch name the research that would most move reach, and does that ordering reach the research queue (decideResearchAllocation)?",
+      "code": "server/services/goals/plan.ts:researchPriority (5232), planResearchPriority (4786), heldForResearch (4982), planSearchBrief (4860); server/services/goals/researchYield.ts:diagnoseGoalResearch (87); server/services/goals/researchAllocation.ts:decideResearchAllocation (332)",
+      "why": "C35-I asks only whether not-ready names research; this tests the planner's priorities actually steer research capacity.",
+      "observable": "Rank correlation between planner priority and queue order/started fragments; DECISION_VALUE_WEIGHT effect."
+    },
+    {
+      "capability": "Goal discovery lenses and focus",
+      "question": "Do industryLensSelection/fixedLenses/originLenses/roleLenses/openWorldLenses and discoveryFocusFor (online-only focus, discovery.ts:987) give rounds lenses that fit the owner's offer and place, and does constructedShare balance constructed vs open rounds?",
+      "code": "server/services/cash/discovery.ts:openGoalDiscovery (1113), discoveryFocusFor (998), industryLensSelection (764), openWorldLenses (913), roleLenses (865), constructedShare (966), nextGoalRoundFor (1062)",
+      "why": "Discovery supplies openings independent of the proposer; C07 tests only directionPrompt. Diagnosis doc: online-only focus appended whatever the owner offered.",
+      "observable": "Lens/focus text on rounds for owners offering local physical labour; share of rounds with off-profile focus."
+    },
+    {
+      "capability": "Harvest of research into openings and evidence join",
+      "question": "Does harvest turn gated fragment claims into openings and evidence fields (routeEvidence -> writeEvidenceAnswer) without duplicating or mis-filing comparable demand as exact demand?",
+      "code": "server/services/cash/discovery.ts:harvest (2149); server/services/cash/routeEvidence.ts; server/services/cash/answers.ts:writeEvidenceAnswer; server/services/goals/routeProposal.ts:groundRoute (1713)",
+      "why": "The only path by which research becomes model inputs on openings; C21/C22 test delivery to prompts, not to the opening card the planner reads.",
+      "observable": "Claims accepted vs fields filed; comparableDemand vs demand field counts; duplicate openings per harvest."
+    },
+    {
+      "capability": "Direction critique (scout stage critic)",
+      "question": "Does applyDirectionCritique keep/drop scouted directions on correct grounds, and does parseDirections preserve decisive unknowns into fileDirection's research?",
+      "code": "server/services/goals/routeProposal.ts:directionCritiquePrompt (611), applyDirectionCritique (633), parseDirections (510), fileDirection",
+      "why": "A second critic before any route is priced; C31 tests only the route critic.",
+      "observable": "Dropped directions later supported by research; directions filed without a research question."
+    },
+    {
+      "capability": "Continuation decision (keep searching / successors)",
+      "question": "Does continuationOf/continueSearch keep the search going exactly when the goal is unmet with days left, stop on achievement or recorded outcome, and carry surplus to successors?",
+      "code": "server/services/goals/plan.ts:continuationOf (3997), continueSearch (3985), widenGoalSearch (5854), askPathwayConstructions (5945)",
+      "why": "Decides whether Brain keeps working a goal at all (C40 'idle goal' is the symptom).",
+      "observable": "Goals with needsMoreOpenings=false while NEEDS_EVIDENCE and daysLeft>0; widenGoalSearch counts per tick."
+    },
+    {
+      "capability": "Pathway constructions and commercial reality check (§116)",
+      "question": "Does commercialRealityOf reject legs where the payer/buyer population/repeat is unreal, and do pathway constructions (askPathwayConstructions) fill the gap it names?",
+      "code": "server/services/goals/pathways.ts (commercialRealityOf use at 311, 795); server/services/goals/commercialReality.ts:commercialRealityOf (52)",
+      "why": "§116: coverage over unsupported legs is not reliability; this is the check, unmapped.",
+      "observable": "Legs passing with a single-company buyer population; failing items vs pathway rounds opened."
+    },
+    {
+      "capability": "Goal sprints and the industry kernel (Russell)",
+      "question": "Do sprintCandidate/activateGoalSprints and runIndustryKernel open rounds for the goals that need them, and do absorbed nodes/constraints/capital reach construction?",
+      "code": "server/services/russell/goalSprint.ts:sprintCandidate (64), activateGoalSprints (95); server/services/russell/loop.ts:runIndustryKernel call (~2226)",
+      "why": "Listed in the intelligence diagnosis as invoked faculties on the goal path; no question touches them.",
+      "observable": "Sprint events per live goal; kernel.opened/absorbed counts vs openings appearing in goalArrangements."
+    },
+    {
+      "capability": "Operator detection of stuck plans",
+      "question": "Does stuckPlanDeficiencies detect readings unchanged for STUCK_PLAN_STALE_DAYS and does directorPass/reattempt act on them (commissionResearch) rather than only on engineering?",
+      "code": "server/services/operator/director.ts:stuckPlanDeficiencies (1513), directorPass (1044), reattempt (859), commissionResearch",
+      "why": "The recovery owner for a plan that stops improving; C22-F/C39-F state 'operator does not act' without a test on this code.",
+      "observable": "Deficiency rows for stalled goals vs commissions/reattempts produced in the next pass."
+    }
+  ],
+  "notReal": [
+    "C41 (R/I/F): 'Fitness changes routing', 'better model used when measured better', 'failing model benched' have no implementation for route/planning asks. strongRouteModels (routeProposal.ts:1419) is selected by env (ANTHROPIC_API_KEY + BRAIN_ROUTE_MODEL), not by measurement; operationsReport's stronger-model call reads Hermes tool success. Measured ranking exists only for the operator's own models (operator/run.ts:97 rankOperatorModels), not for proposer/critic/invent/specialists.",
+    "C17-P component 'tools/verify.py (eval)': no tools/ directory exists in the repo; quote re-verification against a re-read page is an eval-side check, not a production faculty. The gate (research/gate.ts) does not re-open pages.",
+    "C33-P component 'applyCritique': selection of the owner's plan is done by judgeAcceptance + adoptReconstruction + planSet (plan.ts:1648, 3630; planSet.ts:649); applyCritique only ranks LLM routes inside one ask, so C33 tests a selector the plan does not use.",
+    "C12 ('stop when research cannot change the decision'): the value-of-information module cash/infoValue.ts:planQuestions has no caller; the only live stopping logic is materiality/notWorthResearching, which the map does not name.",
+    "C02-R/C02-F: there is no persisted owner profile to correct; ownerProfileOf output is kept only in event detail and re-derived each ask, so 'profile corrected' tests a mechanism that does not exist (a valid gap finding, but not a capability with code).",
+    "C37 as framed (route 'rethink' lessons read by the next ask): routeContext reads no learnings; the real cross-goal learning loop on the planning path is goals/reasoning/learning.ts (UCB library, stance prior), which the map omits.",
+    "goals/commercialReality.ts:planCommercialReality has no caller (only commercialRealityOf is used, from pathways.ts) - any capability phrased as a plan-level commercial-reality verdict is dead code."
+  ]
+}

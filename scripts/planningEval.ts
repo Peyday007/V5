@@ -686,24 +686,27 @@ async function probe(): Promise<void> {
   const { modelsFor } = await import('../server/services/operator/run.ts');
   const { challengerModels } = await import('../server/services/operator/decisions.ts');
   const { chatFor } = await import('../server/services/cheap/modelBench.ts');
-  const models = challengerModels(await modelsFor());
+  // The production route ask's model set and budgets (`operatorChats`, `ROUTE_TOKENS`).
+  const unfit = ((P as unknown as Record<string, unknown>)['ROUTE_UNFIT_MODEL_LABELS'] as readonly string[] | undefined) ?? [];
+  const tokens = ((P as unknown as Record<string, unknown>)['ROUTE_TOKENS'] as { route: number; critique: number; direction: number } | undefined) ?? { route: 4000, critique: 3000, direction: 3500 };
+  const models = challengerModels(await modelsFor()).filter((m) => !unfit.includes(m.label));
   out('models', models.map((m) => m.label));
   const prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
   // The exact ask, so a control can put the identical prompt to another model.
   out('prompt', prompt);
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
-    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
+    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 300_000);
     const started = Date.now();
     // The production turn: an empty reply is retried with twice the budget, then an error (`askModel`).
-    const r = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, system, prompt, 4000);
+    const r = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, system, prompt, scout ? tokens.direction : tokens.route);
     out('reply', { model: model.label, error: r.error ?? null, ms: Date.now() - started, content: String(r.content ?? '').slice(0, 9000) });
     if (r.error || !r.content) continue;
     const parsed = scout ? P['parseDirections']!(r.content, ctx) : P['parseRoutes']!(P['routesJson']!(r.content), ctx);
     out('parsed', parsed);
     if (!scout) {
       const routes = (parsed as { routes: unknown[] }).routes;
-      const critic = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.", String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))), 3000);
+      const critic = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.", String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))), tokens.critique);
       const critique = critic.content ? P['critiqueJson']!(critic.content, routes.length) : null;
       out('critique', critique ? P['applyCritique']!(routes, critique, ctx) : { error: critic.error ?? 'unreadable' });
     }

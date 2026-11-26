@@ -338,6 +338,8 @@ const OWNER_OFFERS_LABOUR = new RegExp(
     // Hours of a named activity of the owner's own ("I can fly about 20 hours a week", "I can bake 18 hours a week").
     "i (?:can|could|will|am able to|'m able to) (?!not\\b|only\\b)[a-z]+ (?:about |around |roughly |up to |maybe )?\\d+(?:\\.\\d+)?(?:\\s*-\\s*\\d+)? ?(?:hours?|hrs?) (?:a|per|each|every) (?:week|day|weekend|month)",
     "i (?:have|'ve got|got) (?:about |around |roughly |up to )?\\d+(?:\\.\\d+)? ?(?:hours?|hrs?) (?:a|per|each|every) (?:week|day|weekend|month)",
+    // Work offered without a figure ("I can work pretty much all day", "I can work full time").
+    "i (?:can|could|will|am able to|'m able to) work (?:pretty much |basically |just about )?(?:all day|full[- ]time|any ?time|whenever|every day|long hours|nights|weekends|evenings)",
     // Equipment or a vehicle the owner has.
     "i(?:'ve| have)? (?:got|own|have) (?:a |an |my own |our )?(?:[a-z-]+ ){0,2}(?:pickup|truck|van|car|vehicle|trailer|camera|cameras|drone|gear|equipment|tools|kitchen|studio|workshop|garage|printer|sewing machine|mower|pressure washer)s?\\b",
     'with my own (?:gear|equipment|tools|camera|truck|van|car|vehicle)',
@@ -348,6 +350,25 @@ const OWNER_OFFERS_LABOUR = new RegExp(
   ].join('|'),
   'i',
 );
+
+/**
+ * The offer, completed by the hours the goal's own reading holds. An owner who
+ * states hours they will give the goal ("I can work full time, 40 hours a
+ * week", "working no more than 10 hours a week from home", "about 15 hours")
+ * has offered their work for those hours, whatever words they used; only an
+ * explicit refusal outranks it. Measured (fresh batch fm1126b, 2026-11-26): the
+ * phrase reader alone missed 14 of 30 owners who stated hours, and every one of
+ * them was sent the standing "the owner does no physical work" rule as a limit
+ * (reviewer 3, root-cause challenge). Pure.
+ */
+export function ownerLabourWithHours(labour: OwnerLabour, hours: { perWeek?: number | null; total?: number | null }): OwnerLabour {
+  if (labour.offered || labour.refused) return labour;
+  const perWeek = hours.perWeek ?? null;
+  const total = hours.total ?? null;
+  if (perWeek !== null && perWeek > 0) return { offered: true, evidence: `the owner gives this goal ${perWeek} hour(s) a week` };
+  if (total !== null && total > 0) return { offered: true, evidence: `the owner gives this goal ${total} hour(s)` };
+  return labour;
+}
 
 export function ownerLabourOffer(...texts: readonly (string | null | undefined)[]): OwnerLabour {
   const words = texts.filter((one): one is string => !!one && !!one.trim()).join(' \n ').replace(/[’‘]/g, "'");
