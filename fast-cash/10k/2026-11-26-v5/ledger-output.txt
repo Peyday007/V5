@@ -1,0 +1,67 @@
+RECONCILED SCENARIOS (illustrations at the test thresholds, not forecasts)
+Prices: $1,250 attorney-referred (ACH), $1,650 direct (card). Review: specialist on EVERY plan.
+
+T0 no demand  (test stops on Dec 14; only proof-stage purchases spent)
+  paid orders 0; proof reached: no; collected net of refunds 0.00 (target 10,000)
+  customer payments                0.00
+  - refunds                        0.00
+  - processor fees                 0.00   (not returned on refunds)
+  - spend: api                    15.00
+  - spend: data                   30.00
+  - spend: domain                 12.00
+  = net profit                   -57.00
+  total spending                  57.00  of 2,000   | pre-proof spending 57.00 of 300
+  settled to bank by Dec 29        0.00;  still in Stripe on Dec 29      0.00
+  cash position Dec 29 = settled - all spending paid from the card = -57.00
+  open obligations on Dec 29: 0 plan(s) inside their 30-day revision window (cost already counted)
+
+T1 proof, nothing more  (exactly the proof threshold: 2 paid by Dec 14, then no further orders)
+  paid orders 2; proof reached: 2026-12-14; collected net of refunds 2,500.00 (target 10,000)
+  customer payments            2,500.00
+  - refunds                        0.00
+  - processor fees                10.00   (not returned on refunds)
+  - spend: api                    45.00
+  - spend: data                   30.00
+  - spend: domain                 12.00
+  - spend: probe                  50.00
+  - spend: review                340.00
+  = net profit                 2,013.00
+  total spending                 487.00  of 2,000   | pre-proof spending 287.00 of 300
+  settled to bank by Dec 29    2,490.00;  still in Stripe on Dec 29      0.00
+  cash position Dec 29 = settled - all spending paid from the card = 2,013.00
+  open obligations on Dec 29: 2 plan(s) inside their 30-day revision window (cost already counted)
+
+T2 $10k threshold, outreach only  (9 paid orders by Dec 22, one refunded -> payments less refunds >= $10,000; review $120 on every plan)
+  paid orders 9; proof reached: 2026-12-14; collected net of refunds 10,400.00 (target 10,000)
+  customer payments           11,650.00
+  - refunds                    1,250.00
+  - processor fees                88.15   (not returned on refunds)
+  - spend: api                   150.00
+  - spend: data                   30.00
+  - spend: domain                 12.00
+  - spend: probe                  50.00
+  - spend: review              1,180.00
+  = net profit                 8,889.85
+  total spending               1,510.15  of 2,000   | pre-proof spending 287.00 of 300
+  settled to bank by Dec 29   10,311.85;  still in Stripe on Dec 29      0.00
+  cash position Dec 29 = settled - all spending paid from the card = 8,889.85
+  open obligations on Dec 29: 8 plan(s) inside their 30-day revision window (cost already counted)
+
+T3 $10k threshold WITH the $1,000 AILA week at $120/plan review: REFUSED by the ledger -> total cap ($2,000) would be exceeded
+
+T3' $10k threshold with the AILA week  (only possible if per-plan review falls to a $40 spot-check)
+  paid orders 9; proof reached: 2026-12-14; collected net of refunds 10,400.00 (target 10,000)
+  customer payments           11,650.00
+  - refunds                    1,250.00
+  - processor fees                88.15   (not returned on refunds)
+  - spend: ads                 1,000.00
+  - spend: api                   150.00
+  - spend: data                   30.00
+  - spend: domain                 12.00
+  - spend: probe                  50.00
+  - spend: review                620.00
+  = net profit                 8,449.85
+  total spending               1,950.15  of 2,000   | pre-proof spending 287.00 of 300
+  settled to bank by Dec 29   10,311.85;  still in Stripe on Dec 29      0.00
+  cash position Dec 29 = settled - all spending paid from the card = 8,449.85
+  open obligations on Dec 29: 8 plan(s) inside their 30-day revision window (cost already counted)
