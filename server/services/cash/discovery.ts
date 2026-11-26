@@ -130,6 +130,7 @@ import type {
   CashOpportunity,
   IndustryNode,
   OpportunityConstraint,
+  ResearchClaim,
   RussellMission,
 } from '../../domain/types.ts';
 
@@ -2103,6 +2104,11 @@ function bucketForRound(round: CashDiscoveryRound): SearchBucket | undefined {
   return listed ?? (round.bucketId.startsWith(GOAL_BUCKET_PREFIX) ? goalBucket(round.bucketId.slice(GOAL_BUCKET_PREFIX.length), 'a goal') : undefined);
 }
 
+/** A market-level figure: context that `harvest` never files as an opening (`claimBasis`). */
+function isMarketSizeFigure(claim: Pick<ResearchClaim, 'opportunitySignal' | 'claim'>): boolean {
+  return claimBasis({ signal: claim.opportunitySignal, claim: claim.claim }).includes('TOTAL_MARKET_SIZE');
+}
+
 export interface Harvested {
   opportunity: CashOpportunity;
   claimId: string;
@@ -2244,6 +2250,8 @@ export async function harvest(input: {
     projectId: input.projectId,
     limit: limit * 4,
     staleBefore: new Date(now.getTime() - freshDays * 86_400_000).toISOString(),
+    // Skipped below and never filed, so it must not use up the bounded read (ROUNDS_FILE, attempt 3).
+    skip: isMarketSizeFigure,
   });
 
   const out: Harvested[] = [];
@@ -2276,7 +2284,7 @@ export async function harvest(input: {
      * still informs every reading that cites it (§116); it just does not become
      * a piece of work. `claimBasis` is the same reading the evidence card uses.
      */
-    if (claimBasis({ signal, claim: claim.claim }).includes('TOTAL_MARKET_SIZE')) continue;
+    if (isMarketSizeFigure(claim)) continue;
 
     /*
      * An observation is "now" for a bounded time. A request, a price or a

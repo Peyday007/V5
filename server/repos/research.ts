@@ -1965,6 +1965,15 @@ export async function signalledClaims(input: {
    * a bounded read would fill with stale rows and re-read them for ever.
    */
   staleBefore?: string | null;
+  /**
+   * A claim the caller never files, whatever it is tagged — `harvest` passes
+   * its market-size rule. Dropped here, before it counts toward `limit`, for
+   * the stale rows' reason: nothing marks a row the caller skips, so it comes
+   * back at the head of this oldest-first read on every pass, and a read's
+   * worth of them hid every newer claim behind them for ever (production
+   * 2026-11-26: 0 of 138 goal rounds filed an opening).
+   */
+  skip?: (claim: ResearchClaim) => boolean;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
   const pointSignals = [...POINT_IN_TIME_SIGNALS];
   const staleSql = input.staleBefore
@@ -2009,7 +2018,7 @@ export async function signalledClaims(input: {
   for (let page = 0; page < SIGNALLED_MAX_PAGES && out.length < want; page += 1) {
     const rows = await signalledPage(input.projectId, staleSql, staleParams, want, page * want);
     for (const one of keepSignalled(rows)) {
-      if (out.length < want && !isStale(one.claim)) out.push(one);
+      if (out.length < want && !isStale(one.claim) && !input.skip?.(one.claim)) out.push(one);
     }
     if (rows.length < want) break;
   }

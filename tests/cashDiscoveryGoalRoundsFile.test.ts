@@ -264,3 +264,40 @@ describe('nextGoalRoundFor: one documented rule for an ABANDONED round that file
     expect(nextGoalRoundFor(productive, at(25 * HOUR))).toBe(3);
   });
 });
+
+/*
+ * The recorded failure class, one read further up (attempt 3, 2026-11-26):
+ * production settled 0 of 138 goal rounds with an opening while their packets
+ * held gated, signalled claims. `harvest` drops a market-level figure in code
+ * ("Global eCommerce sales reached $6.3 trillion" is context, never an
+ * opening), but `signalledClaims` counted those rows toward its bounded,
+ * oldest-first read, so once a project held a read's worth of them every
+ * newer claim — each goal round's opening among them — sat behind rows that
+ * are never filed and so never leave the head of the read. Every round then
+ * settled found 0, however it ended. The figures stay unfiled; they just no
+ * longer use up the read.
+ */
+describe('a backlog of market-size figures does not starve a goal round of its openings', () => {
+  const figure = (i: number) => ({
+    claim: `The global ecommerce market size reached $6.${i} trillion in 2026.`,
+    signal: 'ACTIVE_BUYER_DEMAND' as const,
+    sourceUrl: `https://stats.example.test/market/${i}`,
+  });
+
+  it('files and counts the round’s opening behind more market figures than one read holds', async () => {
+    const open = await goalRoundOpener();
+    const broad = await launchedPacket(null);
+    // Older than the round's claim and more than harvest's whole read (limit 20, read 80).
+    await broad.gate(Array.from({ length: 100 }, (_, i) => figure(i)));
+    await broad.end('DONE');
+    const r = await open();
+    const p = await launchedPacket(r.candidateId);
+    await p.gate([opening('behind-figures')]);
+    await p.end('FAILED');
+    await harvest({ projectId });
+    expect(await rounds(r.bucketId)).toEqual([['ABANDONED', 1]]);
+    const filed = await listOpportunities({ projectId });
+    // The figures themselves are still never filed as openings.
+    expect(filed.map((one) => one.discoveryRoundId)).toEqual([expect.any(String)]);
+  });
+});
