@@ -1,0 +1,2860 @@
+{
+ "Q01": {
+  "letters": {
+   "A": "fallback_auto",
+   "B": "qwen38_27b",
+   "C": "gptoss120b",
+   "D": "claude_opus"
+  },
+  "grades": {
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 1,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": null,
+    "format": 2,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [
+     "Marks (a) as a violation (treats delegated calls as owner calls)"
+    ],
+    "constraint_violations": [
+     "Treats the owner's personal no-call constraint as a ban on third-party calls",
+     "Marks the invented email-only/no-visit rule (c) as COMPLIES, adopting an invented restriction",
+     "Corrected plan removes the phone rep, extending a restriction the owner never stated"
+    ],
+    "evidence_errors": [
+     "Reads 'I personally will not make phone calls' as covering third parties",
+     "Says (c) aligns with the owner's 'preference' when the owner never limited contact to email"
+    ],
+    "unsupported_assumptions": [
+     "'the owner's constraint implies no third-party calling either'"
+    ],
+    "worst_failure": "Marks the commission rep (a) as a violation by claiming 'the owner's constraint implies no third-party calling either,' then removes the rep from the corrected plan."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Labels (f) VIOLATES (Ohio law) rather than INVENTED RESTRICTION; the element itself is a self-imposed limitation, though it reaches the right fix of getting the license"
+    ],
+    "unsupported_assumptions": [
+     "(b) assumes the $2,400 payment is deferred 'until after revenue is generated' and does not address the case where nothing sells within 30 days"
+    ],
+    "worst_failure": "Labels (f) as VIOLATES rather than identifying it as an invented restriction, although the corrected plan reaches the key's fix of obtaining the $25 license."
+   },
+   "gptoss120b": {
+    "reasoning": 2,
+    "commercial": 1,
+    "evidence": 2,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Summary says 'keep owner's communication limited to email and non-phone methods', a residue of the invented email-only restriction"
+    ],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Suggests a bridge loan or line of credit and checking whether a 12% commission needs telemarketing approval, neither supported by the facts",
+     "(b) reason cites the 10-hour limit, which is irrelevant to net-30 terms"
+    ],
+    "worst_failure": "The summary partially reintroduces an email-only limit on the owner's communication, even though the owner restricted only his own phone calls."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   }
+  }
+ },
+ "Q02": {
+  "letters": {
+   "A": "fallback_auto",
+   "B": "gptoss120b",
+   "C": "claude_opus",
+   "D": "qwen38_27b"
+  },
+  "grades": {
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Strategy 1 capacity of 160 devices/month implies full-time work, not 20 h/week"
+    ],
+    "evidence_errors": [
+     "Treats $70 as a referral fee paid to the owner, but it is the rate the owner pays the adjacent-county testers",
+     "States local testers are 'willing to pay $70 for overflow work'",
+     "Payer flow is confused: says clients pay the referral fee to the tester"
+    ],
+    "unsupported_assumptions": [
+     "40% market share in year one",
+     "Captures 50% of overflow work"
+    ],
+    "worst_failure": "Brokerage revenue is computed as '$70 referral fee per device' when $70 is the subcontract cost; margin should be $25-$80."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Days 13-18 plan of 100 calls/day (~5 h/day) exceeds 20 h/week"
+    ],
+    "evidence_errors": [
+     "Says the three local testers could take work at $70; only adjacent-county testers offered that rate",
+     "Cites the $70 overflow offer as Item 8 instead of Item 7"
+    ],
+    "unsupported_assumptions": [
+     "Direct-tester model assumes 16 full weeks of fully booked demand despite the ~1-month certification delay",
+     "Adjacent-county tester capacity assumed ample (40/week) without flagging it as unknown",
+     "30 minutes per booking"
+    ],
+    "worst_failure": "Direct-tester profit of ~$35k assumes 320 tests over 16 weeks with full demand from day one, ignoring the certification lead time."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "$110 price, $10 variable cost and $300/month overhead (labeled as assumptions)",
+     "Spring peak of March-May (labeled as inferred)"
+    ],
+    "worst_failure": ""
+   },
+   "qwen38_27b": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 0,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Strategy 1 capacity assumes 5 days/week (40 tests/week), violating the 20 h/week limit"
+    ],
+    "evidence_errors": [
+     "Includes repair revenue in the tester model without evidence that the owner may perform repairs",
+     "Labels blended revenue of $188 as 'gross margin/test'"
+    ],
+    "unsupported_assumptions": [
+     "Adjacent testers will do repairs for $400",
+     "$300/month fuel for travel to the adjacent county",
+     "Owner files reports with the utility"
+    ],
+    "worst_failure": "Strategy 1 economics assume 160 tests/month on a 5-day week and count $575 repair revenue as margin, contradicting the 20 h/week constraint and the evidence; Month 2 '30 jobs/week = 60/month' is also an arithmetic error."
+   }
+  }
+ },
+ "Q03": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "qwen38_27b",
+   "C": "gptoss120b",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "States outbound freight equals inbound $140, but flags this explicitly as its own assumption"
+    ],
+    "worst_failure": ""
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "S2 classified SUPPORTED despite $1,850 blending 9 serviced and 14 unserviced listings",
+     "S6 table reports a $754 'gross margin' that omits outbound freight"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Classifies S2 as SUPPORTED without recognizing that $1,850 averages serviced and unserviced units. It also does not quantify how an unknown fee could push S6 below $500."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "S2 classified SUPPORTED despite $1,850 mixing serviced and unserviced condition"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Treats S2's $1,850 as fully supported, ignoring the serviced/unserviced mix. For S6 it lists fees as a gap but never mentions defects or shows how close the margin is to $500."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "S3 classified SUPPORTED by misreading F4 to say the 9 serviced units averaged $1,850",
+     "S5 classified UNSUPPORTED although 23/90 days \u2248 7.7/month follows directly from F4",
+     "S1 downgraded over an invented 'all-in vs before freight' contradiction",
+     "S2 classified SUPPORTED despite the condition mix"
+    ],
+    "unsupported_assumptions": [
+     "Infers that serviced units command a premium because they appear in sold listings"
+    ],
+    "worst_failure": "Classifies S3 as SUPPORTED by claiming the 9 serviced listings 'sold for an average of $1,850', which F4 never says, and in the same cell admits no price comparison exists."
+   }
+  }
+ },
+ "Q04": {
+  "letters": {
+   "A": "qwen38_27b",
+   "B": "claude_opus",
+   "C": "fallback_auto",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "qwen38_27b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": "Labor is omitted from the cost structure, a minor gap."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Fine-equivalent pricing ceiling, though it is labeled as inference"
+    ],
+    "worst_failure": "Line (vi) is downgraded to 'marginal at best / bundled feature' rather than treated as plausible add-on revenue."
+   },
+   "fallback_auto": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 1,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Says line (iv) is 'not directly supported by any fact', ignoring the private contract in F2 and the mandate in F1",
+     "Line (ii) is classified as 'Not available' rather than as a cost in the line analysis"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Calls restaurant collection fees 'not confirmed by the facts' and rejects compliance reporting as revenue, so it misses the core model the key requires."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "States 10 tons/week is 'the minimum to be covered by the ordinance' when F1 sets the threshold at 1 ton/week per business",
+     "Labels the $48 + amortized permit total as 'variable cost'",
+     "Cites F6 rather than F2 for the restaurant payment"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Rejects line (vi) as 'not available' and misstates the ordinance threshold as 10 tons/week."
+   }
+  }
+ },
+ "Q05": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "qwen38_27b",
+   "C": "fallback_auto",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 0,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [
+     "Ignores the 500 MOQ in (c) (e.g., 1,151 units)"
+    ],
+    "constraint_violations": [
+     "Treats a 1,151-unit run or 500+651 runs as meeting the 500-unit minimum, instead of counting whole 500-unit runs"
+    ],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Prepayment processed by card and settled on day 2",
+     "Runs can be any size of 500 or more"
+    ],
+    "worst_failure": "Concludes the maximum is 1,151 units ($8,000 \u00f7 $6.95) rather than 1,000 units in two 500-unit runs, which inflates (d) to 421 units and about $3,002 a month."
+   },
+   "qwen38_27b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": "In (e) it gives factory capacity and demand as the limits but does not mention the share of customers who accept deposit terms, and it ignores the processing fee on the deposit."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": null,
+    "revision": null,
+    "format": 1,
+    "score": 1,
+    "correct": false,
+    "critical_errors": [
+     "Contribution off by more than $0.15"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Applies the 2.9% fee to a single $14.50 unit and then divides it by 300",
+     "Counts receivables at selling price as capital tied up, on top of costs already paid",
+     "Treats the customer prepayment as a capital requirement"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Says the owner cannot operate at all because 500 units need $9,125 at day 35, wrongly adding $14.50 per unit of receivables to costs already paid."
+   },
+   "gptoss120b": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Staggering model counts only the $1,875 day-14 payment for older runs and drops the $1,600 deposit still tied up until day 82"
+    ],
+    "unsupported_assumptions": [
+     "A new run can start every 18 days"
+    ],
+    "worst_failure": "Claims 2,000 units (four runs) can be in the pipeline because it undercounts capital per run at $1,875 instead of $3,475 for runs past day 14, which yields 833 units and about $5.9k a month."
+   }
+  }
+ },
+ "Q06": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "gptoss120b",
+   "C": "qwen38_27b",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Rush-fee headroom math is internally inconsistent: it says 'under about $12/bed', then cites ~$32/bed of headroom"
+    ],
+    "worst_failure": "The rush-fee threshold is muddled: it states '<$12/bed', then computes ~$32/bed of headroom across 96 beds."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Says price is 'sufficient' without noting that the GPO cap blocks the price lever"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Arithmetic slips in the options: 91 beds gives $40,815, not $40,215, and 96 beds gives $43,140, not $43,560."
+   },
+   "qwen38_27b": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [
+     "Max beds not 84 (e.g., 96 or 72) without justification"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "The executive summary claims only 60 of 84 beds can be delivered by day 60 and a maximum profit of $18,900, contradicting its own body",
+     "It faults the team member for revenue-timing error even though 84 is exactly the deliverable count"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "The headline states 'maximum achievable net profit... is $18,900' with 'only 60 of those 84 beds' delivered, which contradicts its own correct $37,560 / 84-bed analysis."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 0,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Binding constraint omits the 14-day lead time's role"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "The 'what would change' section is wrong: it says ~87 beds and ~14 beds/week using a nonsensical $703.33 cost, when 90 beds (6 more) are needed."
+   }
+  }
+ },
+ "Q07": {
+  "letters": {
+   "A": "qwen38_27b",
+   "B": "fallback_auto",
+   "C": "gptoss120b",
+   "D": "claude_opus"
+  },
+  "grades": {
+   "qwen38_27b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "10 orders/week volume with no demand evidence",
+     "Second-reader review only 'if budget allows' rather than built in"
+    ],
+    "worst_failure": "Quality control relies mainly on the freelancer's reputation. Second-translator review is optional, even though Fact 5 says firms rank accuracy above price."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": null,
+    "format": 1,
+    "score": 1,
+    "correct": false,
+    "critical_errors": [
+     "Has the owner sign the certification of accuracy himself as translator"
+    ],
+    "constraint_violations": [
+     "Assumes the owner translates Portuguese despite speaking only English",
+     "Assumes the owner has translation competence"
+    ],
+    "evidence_errors": [
+     "Cites the 'owner's language skills' as a viability factor, contrary to the owner profile",
+     "Payment on delivery contradicts Fact 4 (card at order)"
+    ],
+    "unsupported_assumptions": [
+     "About 1 hour per page of owner translation time",
+     "About $1,000 in computer/software costs"
+    ],
+    "worst_failure": "States 'The owner signs the certification statement', which has the English-only owner falsely attest to Portuguese translation competence."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Cites the 'Arizona Board of Professional Engineers & Land Surveyors' as the relevant regulator, which is irrelevant",
+     "Claims a competitive edge from 'faster turnaround', but no agency turnaround is given"
+    ],
+    "unsupported_assumptions": [
+     "A $1,000 freelancer pre-pay reserve 'while invoices are being collected', which contradicts its own card-at-order flow",
+     "Uses the whole $4,000 as required capital",
+     "QA by reading the first and last paragraph and a native-English grader cannot verify translation accuracy"
+    ],
+    "worst_failure": "Internal inconsistency: it collects card payment up front yet budgets a $1,000 reserve to prepay translators while invoices are collected, and it miscomputes the 1-page margin ceiling as $25.50 instead of $25."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Reviewer rate of $0.04/word (labeled as an assumption)",
+     "30\u201345 minutes of owner time per order (labeled as an assumption)"
+    ],
+    "worst_failure": ""
+   }
+  }
+ },
+ "Q08": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "gptoss120b",
+   "C": "fallback_auto",
+   "D": "qwen38_27b"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Tool fee billed on days 1, 31 and 61 (stated as an assumption)"
+    ],
+    "worst_failure": ""
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Counts all 18 appointments, including week 9, as paid by day 90, although a week-9 appointment on days 61-63 pays after day 90",
+     "Strategy A capital omits the $300 transport per lot ($7,000 instead of $7,600)"
+    ],
+    "unsupported_assumptions": [
+     "All week-9 appointments occur by day 60"
+    ],
+    "worst_failure": "Counts B as 18 appointments for $3,850, so the combined total is overstated at $14,254. Its own cash-flow table shows only part of the B payments, so the plan is internally inconsistent."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 2,
+    "revision": null,
+    "format": 1,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Checks hours only as a 90-day total rather than against the 15 hours/week limit"
+    ],
+    "evidence_errors": [
+     "B tool costs double-counted ($350 setup + 3x$150 = $800 instead of $650)",
+     "C subtracts the $1,300 sub-payment float as a cost, giving $6,400 instead of $7,700",
+     "Says C runs 10 jobs in places, contradicting its own count of 9 paid jobs"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Treats C's $1,700 working capital as an expense ($8,100 - $1,700 = $6,400), which understates the best strategy and the combined total ($12,054)."
+   },
+   "qwen38_27b": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Assumes only 1 lot is possible, although $10k allows 2 concurrent lots (an invented restriction)"
+    ],
+    "evidence_errors": [
+     "Writes transport as $3,000 and gives a lot profit of $1,652 instead of $1,352",
+     "Says B needs 0 hours in week 1, although B takes 3 hours/week from setup"
+    ],
+    "unsupported_assumptions": [
+     "Lots can only be bought sequentially"
+    ],
+    "worst_failure": "Strategy A is limited to one sequential lot with a miscomputed $1,652 profit, ignoring that 2 lots can run at once for $2,704."
+   }
+  }
+ },
+ "Q09": {
+  "letters": {
+   "A": "gptoss120b",
+   "B": "qwen38_27b",
+   "C": "claude_opus",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "gptoss120b": {
+    "reasoning": 2,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Labels S6 'valid for county-wide installations' without questioning the accuracy of a secondary trade newsletter",
+     "Says S6 'mixes installations with applications', which the source does not indicate"
+    ],
+    "unsupported_assumptions": [
+     "S6 may count systems connected in prior years"
+    ],
+    "worst_failure": "Treats S6's '>2,000 homes in Pell County installed solar in 2024' as a valid fact, does not flag its accuracy as uncertain, and omits the municipal utility's unknown fee."
+   },
+   "qwen38_27b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "The implied municipal range of '1,140 to 2,000+' has a loosely reasoned upper bound"
+    ],
+    "worst_failure": "Does not explicitly flag 2025 volume as unknown, and only implicitly questions S6's accuracy as a secondary source."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Describes S2 as showing 'misinformation' circulating, although it elsewhere correctly calls S2 accurate historically"
+    ],
+    "unsupported_assumptions": [
+     "S4 may include non-solar applications (flagged as an inference)"
+    ],
+    "worst_failure": "Minor: calling S2 evidence of 'misinformation' slightly undercuts its otherwise correct treatment as outdated rather than wrong."
+   },
+   "fallback_auto": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 1,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Attributes the S4/S5 gap partly to 'approvals', which makes little sense as a cause of fewer connections",
+     "Speculates that S6 may include prior years"
+    ],
+    "unsupported_assumptions": [
+     "S6 may include systems connected in prior years"
+    ],
+    "worst_failure": "Does not recognize that the business's market includes unknown municipal-utility applications, omits the municipal utility's unknown fee, and leaves S6's validity vague ('provide context')."
+   }
+  }
+ },
+ "Q10": {
+  "letters": {
+   "A": "gptoss120b",
+   "B": "qwen38_27b",
+   "C": "fallback_auto",
+   "D": "claude_opus"
+  },
+  "grades": {
+   "gptoss120b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "For C2, cites Fact 5 as the source for 'no license required to broker'; that statement is in Fact 4."
+    ],
+    "unsupported_assumptions": [
+     "Assumes 5 work nights per week when estimating capacity."
+    ],
+    "worst_failure": "Cites the wrong fact number (Fact 5 instead of Fact 4) for the licensing exemption."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Claims a 40%+ gross margin is 'generally considered healthy' in service brokering, which is not in the facts."
+    ],
+    "worst_failure": "Arithmetic slip: converts 4.8 tires/day to '~7 tires/week' (should be about 34/week); the conclusion is unaffected."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 2,
+    "correct": false,
+    "critical_errors": [
+     "Accepts C1 or C2 or C5 as valid"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Marks C2 SUPPORTED although Fact 4 says no license is needed to broker.",
+     "Inverts the net-30/net-45 terms and claims the owner pays the subcontractor 15 days before the fleet pays.",
+     "Calls a 42% gross margin thin by comparing annual gross margin to startup capital."
+    ],
+    "unsupported_assumptions": [
+     "Claims $5,000-$10,000 of extra working capital is needed, which the facts do not support."
+    ],
+    "worst_failure": "Asserts the 'Owner must pay subcontractor 15 days before receiving payment from fleet' despite net-45 payables versus net-30 receivables, which wrongly validates C5."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   }
+  }
+ },
+ "Q11": {
+  "letters": {
+   "A": "qwen38_27b",
+   "B": "fallback_auto",
+   "C": "gptoss120b",
+   "D": "claude_opus"
+  },
+  "grades": {
+   "qwen38_27b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": 2,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": 0,
+    "format": 1,
+    "score": 0,
+    "correct": false,
+    "critical_errors": [
+     "Wrong earliest delivery date in (a)",
+     "Wrong date in (c) or claims deadline met in (c)",
+     "Recommends paying the mill"
+    ],
+    "constraint_violations": [
+     "Ignores the Nov 25-26 closure and weekends (schedules on weekend dates such as Nov 6-7)"
+    ],
+    "evidence_errors": [
+     "Miscounts business days throughout (T2 completes 'Nov 10', T3 completes 'Nov 20')",
+     "States T6 completes Nov 29 and T7 completes Dec 11, which are inconsistent with the stated durations",
+     "Claims expedited freight and overtime do not meet the deadline"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Its calendar arithmetic is wrong from T2 onward, so it reports a baseline delivery of Dec 19 (late), a scenario (c) delivery of Dec 26, and then recommends paying the mill $700."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 2,
+    "revision": 1,
+    "format": 2,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [
+     "Wrong date in (c) or claims deadline met in (c)"
+    ],
+    "constraint_violations": [
+     "Schedules the rework T4 to start on 'Mon Nov 21', which is a Sunday"
+    ],
+    "evidence_errors": [
+     "Gives T5 as Nov 16 and T6 as Nov 18 (should be Nov 15 and Nov 17)",
+     "Gives scenario (c) delivery as Dec 21 (should be Mon Dec 20)",
+     "Says expedited freight and overtime deliver on Dec 17 (should be Dec 16)"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "A misaligned calendar shifts the rework chain by a day, giving a scenario (c) delivery of 'Tuesday December 21' instead of Monday December 20."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": 2,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   }
+  }
+ },
+ "Q12": {
+  "letters": {
+   "A": "fallback_auto",
+   "B": "claude_opus",
+   "C": "qwen38_27b",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": null,
+    "format": 1,
+    "score": 2,
+    "correct": false,
+    "critical_errors": [
+     "Marks O4 or O5 as violating without valid reason"
+    ],
+    "constraint_violations": [
+     "Marks O1 as compliant with constraint 3 despite vape/tobacco",
+     "Invents address-privacy violations for O1, O3, O5, O6"
+    ],
+    "evidence_errors": [
+     "Claims O1 profit starts month 1 (not stated)",
+     "Treats market booths as exposing home address",
+     "States O2 satisfies constraints in the combination section, contradicting its own table"
+    ],
+    "unsupported_assumptions": [
+     "Online store and wholesale 'likely' expose home address",
+     "Combining O2 and O4 could exceed inventory"
+    ],
+    "worst_failure": "Marks O5 as failing constraint 5 because a farmers market booth supposedly makes the address public, and misses O1's tobacco violation entirely."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Treats O5 as a 'likely breach' of the 'involving alcohol' rule, a restriction the key does not support",
+     "Adds a minors-at-booth concern for O5"
+    ],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Beer accessories arguably 'involve alcohol'"
+    ],
+    "worst_failure": "Recommends O4 alone and makes the key's O4+O5 combination conditional on a speculative alcohol-association breach for O5."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": null,
+    "format": 2,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [
+     "Marks O4 or O5 as violating without valid reason"
+    ],
+    "constraint_violations": [
+     "Labels O5 under 'Violation of Constraint 3' for beer accessories",
+     "Rejects O5 in favor of O4 alone"
+    ],
+    "evidence_errors": [
+     "Frames O1's rejection partly as 'ethical ambiguity' instead of a clear tobacco violation"
+    ],
+    "unsupported_assumptions": [
+     "Selling bottle openers and glassware counts as 'involving alcohol'"
+    ],
+    "worst_failure": "Headlines O5 as a 'Violation of Constraint 3' because it sells beer accessories, and so misses the O4+O5 combination."
+   },
+   "gptoss120b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Says O6 uses a UPS-store mailbox (that fact belongs to O4)",
+     "Says O1 profit starts month 1 (not stated)"
+    ],
+    "unsupported_assumptions": [
+     "Owner-hour estimates (about 6-7 h/week)",
+     "Vape accessories are 'typically sold to minors'"
+    ],
+    "worst_failure": "Minor: attributes the UPS-store mailbox to O6 and invents owner-hour estimates; otherwise matches the key."
+   }
+  }
+ },
+ "Q13": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "gptoss120b",
+   "C": "fallback_auto",
+   "D": "qwen38_27b"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "E7: asserts an LOI is a 'binding conditional commitment' that obligates the hotels; LOIs are typically non-binding",
+     "E3: says the conclusion assumes no owners already have a compliant fence, although the conclusion explicitly says 'or have one'",
+     "E5: treats a volume decline as unknown, when it follows arithmetically from a 20% price rise with 15% revenue growth"
+    ],
+    "unsupported_assumptions": [
+     "E1 rated PARTLY SUPPORTS although search interest says nothing about paying rental demand",
+     "E5 rated PARTLY SUPPORTS without addressing why pricing ABOVE the competitor does not follow"
+    ],
+    "worst_failure": "It claims an LOI 'obligates the hotels to the stated purchase' and misreads E3 by ignoring the 'or have one' clause."
+   },
+   "fallback_auto": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "E7: describes LOIs as 'binding in the sense of committed demand'"
+    ],
+    "unsupported_assumptions": [
+     "E1 rated PARTLY SUPPORTS on the basis of curiosity alone",
+     "E5 rated PARTLY SUPPORTS; does not note that volume fell or that the evidence does not support pricing above the competitor",
+     "E4 ignores the sample size and selection bias of the 40 respondents"
+    ],
+    "worst_failure": "It rates E1 and E5 as PARTLY SUPPORTS, treating search curiosity and one competitor's revenue rise as partial support for strong paying demand and a 20% premium."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "E6: treats the observed pattern of 10+ interpreters as a stated 'requirement' or 'rule' rather than an inferred barrier"
+    ],
+    "unsupported_assumptions": [
+     "E3: assumes all permits resulted in completed, occupied pools as a 'standard business assumption'"
+    ],
+    "worst_failure": "For E5 it gives a PARTLY SUPPORTS verdict while its own reasoning says the conclusion 'is false', so the verdict and the analysis are inconsistent."
+   }
+  }
+ },
+ "Q14": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "fallback_auto",
+   "C": "qwen38_27b",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "$4,000-6,000 monthly cost ceiling is a self-labelled rough estimate",
+     "50-100+ mile round trips are estimated without locations for the other sites"
+    ],
+    "worst_failure": "Bundles 'is net-60 firm or negotiable' into the commercial-terms question, which slightly revisits a given fact, though it is framed as negotiability."
+   },
+   "fallback_auto": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [
+     "Asks about already-given facts (payment terms, start time) as top questions"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Ranks 'Payment Terms Verification' #2 even though net-60 is already stated",
+     "Calls the 6-week window 'adequate for basic setup' with no truck, no experience and no partner arranged"
+    ],
+    "unsupported_assumptions": [
+     "Assumes a 20-mile distance suits weekly pickups without knowing volume or the other sites"
+    ],
+    "worst_failure": "Ranks verification of the already-stated net-60 terms as the second most decision-relevant question, while omitting recycler capacity and subcontracting, contract term and exclusivity, and pallet ownership."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Does not ask what Corvane currently pays per repaired pallet or who its incumbent vendor is",
+     "Asks volume only for broken pallets, not for repaired pallets needed"
+    ],
+    "unsupported_assumptions": [
+     "Concludes the business 'is not currently viable' before having the data",
+     "Uses illustrative $2/$10 recycler prices"
+    ],
+    "worst_failure": "Never asks Corvane's current price or baseline, and declares the venture 'not currently viable' instead of identifying brokerage through the recycler as the launch model."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [
+     "Asks about already-given facts (payment terms, start time) as top questions"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Q6 in the highest-impact group asks whether net-60 applies, which is already given",
+     "Middle-man model is inverted: 'buy broken pallets from the recycler, sell the repaired pallets back to the recycler'",
+     "Ranks pallet size and spec as low impact although it drives cost per pallet"
+    ],
+    "unsupported_assumptions": [
+     "Lists a heat gun as needed repair equipment"
+    ],
+    "worst_failure": "Misreads the recycler relationship by proposing to buy broken pallets from it and sell repaired ones back to it, and pads a 28-item list with self-directed questions while asking the already-given payment terms as a top-impact item."
+   }
+  }
+ },
+ "Q15": {
+  "letters": {
+   "A": "qwen38_27b",
+   "B": "gptoss120b",
+   "C": "claude_opus",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 0,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": 1,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Keeps the $180 commercial-dock freight while storing panels in a garage or storage unit, and ignores the $260 residential liftgate rate",
+     "Keeps first-month volume at 26 panels despite saying the addressable market shrank by two-thirds"
+    ],
+    "unsupported_assumptions": [
+     "Buyers will pay a $140 freight pass-through on top of $95/panel",
+     "Local personal-vehicle delivery at $75-$100 exactly offsets its cost",
+     "Demand still clears a full pallet in month 1"
+    ],
+    "worst_failure": "It passes the $140 freight entirely to the buyer and declares per-order profit unchanged at $285 and ROI still 105%, so it never tests the realistic seller-absorbed or price-pressured case and never cuts volume for the one-third segment."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 0,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": 1,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Commits nearly all $6,000 to 5 pallets with no cash reserve"
+    ],
+    "evidence_errors": [
+     "Still projects selling 126 panels in month 1 even though demand is cut to one-third",
+     "Turn 1 claimed a '5-year warranty' that is not in the facts",
+     "Proposes shipping a $260 residential-liftgate pallet to a regional commercial dock, misreading the freight rates"
+    ],
+    "unsupported_assumptions": [
+     "$1/panel packaging cost",
+     "Mix of 12 local pickups and 9 shipped orders",
+     "Bundled accessories add $10 at negligible cost"
+    ],
+    "worst_failure": "It correctly recomputes the shipped 6-panel order (~$97.5) and adds disclosure, but keeps the 5-pallet, 126-panel first-month volume, ignoring that only one-third of buyers can use the panels."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": 2,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "$75 illustrative non-UL price (labeled as an assumption)",
+     "Inference that the comps were UL-labeled panels (labeled as an inference)"
+    ],
+    "worst_failure": ""
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": 0,
+    "format": 1,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Turn 1 capital plan buys 6 pallets plus freight (~$7,008), which exceeds the $6,000 capital"
+    ],
+    "evidence_errors": [
+     "Claims Facebook Marketplace or Craigslist avoids the verified 10% marketplace fee",
+     "Drops pallet inbound freight from the revised cost",
+     "Divides $140 by 8 panels but then projects 39 shipments of 4 panels (which is $35/panel)",
+     "Does not name the UL label removal as an invalidated assumption"
+    ],
+    "unsupported_assumptions": [
+     "$75 price",
+     "All 156 panels sell in month 1 to the one-third niche",
+     "1.5 hours per shipment"
+    ],
+    "worst_failure": "It invents fee-free selling and computes shipping as $140/8 while projecting 4-panel shipments, so the recomputed economics are internally wrong; it also never discloses the missing UL label to buyers."
+   }
+  }
+ },
+ "Q16": {
+  "letters": {
+   "A": "qwen38_27b",
+   "B": "claude_opus",
+   "C": "gptoss120b",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "qwen38_27b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Item 8 labeled SPECULATIVE; the key treats the trade show as a marketing channel/cost (EVENT), not a speculative asset."
+    ],
+    "unsupported_assumptions": [
+     "Asserts the LLC is eligible to register as a university vendor without facts on eligibility.",
+     "Assumes the owner can deliver catering and source or manufacture key-card sleeves."
+    ],
+    "worst_failure": "Classifies the trade show booth as SPECULATIVE, although its own text correctly calls it a marketing expense rather than an opportunity."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   },
+   "gptoss120b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Assumes the LLC can deliver catering for item 7 without noting the capability requirement."
+    ],
+    "worst_failure": "Item 7 does not say that registration itself is only access to purchase orders, not revenue."
+   },
+   "fallback_auto": {
+    "reasoning": 2,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Item 8 labeled SPECULATIVE instead of a marketing cost/event.",
+     "Item 7 says registration lets the LLC 'bid on' purchase orders; the facts say registered vendors may receive them."
+    ],
+    "unsupported_assumptions": [
+     "Assumes the LLC can fulfill catering and key-card sleeve production."
+    ],
+    "worst_failure": "Labels the $1,800 trade show booth as SPECULATIVE rather than a marketing cost/channel, and gives only minimal fact-specific reasoning."
+   }
+  }
+ },
+ "Q17": {
+  "letters": {
+   "A": "fallback_auto",
+   "B": "gptoss120b",
+   "C": "claude_opus",
+   "D": "qwen38_27b"
+  },
+  "grades": {
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Uses $250 'midpoint' revenue without checking the 30-mile round trip, which implies no mileage surcharge",
+     "Lists the vehicle purchase price as a row in the monthly fixed-cost table"
+    ],
+    "unsupported_assumptions": [
+     "50% outsourcing rate",
+     "40% after-hours share",
+     "$200/month insurance and misc. with no basis given"
+    ],
+    "worst_failure": "Computes $662.50 \u00f7 $186.50 \u2248 3.55 but labels it 'calls/day' and '~107 calls/month', then contradicts itself by calling 12.5 calls/month profitable."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Calls $225 the midpoint fee while also assuming no surcharges, which would make the fee $175",
+     "Says funeral homes 'invoice the removal service', reversing who invoices whom",
+     "Says overnight staff raise variable cost, though the per-call labor cost is the same $50"
+    ],
+    "unsupported_assumptions": [
+     "30% outsourced share labelled 'industry anecdote'",
+     "Insurance set to $0 in the base case (flagged as a gap)"
+    ],
+    "worst_failure": "The revenue assumption is internally inconsistent: $225 is described as the midpoint yet also as assuming no stairs or after-midnight surcharge."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "$400/month insurance (clearly flagged)",
+     "55% after-hours share (flagged)"
+    ],
+    "worst_failure": "Gives a conditional GO rather than a plain GO, though the conditions are reasonable and clearly stated."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Executive summary frames the owner's overnight unavailability as raising fixed labor costs and as the primary constraint"
+    ],
+    "evidence_errors": [
+     "Claims the owner is 'short $7,000-$15,000' for the vehicle despite the financing at $2,000 down and $450/month",
+     "Initially treats $25-per-call technician pay as a $500/month fixed cost",
+     "Calls 25-30 calls/month the 'realistic breakeven target'"
+    ],
+    "unsupported_assumptions": [
+     "40% after-hours share called a 'standard industry estimate'",
+     "50% of calls after midnight"
+    ],
+    "worst_failure": "Misreads the vehicle financing as a $7,000-$15,000 capital shortfall and first books per-call labor as a fixed cost, leaving the executive summary contradicting its own corrected breakeven of 3.1 calls."
+   }
+  }
+ },
+ "Q18": {
+  "letters": {
+   "A": "gptoss120b",
+   "B": "claude_opus",
+   "C": "qwen38_27b",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Treats the $1,600 annual insurance quote as a ~$133/month burn and leaves it out of the primary capacity calculation",
+     "Says the owner submits 'the client's required 7-day notice'; the 7-day notice is the subcontractor's requirement"
+    ],
+    "unsupported_assumptions": [
+     "Average subcontractor payment at Day 11",
+     "Owner might pay the subcontractor 'immediately' (Day 0) in the worst case"
+    ],
+    "worst_failure": "Headline capacity of 19 concurrent jobs divides the full $7,000 by $359 without first deducting the $1,600 insurance; only a hedged 15-16 falls in the key range. The chain also omits lead targeting by volume or grease notes and recurring rebooking."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Sales-cycle durations (explicitly flagged as estimates)"
+    ],
+    "worst_failure": ""
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Reserves only $400 against an annual $1,600 insurance quote",
+     "States cleaning takes 1-3 hours"
+    ],
+    "unsupported_assumptions": [
+     "Insurance can be paid monthly",
+     "~3 owner hours per job"
+    ],
+    "worst_failure": "The capacity check is internally inconsistent: it equates 12 concurrent 15-day jobs to about 3 jobs per week, and it multiplies 26 monthly jobs by $540 as if all were outstanding at once. The chain also omits the site survey/quote and recurring rebooking."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 1,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Misstates the subcontractor share as 45-60% and then uses '50% average of 55-60%' = $312.50",
+     "Places subcontractor invoicing and payment (Link 4) before job execution (Link 5)",
+     "Says the subcontractor is paid within 15 days of receiving its invoice; the fact is 15 days of job completion",
+     "Insurance stated as $30.77/month"
+    ],
+    "unsupported_assumptions": [
+     "'Realistic concurrent capacity: 6-8 jobs' with no valid derivation"
+    ],
+    "worst_failure": "The capacity calculation '$5,400 \u00f7 ($312.50 \u00d7 30 days)' is dimensionally nonsensical and rests on a misread 50% subcontractor cost, giving an unsupported 6-8 jobs."
+   }
+  }
+ },
+ "Q19": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "fallback_auto",
+   "C": "qwen38_27b",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Assumes a second route would need its own 30-store minimum (flagged as 'presumably')",
+     "Assumes a 4-week sales window and a 33\u201335 store buffer (both labeled as assumptions)"
+    ],
+    "worst_failure": "Adds a conditional 'abandon if the 30-store gate fails' line, but it is properly gated and does not reject the plan."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 2,
+    "correct": false,
+    "critical_errors": [
+     "Misses the 30-store minimum issue"
+    ],
+    "constraint_violations": [
+     "Treats the $1,500 capital as a cost to be paid back rather than an available constraint"
+    ],
+    "evidence_errors": [
+     "Treats the 31 stores that pay other cleaners as the owner's 'current customers'",
+     "Adds 31+14 to get 45 customers",
+     "Break-even calculation assumes all 85 stores are cleaned",
+     "Never mentions the cleaner's 30-store minimum"
+    ],
+    "unsupported_assumptions": [
+     "Values owner time at $25/hour",
+     "Assumes a 7.5-week payback on the capital"
+    ],
+    "worst_failure": "Claims '31 current customers + 14 new conversions = 45 stores' by treating competitors' customers as already won, and ignores the 30-store minimum entirely."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Says the original proposal relied on cash/card payment; that is the incumbents' practice in Fact 1, not the proposal's",
+     "Says capital poses 'no significant capital risk', missing the working-capital need created by monthly invoicing"
+    ],
+    "unsupported_assumptions": [
+     "Assumes the cleaner would charge $15/store for a 20-store route",
+     "Assumes 16 of the 31 incumbent customers will switch"
+    ],
+    "worst_failure": "Misses the working-capital gap from monthly invoicing (about $1,440\u20131,800, close to the $1,500 capital) and calls capital risk insignificant."
+   },
+   "gptoss120b": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [
+     "Misses the 30-store minimum issue"
+    ],
+    "constraint_violations": [
+     "Abandons the $22 monthly-invoice offer the 14 prospects asked for and imposes $25 with weekly cash collection"
+    ],
+    "evidence_errors": [
+     "Monthly inflow calculated as $660 instead of about $2,860, producing a false 'guaranteed loss'",
+     "Assumes the proposal targets all 85 stores",
+     "Claims the owner pays the cleaner weekly, though payment terms are unspecified",
+     "Presents liability exposure 'despite the subcontractor's insurance' as fact-backed"
+    ],
+    "unsupported_assumptions": [
+     "Assumes the owner must front up to 8 weeks of cleaner payments",
+     "Assumes two cleaning mornings conflict with the owner's sales time"
+    ],
+    "worst_failure": "Calculates monthly invoice revenue as $660 (one week's billing) against $1,440 of monthly costs and concludes monthly invoicing is 'financially untenable'. It also never treats 14 committed stores versus the 30-store minimum as the gating issue."
+   }
+  }
+ },
+ "Q20": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "gptoss120b",
+   "C": "fallback_auto",
+   "D": "qwen38_27b"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "22 PMs commit their full 780 t need (A1)",
+     "PMs pay 60% deposits by Oct 26, flagged as the key untested assumption",
+     "Average drop size of 4.5 t, enforced by a 4 t minimum"
+    ],
+    "worst_failure": "Profitability depends entirely on PMs accepting 60% non-refundable deposits. The answer flags this and states the no-deposit case is infeasible, but it never considers avoiding the yard through direct terminal-to-lot lifting."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 0,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [
+     "Ignores the $15,000 cap / prepayment requirement"
+    ],
+    "constraint_violations": [
+     "Pays for load 5 in installments during Nov 8-14, after the Nov 1 deadline, contrary to full prepayment at contracting",
+     "Phased payment relies on customer receipts that cannot exist before Nov 1"
+    ],
+    "evidence_errors": [
+     "Loader cost treated as $60 per 20 t load instead of $60 per delivery",
+     "Says rationing affects only larger orders, but fact 2 says it affects new customers",
+     "Invoices $85,000 for the Oct 15-21 week before any deliveries",
+     "Collects payments in November for deliveries supposedly made Oct 22-31, before deliveries start"
+    ],
+    "unsupported_assumptions": [
+     "5-ton average delivery",
+     "Terminal will accept installment payment for the pre-season price"
+    ],
+    "worst_failure": "Claims the $17,650 outlay can be phased under $15k by paying for later loads after Nov 1 out of 30-day receipts, which contradicts both the full-prepayment rule and its own timeline (deliveries start Nov 1)."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": null,
+    "format": 1,
+    "score": 1,
+    "correct": false,
+    "critical_errors": [
+     "Ignores the $15,000 cap / prepayment requirement",
+     "Total profit claim inconsistent with own unit economics"
+    ],
+    "constraint_violations": [
+     "Contracts only 20 t at $92 yet sells 312 t, which implies spot or uncontracted purchases",
+     "Peak capital need of $14,940 ignores the $28,704 prepayment required for 312 t"
+    ],
+    "evidence_errors": [
+     "Applies 40% to the 260 lots, which are already owner-supplied, giving 104 lots",
+     "Yard rent shown starting both Nov 1 and Dec 1",
+     "Says contracting the 20 t minimum secures storm allocation for all volume"
+    ],
+    "unsupported_assumptions": [
+     "All lots order by Oct 4",
+     "Insurance excluded from per-ton cost",
+     "10% extra mid-season demand"
+    ],
+    "worst_failure": "Buys only a 20-ton minimum by Nov 1 but projects selling 312 tons with $1,386 profit and a $14,940 peak capital need. Its cost lines actually sum to $52,654, not $51,654, so profit is about $386, and the plan ignores the $28.7k needed to prepay 312 t."
+   },
+   "qwen38_27b": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 0,
+    "revision": null,
+    "format": 0,
+    "score": 2,
+    "correct": false,
+    "critical_errors": [
+     "Total profit claim inconsistent with own unit economics"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Claims $15,000 cannot fund the minimum 20-ton order",
+     "Dismisses direct terminal-to-lot delivery without using fact 9",
+     "Cash-flow figures vary between $20,700, $25,200 and $19,750 peak"
+    ],
+    "unsupported_assumptions": [
+     "6-ton average deliveries",
+     "200 t volume chosen arbitrarily",
+     "Shared-yard costs"
+    ],
+    "worst_failure": "The executive summary claims $13,600 net profit and a $78/ton margin, while the body computes about $34 total profit and concludes the plan is not viable. The answer also wrongly says $15k cannot buy the 20-ton minimum."
+   }
+  }
+ },
+ "Q21": {
+  "letters": {
+   "A": "qwen38_27b",
+   "B": "fallback_auto",
+   "C": "gptoss120b",
+   "D": "claude_opus"
+  },
+  "grades": {
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Claims video interpreting at $1.95-$2.50/minute lets the clinic 'profit significantly', but that is $117-$150/hour against $72 reimbursed",
+     "Ignores the 2-hour in-person minimum"
+    ],
+    "unsupported_assumptions": [
+     "Assumes a patient subscription means the clinic loses $55-$70/hour, when saving the fee and losing the $72 reimbursement nets only a $2-$17 loss"
+    ],
+    "worst_failure": "It recommends video at $1.95-$2.50/minute as profitable for clinics, but that costs $117-$150/hour against only $72 in Medicaid reimbursement."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Labels the +$2 to +$17 surplus as a 'net cost' and says the clinic loses $2/hour at the $70 rate",
+     "Calls VRI at $117-$150/hour 'lower cost'",
+     "Notes the 2-hour minimum but never applies it"
+    ],
+    "unsupported_assumptions": [
+     "Invents an unlimited-use subscription priced at $500/month without checking it covers costs"
+    ],
+    "worst_failure": "It says the clinic 'loses $2 per hour' at $70, when $72 reimbursed minus $70 is a $2 gain."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Mentions the 2-hour minimum but excludes it from the calculation",
+     "Muddled claim that video is \u2248$120/hour 'but often cheaper per minute'"
+    ],
+    "unsupported_assumptions": [
+     "Treats patient interest as confirming the clinic's cost pain point",
+     "Illustrative clinic volumes are invented"
+    ],
+    "worst_failure": "It acknowledges the 2-hour in-person minimum but omits it from the net-cost analysis, missing the $38-$68 net cost it creates."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   }
+  }
+ },
+ "Q22": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "qwen38_27b",
+   "C": "gptoss120b",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Every rental is assumed delivered both ways, which A states and tests in sensitivity",
+     "The bootstrapped second-machine timeline (May\u2013June 2027) assumes sustained peak utilization"
+    ],
+    "worst_failure": "Winter profit (~$1,179) sits somewhat above the key's ~$700\u2013900 range because A assumes 8 rented days and 8 delivery legs."
+   },
+   "qwen38_27b": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [
+     "Double counts loan payment and depreciation without noting it"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Treats the full $756.53 loan payment (including ~$529 principal) as a P&L expense and also deducts $450 depreciation",
+     "Assumes only 3 round-trip deliveries for 12 rentals, which conflicts with the fact that rentals are mostly 1\u20133 days"
+    ],
+    "unsupported_assumptions": [
+     "Most customers pick up the machine themselves",
+     "A full 7-day weekly rental is counted against an 18-day month while 20% long-term days is only 3.6 days"
+    ],
+    "worst_failure": "Net profit is computed as cash flow after the full loan payment minus depreciation, double-counting principal and depreciation and understating peak profit (~$2,442 vs the key's ~$3,800\u20134,300)."
+   },
+   "gptoss120b": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [
+     "Double counts loan payment and depreciation without noting it"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "'Net profit (GAAP)' deducts the full loan payment (including principal) and also depreciation",
+     "Each rented day is treated as a separate 1-day rental with full delivery, which inflates delivery volume"
+    ],
+    "unsupported_assumptions": [
+     "The ~80% utilization figure needed to hit $4,000 rests on understated profit",
+     "The second machine is judged 'financially feasible' within 2\u20133 months, assuming sustained peak utilization"
+    ],
+    "worst_failure": "Net profit = cash profit after the full $756.53 payment minus $450 depreciation, double-counting principal and depreciation, so peak is understated at ~$2,950."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": null,
+    "format": 1,
+    "score": 0,
+    "correct": false,
+    "critical_errors": [
+     "Concludes $4,000/month is achievable every month with one machine",
+     "Double counts loan payment and depreciation without noting it"
+    ],
+    "constraint_violations": [
+     "Ignores the physical one-machine day limit: bills 1.8 monthly rentals plus 3.6 weekly rentals within 18 rented days"
+    ],
+    "evidence_errors": [
+     "Treats rented-day shares as counts of weeks and months, producing $14,005 rental revenue from 18 days",
+     "Omits the owner's $110-per-leg hauler cost entirely",
+     "Assumes 18 round-trip deliveries"
+    ],
+    "unsupported_assumptions": [
+     "Rental mix of 70% daily, 20% weekly, 10% monthly applied as multiples of the rate units"
+    ],
+    "worst_failure": "It bills 3.6 weeks and 1.8 months of rental within 18 rented days and omits delivery costs, concluding a single machine earns $15,769 in peak and $5,720 in winter."
+   }
+  }
+ },
+ "Q23": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "gptoss120b",
+   "C": "fallback_auto"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": 2,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Freight stays $0.90/unit at 5,000 units (flagged as an assumption)",
+     "Capital turns about twice per quarter (flagged as an assumption)",
+     "Uses an environment date of Nov 26 that is not in the question (flagged as unconfirmed)"
+    ],
+    "worst_failure": ""
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": 1,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Applies the 30%/70% factory payment terms to the full $9.00 unit cost (deposit $13,500, balance $31,500) instead of to the $19,000 factory price",
+     "States the capital need as $45,000 including engraving, packaging and fees, versus the key's ~$28,250 landed cash"
+    ],
+    "unsupported_assumptions": [
+     "Buys 1,800 domestic units up front, including 400 speculative units, despite no minimum and 5-day delivery",
+     "Ignores the faster domestic cash cycle that would let capital recycle within the quarter"
+    ],
+    "worst_failure": "Computes the import cash need as 5,000 \u00d7 $9 = $45,000 and treats the 30% deposit as $13,500, misapplying the factory payment terms to the whole unit cost."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": 1,
+    "format": 1,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Proposes buying 4,000-5,000 domestic units with no plan to fund about $44k-$55k from $20k of capital"
+    ],
+    "evidence_errors": [
+     "States the $19,000 capital need 'exceeds $20,000 limit', which is self-contradictory",
+     "Leaves the $4,750 tariff and $4,500 freight out of the capital-per-order figure",
+     "Gives import quarterly contribution as $5,000 instead of $50,000",
+     "Adds the 1,400 POs to the 2,800-4,200 holiday multiple to get 4,200-5,600 units of demand",
+     "Labels the $0.90 line 'freight + duty' while also adding a separate tariff"
+    ],
+    "unsupported_assumptions": [
+     "Treats domestic capital need as 'minimal' despite pay-on-order terms",
+     "Says nothing about the capital needed for the proposed domestic holiday volume"
+    ],
+    "worst_failure": "Says the import order needs only $19,000, which it claims 'exceeds $20,000', omitting tariff and freight cash, and then calls domestic capital 'minimal' while proposing 4,000-5,000 pay-on-order units."
+   }
+  }
+ },
+ "Q24": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "gptoss120b",
+   "C": "qwen38_27b",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "51% monthly sensitivity scenario (explicitly labelled as an assumption)"
+    ],
+    "worst_failure": ""
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Claims the ordinance 'allows a pump-out earlier (when 25% full) but does not require it'; C actually requires pumping at 25% full, whichever comes first",
+     "Explains A vs B only through new or seasonal or unpermitted restaurants, missing institutional or non-restaurant FSEs"
+    ],
+    "unsupported_assumptions": [
+     "Assumes D's 'most' refers only to the professionally serviced segment",
+     "Expects the competitor (D) to share its frequency, contract and pricing data"
+    ],
+    "worst_failure": "Misreads the 25%-full clause as optional rather than mandatory, and omits the ~$2.17M dollar floor and the disposal-capacity and hauler-licensing questions."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Step 1 of the calculation says to 'use the total number of FSEs from Source A (4,850) as the base' before switching to 1,970",
+     "Names the Health Dept as the source for professional-servicing shares of under-sink traps"
+    ],
+    "unsupported_assumptions": [
+     "30% professional uptake, 6 pumps per year and $200 price for under-sink traps in the example forecast",
+     "Treats the 4,850 as the market of potential customers without verification"
+    ],
+    "worst_failure": "Muddles the base by saying it will use 4,850 before correctly using 1,970, and omits disposal-capacity and licensing questions."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 1,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": null,
+    "revision": null,
+    "format": 1,
+    "score": 4,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Says the FOG program 'likely covers a subset of all permitted establishments' even though A (4,850) is larger than B (3,120)",
+     "Treats D's marketing claim as 'current business reality'",
+     "Asks what share of in-ground interceptor owners self-clean, contradicting E"
+    ],
+    "unsupported_assumptions": [
+     "Prefers 4,850 without a valid definitional explanation"
+    ],
+    "worst_failure": "Resolves A vs B with an impossible subset claim and simply prefers 4,850, so the discrepancy is effectively left unexplained; it also omits the dollar floor and the disposal and licensing questions."
+   }
+  }
+ },
+ "Q25": {
+  "letters": {
+   "A": "qwen38_27b",
+   "B": "claude_opus",
+   "C": "fallback_auto",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 1,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Suggests hiring a 5th independent cleaner cleared by March 6, but no new worker can be cleared by then because fingerprints can only be submitted after award"
+    ],
+    "evidence_errors": [
+     "First states the standard COI arrives Jan 31 and is on time, then corrects this",
+     "Clearance count mislabels weekdays (Tue Mar 1, Fri Mar 4) and drops Feb 29, but still lands on Mar 7"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Initially concludes 'yes, the standard COI can be submitted on time' using a wrong calendar before self-correcting, and its clearance count uses wrong weekday labels."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 10,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 0,
+    "strategy": 0,
+    "revision": null,
+    "format": 2,
+    "score": 1,
+    "correct": false,
+    "critical_errors": [
+     "Says standard COI arrives in time",
+     "Says X's cleaners are cleared by March 6",
+     "Wrong number of cleaners required"
+    ],
+    "constraint_violations": [
+     "Ignores the 2:00 p.m. deadline versus the 5:00 p.m. COI delivery",
+     "Treats cleaners as tied to a single library, inflating headcount to 6"
+    ],
+    "evidence_errors": [
+     "Business-day list skips Jan 27-28 and includes Jan 29-30 (a weekend)",
+     "Clearance count uses nonexistent business days (Feb 20, Feb 27, Mar 4, Mar 5 as weekdays)",
+     "Claims Y cannot staff the contract alone"
+    ],
+    "unsupported_assumptions": [
+     "Each library needs its own 2 dedicated cleaners"
+    ],
+    "worst_failure": "Concludes the standard COI delivered at 5 p.m. meets a 2 p.m. deadline, and that X is cleared by March 5, with 6 cleaners required."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 2,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Action dates have wrong weekdays: 'Fri Feb 23', 'Mon Feb 26', 'Fri Mar 1', 'Mon Mar 4' (a Saturday), 'Tue Mar 5' (a Sunday)",
+     "Says X is available 'from the second week onward', but clearance is Mar 7, the second day of service"
+    ],
+    "unsupported_assumptions": [],
+    "worst_failure": "Its rotation claims exactly 3 cleaners work every night, but with off-nights only Mon-Thu, all 4 work Fri/Sat; it also lists several action dates with wrong weekdays, including weekend dates."
+   }
+  }
+ },
+ "Q26": {
+  "letters": {
+   "A": "claude_opus",
+   "B": "fallback_auto",
+   "C": "qwen38_27b",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "High case treats the 30% mobile share as applying to all closings (labeled as an alternative reading), which pushes the ceiling to $697.5k, above the key's ~$605k"
+    ],
+    "worst_failure": "Its alternative 4,650-signing high case widens the market ceiling beyond the key, though it is clearly flagged as an interpretive range."
+   },
+   "fallback_auto": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Calls $100 the midpoint of $75-$150 (actual midpoint is $112.50)",
+     "Statement 2 critique omits that the memo leaves out refinances",
+     "Says the $141,000 projection overstates the market by more than 3x, conflating the revenue target with market size"
+    ],
+    "unsupported_assumptions": [
+     "Asserts 'thin competition among mobile agents' without evidence",
+     "Treats a 10-15% capture as potentially achievable without justification"
+    ],
+    "worst_failure": "It says 10-15% capture is achievable 'given the thin competition among mobile agents', which re-imports the memo's unsupported thin-competition claim, and it gives only a single-point market estimate at a miscomputed midpoint fee."
+   },
+   "qwen38_27b": {
+    "reasoning": 2,
+    "commercial": 1,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Names DocVerify/Notarize as national signing services, which is questionable"
+    ],
+    "unsupported_assumptions": [
+     "5-15% year-one capture called 'a common range for new B2B service providers' without support",
+     "Fee range uses channel midpoints ($87.50-$137.50) rather than the full $75-$150 range"
+    ],
+    "worst_failure": "The first-year range rests on an asserted 5-15% capture rate rather than a bottom-up count of bookings, though it does list title-company relationships and capacity as the needed justification."
+   },
+   "gptoss120b": {
+    "reasoning": 2,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": null,
+    "revision": null,
+    "format": 2,
+    "score": 7,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Rates statement 5 'Partially Supported', and its wording about effective competition being 'higher than the 44 per notary figure suggests' is muddled"
+    ],
+    "unsupported_assumptions": [
+     "Adopts 5-10% capture as 'conservative' after calling 10% optimistic",
+     "Presents $30k-$60k as a 'credible benchmark' without a bottom-up justification"
+    ],
+    "worst_failure": "After calling 10% capture optimistic, it adopts 10% as the basis of a 'credible' $30k-$60k first-year goal, and it only weakly says this must be justified by title-company or signing-service relationships and booking volume."
+   }
+  }
+ },
+ "Q27": {
+  "letters": {
+   "A": "fallback_auto",
+   "B": "qwen38_27b",
+   "C": "claude_opus",
+   "D": "gptoss120b"
+  },
+  "grades": {
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 2,
+    "correct": false,
+    "critical_errors": [
+     "Sales needed off by >1.5 from ~4 given own math"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Treats haul-out ($1,200) as a company cost, although the brief says it is charged to the estate",
+     "Claims the company fronts costs for 14 days, although buyers pay the company at the sale",
+     "Counts monthly insurance as a per-sale cost"
+    ],
+    "unsupported_assumptions": [
+     "Owner can run at most ~1 sale every 2 weeks, ignoring that hired staff run the sales"
+    ],
+    "worst_failure": "Shows a median sale netting -$2, then concludes only 2.1 sales/month are needed for $5,000 net, which contradicts its own loss figure."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [
+     "Rejects due to lack of antiques expertise"
+    ],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Names the probate attorney as the hiring decision-maker rather than the executor",
+     "Claims ~$11,500 of working capital is needed to pay the estate, although the company already holds the buyers' $13,000",
+     "Ignores the budgeted pricing specialist when treating the expertise gap as fatal"
+    ],
+    "unsupported_assumptions": [
+     "Calls the market saturated despite 4-8 week waitlists"
+    ],
+    "worst_failure": "Calls the 14-day estate payout a fatal working-capital gap, even though buyer proceeds are collected before the estate is paid, and cites the expertise gap as an insurmountable reason to reject."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Owner spends ~40-45 hrs per sale (flagged as an assumption)"
+    ],
+    "worst_failure": ""
+   },
+   "gptoss120b": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 1,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 8,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Suggests the owner act as pricing specialist despite having no antiques expertise"
+    ],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Asserts that 25 hrs/week fits coordinating 4-5 sales/month without analysis",
+     "The 'price-on-sale' commission clause is odd and unsupported"
+    ],
+    "worst_failure": "Underplays the owner-time constraint of coordinating 4-5 sales a month in 25 hrs/week, and briefly suggests the owner could do the pricing work."
+   }
+  }
+ },
+ "Q28": {
+  "letters": {
+   "A": "fallback_auto",
+   "B": "gptoss120b",
+   "C": "claude_opus",
+   "D": "qwen38_27b"
+  },
+  "grades": {
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 0,
+    "revision": null,
+    "format": 1,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Treats capital as binding for option 3 despite deposits self-funding ad spend",
+     "Projects profit realized by late January, outside the 45-day window"
+    ],
+    "evidence_errors": [
+     "Claims customers pay 30 days after completion for lights; actually 50% at booking and 50% at completion",
+     "Treats season Nov 15-Dec 20 as '45 days exactly' and computes 6 weeks of crew capacity",
+     "Counts option 4's $4,200 as max profit though payment falls after the window"
+    ],
+    "unsupported_assumptions": [
+     "Assumes demand for 83 light jobs without flagging that demand is unverified"
+    ],
+    "worst_failure": "It caps option 3 at 83 jobs by treating ad spend as unfunded capital, ignoring the booking deposits. It then has profit arriving in late January, so its 'YES' verdict contradicts its own window."
+   },
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Option 3 max (~100 jobs) counts the season through Dec 20, beyond the Dec 16 window",
+     "Minor arithmetic: 71 x $322.50 = $22,897.50, not $22,712"
+    ],
+    "unsupported_assumptions": [
+     "Assumes light-job demand of 71+ bookings at $60 each without flagging that demand is unverified"
+    ],
+    "worst_failure": "It declares the target 'Achievable' and builds the plan on 71 light jobs without noting that demand for holiday-light jobs is unverified."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [],
+    "worst_failure": ""
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 0,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Window end stated as Dec 15 rather than Dec 16",
+     "Counts pallet hours twice in the plan: 40h in Nov 1-14 and another 40h in Nov 15-Dec 15"
+    ],
+    "unsupported_assumptions": [
+     "Final plan assumes 85 bookings are sold despite raising the demand risk"
+    ],
+    "worst_failure": "It opens with 'Feasibility Verdict: NO... approximately $11,400' and later concludes the target is 'achievable' at ~$29,700, giving no plain, consistent verdict."
+   }
+  }
+ },
+ "Q29": {
+  "letters": {
+   "A": "gptoss120b",
+   "B": "qwen38_27b",
+   "C": "claude_opus",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 1,
+    "score": 6,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Q plan buys 4 machines a month and sells all 4, ignoring that about 1 in 8 fail, so 20 sales need about 23 purchases",
+     "Q profit stated as $27,875 versus the key's ~$22,800",
+     "P peak working capital put at $13,680 (4 weeks); the key expects ~$15-17k"
+    ],
+    "unsupported_assumptions": [
+     "Combined peak cash need is only ~$13,680 once Q is sequenced first"
+    ],
+    "worst_failure": "Overstates Q profit at $27,875 by assuming all 20 purchased machines sell despite the 1-in-8 failure rate, and its conclusion contradicts its own K5 verdict (Valid in the table, 'partially valid' in the summary)."
+   },
+   "qwen38_27b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Calls K5 invalid while conceding that demand (20) binds, which is the critic's actual claim",
+     "Q profit of $20,125 assumes only 20 purchases, yielding 17.5 sales, although supply of 24 allows all 20 demanded units to be sold",
+     "Joint cash-flow model starts laundry bills in week 1 (volume begins week 3) and receives a hotel payment in week 4, contradicting its own 4-week lag"
+    ],
+    "unsupported_assumptions": [
+     "Combined peak of $17,260 rests on a mis-timed cash-flow schedule"
+    ],
+    "worst_failure": "The combined cash-flow schedule receives the first hotel payment in week 4, contradicting the net-30 lag it had just modelled, so the claimed $17,260 peak is unreliable."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "Assumes Q's buy-recondition-deliver cycle takes about 3 weeks (stated explicitly as an assumption)"
+    ],
+    "worst_failure": "Rates K5 'partly valid' rather than valid, though the binomial argument about failures is a defensible nuance."
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 0,
+    "revision": null,
+    "format": 1,
+    "score": 1,
+    "correct": false,
+    "critical_errors": [
+     "Selects Q as stronger"
+    ],
+    "constraint_violations": [
+     "Claims Q needs $28,000 upfront, which exceeds the budget, despite the 4-per-month supplier cap"
+    ],
+    "evidence_errors": [
+     "Counts P over 26 weeks although volume starts in week 3",
+     "Assumes all 20 Q machines are bought upfront, which the supplier cap prevents",
+     "Says P's $17,100 need exceeds the $20,000 budget"
+    ],
+    "unsupported_assumptions": [
+     "Asserts Q has more predictable outcomes and lower risk without support"
+    ],
+    "worst_failure": "Chooses Q as stronger even though it computes P's profit at more than three times Q's, and justifies this with an impossible $28k upfront purchase."
+   }
+  }
+ },
+ "Q30": {
+  "letters": {
+   "A": "gptoss120b",
+   "B": "qwen38_27b",
+   "C": "claude_opus",
+   "D": "fallback_auto"
+  },
+  "grades": {
+   "gptoss120b": {
+    "reasoning": 1,
+    "commercial": 1,
+    "evidence": 1,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 5,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Computes the working-capital gap as 2 weeks, but owners pay at month-end, so the gap is about 1 month",
+     "Proposes an inspection add-on 'once owner obtains certification' even though the certificate needs 6 months' experience",
+     "Profit table omits card fees"
+    ],
+    "unsupported_assumptions": [
+     "$10 consumables per turnover",
+     "$20 referral fee per STR accepted by PM firms",
+     "Owner list is public at $0 cost"
+    ],
+    "worst_failure": "May profit is projected at $2,227 (below $3,000), yet the answer declares the target met by June 4 using cumulative profit and June invoices, which misstates the test."
+   },
+   "qwen38_27b": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 2,
+    "strategy": 1,
+    "revision": null,
+    "format": 2,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [
+     "Projects 450 turnovers/month at peak, ignoring crew capacity of ~25/week now and ~40/week if booked by May 1",
+     "Targets PM-managed owners as a secondary market",
+     "Uses 172 self-managers without the out-of-town overlap"
+    ],
+    "unsupported_assumptions": [
+     "$50 inspection coordination fee",
+     "20 clients in April and 50 by June",
+     "10% PM referral fee",
+     "Bridging finance via a credit line"
+    ],
+    "worst_failure": "Scales to 50 clients and 450 turnovers/month, far beyond stated crew capacity, which produces an unrealistic $25k/month projection and a $29k working-capital gap."
+   },
+   "claude_opus": {
+    "reasoning": 2,
+    "commercial": 2,
+    "evidence": 2,
+    "constraints": 2,
+    "strategy": 2,
+    "revision": null,
+    "format": 2,
+    "score": 9,
+    "correct": true,
+    "critical_errors": [],
+    "constraint_violations": [],
+    "evidence_errors": [],
+    "unsupported_assumptions": [
+     "$40 inspection coordination fee (labeled as an assumption)",
+     "Assistant at $600/month",
+     "Crews restock within the turnover visit at no extra charge"
+    ],
+    "worst_failure": ""
+   },
+   "fallback_auto": {
+    "reasoning": 0,
+    "commercial": 0,
+    "evidence": 0,
+    "constraints": 1,
+    "strategy": 1,
+    "revision": null,
+    "format": 1,
+    "score": 3,
+    "correct": false,
+    "critical_errors": [],
+    "constraint_violations": [
+     "Timeline includes 'Register for town inspector program (if pursuing dual role)', although the owner cannot qualify in time"
+    ],
+    "evidence_errors": [
+     "Uses 6 turnovers/STR in May and June, contradicting shoulder (4/month) and peak (9/month)",
+     "Treats all 287 out-of-town owners as primary customers, including PM users",
+     "States 'Competition: Low (owners pay PMs 58%)', which is incoherent",
+     "Arithmetic errors, e.g., April revenue shown as $4,320 instead of 15\u00d74\u00d7$120 = $7,200"
+    ],
+    "unsupported_assumptions": [
+     "15-20 clients signed by April 10",
+     "50% deposits on annual contracts"
+    ],
+    "worst_failure": "Peak working capital is stated as $3,600 while 35 clients imply about $14k of monthly crew cost paid weekly against month-end collection, so the cash constraint is badly understated."
+   }
+  }
+ }
+}
