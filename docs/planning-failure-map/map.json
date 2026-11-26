@@ -312,8 +312,8 @@
    "what": "The owner's plan must not be built from constructed arrangements that read nothing of the owner: route the owner's words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.",
    "owner": "cash/construct.ts; goals/plan.ts (integration owner session_01QF5Tk7etm6MGmaFuHMd6eZ)",
    "depends": "",
-   "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "PR #1345 (8a2c568): a constructed design reaches a goal plan only if its precedent is one of that goal's own route openings; tests/ownerRoutesLeadConstruction.test.ts. Motivating production read: dev6 0/12 usable on a8c4699 (6 QUANT critical on generic arrangements, 6 no-candidate)."
+   "state": "DEPLOYED_EFFECTIVE_PARTIAL",
+   "evidence": "PR #1345 (8a2c568): a constructed design reaches a goal plan only if its precedent is one of that goal's own route openings; tests/ownerRoutesLeadConstruction.test.ts. Motivating production read: dev6 0/12 usable on a8c4699 (6 QUANT critical on generic arrangements, 6 no-candidate). Production dev6 09:59Z on dcc34fe: the generic constructed readings are gone in 10/12 cases; plans now wait on pricing the owner-fit openings (RC20/RC6)."
   },
   {
    "id": "W3b",
@@ -445,6 +445,12 @@
    "measure": "fm1126b read on dcc34fe: 30/30 NO_CANDIDATE. Every goal holds 1-4 owner-fit openings (89 total, e.g. Tulsa truck: junk haul, delivery partner, holiday setup), all unpriced; 0 missions, 0 fragments, 0 claims for the run.",
    "usable": "0/30",
    "note": "read_fm1126b_0926, stall, judging and launching probes; the blocker is launch, not planning (RC20)"
+  },
+  {
+   "at": "2026-11-26 09:59Z",
+   "measure": "dev6 (12 goals, integration owner's read) on dcc34fe vs 442a657: still 0/12. 10/12 moved from QUANT-critical or no-candidate on generic constructed arrangements (RC13, #1345 effective: no $18M-$30M readings) to 'no live opportunity far enough along to model' (unpriced openings); d06 and d07 now lead with found openings. Research 7-10 RESEARCHING packets per goal, before RC20.",
+   "usable": "0/12",
+   "note": "reported by session_01QF5Tk7etm6MGmaFuHMd6eZ; next read about 60 min after 2f91d08 is live"
   }
  ],
  "capabilities": [
@@ -4183,7 +4189,7 @@
    "evidence": "",
    "component": "server/services/cash/construct.ts:constructArrangements (755), graphPass (1400), selectCandidates (1882), rotationWindow (1825)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/cash/construct.ts:selectCandidates: Rotation window pinned to window 0: alternatives outside the first window never enter.\" \u2192 tests/constructionCapRotation.test.ts, tests/arrangementLibrary.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C43-R",
@@ -4258,7 +4264,7 @@
    "evidence": "",
    "component": "server/services/cash/construct.ts:arrangementSignature (613), canonicalSignature (1531); server/services/cash/goalScenario.ts:samePopulationOfferKey (1714), modelledTwinKey (1746)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/cash/construct.ts:arrangementSignature: Supply dropped from the signature: arrangements differing only in who supplies are falsely merged.\" \u2192 tests/capabilitySignatureStable.test.ts, tests/constructionCapRotation.test.ts, tests/arrangementLibrary.test.ts, tests/goalFittedArrangements.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C44-R",
@@ -4333,7 +4339,7 @@
    "evidence": "",
    "component": "server/services/cash/goalScenario.ts:screenArrangement (1548), losesMoneyPerDeal (1514), selectEstimatedArrangements (1818), cutReasonClass (1691)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/cash/goalScenario.ts:screenArrangement: Deadline cut disabled: an arrangement settling after the deadline is not cut.\" \u2192 tests/goalFittedArrangements.test.ts, tests/arrangementSelection.test.ts, tests/arrangementCutReasons.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C45-R",
@@ -4408,7 +4414,7 @@
    "evidence": "",
    "component": "server/services/cash/goalScenario.ts:modelOpportunity (2419), ownerHoursOf (876), structuralDaysToCash (1110), reconstructedSupplyCostPerDeal (1032), priceContradiction (2383)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/cash/goalScenario.ts:priceContradiction: priceContradiction never fires when evidence conflicts with the card price.\" \u2192 tests/reliabilityScenarioGates.test.ts, tests/reliabilityRound8.test.ts, tests/reliabilityRound13.test.ts, tests/planningAdaptationCase.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C46-R",
@@ -4483,7 +4489,7 @@
    "evidence": "",
    "component": "server/services/goals/portfolio.ts:evaluateGoalPortfolio (1315), demandWorlds (873); server/services/goals/plan.ts:conservative (1446), withoutSpareOwnerWork (1309), withoutLossMakingLots (1358), withoutSpareCapitalLots (1385), withoutUnestablishedLots (1418), peakConcurrentLots (1240)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:peakConcurrentLots: Capital tied up read as the sum of lots instead of the peak concurrent lots.\" \u2192 tests/planReliabilityGates.test.ts, tests/reliabilityRound5.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C47-R",
@@ -4558,7 +4564,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:linkChecks (961), validationStage (872), currentDemandCheck (920), economicsState (1051), settlesState (1072), fulfilmentCheck (1093), volumeCheck (1116), nextTestFor (1185)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:validationStage: An opening with only a reachable buyer is staged as buyer-validated (wrong missing link). linkChecks/nextTestFor are not exported and have no direct test.\" \u2192 tests/openingsFromClaims.test.ts, tests/inboundBuyerValidationA10K.test.ts, tests/routeDives.test.ts, tests/operatorDecisions.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C48-R",
@@ -4633,7 +4639,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:judgeAcceptance (1648), measuredPlanChance (1557), planCalibration (2097), candidateSentence (1930), verdictOf (1921)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:judgeAcceptance: The 90% bar is lowered to 81%: a plan at 85% defensible lower bound is ACCEPTED. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/goalAcceptance.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C49-R",
@@ -4708,7 +4714,7 @@
    "evidence": "",
    "component": "server/services/goals/reconstruction.ts:reconstructPlan (333), partitionOpenings (309), gatesOf (798), prepaymentEligible (1174), fulfilmentQuestions (1197), volumeQuestionsFor (1268); server/services/goals/plan.ts:reconstructionFor (3274)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reconstruction.ts:prepaymentEligible: Buyers with unstated payment terms treated as prepaying (unknown read as favourable, invariant 39).\" \u2192 tests/prepaidFulfilmentEvidence.test.ts, tests/goalReconstruction.test.ts, tests/fulfilmentLever.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C50-R",
@@ -4783,7 +4789,7 @@
    "evidence": "",
    "component": "server/services/goals/reasoning/directions.ts:exploreDirections (899), stanceQuotas (752), mutate (834), recombine (817), challengeProgram (622), scoreOf (891), diverseLeaders (1136)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reasoning/directions.ts:scoreOf: Directions resting on assumptions credited their full reach (challenged vs bare gap removed). | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/assumedLeverIsNotEvidence.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C51-R",
@@ -4858,7 +4864,7 @@
    "evidence": "",
    "component": "server/services/goals/reasoning/variables.ts:sweepVariables (692), discoverVariables (589), discoverConditions (643), narrowLevels (189)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reasoning/variables.ts:narrowLevels: Interaction-protected levels dropped by narrowing: the effect that only pays beside another is lost.\" \u2192 tests/surgeBAdaptiveSearch.test.ts, tests/fulfilmentLever.test.ts, tests/variableExploration.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C52-R",
@@ -4933,7 +4939,7 @@
    "evidence": "",
    "component": "server/services/goals/reasoning/invent.ts:inventDirections (102), inventEnabled (98); server/services/goals/reasoning/directions.ts:parseInvented, composeInventedDesigns; server/services/goals/plan.ts:inventDue (3259); server/services/cash/goalScenario.ts:inventedFromArrangement (1185)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reasoning/directions.ts:parseInvented: Invented methods missing stance/thinking are adopted instead of refused. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/inventedMethodContract.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C53-R",
@@ -5008,7 +5014,7 @@
    "evidence": "",
    "component": "server/services/goals/reasoning/learning.ts:recordExploration (146), ucb (50), loadLibrary (67), loadStancePrior (94), methodYield (182); directions.ts:stancePosterior (740)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reasoning/directions.ts:stancePosterior: Stance prior ignored: every stance gets an even quota regardless of recorded lift.\" \u2192 tests/surgeBAdaptiveSearch.test.ts, tests/multidirectionalReasoning.test.ts, tests/variableExploration.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C54-R",
@@ -5083,7 +5089,7 @@
    "evidence": "",
    "component": "server/services/goals/reasoning/evaluatorPool.ts:openEvaluator (133), sharedEvaluator, inlineEvaluator (112); server/services/goals/plan.ts:recordDegraded (3349)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:reconstructionFor/recordDegraded: A dead evaluator/reconstruction failure is swallowed silently instead of a degraded entry.\" \u2192 tests/goalPlanCoherence.test.ts, tests/planReadYields.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C55-R",
@@ -5158,7 +5164,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:adoptReconstruction (3630), implausibility (3448), heldDistribution (1973), candidateStrategyReading (2001)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:adoptReconstruction: A reconstruction is adopted on reach that rests on assumed moves.\" \u2192 tests/assumedLeverIsNotEvidence.test.ts, tests/goalPlanCoherence.test.ts, tests/planMetamorphic.test.ts, tests/fulfilmentLever.test.ts, tests/reliabilityRound9.test.ts, tests/planIntegrityRegressions.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C56-R",
@@ -5233,7 +5239,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:judgeFeasibility (3743), judgeHeldMarkets (3889), heldCeiling (3845), agreedInReach (3809), everyCaseInfeasible (1518), relaxAlso (3960), notSupported (3967)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:judgeFeasibility: NOT_VIABLE concluded on a nil pool even where outreach could carry the gap.\" \u2192 tests/goalPlanCoherence.test.ts, tests/reliabilityRound13.test.ts, tests/blockerResolutions.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C57-R",
@@ -5308,7 +5314,7 @@
    "evidence": "",
    "component": "server/services/goals/committee.ts:reviewPlan (669), reviewRole (653), evidencedReach (556), settleByAnswers (373), committeeTier (779); server/services/goals/plan.ts:refuseForCommittee (5451)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/committee.ts:evidencedReach: QUANT role recompute counts repeat deals from one payer (\u00a7116), so the committee does not block on it. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/investmentCommittee.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C58-R",
@@ -5383,7 +5389,7 @@
    "evidence": "",
    "component": "server/services/goals/committeeSpecialists.ts:reviewWithSpecialists (172), parseSpecialist (134), specialistReviewDue (277), armSpecialistReview, specialistsConfigured",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/committeeSpecialists.ts:parseSpecialist: An uncited specialist FAIL is accepted as a finding instead of UNKNOWN.\" \u2192 tests/committeeSpecialists.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C59-R",
@@ -5458,7 +5464,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:gateIntegrity (5473), refuseForIntegrity (5431); server/services/goals/planIntegrityInput.ts:integrityInput, leadPrice",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:gateIntegrity: Integrity violations no longer refuse an ACCEPTED reading. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/investmentCommitteeWorld.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C60-R",
@@ -5533,7 +5539,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:planSteps (4207), collectsOutsideWindow (4654), withholdImplausibleFigures (4615), missingTransactionStages (4584), ownerOf (4052), killFor (4088); server/services/goals/arrangementSteps.ts",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:missingTransactionStages: A plan that sells but never collects payment is not flagged as missing a stage.\" \u2192 tests/openingChainSteps.test.ts, tests/goalPlanCoherence.test.ts, tests/arrangementSteps.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C61-R",
@@ -5608,7 +5614,7 @@
    "evidence": "",
    "component": "server/services/goals/planSet.ts:buildPlanSet (649), differingDimensions (549), resilienceOf (747), rebuildAfter (798), modelledShareReaching (562)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/planSet.ts:rebuildAfter: A plan depending on a failed channel is reported as surviving the change.\" \u2192 tests/program-ea512f54-goals-d1-p1-planset.test.ts, tests/w15PlannerEventLoop.test.ts, tests/priceAsDecisionVariable.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C62-R",
@@ -5683,7 +5689,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:planInputsFingerprint (5722), planDue (5789), inputsTakenOver (5769), requestGoalPlanPass (5805)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:planInputsFingerprint: Construction facts filed from research claims no longer move the fingerprint (stale plan).\" \u2192 tests/goalPlanReadsNewEvidence.test.ts, tests/constructedRoundNonPriceFacts.test.ts, tests/supplierQuoteIsCost.test.ts, tests/constructedRoundPricesReachPlan.test.ts, tests/constructedRoundShareCountFacts.test.ts, tests/goalPlan.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C63-R",
@@ -5758,7 +5764,7 @@
    "evidence": "",
    "component": "server/services/goals/reconsider.ts:changedFacts (119), dependentsOf (154), reconcileFactChanges (343); wired from goals/tick.ts (reconcileFactChangesIfDue)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reconsider.ts:dependentsOf: A changed price fact under a held opening no longer finds its dependent opening.\" \u2192 tests/program-ea512f54-memory-d1-reconsider.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C64-R",
@@ -5833,7 +5839,7 @@
    "evidence": "",
    "component": "server/services/goals/calibration.ts:reconcileCalibration (404), classifyMiss (129), methodCorrections (174); goals/plan.ts:recordGoalOutcome (5651)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/calibration.ts:methodCorrections: A single miss becomes a method correction. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/program-ea512f54-memory-d1-calibration.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C65-R",
@@ -5908,7 +5914,7 @@
    "evidence": "",
    "component": "server/services/cash/worthResearching.ts:notWorthResearching (247), goalLimitsFor (210), closesWithin (105); server/services/goals/materiality.ts:recordMateriality (27), tooSmallForGoals (63)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/materiality.ts:tooSmallForGoals: An opening one goal could still use is skipped as too small because another goal judged it small.\" \u2192 tests/fastCashScope.test.ts, tests/goalPlan.test.ts, tests/goalDiscoveryBreadth.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C66-R",
@@ -5983,7 +5989,7 @@
    "evidence": "",
    "component": "server/services/cash/validation.ts:startValidations (1238), compareDiveValue (997), diveOrder (1046), fieldsWorthResearching (880), capacityDeferralCandidates (1134), whyNotDiving (398)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/cash/validation.ts:diveOrder: A live goal's own openings lose their first band in the dive queue.\" \u2192 tests/cashDiveDeadlineOrder.test.ts, tests/cashStagedDive.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C67-R",
@@ -6058,7 +6064,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:researchPriority (5232), planResearchPriority (4786), heldForResearch (4982), planSearchBrief (4860); server/services/goals/researchYield.ts:diagnoseGoalResearch (87); server/services/goals/researchAllocation.ts:decideResearchAllocation (332)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:planResearchPriority: The binding factor is never asked as research priority.\" \u2192 tests/goalPlanCoherence.test.ts, tests/quantGoalIntegration.test.ts, tests/planningReliabilityE2E.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C68-R",
@@ -6133,7 +6139,7 @@
    "evidence": "",
    "component": "server/services/cash/discovery.ts:openGoalDiscovery (1113), discoveryFocusFor (998), industryLensSelection (764), openWorldLenses (913), roleLenses (865), constructedShare (966), nextGoalRoundFor (1062)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/cash/discovery.ts:discoveryFocusFor: An owner offering their own labour still gets the online-only focus.\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C69-R",
@@ -6208,7 +6214,7 @@
    "evidence": "",
    "component": "server/services/cash/discovery.ts:harvest (2149); server/services/cash/routeEvidence.ts; server/services/cash/answers.ts:writeEvidenceAnswer; server/services/goals/routeProposal.ts:groundRoute (1713)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/routeProposal.ts:groundRoute: Comparable demand filed as exact demand evidence.\" \u2192 tests/researchInformedRoutes.test.ts, tests/routeEvidenceJoin.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C70-R",
@@ -6283,7 +6289,7 @@
    "evidence": "",
    "component": "server/services/goals/routeProposal.ts:directionCritiquePrompt (611), applyDirectionCritique (633), parseDirections (510), fileDirection",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/routeProposal.ts:applyDirectionCritique: A direction the review says fails a rule is kept because its verdict says KEEP. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/researchInformedRoutes.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C71-R",
@@ -6358,7 +6364,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:continuationOf (3997), continueSearch (3985), widenGoalSearch (5854), askPathwayConstructions (5945)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:continuationOf: Search stops when a plan is accepted though the window is open.\" \u2192 tests/program-ea512f54-goals-d1-p1-wiring.test.ts, tests/reliabilityRound13.test.ts, tests/goalPlanCoherence.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C72-R",
@@ -6433,7 +6439,7 @@
    "evidence": "",
    "component": "server/services/goals/pathways.ts (commercialRealityOf use at 311, 795); server/services/goals/commercialReality.ts:commercialRealityOf (52)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/commercialReality.ts:commercialRealityOf: A leg with a single-company buyer population passes.\" \u2192 tests/commercialReality.test.ts, tests/onePayerIsNotAPopulation.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C73-R",
@@ -6508,7 +6514,7 @@
    "evidence": "",
    "component": "server/services/russell/goalSprint.ts:sprintCandidate (64), activateGoalSprints (95); server/services/russell/loop.ts:runIndustryKernel call (~2226)",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/russell/goalSprint.ts:sprintCandidate: A goal past its deadline still opens a sprint. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/goalSprint.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C74-R",
@@ -6583,7 +6589,7 @@
    "evidence": "",
    "component": "server/services/operator/director.ts:stuckPlanDeficiencies (1513), directorPass (1044), reattempt (859), commissionResearch",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/operator/director.ts:stuckPlanDeficiencies: Readings unchanged for STUCK_PLAN_STALE_DAYS are not detected as stuck.\" \u2192 tests/surgeBHermesDirection.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C75-R",
