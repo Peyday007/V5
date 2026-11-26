@@ -207,6 +207,54 @@ async function freeLaneYield(): Promise<void> {
 }
 
 /**
+ * Why the free lane's slot targets moved over the last 24 h (read-only): every
+ * `FREE_LANE_CAPACITY` change per hour and model, its reason reduced to the
+ * controller's own cause (the text before any detail), and what tripped a
+ * database shrink (`measures.db` with the pool reading beside it); then the
+ * items the lane accepted per hour, so a shrink can be read against what it cost.
+ */
+async function laneCapacity(): Promise<void> {
+  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+  const rows = await getDb().all<{ at: string; workload_class: string | null; outcome: string | null; reason: string | null }>(
+    `SELECT at, workload_class, outcome, reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND at >= ? ORDER BY at LIMIT 20000`,
+    [since],
+  );
+  const cause = (reason: string | null): string =>
+    (reason ?? '')
+      .replace(/^\d+ -> \d+: /, '')
+      .replace(/\d+(\.\d+)?/g, '#')
+      .split(/[;(]/)[0]!
+      .trim()
+      .slice(0, 70);
+  const byCause = new Map<string, number>();
+  const byHour = new Map<string, number>();
+  for (const row of rows) {
+    const key = `${(row.workload_class ?? '-').slice(0, 28).padEnd(28)} ${(row.outcome ?? '-').padEnd(6)} ${cause(row.reason)}`;
+    byCause.set(key, (byCause.get(key) ?? 0) + 1);
+    if (row.outcome === 'SHRINK') {
+      const hour = `${row.at.slice(0, 13)} ${cause(row.reason)}`;
+      byHour.set(hour, (byHour.get(hour) ?? 0) + 1);
+    }
+  }
+  console.log(`DIAGNOSE: lane-capacity since ${since} (${rows.length} target changes)`);
+  for (const [key, n] of [...byCause].sort((x, y) => y[1] - x[1])) console.log(`  ${String(n).padStart(5)}x ${key}`);
+  console.log('DIAGNOSE: lane-capacity shrinks per hour');
+  for (const [key, n] of [...byHour].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
+  const accepted = await getDb().all<{ hour: string; outcome: string | null; n: number | string }>(
+    `SELECT SUBSTR(at, 1, 13) AS hour, outcome, COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? GROUP BY SUBSTR(at, 1, 13), outcome ORDER BY hour`,
+    [since],
+  );
+  console.log('DIAGNOSE: lane-capacity items per hour by outcome');
+  for (const row of accepted) console.log(`  ${row.hour} ${String(row.outcome ?? '-').padEnd(12)} ${Number(row.n)}`);
+  const restarts = await getDb().all<{ ended_at: string }>(
+    "SELECT ended_at FROM infra_incidents WHERE kind = 'PROCESS_RESTART' AND ended_at >= ? ORDER BY ended_at",
+    [since],
+  );
+  console.log(`DIAGNOSE: lane-capacity process restarts ${restarts.length}: ${restarts.map((r) => r.ended_at.slice(11, 16)).join(' ')}`);
+}
+
+/**
  * Who answered the GPU slot, per UTC day over the last 16 days: `FREE_LANE_ITEM`
  * rows on a `runpod/` slot split by whether `measures.servedBy` was recorded and
  * what it names, beside the pod's own `RUNPOD_POD` samples (running, and whether
@@ -675,6 +723,7 @@ async function main(): Promise<void> {
     else if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
+    else if (command === 'lane-capacity') await laneCapacity();
     else if (command === 'gpu-answers') await gpuAnswers();
     else if (command === 'heap-sources') await heapSources();
     else if (command === 'heap-profile') await heapProfile();
