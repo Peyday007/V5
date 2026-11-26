@@ -1,0 +1,80 @@
+==============================================================================
+A. ROUTE SCREEN: can each acquisition strategy fund $10k inside $2,000?
+==============================================================================
+AOV $1,370 (70% wholesale $1,250, 30% direct $1,650) -> 7.3 orders for $10k
+Fulfilment + fees for 8 orders: $744
+=> acquisition room inside the cap: $1,256; allowed CAC <= $157 per order
+
+  Generic paid search, business services                     CAC $345-$518 -> does NOT fit even at the favourable end
+      basis: LocaliQ 2025 CPL $103.54 (EXTERNAL); lead->paid 20-30% (ASSUMED)
+  Bark-style lead marketplace                                CAC $118-$352 -> fits even at the favourable end
+      basis: $2.35/credit x 10-15 credits (EXTERNAL); hire per response 10-20% (ASSUMED)
+  Upwork proposals (owner rejected freelance work 2026-10-20) CAC $165-$262 -> does NOT fit even at the favourable end
+      basis: $2.25-3.75/proposal, win 3-8% (EXTERNAL, vendor), + 10% fee
+  Attorney outreach, purchased data                          CAC depends on an UNKNOWN conversion: break-even in section C
+      basis: Maps data $3/1k + enrichment $3-14/1k (EXTERNAL); conversion UNKNOWN
+  AILA8 newsletter week, $1,000                              CAC depends on an UNKNOWN conversion: break-even in section C
+      basis: 16,000 recipients, 38% open (EXTERNAL, vendor); click/order UNKNOWN
+  Paid social DTC (holiday gifts): needs ROAS >= 5.9 on ~$1,700 ads; e-commerce benchmarks sit near 2 -> does NOT fit
+  Co-op postcard: vendor drop ~$2,309 for 4,944 homes (M13 + print) -> over the cap before any revenue
+
+==============================================================================
+B. SCENARIOS (customer payments within the window)
+==============================================================================
+Pre-proof spend $267 of $300: domain $12, contact data $70, sample plan API $15, specialist critique of sample $120, search-ad CPC/policy probe $50
+
+CONSERVATIVE: outreach 1000 attorneys x interest 0.2% x order 30% x 1.0 = 0.6 orders; AILA8 week not bought -> 0.0 orders
+   orders fulfilled inside the cap 0.6 | customer payments $797 | refunds $120 | fees $10
+   total spending $356 (cap $2,000) | net profit $322 | gap to $10k $9,203
+
+BASE: outreach 1500 attorneys x interest 0.6% x order 50% x 1.2 = 5.2 orders; AILA8 week bought -> 7.3 orders  [SPENDING CAP BINDS]
+   orders fulfilled inside the cap 7.8 | customer payments $10,733 | refunds $1,073 | fees $141
+   total spending $1,998 (cap $2,000) | net profit $7,661 | gap to $10k $0
+
+UPSIDE: outreach 2500 attorneys x interest 1.5% x order 60% x 1.5 = 32.7 orders; AILA8 week not bought -> 0.0 orders  [SPENDING CAP BINDS]
+   orders fulfilled inside the cap 21.5 | customer payments $29,506 | refunds $1,475 | fees $386
+   total spending $1,998 (cap $2,000) | net profit $26,033 | gap to $10k $0
+
+==============================================================================
+C. BREAK-EVENS AND SENSITIVITY
+==============================================================================
+  outreach only: 1000 attorneys, order 50% of interested, 1.2 plans each -> interest needed 1.25%
+  outreach only: 1000 attorneys, order 60% of interested, 1.5 plans each -> interest needed 0.84%
+  outreach only: 1500 attorneys, order 50% of interested, 1.2 plans each -> interest needed 0.84%
+  outreach only: 1500 attorneys, order 60% of interested, 1.5 plans each -> interest needed 0.56%
+  outreach only: 2500 attorneys, order 50% of interested, 1.2 plans each -> interest needed 0.50%
+  outreach only: 2500 attorneys, order 60% of interested, 1.5 plans each -> interest needed 0.33%
+  AILA8 week: click/open 1% x intake 10% x paid 40% ->   2.4 orders ($3,332)
+  AILA8 week: click/open 1% x intake 20% x paid 50% ->   6.1 orders ($8,330)
+  AILA8 week: click/open 3% x intake 10% x paid 40% ->   7.3 orders ($9,996)
+  AILA8 week: click/open 3% x intake 20% x paid 50% ->  18.2 orders ($24,989)
+  AILA8 week: click/open 6% x intake 10% x paid 40% ->  14.6 orders ($19,991)
+  AILA8 week: click/open 6% x intake 20% x paid 50% ->  36.5 orders ($49,978)
+  Spending cap: after the first two plans each order costs ~$73 (API $15 + spot-check $40 + fees $18).
+  max orders the cap can fund without the AILA week: 21.6 ($29,543)
+  max orders the cap can fund with the AILA week:  7.9 ($10,762)
+
+==============================================================================
+D. DATED CASH FLOW, base (day 1 = Mon Nov 30, day 30 = Tue Dec 29)
+==============================================================================
+
+BASE
+  Nov 30    domain, data, sample plan + critique, CPC probe  payments        0  spend     267  cum pay        0  cum spend     267
+  Dec 01-09 outreach orders before the proof gate            payments    2,740  spend     306  cum pay    2,740  cum spend     573
+  Dec 10    AILA8 week booked                                payments        0  spend   1,000  cum pay    2,740  cum spend   1,573
+  Dec 10-18 outreach orders after the gate                   payments    4,436  spend     236  cum pay    7,176  cum spend   1,809
+  Dec 15-23 AILA8 ad orders                                  payments    3,557  spend     189  cum pay   10,733  cum spend   1,998
+  Dec 29    refund provision                                 payments   -1,073  spend       0  cum pay    9,659  cum spend   1,998
+  day 30: payments $10,733, refunds $1,073, spending $1,998, net $7,661; cash settled in the bank by Dec 29 ~$5,883; the rest of the net settles in early January
+
+UPSIDE
+  Nov 30    domain, data, sample plan + critique, CPC probe  payments        0  spend     267  cum pay        0  cum spend     267
+  Dec 01-09 outreach orders before the proof gate            payments    2,740  spend     306  cum pay    2,740  cum spend     573
+  Dec 10    AILA8 week not needed                            payments        0  spend       0  cum pay    2,740  cum spend     573
+  Dec 10-18 outreach orders after the gate                   payments   26,766  spend   1,425  cum pay   29,506  cum spend   1,998
+  Dec 15-23 AILA8 ad orders                                  payments        0  spend       0  cum pay   29,506  cum spend   1,998
+  Dec 29    refund provision                                 payments   -1,475  spend       0  cum pay   28,031  cum spend   1,998
+  day 30: payments $29,506, refunds $1,475, spending $1,998, net $26,033; cash settled in the bank by Dec 29 ~$26,033; the rest of the net settles in early January
+
+Bank: Stripe first payout 7-14 days after the first live payment (EXTERNAL), then rolling; ACH settles in ~4 business days.
+Obligations past day 30: up to 2 revision rounds per delivered plan (API + spot-check cost already provisioned).
