@@ -12,7 +12,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"without spending more than $X\" is the capital limit; an unnegated \"more than\" is a floor, never a ceiling"
+    "\u00d7 tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"without spending more than $X\" is the capital limit; an unnegated \"more than\" is a floor, never a ceiling"
    ],
    "at": "2026-11-26T08:13:08.304Z"
   },
@@ -27,7 +27,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > a named break is the window, and its stated length is not a second deadline"
+    "\u00d7 tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > a named break is the window, and its stated length is not a second deadline"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -42,7 +42,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"N hours a week at most\" is a rate, not a total of N"
+    "\u00d7 tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"N hours a week at most\" is a rate, not a total of N"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -57,14 +57,14 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > a monthly figure with a start month is due at the end of that month"
+    "\u00d7 tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > a monthly figure with a start month is due at the end of that month"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
   {
    "id": "C01-X",
    "rc": "RC15",
-   "why": "historical: \"I already work 40 hours a week … maybe 15 more\" read as 40 h a week",
+   "why": "historical: \"I already work 40 hours a week \u2026 maybe 15 more\" read as 40 h a week",
    "test": "tests/objectiveFreshBatchBlind.test.ts",
    "title": "f07",
    "knownBadDetected": true,
@@ -72,7 +72,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/objectiveFreshBatchBlind.test.ts > the objective reader agrees with blind human readings of 30 fresh requests > f07: I'm a licensed electrician in Denver. I need $6,000 by January 15th fo…"
+    "\u00d7 tests/objectiveFreshBatchBlind.test.ts > the objective reader agrees with blind human readings of 30 fresh requests > f07: I'm a licensed electrician in Denver. I need $6,000 by January 15th fo\u2026"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -87,7 +87,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > discovery keeps the online focus unless the goal's words offer the owner's work"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > discovery keeps the online focus unless the goal's words offer the owner's work"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -102,8 +102,8 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I'd like $800 a month starting in January, working no more t…\" lifts the standing no-physical-work rule",
-    "× tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I need $5,000 in the next 60 days and can work 40 hours a we…\" lifts the standing no-physical-work rule"
+    "\u00d7 tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I'd like $800 a month starting in January, working no more t\u2026\" lifts the standing no-physical-work rule",
+    "\u00d7 tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I need $5,000 in the next 60 days and can work 40 hours a we\u2026\" lifts the standing no-physical-work rule"
    ],
    "at": "2026-11-26T08:13:08.304Z"
   },
@@ -118,7 +118,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > the scouting and route asks put the owner's direct paid work before brokering"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first > the scouting and route asks put the owner's direct paid work before brokering"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -133,7 +133,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > past its budget takes every lane in turn, so the newest round cannot crowd the rest out"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > past its budget takes every lane in turn, so the newest round cannot crowd the rest out"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -148,7 +148,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/goalIdeasEachProjectsTurn.test.ts > a fresh goal beside an older goal’s backlog > holds no cancelled or paused goal's backlog in the goal queue ahead of a live goal (fresh batch, 2026-11-26) 1056ms"
+    "\u00d7 tests/goalIdeasEachProjectsTurn.test.ts > a fresh goal beside an older goal\u2019s backlog > holds no cancelled or paused goal's backlog in the goal queue ahead of a live goal (fresh batch, 2026-11-26) 1056ms"
    ],
    "at": "2026-11-26T08:13:08.304Z"
   },
@@ -163,7 +163,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -178,7 +178,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > by default shows every one of 135 distinct verified findings (the intelligence test held 111, 111 and 135)"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > by default shows every one of 135 distinct verified findings (the intelligence test held 111, 111 and 135)"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -193,7 +193,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > keeps two facts that share their first 160 characters and drop a refuted one"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -208,7 +208,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC1: an empty model turn is not an answer > asks once more with twice the budget, and uses that answer"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC1: an empty model turn is not an answer > asks once more with twice the budget, and uses that answer"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -223,7 +223,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/chatStreaming.test.ts > a stream cut before the answer ends is an error, not an answer > keeps the partial text but names the cut, so the turn is retried"
+    "\u00d7 tests/chatStreaming.test.ts > a stream cut before the answer ends is an error, not an answer > keeps the partial text but names the cut, so the turn is retried"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -238,14 +238,14 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/chatStreaming.test.ts > a chat turn without tools is streamed > asks for a stream and joins the answer from its events"
+    "\u00d7 tests/chatStreaming.test.ts > a chat turn without tools is streamed > asks for a stream and joins the answer from its events"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
   {
    "id": "C23-R",
    "rc": "RC16",
-   "why": "historical: 2,500–4,000 token budgets exhausted by hidden reasoning",
+   "why": "historical: 2,500\u20134,000 token budgets exhausted by hidden reasoning",
    "test": "tests/planningFailureMapWave2.test.ts",
    "title": "gives a reasoning model room to reason",
    "knownBadDetected": true,
@@ -253,7 +253,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave2.test.ts > no route ask is answered by a model measured unfit for it > gives a reasoning model room to reason and answer (exam at 16,000 tokens: 0 of 47 empty)"
+    "\u00d7 tests/planningFailureMapWave2.test.ts > no route ask is answered by a model measured unfit for it > gives a reasoning model room to reason and answer (exam at 16,000 tokens: 0 of 47 empty)"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -268,7 +268,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > refuses a route whose buyers cost more to win than a sale earns (the 445-beanies-from-$3,000 route)"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > refuses a route whose buyers cost more to win than a sale earns (the 445-beanies-from-$3,000 route)"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -283,7 +283,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > computes sales, buyer cost, hours and first-cash date for a sound route, and says them to the critic"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > computes sales, buyer cost, hours and first-cash date for a sound route, and says them to the critic"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -298,7 +298,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > refuses a route whose capital and first buyer together exceed the limit, and says when buyers must be bought from proceeds"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC8: a route is held to its own arithmetic by code > refuses a route whose capital and first buyer together exceed the limit, and says when buyers must be bought from proceeds"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -313,7 +313,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > re-checks a disputed figure as a repair: 30 days to cash still fits a 60-day window"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > re-checks a disputed figure as a repair: 30 days to cash still fits a 60-day window"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -328,7 +328,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC9: a missing description is a gap, not a lost route > keeps a route without an owner-fit sentence and says it is unstated"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC9: a missing description is a gap, not a lost route > keeps a route without an owner-fit sentence and says it is unstated"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -343,7 +343,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -358,7 +358,7 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept"
+    "\u00d7 tests/planningFailureMapWave1.test.ts > RC2: the critic cannot veto on sums the code checked > keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept"
    ],
    "at": "2026-11-26T07:18:58.628Z"
   },
@@ -373,9 +373,714 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/planningFailureMapWave2.test.ts > no route ask is answered by a model measured unfit for it > names the production fallback combo (model exam: 1 of 30, 0 of 11 on planning) as unfit"
+    "\u00d7 tests/planningFailureMapWave2.test.ts > no route ask is answered by a model measured unfit for it > names the production fallback combo (model exam: 1 of 30, 0 of 11 on planning) as unfit"
    ],
    "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C43-P",
+   "rc": "none",
+   "why": "controlled: server/services/cash/construct.ts:selectCandidates: Rotation window pinned to window 0: alternatives outside the first window never enter.",
+   "test": "tests/constructionCapRotation.test.ts, tests/arrangementLibrary.test.ts",
+   "title": "constructionCapRotation.test.ts > the construction cap is evidence-first reaches every candidate within considered / ROTATION_SLOTS hours, by the pass's hour rather than a draw or a row",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "constructionCapRotation.test.ts > the construction cap is evidence-first reaches every candidate within considered / ROTATION_SLOTS hours, by the pass's hour rather than a draw or a row"
+   ],
+   "mutation": {
+    "file": "server/services/cash/construct.ts",
+    "find": "const at = ((Math.max(0, Math.floor(job.rotation ?? 0)) % windows) * ROTATION_SLOTS);",
+    "replace": "const at = 0;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C44-P",
+   "rc": "none",
+   "why": "controlled: server/services/cash/construct.ts:arrangementSignature: Supply dropped from the signature: arrangements differing only in who supplies are falsely merged.",
+   "test": "tests/capabilitySignatureStable.test.ts, tests/constructionCapRotation.test.ts, tests/arrangementLibrary.test.ts, tests/goalFittedArrangements.test.ts",
+   "title": "arrangementLibrary.test.ts > the construction cap ranks before it cuts keeps what ranks highest wherever it falls in enumeration order, keeps breadth, and counts what it cut",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "arrangementLibrary.test.ts > the construction cap ranks before it cuts keeps what ranks highest wherever it falls in enumeration order, keeps breadth, and counts what it cut",
+    "capabilitySignatureStable.test.ts > an arrangement Brain produces is identified by the capability it uses, not the deliverables list signs the one capability: any deliverables list is the same part, and Brain producing it differs from a named supplier or none",
+    "constructionCapRotation.test.ts > the construction cap is evidence-first holds the goal's leader on every pass, and a re-read with unchanged inputs composes the same set whatever the first read stored",
+    "constructionCapRotation.test.ts > the construction cap is evidence-first reaches every candidate within considered / ROTATION_SLOTS hours, by the pass's hour rather than a draw or a row"
+   ],
+   "mutation": {
+    "file": "server/services/cash/construct.ts",
+    "find": "identityPath(demand), identityPath(need), identityPath(supply)].join('|')",
+    "replace": "identityPath(demand), identityPath(need)].join('|')"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C45-P",
+   "rc": "none",
+   "why": "controlled: server/services/cash/goalScenario.ts:screenArrangement: Deadline cut disabled: an arrangement settling after the deadline is not cut.",
+   "test": "tests/goalFittedArrangements.test.ts, tests/arrangementSelection.test.ts, tests/arrangementCutReasons.test.ts",
+   "title": "goalFittedArrangements.test.ts > the screen reads the deadline, the hours and the margin money that settles no sooner than the deadline is a misfit, not a lower reading",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "goalFittedArrangements.test.ts > the screen reads the deadline, the hours and the margin money that settles no sooner than the deadline is a misfit, not a lower reading"
+   ],
+   "mutation": {
+    "file": "server/services/cash/goalScenario.ts",
+    "find": "daysLow !== null && daysLow > input.daysLeft\n",
+    "replace": "false && daysLow !== null && daysLow > input.daysLeft\n"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C46-P",
+   "rc": "none",
+   "why": "controlled: server/services/cash/goalScenario.ts:priceContradiction: priceContradiction never fires when evidence conflicts with the card price.",
+   "test": "tests/reliabilityScenarioGates.test.ts, tests/reliabilityRound8.test.ts, tests/reliabilityRound13.test.ts, tests/planningAdaptationCase.test.ts",
+   "title": "reliabilityRound13.test.ts > priceContradiction: an exact second figure is a second price contests a card 16% from an exact figure, either way",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "reliabilityRound13.test.ts > priceContradiction: an exact second figure is a second price contests a card 16% from an exact figure, either way",
+    "reliabilityRound8.test.ts > a per-period price contests the card contests a card several times the sourced monthly price, either way",
+    "reliabilityScenarioGates.test.ts > rule 2: a sourced price that contradicts the card makes the price contested reads a figure far from every stated price as a contradiction, and an agreeing one as none",
+    "reliabilityScenarioGates.test.ts > rule 2: a sourced price that contradicts the card makes the price contested contests the card symmetrically: a higher stated figure is a contradiction exactly as a lower one is",
+    "reliabilityScenarioGates.test.ts > rule 2: a sourced price that contradicts the card makes the price contested through the real card read never reads the contradicted card price as evidence, and plans on the lower figure"
+   ],
+   "mutation": {
+    "file": "server/services/cash/goalScenario.ts",
+    "find": "  if (agrees) return null;\n",
+    "replace": "  if (agrees || true) return null;\n"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C47-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:peakConcurrentLots: Capital tied up read as the sum of lots instead of the peak concurrent lots.",
+   "test": "tests/planReliabilityGates.test.ts, tests/reliabilityRound5.test.ts",
+   "title": "planReliabilityGates.test.ts > 2. money tied up is the peak held at once runs lots one after another as their cash settles",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "planReliabilityGates.test.ts > 2. money tied up is the peak held at once runs lots one after another as their cash settles",
+    "planReliabilityGates.test.ts > 2. money tied up is the peak held at once frees a lot paid the day it is sold for the next day\u2019s lot (planner residuals, 2026-11-25: r09)",
+    "planReliabilityGates.test.ts > 2. money tied up is the peak held at once two signed $8,000 lots paid in 21 days hold $8,000 at once over 60 days, inside a $10,000 limit (fam-16)",
+    "planReliabilityGates.test.ts > 6. under a capital ceiling, lots are recycled runs as many lots at once as the ceiling holds, and counts only those that settle in time",
+    "planReliabilityGates.test.ts > 6. under a capital ceiling, lots are recycled reads agreed lots that cannot all run inside the ceiling at the money the ones that settle bring"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "return Math.min(lots, Math.ceil(Math.ceil(lots - 1e-9) / inSequence));",
+    "replace": "return lots;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C48-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:validationStage: An opening with only a reachable buyer is staged as buyer-validated (wrong missing link). linkChecks/nextTestFor are not exported and have no direct test.",
+   "test": "tests/openingsFromClaims.test.ts, tests/inboundBuyerValidationA10K.test.ts, tests/routeDives.test.ts, tests/operatorDecisions.test.ts",
+   "title": "openingsFromClaims.test.ts > O-7: an unpublished capital whose worst case fits the limit is a market test price 300, capital swept 0\u2013300: C under a 375 limit, B under 200, B with no limit",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "openingsFromClaims.test.ts > O-7: an unpublished capital whose worst case fits the limit is a market test price 300, capital swept 0\u2013300: C under a 375 limit, B under 200, B with no limit"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "if (ok('CONVERSION')) return 'D_BUYER_VALIDATED';",
+    "replace": "if (ok('CONVERSION') || ok('REACHABLE_BUYER')) return 'D_BUYER_VALIDATED';"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C49-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:judgeAcceptance: The 90% bar is lowered to 81%: a plan at 85% defensible lower bound is ACCEPTED. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/goalAcceptance.test.ts, tests/planningConfidence.test.ts, tests/program-ea512f54-goals-d0-p0-acceptance.test.ts, tests/buyerValidatedOpeningA10K.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "} else if (bounds.low < required) {",
+    "replace": "} else if (bounds.low < required * 0.9) {"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C50-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/reconstruction.ts:prepaymentEligible: Buyers with unstated payment terms treated as prepaying (unknown read as favourable, invariant 39).",
+   "test": "tests/prepaidFulfilmentEvidence.test.ts, tests/goalReconstruction.test.ts, tests/fulfilmentLever.test.ts",
+   "title": "goalReconstruction.test.ts > \u00a799 regression: the $10K plan explores materially different strategies across dimensions, not percentages of the same one",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "goalReconstruction.test.ts > \u00a799 regression: the $10K plan explores materially different strategies across dimensions, not percentages of the same one",
+    "goalReconstruction.test.ts > \u00a799 regression: the $10K plan can change the acquisition method and the financing structure of the business",
+    "prepaidFulfilmentEvidence.test.ts > production case: the prepaid lever never zeroes an arrears or unknown buyer's cost unknown payment timing: no prepaid fulfilment on the bureaus, and the best plan does not rest on them",
+    "prepaidFulfilmentEvidence.test.ts > production case: the prepaid lever never zeroes an arrears or unknown buyer's cost a buyer with evidenced prepayment still gets the lever"
+   ],
+   "mutation": {
+    "file": "server/services/goals/reconstruction.ts",
+    "find": "eligible: reading.timing === 'PREPAID'",
+    "replace": "eligible: reading.timing !== 'ARREARS'"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C51-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/reasoning/directions.ts:scoreOf: Directions resting on assumptions credited their full reach (challenged vs bare gap removed). Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/multidirectionalReasoning.test.ts, tests/surgeBInventedDesign.test.ts, tests/surgeBAdaptiveSearch.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/goals/reasoning/directions.ts",
+    "find": "const established = assumed === 0 ? reading.reach : bare?.feasible ? Math.min(reading.reach, bare.reach) : 0;",
+    "replace": "const established = reading.reach;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C52-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/reasoning/variables.ts:narrowLevels: Interaction-protected levels dropped by narrowing: the effect that only pays beside another is lost.",
+   "test": "tests/surgeBAdaptiveSearch.test.ts, tests/fulfilmentLever.test.ts, tests/variableExploration.test.ts",
+   "title": "surgeBAdaptiveSearch.test.ts > S-16: an interaction-only level survives factorial narrowing the screen's top interaction protects capacity \u00d7 prepaid, and the factorial still fits its budget",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "surgeBAdaptiveSearch.test.ts > S-16: an interaction-only level survives factorial narrowing the screen's top interaction protects capacity \u00d7 prepaid, and the factorial still fits its budget"
+   ],
+   "mutation": {
+    "file": "server/services/goals/reasoning/variables.ts",
+    "find": "if (l === 0 || protectedLevels.has(`${j}:${l}`)) continue;",
+    "replace": "if (l === 0) continue;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C53-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/reasoning/directions.ts:parseInvented: Invented methods missing stance/thinking are adopted instead of refused. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/inventedMethodContract.test.ts, tests/multidirectionalReasoning.test.ts, tests/surgeBInventedDesign.test.ts, tests/arrangementSelection.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/goals/reasoning/directions.ts",
+    "find": "if (!name || !stance || !thinking) {",
+    "replace": "if (!name) {"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C54-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/reasoning/directions.ts:stancePosterior: Stance prior ignored: every stance gets an even quota regardless of recorded lift.",
+   "test": "tests/surgeBAdaptiveSearch.test.ts, tests/multidirectionalReasoning.test.ts, tests/variableExploration.test.ts",
+   "title": "surgeBAdaptiveSearch.test.ts > S-10: the seed budget follows each stance's recorded yield shifts budget toward the stance that keeps improving plans, and every stance keeps its floor",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "surgeBAdaptiveSearch.test.ts > S-10: the seed budget follows each stance's recorded yield shifts budget toward the stance that keeps improving plans, and every stance keeps its floor",
+    "surgeBAdaptiveSearch.test.ts > S-10: the seed budget follows each stance's recorded yield the pool takes the seeds in that allocation, not in generation order"
+   ],
+   "mutation": {
+    "file": "server/services/goals/reasoning/directions.ts",
+    "find": "return (1 + Math.min(tries, Math.max(0, r?.improvements ?? 0))) / (2 + tries);",
+    "replace": "return 0.5;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C55-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:reconstructionFor/recordDegraded: A dead evaluator/reconstruction failure is swallowed silently instead of a degraded entry.",
+   "test": "tests/goalPlanCoherence.test.ts, tests/planReadYields.test.ts",
+   "title": "goalPlanCoherence.test.ts > C-13: a failure inside the read is carried and recorded a failed reconstruction and library are degraded entries, not silence",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "goalPlanCoherence.test.ts > C-13: a failure inside the read is carried and recorded a failed reconstruction and library are degraded entries, not silence"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "degraded.push(`reconstruction: ${errorText(error)} (the plan is read without a reconstruction)`);",
+    "replace": "void error;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C56-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:adoptReconstruction: A reconstruction is adopted on reach that rests on assumed moves.",
+   "test": "tests/assumedLeverIsNotEvidence.test.ts, tests/goalPlanCoherence.test.ts, tests/planMetamorphic.test.ts, tests/fulfilmentLever.test.ts, tests/reliabilityRound9.test.ts, tests/planIntegrityRegressions.test.ts",
+   "title": "assumedLeverIsNotEvidence.test.ts > an adopted reconstruction is reported at what holds without its assumptions adopts on the established move alone, reports its reach, and labels the assumed upside",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "assumedLeverIsNotEvidence.test.ts > an adopted reconstruction is reported at what holds without its assumptions adopts on the established move alone, reports its reach, and labels the assumed upside",
+    "assumedLeverIsNotEvidence.test.ts > an adopted reconstruction is reported at what holds without its assumptions does not adopt when only the assumptions beat the plan as held",
+    "assumedLeverIsNotEvidence.test.ts > an adopted reconstruction is reported at what holds without its assumptions an unread assumption-free reading is never the favourable one",
+    "goalPlanCoherence.test.ts > C-6: one plan adopts the reconstruction when it beats the plan as held: the candidate is its members, and its reach stays coverage"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "const held = upside ? (r.established ?? null) : r.best;",
+    "replace": "const held = r.best;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C57-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:judgeFeasibility: NOT_VIABLE concluded on a nil pool even where outreach could carry the gap.",
+   "test": "tests/goalPlanCoherence.test.ts, tests/reliabilityRound13.test.ts, tests/blockerResolutions.test.ts",
+   "title": "goalPlanCoherence.test.ts > C-10: an infeasible goal is concluded by arithmetic, and only by arithmetic never reads the $10K goal as infeasible: weak openings are a reason to search, not a verdict (\u00a765)",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "goalPlanCoherence.test.ts > C-10: an infeasible goal is concluded by arithmetic, and only by arithmetic never reads the $10K goal as infeasible: weak openings are a reason to search, not a verdict (\u00a765)"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "if (!allImpossible && !(nil && !outreachCarries)) return null;",
+    "replace": "if (!allImpossible && !nil) return null;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C58-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/committee.ts:evidencedReach: QUANT role recompute counts repeat deals from one payer (\u00a7116), so the committee does not block on it. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/investmentCommittee.test.ts, tests/committeeResearch.test.ts, tests/investmentCommitteeWorld.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/goals/committee.ts",
+    "find": "EVIDENCED(p.volume) && !has(leg, 'ONE_PAYER_REPEATS') ?",
+    "replace": "EVIDENCED(p.volume) ?"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C59-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/committeeSpecialists.ts:parseSpecialist: An uncited specialist FAIL is accepted as a finding instead of UNKNOWN.",
+   "test": "tests/committeeSpecialists.test.ts",
+   "title": "committeeSpecialists.test.ts > the specialist call parses a structured answer; an uncited FAIL is UNKNOWN; an answer that is not one is null",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "committeeSpecialists.test.ts > the specialist call parses a structured answer; an uncited FAIL is UNKNOWN; an answer that is not one is null"
+   ],
+   "mutation": {
+    "file": "server/services/goals/committeeSpecialists.ts",
+    "find": "if (verdict === 'FAIL' && defects.length === 0) {",
+    "replace": "if (false) {"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C60-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:gateIntegrity: Integrity violations no longer refuse an ACCEPTED reading. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/planIntegrityRegressions.test.ts, tests/planExecutability.test.ts, tests/investmentCommitteeWorld.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "if (reading.acceptance.status !== 'ACCEPTED' || (violations.length === 0 && !committeeRefuses)) return",
+    "replace": "if (reading.acceptance.status !== 'ACCEPTED' || (!committeeRefuses)) return"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C61-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:missingTransactionStages: A plan that sells but never collects payment is not flagged as missing a stage.",
+   "test": "tests/openingChainSteps.test.ts, tests/goalPlanCoherence.test.ts, tests/arrangementSteps.test.ts",
+   "title": "openingChainSteps.test.ts > selling to measure is still a whole transaction with no opening to sequence, the selling step names the stages it lacks",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "openingChainSteps.test.ts > selling to measure is still a whole transaction with no opening to sequence, the selling step names the stages it lacks",
+    "openingChainSteps.test.ts > selling to measure is still a whole transaction a search that sells nothing lacks nothing; a sale lacking collection says so"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "  if (!steps.some((s) => s.stage?.stage === 'COLLECT' || op(s) === 'COLLECT_PAYMENT')) out.push('collect payment');\n",
+    "replace": "\n"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C62-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/planSet.ts:rebuildAfter: A plan depending on a failed channel is reported as surviving the change.",
+   "test": "tests/program-ea512f54-goals-d1-p1-planset.test.ts, tests/w15PlannerEventLoop.test.ts, tests/priceAsDecisionVariable.test.ts",
+   "title": "program-ea512f54-goals-d1-p1-planset.test.ts > distinct plan set (GOAL-23) rebuildAfter returns the surviving and the reconstructed alternatives after a named change",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "program-ea512f54-goals-d1-p1-planset.test.ts > distinct plan set (GOAL-23) rebuildAfter returns the surviving and the reconstructed alternatives after a named change",
+    "program-ea512f54-goals-d1-p1-planset.test.ts > distinct plan set (GOAL-23) gives a plan rebuilt after a change no calibration of the plan it replaced",
+    "w15PlannerEventLoop.test.ts > W15: planner hot paths builds and rebuilds a 400-candidate plan set within a bound, unchanged"
+   ],
+   "mutation": {
+    "file": "server/services/goals/planSet.ts",
+    "find": "change.kind === 'CHANNEL_FAILED' && hits(c.channels, change.channel)",
+    "replace": "change.kind === 'CHANNEL_FAILED' && false"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C63-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:planInputsFingerprint: Construction facts filed from research claims no longer move the fingerprint (stale plan).",
+   "test": "tests/goalPlanReadsNewEvidence.test.ts, tests/constructedRoundNonPriceFacts.test.ts, tests/supplierQuoteIsCost.test.ts, tests/constructedRoundPricesReachPlan.test.ts, tests/constructedRoundShareCountFacts.test.ts, tests/goalPlan.test.ts",
+   "title": "constructedRoundNonPriceFacts.test.ts > R2: on an OPEN constructed round, non-price claims reach the plan or are refused by name files the per-buyer volume against the arrangement\u2019s buyer, OBSERVED with its claim; refuses every Solarize claim; the plan reads the volume",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "constructedRoundNonPriceFacts.test.ts > R2: on an OPEN constructed round, non-price claims reach the plan or are refused by name files the per-buyer volume against the arrangement\u2019s buyer, OBSERVED with its claim; refuses every Solarize claim; the plan reads the volume",
+    "constructedRoundPricesReachPlan.test.ts > B1c: a priced claim on an OPEN constructed round reaches the plan files the per-unit price against the arrangement\u2019s buyer and the plan reads it, with the round still OPEN",
+    "constructedRoundShareCountFacts.test.ts > R3: a filed close rate and buyer count reach the arrangement and the goal model a filed win rate becomes the arrangement\u2019s conversion, moves its composition and inputs digest, and is the goal model\u2019s close rate",
+    "constructedRoundShareCountFacts.test.ts > R3: on an OPEN constructed round, a close rate and a buyer count are filed; the Solarize claims stay refused files both against the arrangement\u2019s buyer as OBSERVED, refuses every Solarize claim with why, and the plan reads them",
+    "goalPlanReadsNewEvidence.test.ts > a research claim filed as a construction fact reaches the plan re-reads on the next pass past the floor, inside the half-hour, as evidence",
+    "supplierQuoteIsCost.test.ts > B1j: an accepted per-run supply quote is the pooled arrangement\u2019s fixed run cost supersedes the production facts into the arrangement\u2019s economics: fixed run cost 4675 from the Oppizi claim, unit costs 0.26 and 0.259, and no value"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "row?.g, row?.f, row?.fc, row?.k, row?.ku]",
+    "replace": "row?.g, row?.o, row?.o, row?.k, row?.ku]"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C64-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/reconsider.ts:dependentsOf: A changed price fact under a held opening no longer finds its dependent opening.",
+   "test": "tests/program-ea512f54-memory-d1-reconsider.test.ts",
+   "title": "program-ea512f54-memory-d1-reconsider.test.ts > a changed material fact, after a real plan used it names the dependents, reconsiders once, keeps the earlier decision, and the next step changes by itself",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "program-ea512f54-memory-d1-reconsider.test.ts > a changed material fact, after a real plan used it names the dependents, reconsiders once, keeps the earlier decision, and the next step changes by itself",
+    "program-ea512f54-memory-d1-reconsider.test.ts > the pure reading a pursued opportunity whose fact did not change is not a dependent action"
+   ],
+   "mutation": {
+    "file": "server/services/goals/reconsider.ts",
+    "find": "if (change.kind === 'OPPORTUNITY_PRICE' || change.kind === 'OPPORTUNITY_DEADLINE'",
+    "replace": "if (change.kind === 'OPPORTUNITY_DEADLINE'"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C65-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/calibration.ts:methodCorrections: A single miss becomes a method correction. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/program-ea512f54-memory-d1-calibration.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/goals/calibration.ts",
+    "find": "if (correction.misses < MIN_CORRECTION_MISSES) continue;",
+    "replace": "if (correction.misses < 1) continue;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C66-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/materiality.ts:tooSmallForGoals: An opening one goal could still use is skipped as too small because another goal judged it small.",
+   "test": "tests/fastCashScope.test.ts, tests/goalPlan.test.ts, tests/goalDiscoveryBreadth.test.ts",
+   "title": "goalDiscoveryBreadth.test.ts > an opening the goal plan judged too small is not researched by any other spender screens it out once every goal that read it found it under the floor, and not before",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "goalDiscoveryBreadth.test.ts > an opening the goal plan judged too small is not researched by any other spender screens it out once every goal that read it found it under the floor, and not before"
+   ],
+   "mutation": {
+    "file": "server/services/goals/materiality.ts",
+    "find": "if (judged.some((one) => one.potential >= one.floor)) return null;",
+    "replace": "if (judged.every((one) => one.potential >= one.floor)) return null;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C67-P",
+   "rc": "none",
+   "why": "controlled: server/services/cash/validation.ts:diveOrder: A live goal's own openings lose their first band in the dive queue.",
+   "test": "tests/cashDiveDeadlineOrder.test.ts, tests/cashStagedDive.test.ts",
+   "title": "cashDiveDeadlineOrder.test.ts > dive order reads a recorded closing date (EDF) keeps undated openings in decision-value order, goal openings first and dropped ones last",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "cashDiveDeadlineOrder.test.ts > dive order reads a recorded closing date (EDF) keeps undated openings in decision-value order, goal openings first and dropped ones last"
+   ],
+   "mutation": {
+    "file": "server/services/cash/validation.ts",
+    "find": "if (input.forGoal(opportunity)) return 0;",
+    "replace": "if (input.forGoal(opportunity)) return 2;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C68-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:planResearchPriority: The binding factor is never asked as research priority.",
+   "test": "tests/goalPlanCoherence.test.ts, tests/quantGoalIntegration.test.ts, tests/planningReliabilityE2E.test.ts",
+   "title": "goalPlanCoherence.test.ts > C-9: research follows the adopted plan always asks the factor that binds the plan, ranked by what moving it alone lifts, and only the top one",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "goalPlanCoherence.test.ts > C-9: research follows the adopted plan always asks the factor that binds the plan, ranked by what moving it alone lifts, and only the top one"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "if (binding && r.diagnosis[0] === binding) {",
+    "replace": "if (false && binding && r.diagnosis[0] === binding) {"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C69-P",
+   "rc": "none",
+   "why": "controlled: server/services/cash/discovery.ts:discoveryFocusFor: An owner offering their own labour still gets the online-only focus.",
+   "test": "tests/planningFailureMapWave1.test.ts",
+   "title": "planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first discovery keeps the online focus unless the goal's words offer the owner's work",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "planningFailureMapWave1.test.ts > RC5 and RC3: the owner offering their own work is asked about first discovery keeps the online focus unless the goal's words offer the owner's work"
+   ],
+   "mutation": {
+    "file": "server/services/cash/discovery.ts",
+    "find": "if (!labour.offered) return REMOTE_AI_FOCUS;",
+    "replace": "return REMOTE_AI_FOCUS;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C70-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/routeProposal.ts:groundRoute: Comparable demand filed as exact demand evidence.",
+   "test": "tests/researchInformedRoutes.test.ts, tests/routeEvidenceJoin.test.ts",
+   "title": "researchInformedRoutes.test.ts > the loop on a goal scouts first, waits for research, then proposes grounded routes, files their evidence and retires the scouts",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "researchInformedRoutes.test.ts > the loop on a goal scouts first, waits for research, then proposes grounded routes, files their evidence and retires the scouts"
+   ],
+   "mutation": {
+    "file": "server/services/goals/routeProposal.ts",
+    "find": "route.grounds.demandScope !== 'EXACT' ? COMPARABLE_DEMAND_FIELD",
+    "replace": "route.grounds.demandScope === 'NEVER' ? COMPARABLE_DEMAND_FIELD"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C71-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/routeProposal.ts:applyDirectionCritique: A direction the review says fails a rule is kept because its verdict says KEEP. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/researchInformedRoutes.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/goals/routeProposal.ts",
+    "find": "if (review.verdict === 'DROP' || review.failed.length > 0) {",
+    "replace": "if (review.verdict === 'DROP') {"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C72-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/plan.ts:continuationOf: Search stops when a plan is accepted though the window is open.",
+   "test": "tests/program-ea512f54-goals-d1-p1-wiring.test.ts, tests/reliabilityRound13.test.ts, tests/goalPlanCoherence.test.ts",
+   "title": "program-ea512f54-goals-d1-p1-wiring.test.ts > the continuation rule: a threshold is a minimum, never a stop (pure) an accepted plan does not end the search for more value",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "program-ea512f54-goals-d1-p1-wiring.test.ts > the continuation rule: a threshold is a minimum, never a stop (pure) an accepted plan does not end the search for more value",
+    "program-ea512f54-goals-d1-p1-wiring.test.ts > the goal plan pass carries the three readings, from rows an accepted plan keeps the goal\u2019s productive work going and records why"
+   ],
+   "mutation": {
+    "file": "server/services/goals/plan.ts",
+    "find": "{ continues: true, reason: 'a plan is accepted, but",
+    "replace": "{ continues: false, reason: 'a plan is accepted, but"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C73-P",
+   "rc": "none",
+   "why": "controlled: server/services/goals/commercialReality.ts:commercialRealityOf: A leg with a single-company buyer population passes.",
+   "test": "tests/commercialReality.test.ts, tests/onePayerIsNotAPopulation.test.ts",
+   "title": "commercialReality.test.ts > the commercial reality check (\u00a7116) rejects the audited GitHub leg: a reward as the price, one company swept as 200 buyers, no channel, nobody to deliver",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "commercialReality.test.ts > the commercial reality check (\u00a7116) rejects the audited GitHub leg: a reward as the price, one company swept as 200 buyers, no channel, nobody to deliver"
+   ],
+   "mutation": {
+    "file": "server/services/goals/commercialReality.ts",
+    "find": "if (o.payer && (namesOneOrganisation(o.payer)",
+    "replace": "if (false && o.payer && (namesOneOrganisation(o.payer)"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C74-P",
+   "rc": "none",
+   "why": "controlled: server/services/russell/goalSprint.ts:sprintCandidate: A goal past its deadline still opens a sprint. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "test": "tests/goalSprint.test.ts",
+   "title": "",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "mutation": {
+    "file": "server/services/russell/goalSprint.ts",
+    "find": "  if (goal.dueAt && Date.parse(goal.dueAt) <= now.getTime()) return false;\n",
+    "replace": "\n"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
+  },
+  {
+   "id": "C75-P",
+   "rc": "none",
+   "why": "controlled: server/services/operator/director.ts:stuckPlanDeficiencies: Readings unchanged for STUCK_PLAN_STALE_DAYS are not detected as stuck.",
+   "test": "tests/surgeBHermesDirection.test.ts",
+   "title": "surgeBHermesDirection.test.ts > F8: a stuck plan is read by the kinds of evidence it lacks, and by time fires on time alone: a plan nothing moves stores no new reading, and its last one ages",
+   "knownBadDetected": true,
+   "causeNamed": true,
+   "knownGoodAccepted": true,
+   "verified": true,
+   "failing": [
+    "surgeBHermesDirection.test.ts > F8: a stuck plan is read by the kinds of evidence it lacks, and by time fires on time alone: a plan nothing moves stores no new reading, and its last one ages"
+   ],
+   "mutation": {
+    "file": "server/services/operator/director.ts",
+    "find": "const stale = rows[0]!.created_at < staleBefore;",
+    "replace": "const stale = false;"
+   },
+   "at": "2026-11-26T10:20:00Z",
+   "by": "independent proof agent (worktree)"
   }
  ]
 }
