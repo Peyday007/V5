@@ -741,29 +741,71 @@ async function questions(): Promise<void> {
   const models = challengerModels(await modelsFor());
   out('models', models.map((m) => m.label));
   const system = "You are Brain's research director. You decide what must be learned from the real world before a commercial plan can be trusted. Answer with exactly one JSON object.";
+  // A reply cut off mid-list still holds its complete questions; the rest are asked for in further rounds.
+  const salvage = (text: string): Record<string, unknown>[] => {
+    const found: Record<string, unknown>[] = [];
+    for (let i = text.indexOf('{"id"'); i >= 0; i = text.indexOf('{"id"', i + 1)) {
+      let depth = 0;
+      let inString = false;
+      for (let j = i; j < text.length; j += 1) {
+        const ch = text[j];
+        if (inString) {
+          if (ch === '\\') j += 1;
+          else if (ch === '"') inString = false;
+        } else if (ch === '"') inString = true;
+        else if (ch === '{') depth += 1;
+        else if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            try {
+              const one = JSON.parse(text.slice(i, j + 1).replace(/[\u0000-\u001f]+/g, ' ')) as Record<string, unknown>;
+              if (typeof one['question'] === 'string') found.push(one);
+            } catch {
+              /* not a whole question */
+            }
+            break;
+          }
+        }
+      }
+    }
+    return found;
+  };
+  const ownerOf = (text: string): unknown => {
+    const m = /"owner"\s*:\s*(\{[^{}]*\})/.exec(text);
+    try {
+      return m ? JSON.parse(m[1]!.replace(/[\u0000-\u001f]+/g, ' ')) : null;
+    } catch {
+      return null;
+    }
+  };
   for (const model of models) {
     const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
-    const r = await chat([{ role: 'system', content: system }, { role: 'user', content: prompt }], undefined, 8000);
-    if (r.error || !r.content) {
-      out('reply_error', { model: model.label, error: r.error ?? 'empty', ms: r.ms });
-      continue;
+    const got: Record<string, unknown>[] = [];
+    let owner: unknown = null;
+    for (let round = 1; round <= 4 && got.length < count; round += 1) {
+      const more = got.length
+        ? `\n\nALREADY LISTED (do not repeat these or ask them in other words; list only the remaining ${count - got.length}, numbered from Q${got.length + 1}):\n- ${got.map((one) => String(one['question'])).join('\n- ')}`
+        : '';
+      const r = await chat([{ role: 'system', content: system }, { role: 'user', content: prompt + more }], undefined, 8000);
+      if (r.error || !r.content) {
+        out('reply_error', { model: model.label, round, error: String(r.error ?? 'empty').slice(0, 200), ms: r.ms });
+        break;
+      }
+      const text = String(r.content);
+      owner = owner ?? ownerOf(text);
+      const fresh = salvage(text);
+      out('round', { model: model.label, round, ms: r.ms, chars: text.length, questions: fresh.length });
+      if (fresh.length === 0) {
+        out('reply_unparsed', { model: model.label, ms: r.ms, content: text.slice(0, 2000) });
+        break;
+      }
+      const seen = new Set(got.map((one) => String(one['question']).toLowerCase()));
+      for (const one of fresh) if (!seen.has(String(one['question']).toLowerCase()) && got.length < count) got.push(one);
     }
-    const text = String(r.content);
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    let parsed: { questions?: unknown[] } | null = null;
-    try {
-      parsed = JSON.parse(text.slice(start, end + 1)) as { questions?: unknown[] };
-    } catch {
-      parsed = null;
-    }
-    if (!parsed || !Array.isArray(parsed.questions)) {
-      out('reply_unparsed', { model: model.label, ms: r.ms, content: text.slice(0, 4000) });
-      continue;
-    }
-    out('model', { label: model.label, ms: r.ms, questions: parsed.questions.length });
-    out('owner', (parsed as Record<string, unknown>)['owner'] ?? null);
-    for (const one of parsed.questions) out('q', one);
+    if (got.length === 0) continue;
+    out('model', { label: model.label, questions: got.length });
+    out('owner', owner);
+    got.forEach((one, i) => out('q', { ...one, id: `Q${i + 1}` }));
     return;
   }
   fail('no model answered with questions');
