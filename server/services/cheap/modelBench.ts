@@ -89,10 +89,20 @@ export function chatFor(endpoint: BenchEndpoint, fetchImpl: typeof fetch = fetch
           messages,
           temperature: 0.3,
           max_tokens: maxTokens,
-          ...(tools && tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+          ...(tools && tools.length > 0 ? { tools, tool_choice: 'auto' } : { stream: true }),
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });
+      /*
+       * A turn without tools is streamed. A reasoning model can think for more
+       * than 100 seconds before its first answer token, and the GPU pod's proxy
+       * closes a connection idle that long: the reply then arrived as content ""
+       * or HTTP 524 (production route asks, 2026-11-26: gpt-oss-120b failed 6 of
+       * 12; the model exam's re-ask with streaming served every one). Streamed,
+       * the reasoning keeps bytes flowing. An endpoint that answers with plain
+       * JSON anyway is read as before.
+       */
+      if (res.ok && /text\/event-stream/i.test(res.headers.get('content-type') ?? '')) return readStream(res, started);
       const text = await res.text();
       const ms = Date.now() - started;
       if (!res.ok) return { content: '', toolCalls: [], ms, completionTokens: 0, error: `HTTP ${res.status} ${text.slice(0, 200)}` };
@@ -117,6 +127,43 @@ export function chatFor(endpoint: BenchEndpoint, fetchImpl: typeof fetch = fetch
       return { content: '', toolCalls: [], ms: Date.now() - started, completionTokens: 0, error: (error as Error).message.slice(0, 200) };
     }
   };
+}
+
+/** A streamed chat completion, read to its end: the answer's text and its token count. */
+async function readStream(res: Response, started: number): Promise<ChatResult> {
+  let content = '';
+  let completionTokens = 0;
+  let error: string | null = null;
+  try {
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const reader = res.body?.getReader();
+    if (!reader) return { content: '', toolCalls: [], ms: Date.now() - started, completionTokens: 0, error: 'a streamed reply with no body' };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let at: number;
+      while ((at = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, at).trim();
+        buffer = buffer.slice(at + 1);
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const event = JSON.parse(data) as { choices?: { delta?: { content?: string | null } }[]; usage?: { completion_tokens?: number }; error?: { message?: string } };
+          if (event.error) error = String(event.error.message ?? 'stream error').slice(0, 200);
+          content += event.choices?.[0]?.delta?.content ?? '';
+          if (event.usage?.completion_tokens) completionTokens = event.usage.completion_tokens;
+        } catch {
+          /* a line that is not one JSON event is skipped */
+        }
+      }
+    }
+  } catch (caught) {
+    error = (caught as Error).message.slice(0, 200);
+  }
+  return { content: stripThink(content), toolCalls: [], ms: Date.now() - started, completionTokens, error: content.trim() ? null : error };
 }
 
 export function stripThink(text: string): string {

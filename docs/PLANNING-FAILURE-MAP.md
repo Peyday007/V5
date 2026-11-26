@@ -8,8 +8,8 @@ Rendered from `docs/planning-failure-map/map.py` by `render_md.py`; edit the dat
 
 - Capabilities required: **42**
 - Diagnostic questions (5 per capability, +1 model-isolation question for each of the 8 model-dependent ones): **218**
-- PASS 27 · FAIL 82 · NEEDS RECHECK 32 · UNKNOWN 77
-- Root causes established: **12**
+- PASS 27 · FAIL 85 · NEEDS RECHECK 32 · UNKNOWN 74
+- Root causes established: **15**
 
 ## A. What creating a successful plan requires (capability map)
 
@@ -66,7 +66,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 | id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
 |---|---|---|---|---|---|---|---|
-| C01-P | Can Brain perform it correctly? | Read 30 varied owner requests incl. "can't put any hours in", weekly vs total hours, "keeps going after". | Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed. | **PASS** | 30Q: p02/p06/p10 readings correct (capital 1500/0/5000; hours 171/15/0 after d5beaf6). | industry/construction/intent.ts readObjective | — |
+| C01-P | Can Brain perform it correctly? | Read 30 varied owner requests incl. "can't put any hours in", weekly vs total hours, "keeps going after". | Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed. | **FAIL** | Fresh batch fm1126a (30 goals, production 4dcef5c-era reader): 4 refused (monthly figure with a start month x2, "spending more than $1,000", "about two weeks"), 1 read as OTHER ("go from nothing to $3,500 a month"), "3 hours a week at most" read as 3 hours total, "zero time" / "not going to do any of the work" read as no limit. Repaired W1i; recheck on the next batch. | industry/construction/intent.ts readObjective | RC15 |
 | C01-R | Does the result reach every component that needs it? | Does the reading reach proposer, critic, planner, committee? | Same figures in every prompt and plan reading. | **PASS** | 30Q probe objective lines; plan readings use target. | goals/target.ts | — |
 | C01-I | Does the result change later decisions correctly? | Change hours from 15 to 0 mid-course. | Next ask drops owner-performed routes. | **UNKNOWN** | — | planningEval update path | — |
 | C01-F | Does Brain recognise and recover when it fails? | Ambiguous request ("some money soon"). | Goal flags the unread field as a question to the owner, plans nothing on a guess. | **UNKNOWN** | — | readObjective unread[] | — |
@@ -81,7 +81,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C02-I | Does the result change later decisions correctly? | Owner states a licence; do routes sell the licensed work? | At least one route sells it. | **PASS** | p02: every output led with Part 107 aerial work. | ROUTE_RULES.OWNER_FIT | — |
 | C02-F | Does Brain recognise and recover when it fails? | Profile contradicts owner words; is it corrected? | Code compares profile to words and drops inventions. | **FAIL** | No check exists (code). | ownerProfileOf | RC3 |
 | C02-X | Does it still work combined with the other capabilities? | Owner with no stated skill + $0 + place. | Means = time, place; direct paid work considered. | **FAIL** | p06: no output proposed the owner's own paid work. | directionPrompt | RC5 |
-| C02-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same p06 prompt to the control model. | Control reads the owner correctly. | **PASS** | Control p06 owner profile had no invented refusals. | model | — |
+| C02-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same p06 prompt to the control model. | Control reads the owner correctly. | **PASS** | Model exam: given complete facts, Claude Opus reads constraints with 3 violations in 30; gpt-oss 8, fallback 22. The 4/4 invented refusals were the fallback's. | model | RC14 |
 
 ### C03 Resolve Brain's standing operating rule against the goal's own offer, once, as data
 
@@ -101,7 +101,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C04-R | Does the result reach every component that needs it? | Do lessons, refutations and committee questions reach the route ask? | Shown in routeContext. | **FAIL** | Integration diag (code). | routeContext | RC7 |
 | C04-I | Does the result change later decisions correctly? | A refuted direction: is it proposed again? | Never in another wording. | **NEEDS RECHECK** | Last ask's CRITIQUE drops fed back (routeProposal ~1836); multi-ask effect unmeasured. | routeContext refuted | — |
 | C04-F | Does Brain recognise and recover when it fails? | Goal changed by owner: are stale openings retired? | Openings inconsistent with new limits archived. | **UNKNOWN** | — | — | — |
-| C04-X | Does it still work combined with the other capabilities? | Six generators feed one goal. | One arbitrated set; no contradictory openings. | **FAIL** | 426 candidates → 49 distinct; no arbiter. | plan set | RC11 |
+| C04-X | Does it still work combined with the other capabilities? | Six generators feed one goal. | One arbitrated set; no contradictory openings. | **FAIL** | fm1126a f01: the plan reading is built from constructed arrangements while the route proposer's owner-read directions are not yet openings; two generators, no arbiter. | plan set | RC11,RC13 |
 
 ### C05 Calendar, season and window arithmetic
 
@@ -112,7 +112,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C05-I | Does the result change later decisions correctly? | Does a correct date change keep/drop? | Drops on window only when computed outside. | **FAIL** | No computed check (code). | applyCritique | RC2 |
 | C05-F | Does Brain recognise and recover when it fails? | A wrong date claim: detected? | Code overrules. | **FAIL** | None (code). | applyCritique | RC2 |
 | C05-X | Does it still work combined with the other capabilities? | Season + payment terms + delivery lead time combined. | Computed first-cash day inside window. | **FAIL** | p02/p10 critic errors. | critic | RC2 |
-| C05-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same critique prompt to the control model. | Control does the arithmetic right. | **NEEDS RECHECK** | Not run on the critique prompt. | model | — |
+| C05-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same critique prompt to the control model. | Control does the arithmetic right. | **FAIL** | Model exam: gpt-oss 8 and the fallback 22 constraint violations in 30, Claude 3; date and window arithmetic errors concentrate in the open models. | model | RC14 |
 
 ### C06 Know the local economic environment (buyers in the place, market conditions, season)
 
@@ -133,7 +133,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C07-I | Does the result change later decisions correctly? | Research refutes a direction: replaced? | Replacement direction differs structurally. | **NEEDS RECHECK** | Scout→refuted loop exists; starved. | scout loop | — |
 | C07-F | Does Brain recognise and recover when it fails? | All directions refuted. | New directions from a different mechanism. | **UNKNOWN** | — | — | — |
 | C07-X | Does it still work combined with the other capabilities? | Discovery + owner means + constraints. | No online-only bias for owners with physical means. | **FAIL** | discovery REMOTE_AI_FOCUS. | discovery | RC3 |
-| C07-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the same direction prompt. | Control names the strongest path. | **FAIL** | Control p06 also missed the Tasker path; p02 chose wholesale over retail. | prompt | RC5 |
+| C07-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the same direction prompt. | Control names the strongest path. | **FAIL** | Model exam commercial planning: Claude 10/11, gpt-oss 4/11, Qwen 1/11, fallback 0/11. 30Q control (Claude Sonnet, Brain's prompt) also missed p06's strongest path, so the prompt shares the failure (RC5). | prompt | RC14,RC5 |
 
 ### C08 Generate genuinely different approaches
 
@@ -174,7 +174,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C11-I | Does the result change later decisions correctly? | Answers change routes. | Yes. | **PASS** | 30Q: facts killed Upwork/Fiverr/dropship routes. | proposer | — |
 | C11-F | Does Brain recognise and recover when it fails? | Model fails to answer (timeout/unparsed). | Retried, salvaged. | **NEEDS RECHECK** | Questions command salvages; production route path unchanged. | ask | RC1 |
 | C11-X | Does it still work combined with the other capabilities? | Questions + owner means. | Ask how owner can be paid directly. | **FAIL** | p06. | directionPrompt | RC5 |
-| C11-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the question prompt. | Less anchored. | **UNKNOWN** | Not run. | model | — |
+| C11-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the question prompt. | Less anchored. | **NEEDS RECHECK** | Not run on the question prompt; the model exam's evidence-interpretation errors (gpt-oss 61, Claude 1) predict the gap. | model | RC14 |
 
 ### C12 Prioritise follow-ups and stop when research cannot change the decision
 
@@ -295,7 +295,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C23-I | Does the result change later decisions correctly? | Fallback quality equals primary. | Yes. | **FAIL** | Fallback invented refusals. | — | RC1 |
 | C23-F | Does Brain recognise and recover when it fails? | Empty content treated as error and retried with larger budget. | Yes. | **FAIL** | Code: error null on empty. | ask | RC1 |
 | C23-X | Does it still work combined with the other capabilities? | Model answers under concurrent load. | Yes. | **UNKNOWN** | — | — | — |
-| C23-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same prompt, larger max_tokens. | Answers. | **UNKNOWN** | To test. | model | — |
+| C23-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same prompt, larger max_tokens. | Answers. | **PASS** | Model exam: re-asked with streaming, gpt-oss served 30/30; the empty replies are the proxy idle cut, not the model (repaired W1j). | model | RC1 |
 
 ### C24 Propose routes that use the evidence correctly
 
@@ -306,7 +306,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C24-I | Does the result change later decisions correctly? | Evidence changes route choice. | Yes. | **NEEDS RECHECK** | Partly (p02 prices; p06 escrow). | — | — |
 | C24-F | Does Brain recognise and recover when it fails? | Route contradicted by a fact: dropped by code or critic. | Yes. | **UNKNOWN** | — | — | — |
 | C24-X | Does it still work combined with the other capabilities? | Evidence + limits + owner means. | All three respected. | **FAIL** | p06 invented subcontractor. | proposer | RC8 |
-| C24-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on identical prompt. | Better use. | **FAIL** | Control 0/3 usable; better hygiene. | model | — |
+| C24-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on identical prompt. | Better use. | **FAIL** | Model exam evidence interpretation: gpt-oss 1.00/2, Claude 1.93/2; 30Q control 0/3 usable but best evidence hygiene. | model | RC14 |
 
 ### C25 Quantitative and causal economics (price x volume, CAC vs capital, margin, hours, reach)
 
@@ -317,7 +317,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C25-I | Does the result change later decisions correctly? | Under-reaching route flagged/fixed. | Yes. | **UNKNOWN** | — | — | — |
 | C25-F | Does Brain recognise and recover when it fails? | Arithmetic error detected. | Yes. | **FAIL** | None. | — | RC8 |
 | C25-X | Does it still work combined with the other capabilities? | Economics + timing + capital. | Consistent. | **UNKNOWN** | — | — | — |
-| C25-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control on arithmetic. | Correct. | **NEEDS RECHECK** | Control understated channel budget (p10). | model | — |
+| C25-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control on arithmetic. | Correct. | **FAIL** | Model exam reasoning correctness: gpt-oss 1.13/2, fallback 0.23, Claude 1.97; mechanical key numbers gpt-oss 7/9. | model | RC14 |
 
 ### C26 Payment terms and time to collected cash
 
@@ -378,7 +378,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | C31-I | Does the result change later decisions correctly? | A drop leads to a better route. | Yes. | **FAIL** | Outputs end with nothing. | — | RC2 |
 | C31-F | Does Brain recognise and recover when it fails? | False drop detected and overruled. | Yes. | **FAIL** | None. | — | RC2 |
 | C31-X | Does it still work combined with the other capabilities? | Critic + parser + replacement. | At least one usable route survives when one exists. | **FAIL** | 9/12 outputs no plan. | — | RC2 |
-| C31-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model as critic on the same routes. | Fewer false drops. | **UNKNOWN** | To test. | model | — |
+| C31-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model as critic on the same routes. | Fewer false drops. | **NEEDS RECHECK** | Not run as critic; exam constraint and evidence errors predict false drops from open models. | model | RC14 |
 
 ### C32 Revise after critique (replacement routes)
 
@@ -424,7 +424,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 | id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
 |---|---|---|---|---|---|---|---|
-| C36-P | Can Brain perform it correctly? | Route → steps with owners, dates, costs, first action. | Executable tomorrow. | **FAIL** | Graders: no output executable; route output has no step plan. | arrangementSteps/stepExecutor (route path) | — |
+| C36-P | Can Brain perform it correctly? | Route → steps with owners, dates, costs, first action. | Executable tomorrow. | **FAIL** | Model exam: complete executable plan Claude 4/4, gpt-oss 0/4, Qwen 0/4. Production fm1126a f01: the owner's plan is research steps on generic constructed arrangements. | goals/plan.ts steps; route→plan | RC14,RC13 |
 | C36-R | Does the result reach every component that needs it? | Steps reach the owner view. | Yes. | **UNKNOWN** | — | — | — |
 | C36-I | Does the result change later decisions correctly? | Step results update the plan. | Yes. | **UNKNOWN** | — | — | — |
 | C36-F | Does Brain recognise and recover when it fails? | Step blocked: replanned. | Yes. | **UNKNOWN** | — | — | — |
@@ -494,11 +494,11 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 ### RC1 Model turn is not checked before it counts (model+software)
 
-- **What is wrong:** An empty reply (content "" with no error) or a 524 timeout from the primary model (gpt-oss-120b) is not treated as a failed turn to be retried on the same capable model; the turn falls to a weaker fallback. Reasoning models spend the max-token budget on hidden reasoning and return nothing.
+- **What is wrong:** An empty reply (content "" with no error) or a 524 timeout from the primary model (gpt-oss-120b) is not treated as a failed turn to be retried on the same capable model; the turn falls to a weaker fallback. Reasoning models spend the max-token budget on hidden reasoning and return nothing. Measured cause: the GPU pod proxy closes a connection idle for 100 s; a non-streamed reasoning reply that thinks longer arrives empty or as HTTP 524 (model exam 2026-11-26: every such item served once streamed).
 - **Owner of the correction:** server/services/goals/routeProposal.ts (ask/operatorChats), server/services/cheap/modelBench.ts
 - **How a correction is proved:** Replay: on the same prompts, empty replies retried with a larger budget answer; production route asks record zero empty-reply fall-throughs.
 - **Evidence:** 30Q test: gpt-oss empty on 6/12 route asks; 524 at ~125 s on 2/3 question asks; integration diagnosis: 4/8 primary failures.
-- **Questions it explains (10):** C11-F, C23-P, C23-R, C23-I, C23-F, C39-P, C39-I, C41-P, C41-R, C41-I
+- **Questions it explains (11):** C11-F, C23-P, C23-R, C23-I, C23-F, C23-M, C39-P, C39-I, C41-P, C41-R, C41-I
 
 ### RC2 Critic veto is unchecked (instruction+coordination)
 
@@ -588,6 +588,30 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **Evidence:** BRAIN-FAILURE-DIAGNOSIS-2026-11-17 F1 (code).
 - **Questions it explains (1):** C35-P
 
+### RC13 The owner's plan is built from generic constructed arrangements that never read the owner (coordination+reasoning)
+
+- **What is wrong:** Until route openings exist, readGoalPlan models the arrangement constructor's generic designs (fractional aircraft ownership, HVAC referral brokering) for every goal; the constructor and its research steps never read the owner's words, means or place, so the plan the owner is handed fits any request.
+- **Owner of the correction:** cash/construct.ts / goals/plan.ts goalArrangements
+- **How a correction is proved:** A fresh goal's plan reading names only strategies whose buyer, offer or means come from the owner's words or from the route proposer's owner-read routes.
+- **Evidence:** Production read fm1126a f01 (Tulsa, pickup truck, weekends, $200): plan = 12 constructed estimates incl. "Fractional ownership of aircraft" and HVAC firms; steps = research their buyer counts. Integration diagnosis: owner words do not reach the constructor.
+- **Questions it explains (2):** C04-X, C36-P
+
+### RC14 The production reasoning models are below the bar the outcome needs (model)
+
+- **What is wrong:** In isolation, on complete-information commercial questions, gpt-oss-120b answers 14/30 correctly, 4/11 commercial planning, 0/4 complete executable plans, with 61 evidence-interpretation errors; the fallback (laguna-xs-2.1) 1/30; Claude Opus 28/30, 10/11, 4/4. No prompt or software repair raises a model past its own ceiling.
+- **Owner of the correction:** model selection: routeProposal strongRouteModels (BRAIN_ROUTE_MODEL + key), operator models
+- **How a correction is proved:** Route asks served by a model that passes the commercial-planning exam (>=9/11) on the same prompts.
+- **Evidence:** docs/model-exam-2026-11-26/REPORT.md (blind, 4 models, 30 questions, mechanical cross-check).
+- **Questions it explains (8):** C02-M, C05-M, C07-M, C11-M, C24-M, C25-M, C31-M, C36-P
+
+### RC15 The objective reader misses common phrasings (software)
+
+- **What is wrong:** The regex reader has no reading for several ordinary ways people state a window, a spending cap, an hours rate or no time at all, so a goal is refused or carries a wrong limit into every later step.
+- **Owner of the correction:** industry/construction/intent.ts readObjective
+- **How a correction is proved:** Every goal of a fresh batch is read with the amount, window, capital and hours a person would read.
+- **Evidence:** fm1126a create log: 4 of 30 refused, 3+ misread (see C01-P).
+- **Questions it explains (1):** C01-P
+
 ## E. Repairs, owners and dependencies
 
 | id | root cause | repair | owner | depends on | state | evidence |
@@ -605,6 +629,10 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | W2c | RC11 | One selector: the plan reading's chosen strategy is the single answer read by acceptance, committee, report and operator. | readGoalPlan | W1 | OPEN | — |
 | W2d | RC12 | An owner-usable readiness state for a research-grounded plan, separate from the money-commitment gate. | goals/plan.ts | W2c | OPEN | — |
 | W2e | — | Convert the chosen route into an executable step plan (who, when, cost, first action, acceptance) on the owner surface (C36). | goals/arrangementSteps.ts / stepTitle | W2c | OPEN | — |
+| W1i | RC15 | Objective reader: monthly figure with a start month (deadline end of that month), "more than" spending limits, bare spans ("about two weeks"), "N hours a week at most" read as a rate, "zero time"/"not going to do any of the work" as zero hours, "don't want to put any money in"/"nothing, no savings" as no capital. | intent.ts | — | MERGED_PENDING_PRODUCTION | tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally |
+| W1j | RC1 | chatFor streams every turn without tools, so reasoning past the 100 s proxy idle cut still answers. | cheap/modelBench.ts | — | MERGED_PENDING_PRODUCTION | tests/chatStreaming.test.ts; model exam pass 2 |
+| W3a | RC13 | The owner's plan must not be built from constructed arrangements that read nothing of the owner: route the owner's words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown. | cash/construct.ts; goals/plan.ts | — | OPEN | — |
+| W3b | RC14 | A route and critique model that passes the commercial-planning exam: BRAIN_ROUTE_MODEL with an Anthropic key (owner), or the owner lifting the §84 reservation so Claude routines may plan goals. | owner decision; routeProposal strongRouteModels | owner | BLOCKED_MISSING_AUTHORITY | model exam |
 
 ## F. Production evidence of repairs
 
@@ -612,7 +640,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 ## G. Remaining untested or unresolved requirements
 
-C01-I, C01-F, C01-X, C03-F, C04-I, C04-F, C05-M, C06-P, C06-I, C06-F, C07-I, C07-F, C08-P, C08-F, C09-P, C09-I, C10-R, C10-I, C10-F, C10-X, C11-F, C11-M, C12-X, C13-R, C13-I, C13-F, C13-X, C14-I, C14-F, C15-R, C15-F, C16-R, C16-X, C17-R, C17-I, C18-P, C18-X, C19-P, C19-F, C19-X, C20-R, C20-I, C20-X, C21-F, C22-X, C23-X, C23-M, C24-R, C24-I, C24-F, C25-I, C25-X, C25-M, C26-R, C26-I, C26-F, C26-X, C27-I, C27-F, C27-X, C28-R, C28-F, C29-R, C29-X, C30-P, C30-R, C30-X, C31-M, C32-P, C32-R, C32-I, C32-F, C32-X, C33-R, C33-I, C33-F, C33-X, C34-R, C34-I, C34-F, C34-X, C35-R, C35-I, C35-X, C36-R, C36-I, C36-F, C36-X, C37-I, C37-F, C37-X, C38-R, C38-I, C38-X, C39-R, C39-I, C39-F, C39-X, C40-R, C40-I, C40-F, C40-X, C41-R, C41-F, C41-X, C42-P, C42-R, C42-I, C42-F
+C01-I, C01-F, C01-X, C03-F, C04-I, C04-F, C06-P, C06-I, C06-F, C07-I, C07-F, C08-P, C08-F, C09-P, C09-I, C10-R, C10-I, C10-F, C10-X, C11-F, C11-M, C12-X, C13-R, C13-I, C13-F, C13-X, C14-I, C14-F, C15-R, C15-F, C16-R, C16-X, C17-R, C17-I, C18-P, C18-X, C19-P, C19-F, C19-X, C20-R, C20-I, C20-X, C21-F, C22-X, C23-X, C24-R, C24-I, C24-F, C25-I, C25-X, C26-R, C26-I, C26-F, C26-X, C27-I, C27-F, C27-X, C28-R, C28-F, C29-R, C29-X, C30-P, C30-R, C30-X, C31-M, C32-P, C32-R, C32-I, C32-F, C32-X, C33-R, C33-I, C33-F, C33-X, C34-R, C34-I, C34-F, C34-X, C35-R, C35-I, C35-X, C36-R, C36-I, C36-F, C36-X, C37-I, C37-F, C37-X, C38-R, C38-I, C38-X, C39-R, C39-I, C39-F, C39-X, C40-R, C40-I, C40-F, C40-X, C41-R, C41-F, C41-X, C42-P, C42-R, C42-I, C42-F
 
 ## H. Measured progress toward 27/30 usable plans
 
