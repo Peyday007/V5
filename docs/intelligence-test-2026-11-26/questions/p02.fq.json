@@ -1,0 +1,338 @@
+[
+ {
+  "id": "F1",
+  "question": "What is the average time from job acceptance to cash payment for real\u2011estate drone shoots on the ARMLS Preferred Photographer Program?",
+  "area": "payment speed",
+  "decision": "choose ARMLS vs other channels",
+  "invalidates": "If payment >7 days, ARMLS becomes less attractive for the 60\u2011day cash goal",
+  "searches": [
+   "ARMLS photographer payment terms 2026",
+   "ARMLS preferred photographer payout schedule"
+  ]
+ },
+ {
+  "id": "F2",
+  "question": "How many active real\u2011estate listing requests per week are posted on Droners.io and Zeitview for the Phoenix metro area?",
+  "area": "buyer volume",
+  "decision": "whether to invest time in pilot networks",
+  "invalidates": "If weekly volume <2, pilot\u2011network route unlikely to hit $4,500 in 60 days",
+  "searches": [
+   "Droners.io Phoenix job feed statistics",
+   "Zeitview Phoenix mission volume 2026"
+  ]
+ },
+ {
+  "id": "F3",
+  "question": "What is the typical net\u2011payment term (e.g., immediate, net\u201130, net\u201114) for agents who hire freelancers via the ARMLS Preferred Photographer Program?",
+  "area": "payment terms",
+  "decision": "risk of cash\u2011flow delay",
+  "invalidates": "If most agents pay net\u201130, cash may not arrive within 60 days",
+  "searches": [
+   "ARMLS photographer invoice terms",
+   "ARMLS payment schedule for photographers"
+  ]
+ },
+ {
+  "id": "F4",
+  "question": "What is the average acceptance rate for pilots on Droners.io and Zeitview when they bid on Phoenix real\u2011estate jobs?",
+  "area": "conversion likelihood",
+  "decision": "estimate realistic weekly revenue",
+  "invalidates": "If acceptance <20%, projected earnings drop below target",
+  "searches": [
+   "Droners.io pilot win rate statistics",
+   "Zeitview pilot job acceptance rate Phoenix"
+  ]
+ },
+ {
+  "id": "F5",
+  "question": "Are there any upcoming large\u2011scale construction or land\u2011development projects in Arizona with a budget for drone surveying that require turnaround within 2\u20113 weeks?",
+  "area": "high\u2011value surveying demand",
+  "decision": "pursue surveying route vs real\u2011estate photography",
+  "invalidates": "If no such projects, surveying route not viable",
+  "searches": [
+   "Arizona construction project bids 2026 drone survey",
+   "Arizona land development drone mapping contracts 2026"
+  ]
+ },
+ {
+  "id": "F6",
+  "question": "What are the current average rates paid to pilots on Zeitview for a standard 30\u2011minute real\u2011estate mission in Phoenix?",
+  "area": "price evidence",
+  "decision": "revenue projection for pilot\u2011network route",
+  "invalidates": "If average pay < $100, many jobs needed to meet $4,500",
+  "searches": [
+   "Zeitview pilot pay Phoenix real estate mission 2026",
+   "Zeitview compensation schedule Arizona"
+  ]
+ },
+ {
+  "id": "F7",
+  "question": "How long does it take for a client to approve and release payment after receiving drone photos/video from a photographer on PropPhoto or Fullview 360?",
+  "area": "cash receipt timing",
+  "decision": "ensure first payment lands before day\u202f60",
+  "invalidates": "If approval + payment >14 days on average, may miss cash deadline",
+  "searches": [
+   "PropPhoto payment timeline Phoenix",
+   "Fullview 360 client payment process"
+  ]
+ },
+ {
+  "id": "F8",
+  "question": "What is the cost (subscription/license) for the post\u2011processing software (e.g., Pix4D, DroneDeploy) needed to deliver 4K video and orthomosaics, and can it be covered within the $1,500 capital?",
+  "area": "operational cost",
+  "decision": "budget allocation between marketing vs software",
+  "invalidates": "If software cost > $500, insufficient capital for other expenses",
+  "searches": [
+   "Pix4D subscription price 2026",
+   "DroneDeploy pricing 2026"
+  ]
+ },
+ {
+  "id": "F9",
+  "question": "Do any Phoenix\u2011based real\u2011estate brokerages offer a \u201cpay\u2011on\u2011the\u2011spot\u201d or same\u2011day payment option for drone photography services?",
+  "area": "payment speed",
+  "decision": "target fast\u2011paying clients",
+  "invalidates": "If none exist, must rely on slower channels",
+  "searches": [
+   "Phoenix brokerage drone photography same day payment",
+   "Arizona real estate agents instant payment drone services"
+  ]
+ },
+ {
+  "id": "F10",
+  "question": "What is the average number of new listings per week in the Phoenix metro area during November\u2011December 2026?",
+  "area": "market volume",
+  "decision": "estimate potential job pool for real\u2011estate photography",
+  "invalidates": "If weekly listings <5, revenue target unlikely",
+  "searches": [
+   "Phoenix MLS new listings November 2026",
+   "Arizona real estate weekly listing count 2026"
+  ]
+ },
+ {
+  "id": "F11",
+  "question": "What is the typical commission split for a broker\u2011to\u2011photographer referral program (e.g., Panoee) when the buyer is a real\u2011estate agent?",
+  "area": "referral profitability",
+  "decision": "whether to pursue affiliate route",
+  "invalidates": "If commission <10%, affiliate route insufficient for $4,500",
+  "searches": [
+   "Panoee real estate affiliate commission",
+   "Arizona real estate photographer referral fees"
+  ]
+ },
+ {
+  "id": "F12",
+  "question": "Are there any restrictions or additional licensing requirements for using a DJI Mavic\u202f3 to perform land\u2011survey\u2011grade orthomosaics in Arizona?",
+  "area": "legal compliance",
+  "decision": "whether surveying route is permissible",
+  "invalidates": "If additional state surveyor license required, route infeasible",
+  "searches": [
+   "Arizona drone surveying licensing requirements 2026",
+   "Mavic 3 land survey legal Arizona"
+  ]
+ },
+ {
+  "id": "F13",
+  "question": "What is the average turnaround time (from flight to final deliverable) for a 5\u2011acre drone orthomosaic when processed using the owner\u2019s own software versus outsourcing to a service like Propeller Aero?",
+  "area": "service speed",
+  "decision": "choose in\u2011house vs outsource processing",
+  "invalidates": "If in\u2011house takes >48\u202fh and delays payment, outsource may be needed",
+  "searches": [
+   "Propeller Aero orthomosaic delivery time",
+   "Pix4D processing time 5 acre dataset"
+  ]
+ },
+ {
+  "id": "F14",
+  "question": "Can the owner secure at least 5 paid listings per week through organic outreach (e.g., MLS directories, social media) without spending more than $200 of the capital?",
+  "area": "lead generation feasibility",
+  "decision": "whether low\u2011budget marketing can meet volume",
+  "invalidates": "If organic leads <5/week, need paid ads exceeding budget",
+  "searches": [
+   "MLS photographer outreach success rate",
+   "Phoenix real estate agents Instagram photographer hiring"
+  ]
+ },
+ {
+  "id": "F15",
+  "question": "What is the average payout per video clip on stock platforms (Shutterstock, Pond5, Adobe Stock) for Arizona aerial footage, and how many clips must be sold to reach $4,500?",
+  "area": "stock footage revenue",
+  "decision": "evaluate licensing route viability",
+  "invalidates": "If average payout < $5, need >900 clips, unrealistic in 60 days",
+  "searches": [
+   "Shutterstock aerial video royalty rates 2026",
+   "Pond5 average earnings per video 2026"
+  ]
+ },
+ {
+  "id": "F16",
+  "question": "How long does it take for a new contributor\u2019s video to be approved and appear for sale on Shutterstock and Pond5?",
+  "area": "time to first sale",
+  "decision": "whether stock route can generate cash within 60 days",
+  "invalidates": "If review >30 days, cash flow delayed",
+  "searches": [
+   "Shutterstock video review time 2026",
+   "Pond5 video approval timeframe 2026"
+  ]
+ },
+ {
+  "id": "F17",
+  "question": "What is the typical commission percentage taken by Droners.io for completed jobs, and does it apply to the owner\u2019s earnings after platform fees?",
+  "area": "platform cost",
+  "decision": "net revenue calculation for platform\u2011based jobs",
+  "invalidates": "If commission >20%, profit per job may drop below target",
+  "searches": [
+   "Droners.io commission rate 2026",
+   "Droners.io fee structure for pilots"
+  ]
+ },
+ {
+  "id": "F18",
+  "question": "Are there any seasonal slow\u2011downs in Phoenix real\u2011estate photography demand during the holiday period (late November\u2011December)?",
+  "area": "seasonality",
+  "decision": "adjust weekly job expectations",
+  "invalidates": "If demand drops >30% during holidays, target may be missed",
+  "searches": [
+   "Phoenix real estate photography demand holiday season 2026",
+   "Arizona MLS listing activity November December 2026"
+  ]
+ },
+ {
+  "id": "F19",
+  "question": "What is the average cost to run a targeted Facebook/Instagram ad campaign in the Phoenix metro area to generate a qualified real\u2011estate photography lead?",
+  "area": "paid acquisition cost",
+  "decision": "budget allocation for ads",
+  "invalidates": "If CPL > $100, $1,500 budget yields <15 leads, insufficient",
+  "searches": [
+   "Phoenix real estate photographer lead cost Facebook 2026",
+   "Instagram CPL real estate services Arizona"
+  ]
+ },
+ {
+  "id": "F20",
+  "question": "Do any Phoenix construction firms offer a \u201cpay\u2011upon\u2011completion\u201d clause for drone progress\u2011report services, and what is the typical payment window?",
+  "area": "construction surveying payment",
+  "decision": "pursue construction route",
+  "invalidates": "If payment >14 days, cash flow risk",
+  "searches": [
+   "Phoenix construction drone progress report payment terms",
+   "Arizona contractor prompt payment act drone services"
+  ]
+ },
+ {
+  "id": "F21",
+  "question": "What is the average number of drone\u2011based virtual tours sold per month by providers like TheFuture3D in the Phoenix market?",
+  "area": "virtual\u2011tour market size",
+  "decision": "evaluate virtual\u2011tour brokerage route",
+  "invalidates": "If monthly sales <5, revenue insufficient",
+  "searches": [
+   "Phoenix virtual tour provider sales volume 2026",
+   "TheFuture3D Arizona market data"
+  ]
+ },
+ {
+  "id": "F22",
+  "question": "Is there a minimum contract length or commitment required to join the ARMLS Preferred Photographer Program, and does it affect cash flow timing?",
+  "area": "program onboarding",
+  "decision": "whether to invest time in ARMLS",
+  "invalidates": "If contract forces delayed payouts, route unsuitable",
+  "searches": [
+   "ARMLS Preferred Photographer Program contract terms 2026",
+   "ARMLS photographer onboarding timeline"
+  ]
+ },
+ {
+  "id": "F23",
+  "question": "What is the average net profit per 5\u2011acre drone survey project after accounting for minimum $500\u2011$1,500 project cost and processing time?",
+  "area": "survey project profitability",
+  "decision": "compare to real\u2011estate photography earnings",
+  "invalidates": "If profit < $200 per project, not worth time",
+  "searches": [
+   "Arizona drone survey profit per 5 acre project 2026",
+   "Drone survey cost vs revenue Arizona"
+  ]
+ },
+ {
+  "id": "F24",
+  "question": "Do any Phoenix real\u2011estate agents currently use a subscription\u2011based drone service (e.g., monthly retainer) that pays upfront?",
+  "area": "recurring revenue potential",
+  "decision": "target retainer contracts",
+  "invalidates": "If none exist, focus on per\u2011job sales",
+  "searches": [
+   "Phoenix real estate agent drone service subscription",
+   "Arizona broker drone photography retainer"
+  ]
+ },
+ {
+  "id": "F25",
+  "question": "What is the average premium for a one\u2011year liability insurance policy that covers FAA Part\u202f107 drone operations in Arizona, and can a policy be obtained for $200 or less?",
+  "area": "insurance cost",
+  "decision": "whether to include insurance in the cost structure or to operate uninsured (which would affect legal risk and buyer confidence)",
+  "invalidates": "If the cheapest adequate policy exceeds $200, the $1,500 capital cap may be breached, ruling out insurance\u2011dependent opportunities.",
+  "searches": [
+   "Arizona drone insurance providers rates 2026",
+   "FAA Part 107 liability insurance cost",
+   "Drone insurance premium comparison Arizona"
+  ]
+ },
+ {
+  "id": "F26",
+  "question": "Do any Phoenix\u2011area real\u2011estate brokerages require a signed service agreement before each drone shoot, and does that requirement delay immediate (same\u2011day or next\u2011day) payment to the photographer?",
+  "area": "contract terms & cash flow",
+  "decision": "whether to target brokerages that can pay on the spot or need pre\u2011approval, impacting the ability to meet the 60\u2011day cash deadline",
+  "invalidates": "If most brokerages mandate contracts that push payment beyond 7\u202fdays, the route would not satisfy the cash\u2011within\u201160\u2011days rule.",
+  "searches": [
+   "Phoenix real estate brokerage drone photography service agreement policy",
+   "ARMLS Preferred Photographer payment terms contract",
+   "Brokerage payment timelines for photography services Arizona"
+  ]
+ },
+ {
+  "id": "F27",
+  "question": "What price range do Phoenix commercial real\u2011estate agents typically pay for a 60\u2011second 4K drone video package, and what are the standard payment terms for such video services?",
+  "area": "pricing & payment for video",
+  "decision": "whether to add a 4K video upsell to the service mix or focus solely on photos, based on profitability and cash\u2011flow speed",
+  "invalidates": "If the average price is below $150 or payment is net\u201130, the video upsell would not generate sufficient margin within the 60\u2011day window.",
+  "searches": [
+   "Phoenix real estate drone video pricing 2026",
+   "Commercial real estate drone video payment terms Arizona",
+   "4K drone video package rates for listings Phoenix"
+  ]
+ },
+ {
+  "id": "F28",
+  "question": "How many active construction\u2011progress\u2011report jobs are posted each week on Droners.io and Zeitview for the Phoenix metro area, and what turnaround time do clients expect for those reports?",
+  "area": "construction job volume & turnaround",
+  "decision": "whether to pursue construction\u2011progress reporting as a revenue stream, based on volume and ability to deliver quickly enough for payment within 60\u202fdays",
+  "invalidates": "If weekly postings are fewer than 2 or clients expect >10\u2011day turnaround (delaying payment), the construction route becomes non\u2011viable.",
+  "searches": [
+   "Droners.io Phoenix construction drone jobs November 2026",
+   "Zeitview construction progress report demand Arizona",
+   "Construction drone progress report payment timelines"
+  ]
+ },
+ {
+  "id": "F29",
+  "question": "What are the processing time and cost differences between using the owner\u2019s DJI\u202fMavic\u202f3 with Pix4D (or DroneDeploy) versus outsourcing to Propeller Aero for a 5\u2011acre orthomosaic, and can the faster option meet the 60\u2011day cash\u2011receipt requirement?",
+  "area": "processing speed & cost",
+  "decision": "whether to keep data processing in\u2011house or outsource, balancing capital use, hours, and payment timing",
+  "invalidates": "If in\u2011house processing exceeds the owner\u2019s weekly 20\u2011hour limit or costs more than the $1,500 capital, the route must be outsourced; if outsourcing delays payment beyond 60\u202fdays, the route is ruled out.",
+  "searches": [
+   "Pix4D pricing for 5\u2011acre orthomosaic 2026",
+   "DroneDeploy subscription cost Arizona",
+   "Propeller Aero turnaround time for 5\u2011acre orthomosaic"
+  ]
+ },
+ {
+  "id": "F30",
+  "question": "Does the Arizona Prompt Payment Act apply to subcontracted drone services for private real\u2011estate clients, and what is the typical timeframe for a subcontractor to receive payment after the primary contractor is paid?",
+  "area": "legal payment timing for subcontractors",
+  "decision": "whether to subcontract any portion of the work (e.g., processing, additional pilots) without risking cash flow beyond the 60\u2011day limit",
+  "invalidates": "If subcontractors are legally allowed to be paid only after a 30\u2011day client payment window, the subcontracting model would breach the cash\u2011within\u201160\u2011days rule.",
+  "searches": [
+   "Arizona Prompt Payment Act subcontractor private real estate drone services",
+   "Subcontractor payment timeline Arizona construction and photography",
+   "FAA Part 107 subcontractor payment rules Arizona"
+  ]
+ }
+]

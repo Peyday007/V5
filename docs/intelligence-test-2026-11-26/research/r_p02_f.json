@@ -1,0 +1,680 @@
+{
+ "goal": "p02",
+ "worker": "p02_f",
+ "results": [
+  {
+   "id": "F1",
+   "status": "PARTIAL",
+   "answer": "ARMLS does not pay photographers: the photographer must have a service agreement with each agent, so payment timing is whatever that agreement says (no ARMLS payout schedule exists on its program page). A comparable MLS program states fees are negotiated agent-to-photographer and the MLS is not responsible for payment. No measured acceptance-to-cash time was found.",
+   "facts": [
+    {
+     "claim": "ARMLS requires Preferred Photographers to have their own service agreement with each Arizona agent they serve; ARMLS's own photographer agreement only fills gaps (Section 4).",
+     "quote": "you are required to have a service agreement with agents you serve",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "payer"
+    },
+    {
+     "claim": "At realMLS (a different MLS's photographer network, used as a comparable), fees are negotiated directly between listing agent and photographer.",
+     "quote": "Any fees for services are negotiated directly between the listing agent and the photographer once contact is established.",
+     "sourceUrl": "https://www.realmls.com/photographer/",
+     "sourceTitle": "realMLS Photographer Network",
+     "sourceDate": null,
+     "lane": "payer"
+    },
+    {
+     "claim": "realMLS states it is not responsible for payment of photographer fees under the independent agent-photographer service agreements (comparable MLS program, not ARMLS).",
+     "quote": "realMLS is not responsible for any of the terms, including payment of fees.",
+     "sourceUrl": "https://www.realmls.com/photographer/",
+     "sourceTitle": "realMLS Photographer Network",
+     "sourceDate": null,
+     "lane": "payer"
+    }
+   ],
+   "opened": [
+    "https://armls.com/become-certified",
+    "https://www.realmls.com/photographer/"
+   ],
+   "failed": [],
+   "notes": "ARMLS program page does not mention payment, payment terms or who pays. Searched 'ARMLS Preferred Photographer Program FAQ photographer payment agent pays'. Known fact #4-5 (2016 blog) on pay-at-shoot remains the only timing evidence."
+  },
+  {
+   "id": "F2",
+   "status": "UNANSWERED",
+   "answer": "No public count of Phoenix real-estate requests per week on Droners.io or Zeitview was found; a 2026 Zeitview guide says mission volume is inconsistent, especially in saturated markets.",
+   "facts": [
+    {
+     "claim": "A March 2026 Zeitview careers guide says Zeitview mission volume can be inconsistent, especially in saturated markets.",
+     "quote": "Mission volume can be inconsistent, especially in saturated markets.",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview / DroneBase careers guide (Fonzi)",
+     "sourceDate": null,
+     "lane": "current_demand"
+    },
+    {
+     "claim": "The same 2026 Zeitview guide says weather cancellations affect about 40% of scheduled missions.",
+     "quote": "Weather cancellations are affecting approximately 40% of scheduled missions.",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview / DroneBase careers guide (Fonzi)",
+     "sourceDate": null,
+     "lane": "risk"
+    }
+   ],
+   "opened": [
+    "https://droners.io/jobs",
+    "https://fonzi.ai/blog/zeitview-dronebase-careers"
+   ],
+   "failed": [
+    "https://droners.io/jobs: HTTP 403"
+   ],
+   "notes": "Searches: 'Droners.io jobs Phoenix Arizona drone pilot job posting', 'Zeitview pilot how many missions per week area reddit real estate missions 2026'. Zeitview missions visible only in pilot app; Droners job board 403."
+  },
+  {
+   "id": "F3",
+   "status": "PARTIAL",
+   "answer": "ARMLS sets no payment term; terms are set in the photographer's own service agreement with the agent, with ARMLS's Section 4 terms filling gaps (Section 4 text not seen). Typical net terms among ARMLS agents were not found.",
+   "facts": [
+    {
+     "claim": "ARMLS requires Preferred Photographers to have their own service agreement with each Arizona agent they serve; ARMLS's own photographer agreement only fills gaps (Section 4).",
+     "quote": "you are required to have a service agreement with agents you serve",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "payer"
+    },
+    {
+     "claim": "Where a photographer's agreement with an agent does not cover items in Section 4 of the ARMLS-photographer agreement, the ARMLS terms apply.",
+     "quote": "does not cover items in Section 4 of the ARMLS-photographer agreement, those terms will apply.",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    },
+    {
+     "claim": "At realMLS (a different MLS's photographer network, used as a comparable), fees are negotiated directly between listing agent and photographer.",
+     "quote": "Any fees for services are negotiated directly between the listing agent and the photographer once contact is established.",
+     "sourceUrl": "https://www.realmls.com/photographer/",
+     "sourceTitle": "realMLS Photographer Network",
+     "sourceDate": null,
+     "lane": "payer"
+    }
+   ],
+   "opened": [
+    "https://armls.com/become-certified",
+    "https://www.realmls.com/photographer/"
+   ],
+   "failed": [],
+   "notes": "ARMLS-photographer agreement itself (Section 4) not publicly located."
+  },
+  {
+   "id": "F4",
+   "status": "PARTIAL",
+   "answer": "A 2026 Zeitview guide reports 20-50% claim success in areas with many competing pilots, and priority for top-rated pilots on premium missions. No Phoenix-specific or Droners.io win-rate figure found.",
+   "facts": [
+    {
+     "claim": "Per a 2026 Zeitview pilot guide, in areas with many competing pilots, claim success rates on Zeitview missions are 20-50%.",
+     "quote": "Areas with many competing pilots see lower claim success rates (20-50%).",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview / DroneBase careers guide (Fonzi)",
+     "sourceDate": null,
+     "lane": "competition"
+    },
+    {
+     "claim": "Top-rated Zeitview pilots with high acceptance rates get priority on premium missions (2026 guide).",
+     "quote": "Top-rated pilots with high acceptance rates get priority on premium missions",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview / DroneBase careers guide (Fonzi)",
+     "sourceDate": null,
+     "lane": "competition"
+    }
+   ],
+   "opened": [
+    "https://fonzi.ai/blog/zeitview-dronebase-careers"
+   ],
+   "failed": [],
+   "notes": "Secondary guide, not Zeitview official; no Droners.io bid win-rate data found."
+  },
+  {
+   "id": "F5",
+   "status": "UNANSWERED",
+   "answer": "Not researched this round.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "not researched: 12-question research cap for this round; lower priority than questions that could invalidate leading strategies"
+  },
+  {
+   "id": "F6",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #46/#62: Zeitview real-estate marketing missions (~30 min) pay indicative $125-225 (March 2026 guide).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F7",
+   "status": "UNANSWERED",
+   "answer": "Not researched this round.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "not researched: 12-question research cap for this round; lower priority than questions that could invalidate leading strategies"
+  },
+  {
+   "id": "F8",
+   "status": "ANSWERED",
+   "answer": "PIX4Dmatic starts at $125/month and Pix4Dmapper at $333/month (month-to-month available), with a free 15-day plan; DroneDeploy's individual Flight & Analysis plan is $4,188 billed annually with a 14-day free trial. A one-to-two-month Pix4Dmatic subscription fits within $1,500; DroneDeploy annual does not.",
+   "facts": [
+    {
+     "claim": "PIX4Dmatic photogrammetry software is listed starting from USD 125 per month (Pix4D pricing page, viewed 2026-11-26).",
+     "quote": "USD125/ month",
+     "sourceUrl": "https://www.pix4d.com/pricing/",
+     "sourceTitle": "Pix4D pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Pix4Dmapper is listed starting from USD 333 per month (Pix4D pricing page, viewed 2026-11-26).",
+     "quote": "USD333/ month",
+     "sourceUrl": "https://www.pix4d.com/pricing/",
+     "sourceTitle": "Pix4D pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Pix4D subscriptions can renew month-to-month, yearly or on a three-year basis.",
+     "quote": "month-to-month or on a yearly or three-year basis",
+     "sourceUrl": "https://www.pix4d.com/pricing/",
+     "sourceTitle": "Pix4D pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Pix4D offers a free 15-day plan with no credit card required.",
+     "quote": "Free 15-day plan. No credit card required.",
+     "sourceUrl": "https://www.pix4d.com/pricing/",
+     "sourceTitle": "Pix4D pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "DroneDeploy's Flight & Analysis Plan for individual pilots costs $4,188 billed annually (viewed 2026-11-26).",
+     "quote": "$4,188",
+     "sourceUrl": "https://www.dronedeploy.com/pricing",
+     "sourceTitle": "DroneDeploy pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "DroneDeploy gives every new user a 14-day free trial with no credit card required.",
+     "quote": "14-day free trial \u2013 no credit card required",
+     "sourceUrl": "https://www.dronedeploy.com/pricing",
+     "sourceTitle": "DroneDeploy pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.pix4d.com/pricing/",
+    "https://www.dronedeploy.com/pricing"
+   ],
+   "failed": [],
+   "notes": "DroneDeploy page does not explicitly say orthomosaics are in the Flight & Analysis plan; Pix4D one-time licences require sales contact."
+  },
+  {
+   "id": "F9",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #4-5: real estate photographers report being paid in full at the shoot and withholding delivery until paid; pay-on-spot is a photographer-set term, not a brokerage program.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F10",
+   "status": "ANSWERED",
+   "answer": "Realtor.com data (FRED) shows Phoenix metro new listings of 6,400 in November 2025 and 4,954 in December 2025 (roughly 1,100-1,500 per week); October 2026 was 6,708. Far above a 5/week threshold.",
+   "facts": [
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings totaled 6,400 in November 2025 (Realtor.com via FRED), about 1,480 per week.",
+     "quote": "2025-11-01 | 6400",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings totaled 4,954 in December 2025 (Realtor.com via FRED), down from 7,566 in October 2025.",
+     "quote": "2025-12-01 | 4954",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings totaled 6,708 in October 2026, the latest month on FRED (Realtor.com).",
+     "quote": "2026-10-01 | 6708",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    }
+   ],
+   "opened": [
+    "https://fred.stlouisfed.org/data/NEWLISCOU38060"
+   ],
+   "failed": [],
+   "notes": "Evidence obtained from the page opened for F18; no separate research. Nov-Dec 2026 not yet published."
+  },
+  {
+   "id": "F11",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known fact #23/#27: Panoee pays up to 30% recurring commission, monthly via Stripe/PayPal.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F12",
+   "status": "PARTIAL",
+   "answer": "Arizona statute defines land surveying practice to include measuring features 'in the air' and on the surface to determine location, topography, grades and contours and preparing maps of them; practicing or holding oneself out as qualified in a board-regulated profession without registration is a class 2 misdemeanor. Whether a plain (non-survey-grade) orthomosaic falls inside the definition is not stated; topographic/contour deliverables appear to.",
+   "facts": [
+    {
+     "claim": "A.R.S. 32-101 defines 'land surveying practice' to include measuring by angles, distances and elevations natural or artificial features in the air or on the earth's surface (Arizona).",
+     "quote": "Measuring by angles, distances and elevations natural or artificial features in the air",
+     "sourceUrl": "https://www.azleg.gov/ars/32/00101.htm",
+     "sourceTitle": "A.R.S. 32-101 Definitions",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "Under A.R.S. 32-101, that measurement is land surveying when for determining location, size, shape, topography, grades or contours, including preparing maps depicting these features.",
+     "quote": "maps depicting these features",
+     "sourceUrl": "https://www.azleg.gov/ars/32/00101.htm",
+     "sourceTitle": "A.R.S. 32-101 Definitions",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "Under A.R.S. 32-145, a person who practices, offers to practice or holds himself out as qualified in a board-regulated profession without registration is guilty of a class 2 misdemeanor (Arizona).",
+     "quote": "Practices, offers to practice or by any implication holds himself out as qualified to practice",
+     "sourceUrl": "https://www.azleg.gov/ars/32/00145.htm",
+     "sourceTitle": "A.R.S. 32-145 Violations; classification",
+     "sourceDate": null,
+     "lane": "legal"
+    }
+   ],
+   "opened": [
+    "https://www.azleg.gov/ars/32/00101.htm",
+    "https://www.azleg.gov/ars/32/00145.htm",
+    "https://btr.az.gov/non-registrant/wayne-quimby-and-all-aerial-solutions-llc",
+    "https://azbtr.gov/sites/default/files/disciplinary-actions/p17-076_agenda_0.pdf",
+    "https://btr.az.gov/sites/default/files/disciplinary-actions/p17-076_agenda_0.pdf"
+   ],
+   "failed": [
+    "https://btr.az.gov/non-registrant/wayne-quimby-and-all-aerial-solutions-llc: HTTP 403",
+    "https://btr.az.gov/sites/default/files/disciplinary-actions/p17-076_agenda_0.pdf: HTTP 403 (after 301 from azbtr.gov)"
+   ],
+   "notes": "Search results (snippets only, not evidence) indicated AZ BTR enforcement against drone/aerial firms for unregistered land surveying (e.g. P16-041 Drone View Technologies, All In Aerial Solutions); those pages returned 403. Statute does not mention photogrammetry or orthomosaics by name; 'Mavic 3' equipment itself is not regulated."
+  },
+  {
+   "id": "F13",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #11/#12/#34/#36: in-house processing 1-4 h (500 images 2-3 h); Propeller often <12 h, standard 24 h.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F14",
+   "status": "UNANSWERED",
+   "answer": "Not researched this round.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "not researched: forecast of the owner's own outreach conversion is not answerable from public sources; 12-question cap"
+  },
+  {
+   "id": "F15",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #16-18/#22: Adobe Stock pays $56-70 per 4K video sale, Shutterstock 15-40%, Pond5 30-40%; a contributor reported $2 per video sale.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F16",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #19-21: Pond5 video 3-5 business days; Adobe 5-15 business days; Shutterstock no fixed timeframe.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F17",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known fact #43: Droners.io takes a flat 10% commission on completed gigs.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F18",
+   "status": "ANSWERED",
+   "answer": "Yes: Phoenix metro new listings drop sharply in December. In 2025 new listings fell from 7,566 (Oct) to 6,400 (Nov, -15%) to 4,954 (Dec, -35% vs Oct); in 2024 from 7,032 (Oct) to 4,382 (Dec, -38%). They rebound in January (8,556 in Jan 2026).",
+   "facts": [
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings totaled 7,566 in October 2025 (Realtor.com via FRED).",
+     "quote": "2025-10-01 | 7566",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings totaled 6,400 in November 2025 (Realtor.com via FRED), about 1,480 per week.",
+     "quote": "2025-11-01 | 6400",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings totaled 4,954 in December 2025 (Realtor.com via FRED), down from 7,566 in October 2025.",
+     "quote": "2025-12-01 | 4954",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings totaled 4,382 in December 2024 vs 7,032 in October 2024 (Realtor.com via FRED).",
+     "quote": "2024-12-01 | 4382",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Phoenix-Mesa-Scottsdale new listings rebounded to 8,556 in January 2026 (Realtor.com via FRED).",
+     "quote": "2026-01-01 | 8556",
+     "sourceUrl": "https://fred.stlouisfed.org/data/NEWLISCOU38060",
+     "sourceTitle": "Housing Inventory: New Listing Count in Phoenix-Mesa-Scottsdale, AZ (CBSA) (Realtor.com via FRED)",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    }
+   ],
+   "opened": [
+    "https://fred.stlouisfed.org/data/NEWLISCOU38060"
+   ],
+   "failed": [],
+   "notes": "Search 'Phoenix new listings December seasonal decline Cromford holiday listings drop'; Cromford data not found; used Realtor.com series on FRED (not seasonally adjusted). Listings are a proxy for photography demand."
+  },
+  {
+   "id": "F19",
+   "status": "PARTIAL",
+   "answer": "LocaliQ's 2026 benchmarks put Facebook lead-objective CPL at $13.74 for Real Estate and $27.39 across industries. These are consumer real-estate leads, not agents hiring photographers; no Phoenix- or photographer-specific CPL found.",
+   "facts": [
+    {
+     "claim": "LocaliQ's 2026 Facebook ads benchmarks (updated 2026-09-23) list average cost per lead for Real Estate at $13.74 (US, leads objective).",
+     "quote": "Real Estate at $13.74",
+     "sourceUrl": "https://localiq.com/blog/facebook-advertising-benchmarks/",
+     "sourceTitle": "Facebook Ads Benchmarks (LocaliQ)",
+     "sourceDate": "2026-09-23",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "LocaliQ's 2026 benchmarks put average Facebook cost per lead across industries at $27.39 (leads objective).",
+     "quote": "The average cost per lead in Facebook ads for the leads objective across industries is $27.39",
+     "sourceUrl": "https://localiq.com/blog/facebook-advertising-benchmarks/",
+     "sourceTitle": "Facebook Ads Benchmarks (LocaliQ)",
+     "sourceDate": "2026-09-23",
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://wordstream.com/blog/facebook-ads-benchmarks-2025",
+    "https://localiq.com/blog/facebook-advertising-benchmarks/"
+   ],
+   "failed": [
+    "https://wordstream.com/blog/facebook-ads-benchmarks-2025: HTTP 403"
+   ],
+   "notes": "Benchmark 'Real Estate' covers real-estate advertisers' consumer leads; B2B lead cost for a photographer targeting agents is not measured."
+  },
+  {
+   "id": "F20",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #13/#14: Arizona Prompt Payment Act summary \u2014 owner pays GC within 7 days of deemed approval (14 days after receipt), GC pays subs within 7 days of receipt. Applicability to drone services as 'construction' not established.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F21",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Virtual-tour sales volume of a third-party provider does not bear on the leading strategies (real-estate aerial, surveying, stock).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "skipped"
+  },
+  {
+   "id": "F22",
+   "status": "PARTIAL",
+   "answer": "The ARMLS page states no contract length or minimum commitment; joining requires completing training with a 100% quiz score, an application and signing the ARMLS-photographer agreement; no cost now, $50/yr + $25 application from January 2027. ARMLS does not handle payouts, so it imposes no payout delay.",
+   "facts": [
+    {
+     "claim": "To join the ARMLS Preferred Photographer Program a photographer completes training, a quiz and an application.",
+     "quote": "To join the Preferred Photographer Program, complete the training, quiz, and application.",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "ARMLS requires a 100% score on its training course to become a Preferred Photographer.",
+     "quote": "you must pass the training course with a 100% to be a Preferred Photographer.",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "After applying, ARMLS contacts the photographer to sign the ARMLS-photographer agreement.",
+     "quote": "upon completing the application, you will be contacted to sign the agreement",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "ARMLS Preferred Photographer Program has no cost to get started as of Nov 2026.",
+     "quote": "There is no cost to get started at this time.",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://armls.com/become-certified"
+   ],
+   "failed": [],
+   "notes": "No onboarding time or contract term given on the page."
+  },
+  {
+   "id": "F23",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #9-11/#30: 5-acre lot ~ flat $800 project, $500-1,500 minimums, 4-8 h field-to-handoff; processing software cost now in F8.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F24",
+   "status": "UNANSWERED",
+   "answer": "Not researched this round.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "not researched: 12-question research cap for this round; lower priority than questions that could invalidate leading strategies"
+  },
+  {
+   "id": "F25",
+   "status": "ANSWERED",
+   "answer": "SkyWatch $1M drone liability starts at $750/year, $62/month or about $14/hour on demand; another SkyWatch guide says $750-1,500/yr for $1M for new Part 107 pilots. An annual policy cannot be had for $200 from SkyWatch, but monthly ($62) or hourly coverage fits. Real estate and construction clients typically require $1M minimum.",
+   "facts": [
+    {
+     "claim": "SkyWatch.AI $1M drone liability annual plans start at $750 (US).",
+     "quote": "an annual plan which starts at $750",
+     "sourceUrl": "https://www.skywatch.ai/blog/how-much-should-your-drone-insurance-cost",
+     "sourceTitle": "How much should your drone insurance cost? (SkyWatch)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "SkyWatch.AI $1M drone liability monthly policies start at $62 per month.",
+     "quote": "SkyWatch.AI $1M Liability policies start at $62 for the entire month",
+     "sourceUrl": "https://www.skywatch.ai/blog/how-much-should-your-drone-insurance-cost",
+     "sourceTitle": "How much should your drone insurance cost? (SkyWatch)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "SkyWatch.AI $1M drone liability can be bought by the hour for an average of $14, depending on flight zone.",
+     "quote": "can be purchased by the hour for an average of $14, depending on the flight zone",
+     "sourceUrl": "https://www.skywatch.ai/blog/how-much-should-your-drone-insurance-cost",
+     "sourceTitle": "How much should your drone insurance cost? (SkyWatch)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "SkyWatch says liability coverage for most new Part 107 pilots starts around $750-1,500 annually for $1M coverage.",
+     "quote": "For most new Part 107 pilots, liability coverage starts around $750-1,500 annually for $1M coverage.",
+     "sourceUrl": "https://www.skywatch.ai/blog/part-107-commercial-drone-insurance-guide",
+     "sourceTitle": "What Every Part 107 Pilot Needs to Know About Commercial Drone Insurance (SkyWatch)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "SkyWatch states real estate firms and construction clients require minimum $1M drone liability coverage.",
+     "quote": "require minimum $1M coverage",
+     "sourceUrl": "https://www.skywatch.ai/blog/part-107-commercial-drone-insurance-guide",
+     "sourceTitle": "What Every Part 107 Pilot Needs to Know About Commercial Drone Insurance (SkyWatch)",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    }
+   ],
+   "opened": [
+    "https://www.skywatch.ai/blog/how-much-should-your-drone-insurance-cost",
+    "https://www.skywatch.ai/blog/part-107-commercial-drone-insurance-guide"
+   ],
+   "failed": [],
+   "notes": "Insurer's own marketing pages, undated; not Arizona-specific quotes."
+  },
+  {
+   "id": "F26",
+   "status": "PARTIAL",
+   "answer": "ARMLS requires a service agreement between photographer and each agent, but no source says it delays payment; payment terms are set by the photographer in that agreement. Brokerage-specific policies in Phoenix not found.",
+   "facts": [
+    {
+     "claim": "ARMLS requires Preferred Photographers to have their own service agreement with each Arizona agent they serve; ARMLS's own photographer agreement only fills gaps (Section 4).",
+     "quote": "you are required to have a service agreement with agents you serve",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "payer"
+    },
+    {
+     "claim": "Where a photographer's agreement with an agent does not cover items in Section 4 of the ARMLS-photographer agreement, the ARMLS terms apply.",
+     "quote": "does not cover items in Section 4 of the ARMLS-photographer agreement, those terms will apply.",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    },
+    {
+     "claim": "realMLS states it is not responsible for payment of photographer fees under the independent agent-photographer service agreements (comparable MLS program, not ARMLS).",
+     "quote": "realMLS is not responsible for any of the terms, including payment of fees.",
+     "sourceUrl": "https://www.realmls.com/photographer/",
+     "sourceTitle": "realMLS Photographer Network",
+     "sourceDate": null,
+     "lane": "payer"
+    }
+   ],
+   "opened": [
+    "https://armls.com/become-certified",
+    "https://www.realmls.com/photographer/"
+   ],
+   "failed": [],
+   "notes": "No Phoenix brokerage policy pages found; one agreement per agent (not per shoot) is what ARMLS states."
+  },
+  {
+   "id": "F27",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #3/#59/#76: PropPhoto Mesa drone video $129-300 per shoot, 24-48 h delivery; Drone Videos Phoenix sells commercial RE video with rush add-on. Payment terms photographer-set (facts #4-5).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F28",
+   "status": "PARTIAL",
+   "answer": "No weekly count of Phoenix construction-progress jobs on Droners.io or Zeitview is public; a 2026 Zeitview guide lists construction progress mapping missions at indicative $300-500 per ~75 minutes and says volume is inconsistent. Known facts say weekly reports are often turned around within one working day.",
+   "facts": [
+    {
+     "claim": "Zeitview construction progress mapping missions (PPK, ortho outputs) carry indicative pilot pay of $300-500 for about a 75-minute mission (2026 guide).",
+     "quote": "Construction progress mapping with PPK logs for high-accuracy ortho outputs",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview / DroneBase careers guide (Fonzi)",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "A March 2026 Zeitview careers guide says Zeitview mission volume can be inconsistent, especially in saturated markets.",
+     "quote": "Mission volume can be inconsistent, especially in saturated markets.",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview / DroneBase careers guide (Fonzi)",
+     "sourceDate": null,
+     "lane": "current_demand"
+    }
+   ],
+   "opened": [
+    "https://droners.io/jobs",
+    "https://fonzi.ai/blog/zeitview-dronebase-careers"
+   ],
+   "failed": [
+    "https://droners.io/jobs: HTTP 403"
+   ],
+   "notes": "Same searches as F2; turnaround expectation from known fact #35 (Birdi)."
+  },
+  {
+   "id": "F29",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known facts #11/#12/#34/#36 give processing times (in-house 1-4 h; Propeller <12-24 h); software cost from F8 (PIX4Dmatic $125/mo).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  },
+  {
+   "id": "F30",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known fact #13: AZ Prompt Payment Act requires contractor to pay subs within 7 days of receiving owner payment; applies to construction contracts, not private photography.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "answered by known facts; no research"
+  }
+ ]
+}

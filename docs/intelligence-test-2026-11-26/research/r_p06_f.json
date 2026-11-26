@@ -1,0 +1,593 @@
+{
+ "goal": "p06",
+ "worker": "p06_f",
+ "results": [
+  {
+   "id": "F1",
+   "status": "PARTIAL",
+   "answer": "TaskRabbit's Seattle executive/personal-assistant pages show 1,731 featured Taskers in Seattle, an average booking cost of $31/hour, and 'Schedule a Tasker as early as today'. TaskRabbit supports a task-based fixed payment structure besides hourly rates. No page confirmed that a specific Seattle virtual assistant is free within 12 hours.",
+   "facts": [
+    {
+     "claim": "TaskRabbit's Seattle executive-assistant page (viewed 2026-11-26) shows 1,731 featured Taskers in Seattle, WA.",
+     "quote": "1731 Featured Taskers in Seattle, WA",
+     "sourceUrl": "https://www.taskrabbit.com/locations/seattle/executive-assistant",
+     "sourceTitle": "Executive assistant - Seattle | Taskrabbit",
+     "sourceDate": null,
+     "lane": "fulfiller"
+    },
+    {
+     "claim": "TaskRabbit's Seattle pages say clients can schedule a Tasker as early as the same day (viewed 2026-11-26).",
+     "quote": "Schedule a Tasker as early as today.",
+     "sourceUrl": "https://www.taskrabbit.com/locations/seattle/executive-assistant",
+     "sourceTitle": "Executive assistant - Seattle | Taskrabbit",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "TaskRabbit's Seattle executive-assistant page gives an average virtual-assistant booking cost of $31 per hour (viewed 2026-11-26).",
+     "quote": "It's $31 an hour when you book a Tasker.",
+     "sourceUrl": "https://www.taskrabbit.com/locations/seattle/executive-assistant",
+     "sourceTitle": "Executive assistant - Seattle | Taskrabbit",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "TaskRabbit offers a task-based structure with a fixed payment per task, besides self-set and pre-set hourly rates (TaskRabbit blog, 2026).",
+     "quote": "This structure offers a fixed payment per task — not an hourly rate.",
+     "sourceUrl": "https://www.taskrabbit.com/blog/how-pricing-works-on-taskrabbit-and-what-it-means-for-your-earnings/",
+     "sourceTitle": "How Pricing Works on Taskrabbit",
+     "sourceDate": null,
+     "lane": "fulfiller"
+    }
+   ],
+   "opened": [
+    "https://www.taskrabbit.com/m/online-tasks/virtual-assistant",
+    "https://www.taskrabbit.com/locations/seattle/executive-assistant",
+    "https://taskrabbit.com/locations/seattle/personal-assistant",
+    "https://www.taskrabbit.com/blog/how-pricing-works-on-taskrabbit-and-what-it-means-for-your-earnings/"
+   ],
+   "failed": [],
+   "notes": "Individual Tasker profiles and live calendars were not visible in the fetched pages. Whether a Seattle Tasker is available within 12 hours was not verified."
+  },
+  {
+   "id": "F2",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: TaskRabbit pays Taskers through Stripe, and most payouts arrive 1-3 business days after task completion (TaskRabbit blog, July 2026).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F3",
+   "status": "ANSWERED",
+   "answer": "Upwork's faster payouts apply only to hourly contracts held by Top Rated and Top Rated Plus freelancers and agencies, so a new freelancer is not eligible. With faster payouts the typical 10-day wait is cut in half, and cleared payments are released on Fridays.",
+   "facts": [
+    {
+     "claim": "Upwork faster payouts are available only to Top Rated and Top Rated Plus freelancers and agencies on hourly contracts (help center, updated 2026-10-29).",
+     "quote": "Top Rated and Top Rated Plus freelancers and agencies are eligible for faster payouts for hourly contracts.",
+     "sourceUrl": "https://support.upwork.com/api/v2/help_center/en-us/articles/360047676133.json",
+     "sourceTitle": "Faster payouts (Upwork Help)",
+     "sourceDate": "2026-10-29",
+     "lane": "risk"
+    },
+    {
+     "claim": "Upwork's standard hourly payment wait is typically 10 days, and faster payouts cut it in half to about 5 days.",
+     "quote": "With faster payouts, the typical 10-day wait for payment is cut in half for hourly contracts.",
+     "sourceUrl": "https://support.upwork.com/api/v2/help_center/en-us/articles/360047676133.json",
+     "sourceTitle": "Faster payouts (Upwork Help)",
+     "sourceDate": "2026-10-29",
+     "lane": "timing"
+    },
+    {
+     "claim": "Upwork releases cleared faster payments by 11:59 PM UTC on Fridays.",
+     "quote": "Cleared payments are released by 11:59 PM UTC on Fridays.",
+     "sourceUrl": "https://support.upwork.com/api/v2/help_center/en-us/articles/40368885170579.json",
+     "sourceTitle": "Why haven't my funds arrived yet if I qualify for faster payments",
+     "sourceDate": "2026-10-18",
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://support.upwork.com/api/v2/help_center/en-us/articles/40368885170579.json",
+    "https://support.upwork.com/api/v2/help_center/en-us/articles/360047676133.json"
+   ],
+   "failed": [],
+   "notes": "Did not research whether individual freelancers would accept a 15-hour, $500 contract. Platform eligibility rules out faster payments for a new account."
+  },
+  {
+   "id": "F4",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Venmo business profiles pay 1.9% + $0.10 per payment received, and Venmo Instant Transfer costs 1.75% and typically arrives in minutes. Zelle typically arrives in minutes, with fees set by the bank.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F5",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Seattle requires a license for home-based and personal or professional services even when unprofitable, at $73 for revenue of $0-$19,999. The $4,000 exemption applies only to businesses with no place of business in Seattle.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F6",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Fiverr seller earnings clear in 14 days and Early Payout needs Top Rated or Level 2 status (known), and Fiverr buyers prepay (F7). Buyer release speed therefore cannot make Fiverr payouts arrive within 7 days.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Skipped: answer cannot change strategy choice or viability."
+  },
+  {
+   "id": "F7",
+   "status": "ANSWERED",
+   "answer": "No. On Fiverr all payments go through the order page and clients pay in advance, so a broker buying a gig must pay the designer upfront. Paying outside the platform is not supported.",
+   "facts": [
+    {
+     "claim": "Fiverr requires clients to pay for orders in advance through the platform's order page (Fiverr client FAQ, updated 2026-11-22).",
+     "quote": "For your safety, all payments are made through Fiverr on the order page, and clients pay for orders in advance.",
+     "sourceUrl": "https://help.fiverr.com/api/v2/help_center/en-us/articles/360011454477.json",
+     "sourceTitle": "FAQs for clients (Fiverr Help Center)",
+     "sourceDate": "2026-11-22",
+     "lane": "delivery_requirements"
+    },
+    {
+     "claim": "Fiverr tells clients to report any freelancer who asks for an alternative payment method (Fiverr client FAQ, 2026-11-22).",
+     "quote": "If you are asked to use an alternative payment method, report it to Customer Service right away.",
+     "sourceUrl": "https://help.fiverr.com/api/v2/help_center/en-us/articles/360011454477.json",
+     "sourceTitle": "FAQs for clients (Fiverr Help Center)",
+     "sourceDate": "2026-11-22",
+     "lane": "legal"
+    },
+    {
+     "claim": "Fiverr charges a buyer service fee on every transaction, including tips (Fiverr client FAQ, 2026-11-22).",
+     "quote": "All transactions, including tips, require the service fee.",
+     "sourceUrl": "https://help.fiverr.com/api/v2/help_center/en-us/articles/360011454477.json",
+     "sourceTitle": "FAQs for clients (Fiverr Help Center)",
+     "sourceDate": "2026-11-22",
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://help.fiverr.com/api/v2/help_center/en-us/articles/360011454477.json"
+   ],
+   "failed": [],
+   "notes": "24-hour gig prices of $80-$120 were not researched, because prepayment already rules out $0-upfront brokerage through Fiverr."
+  },
+  {
+   "id": "F8",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Fiverr earnings have a 14-day clearing period. Early Payout (1% fee) is available only to Top Rated or Level 2 sellers with Seller Plus Premium.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F9",
+   "status": "ANSWERED",
+   "answer": "Contra holds standard payouts for a 4-day safety clearance on top of the provider's own time. Its faster-payout option delivers to a US debit card within an hour, or to PayPal or Payoneer within 30 minutes. If the client pays by ACH, funds are withdrawable only after 3-5 business days of settlement. Known listings price comparable CSV cleanups at $50-$107.",
+   "facts": [
+    {
+     "claim": "Contra applies a 4-day safety-clearance period to standard freelancer payouts, on top of the payout provider's own time (help article, March 13 2026).",
+     "quote": "Standard payouts are subject to a 4-day safety-clearance period in addition to the provider timeline.",
+     "sourceUrl": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+     "sourceTitle": "Payout timelines for freelancers on Contra",
+     "sourceDate": "2026-03-13",
+     "lane": "timing"
+    },
+    {
+     "claim": "Contra's faster-payouts option lets freelancers withdraw before the 4-day clearance ends; to a US debit card it arrives within an hour, to PayPal or Payoneer within 30 minutes (March 2026).",
+     "quote": "Faster payouts gives you the option to access your earnings before the 4-day safety-clearance period is complete.",
+     "sourceUrl": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+     "sourceTitle": "Payout timelines for freelancers on Contra",
+     "sourceDate": "2026-03-13",
+     "lane": "timing"
+    },
+    {
+     "claim": "When a Contra client pays by ACH, the freelancer can withdraw only after the funds settle, which takes 3-5 business days (March 2026).",
+     "quote": "For ACH, funds take 3-5 business days to settle and SEPA takes 7-10 business days.",
+     "sourceUrl": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+     "sourceTitle": "Payout timelines for freelancers on Contra",
+     "sourceDate": "2026-03-13",
+     "lane": "risk"
+    }
+   ],
+   "opened": [
+    "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra"
+   ],
+   "failed": [],
+   "notes": "Contra's fee for faster payouts is on a separate 'Fees overview' article, not opened. Some payouts may be held for review."
+  },
+  {
+   "id": "F10",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: OpenAI's Free API tier has a $100/month usage limit and is available in allowed geographies, but per-model rate limits are published only for paid tiers, so throughput cannot be verified further.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F11",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: US VA rates are $15-$42/hr (average $25.77), and general admin and email work is $15-$28/hr (HoneyBook 2026). A Seattle VA lists $45/hr, and TaskRabbit Seattle averages $31/hr (F1).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F12",
+   "status": "UNANSWERED",
+   "answer": "No source confirmed that a Seattle BNI chapter meets during Thanksgiving week or wants a VA referral partner. Known: BNI chapters meet weekly to exchange referrals.",
+   "facts": [
+    {
+     "claim": "A Seattle BNI chapter, Creative Alliance for Growth, held a visitors' day at AGC of Washington, Seattle, on Wednesday Sept 17 2025 from 11:30 AM to 1:30 PM.",
+     "quote": "Wednesday, September 17, 2025 • 11:30 AM - 1:30 PM",
+     "sourceUrl": "https://www.eventbrite.com/e/bni-creative-alliance-for-growth-visitors-day-2025-tickets-1478664458199",
+     "sourceTitle": "BNI Creative Alliance for Growth Visitors Day 2025 (Eventbrite)",
+     "sourceDate": "2025-09-17",
+     "lane": "acquisition_access"
+    }
+   ],
+   "opened": [
+    "https://www.eventbrite.com/e/bni-creative-alliance-for-growth-visitors-day-2025-tickets-1478664458199"
+   ],
+   "failed": [],
+   "notes": "Searched 'BNI Seattle chapters weekly meeting visitors Thanksgiving week' and 'BNI Washington Seattle chapter ... visitor fee'. No current Seattle chapter schedule for Nov 23-Dec 2 2026 and no VA-demand evidence was found. Visit rules seen only in search snippets were not recorded."
+  },
+  {
+   "id": "F13",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: new Stripe users are not immediately eligible for Instant Payouts, and the first Stripe payout typically arrives 7-14 days after the first live payment.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F14",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Upwork fixed-price clients fund escrow before work, and approved funds then have a 5-day hold. The client has 14 days to approve. Fiverr earnings clear in 14 days.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F15",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Belkins 2025 measured a 0.45% B2B cold-email reply rate (0.72% for 0-10-employee companies), while Instantly gives 5-9%. No Thanksgiving-specific figure was found.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F16",
+   "status": "PARTIAL",
+   "answer": "No Seattle-specific evidence was found. A Contra guide says freelance deposits typically run 30-50% of the fee, with first-time clients closer to 50%. A logo designer hired with no upfront payment is therefore atypical.",
+   "facts": [
+    {
+     "claim": "A Contra guide (July 6 2025) says a standard freelance project deposit is 30% to 50% of the fee.",
+     "quote": "A standard deposit typically ranges from 30% to 50% of the total project fee.",
+     "sourceUrl": "https://contra.com/p/7eoOP7W2-smart-payment-practices-milestones-upfronts-and-using-escrow-safely",
+     "sourceTitle": "Smart Payment Practices: Milestones, Upfronts, and Using Escrow Safely (Contra)",
+     "sourceDate": "2025-07-06",
+     "lane": "fulfiller"
+    },
+    {
+     "claim": "The same Contra guide says first-time clients usually pay a deposit closer to 50%.",
+     "quote": "First-time clients often pay closer to 50%, while repeat clients might pay 30%.",
+     "sourceUrl": "https://contra.com/p/7eoOP7W2-smart-payment-practices-milestones-upfronts-and-using-escrow-safely",
+     "sourceTitle": "Smart Payment Practices: Milestones, Upfronts, and Using Escrow Safely (Contra)",
+     "sourceDate": "2025-07-06",
+     "lane": "fulfiller"
+    }
+   ],
+   "opened": [
+    "https://contra.com/p/7eoOP7W2-smart-payment-practices-milestones-upfronts-and-using-escrow-safely"
+   ],
+   "failed": [],
+   "notes": "Searched 'freelance logo designer deposit 50% upfront standard practice 2026'. No Seattle-specific survey of designers accepting payment after delivery was found."
+  },
+  {
+   "id": "F17",
+   "status": "ANSWERED",
+   "answer": "PayPal Instant Transfer costs 1.75% (min $0.25, max $25), and standard transfer is free. Goods-and-services receipts cost 2.99%, and invoice card payments 2.99% + $0.49. Computed: $500 received as goods and services nets $485.05, or about $476.56 after Instant Transfer. Friends-and-family receipts are free, netting about $491.25 after Instant Transfer.",
+   "facts": [
+    {
+     "claim": "PayPal US Instant Transfer to a bank or debit card costs 1.75% of the amount transferred (min $0.25, max $25; consumer fee page updated May 19 2026).",
+     "quote": "1.75% of amount transferred",
+     "sourceUrl": "https://www.paypal.com/us/webapps/mpp/paypal-fees",
+     "sourceTitle": "PayPal Consumer Fees",
+     "sourceDate": "2026-05-19",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "PayPal standard transfer to a bank has no fee when no currency conversion is involved (US consumer fees, May 2026).",
+     "quote": "No Fee (when no currency conversion is involved)",
+     "sourceUrl": "https://www.paypal.com/us/webapps/mpp/paypal-fees",
+     "sourceTitle": "PayPal Consumer Fees",
+     "sourceDate": "2026-05-19",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "PayPal charges 2.99% to receive domestic US goods-and-services payments (business fees page updated Nov 4 2026).",
+     "quote": "Send/Receive Money for Goods and Services | 2.99%",
+     "sourceUrl": "https://www.paypal.com/us/business/paypal-business-fees",
+     "sourceTitle": "PayPal Merchant Fees",
+     "sourceDate": "2026-11-04",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "PayPal invoicing charges 2.99% + $0.49 for standard card payments and 1% (max $10) for Pay by Bank ACH (US, Nov 2026).",
+     "quote": "Pay by Bank (ACH) | 1% (capped at $10.00 per transaction)",
+     "sourceUrl": "https://www.paypal.com/us/business/paypal-business-fees",
+     "sourceTitle": "PayPal Merchant Fees",
+     "sourceDate": "2026-11-04",
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.paypal.com/us/webapps/mpp/paypal-fees",
+    "https://www.paypal.com/us/business/paypal-business-fees"
+   ],
+   "failed": [],
+   "notes": "The PayPal fee pages do not state standard-transfer timing. Net figures are computed from these rates, not quoted."
+  },
+  {
+   "id": "F18",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Constant Contact 2025 found holidays are up to half of sales for 60% of SMBs, and 33% launched new campaigns. Seattle promoted Small Business Saturday. No Seattle 2026 service-demand figure exists.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F19",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: the $4,000 exemption applies only to businesses with no place of business in Seattle. A Seattle resident working from home has one, so the $73 license applies. A WA state registration is needed only at $12,000+ or if sales tax applies.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F20",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Duplicate of F2: TaskRabbit payouts go through Stripe and most arrive 1-3 business days after completion. The blog mentions no instant payout option (F1 sources).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F21",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: PeoplePerHour's 7-day fast clearing needs over £2,000 in earnings in the previous 2 months. Otherwise funds clear in 14 days, plus 2 working days to withdraw.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F22",
+   "status": "ANSWERED",
+   "answer": "TaskRabbit allows three rate structures: self-set hourly, pre-set hourly for direct hires, and task-based with a fixed payment shown before the task starts. Seattle VA and executive-assistant bookings average $31/hour, so 2 hours is about $62 before any client fees.",
+   "facts": [
+    {
+     "claim": "TaskRabbit Taskers can set their own hourly rate by category (TaskRabbit blog, 2026).",
+     "quote": "You choose your own hourly rate by category.",
+     "sourceUrl": "https://www.taskrabbit.com/blog/how-pricing-works-on-taskrabbit-and-what-it-means-for-your-earnings/",
+     "sourceTitle": "How Pricing Works on Taskrabbit",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "TaskRabbit also offers a task-based structure with a fixed payment per task instead of an hourly rate.",
+     "quote": "This structure offers a fixed payment per task — not an hourly rate.",
+     "sourceUrl": "https://www.taskrabbit.com/blog/how-pricing-works-on-taskrabbit-and-what-it-means-for-your-earnings/",
+     "sourceTitle": "How Pricing Works on Taskrabbit",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "TaskRabbit gives $31/hour as the cost of booking a personal assistant in Seattle (viewed 2026-11-26).",
+     "quote": "It costs $31 an hour to book a personal assistant with Taskrabbit.",
+     "sourceUrl": "https://taskrabbit.com/locations/seattle/personal-assistant",
+     "sourceTitle": "Personal assistant - Seattle | Taskrabbit",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.taskrabbit.com/blog/how-pricing-works-on-taskrabbit-and-what-it-means-for-your-earnings/",
+    "https://taskrabbit.com/locations/seattle/personal-assistant",
+    "https://www.taskrabbit.com/locations/seattle/executive-assistant"
+   ],
+   "failed": [],
+   "notes": "The fetched pages showed no 2-hour minimum. A search snippet mentioned one Seattle profile with a 2-hour minimum, but it was not verified."
+  },
+  {
+   "id": "F23",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: on Upwork fixed-price contracts the client funds escrow first and has up to 14 days to approve. Approved funds then have a 5-day hold, so client-approval timing decides whether payment arrives within 7 days.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F24",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Computed from known Stripe rates (2.9% + $0.30 processing; Instant Payout 1.5%, min $0.50): $500 gross nets $485.20, and Instant Payout leaves about $477.92. Known: new Stripe accounts are not immediately eligible for Instant Payouts.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F25",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Square instant transfer costs 1.95% on top of processing. Standard transfers of payments taken before 5 PM PT arrive the next business day.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  },
+  {
+   "id": "F26",
+   "status": "PARTIAL",
+   "answer": "Craigslist charges $5 per Services post in the US. No source with Seattle Services response times was found.",
+   "facts": [
+    {
+     "claim": "Craigslist charges $5 per post in the Services category in the US and Canada (posting fees page, viewed 2026-11-26).",
+     "quote": "Services in US and CA—$5",
+     "sourceUrl": "https://www.craigslist.org/about/help/posting_fees",
+     "sourceTitle": "craigslist | about | help | posting fees",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.craigslist.org/about/help/posting_fees"
+   ],
+   "failed": [],
+   "notes": "The fee page says nothing about post duration or response speed. No published Seattle Craigslist response-time data was found. The $5 fee cannot be paid from $0 capital without an outside source."
+  },
+  {
+   "id": "F27",
+   "status": "PARTIAL",
+   "answer": "No conversion rate was found. Meta's Commerce Policies say commerce content may not promote buying or selling services, except through specific channels (WhatsApp Business app, Appointments). So a $70 service listing on Facebook Marketplace is restricted.",
+   "facts": [
+    {
+     "claim": "Meta's Commerce Policies (viewed 2026-11-26) bar commerce content, including Facebook Marketplace, from promoting the buying or selling of services, with exceptions such as Appointments and the WhatsApp Business app.",
+     "quote": "Commerce content may not promote the buying, selling, or trading of services, except on the",
+     "sourceUrl": "https://www.facebook.com/policies_center/commerce",
+     "sourceTitle": "Commerce Policies | Meta",
+     "sourceDate": null,
+     "lane": "legal"
+    }
+   ],
+   "opened": [
+    "https://www.facebook.com/policies_center/commerce",
+    "https://transparency.meta.com/policies/commerce-policies/"
+   ],
+   "failed": [
+    "https://transparency.meta.com/policies/commerce-policies/: HTTP 404"
+   ],
+   "notes": "The quoted sentence is truncated by the fetch tool. Per the tool, the exceptions are the WhatsApp Business app and Appointments on Facebook/Instagram. Facebook Groups posts (not Marketplace) were not assessed. No conversion statistics found."
+  },
+  {
+   "id": "F28",
+   "status": "PARTIAL",
+   "answer": "TaskRabbit's Terms make Taskers independent contractors of clients, and TaskRabbit is not an employer. Each user carries the liability for classifying their own workers. The Terms do not explicitly address a client reselling a Tasker's work. Taskers may use subcontractors only with client approval, and those subcontractors must be registered on the platform.",
+   "facts": [
+    {
+     "claim": "TaskRabbit's Terms of Service state that Taskers are independent contractors of clients, not of TaskRabbit.",
+     "quote": "Taskers are independent contractors of Clients, and Clients are therefore clients of Taskers, not Taskrabbit.",
+     "sourceUrl": "https://support.taskrabbit.com/hc/en-us/articles/360008913792-Taskrabbit-s-Terms-of-Service",
+     "sourceTitle": "Taskrabbit's Terms of Service",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "TaskRabbit's Terms put liability for worker classification on each user.",
+     "quote": "Each User assumes all liability for proper classification of such User's workers based on applicable legal guidelines.",
+     "sourceUrl": "https://support.taskrabbit.com/hc/en-us/articles/360008913792-Taskrabbit-s-Terms-of-Service",
+     "sourceTitle": "Taskrabbit's Terms of Service",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "TaskRabbit's Terms state TaskRabbit is not an employer of any user.",
+     "quote": "Taskrabbit is not an employer of any User.",
+     "sourceUrl": "https://support.taskrabbit.com/hc/en-us/articles/360008913792-Taskrabbit-s-Terms-of-Service",
+     "sourceTitle": "Taskrabbit's Terms of Service",
+     "sourceDate": null,
+     "lane": "legal"
+    }
+   ],
+   "opened": [
+    "https://www.taskrabbit.com/terms",
+    "https://support.taskrabbit.com/api/v2/help_center/en-us/articles/360008913792.json",
+    "https://support.taskrabbit.com/hc/en-us/articles/360008913792-Taskrabbit-s-Terms-of-Service"
+   ],
+   "failed": [
+    "https://www.taskrabbit.com/terms: 302 redirect to support.taskrabbit.com",
+    "https://support.taskrabbit.com/api/v2/help_center/en-us/articles/360008913792.json: HTTP 404"
+   ],
+   "notes": "Washington State independent-contractor tests and the Acceptable Use Policy were not researched. The Platform license is 'for your personal use and the intended purpose of the Platform', and whether that restricts reselling is unclear."
+  },
+  {
+   "id": "F29",
+   "status": "PARTIAL",
+   "answer": "A DesignCrowd project runs an Open phase of typically 2-14 days, a Deciding phase of up to 14 days and a Handover of up to 7 days. Designers are paid only after the project closes, via PayPal or Payoneer, and DesignCrowd keeps 15%. A designer winning a newly opened contest is therefore unlikely to be paid within 7 days. Whether buyers pay before work starts was not confirmed on a page.",
+   "facts": [
+    {
+     "claim": "DesignCrowd's Open phase typically lasts 2 to 14 days (DesignCrowd help, viewed 2026-11-26).",
+     "quote": "The Open phase of a project typically lasts from 2 - 14 days.",
+     "sourceUrl": "https://www.designcrowd.com/help/article/what-are-the-different-statuses-of-a-project",
+     "sourceTitle": "What are the different statuses of a project (DesignCrowd)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "DesignCrowd's Deciding phase can last up to 14 days.",
+     "quote": "The Deciding phase my last up to 14 days.",
+     "sourceUrl": "https://www.designcrowd.com/help/article/what-are-the-different-statuses-of-a-project",
+     "sourceTitle": "What are the different statuses of a project (DesignCrowd)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "DesignCrowd pays designers only when the project is completed, after a Design Handover of up to 7 days.",
+     "quote": "the project is completed and DesignCrowd will make payment to the designer(s)",
+     "sourceUrl": "https://www.designcrowd.com/help/article/what-are-the-different-statuses-of-a-project",
+     "sourceTitle": "What are the different statuses of a project (DesignCrowd)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "DesignCrowd keeps 15% of all project budgets and place and participation payments.",
+     "quote": "DesignCrowd retains a standard 15% of all project budget, place and participation payments from customers.",
+     "sourceUrl": "https://www.designcrowd.com/help/article/how-much-does-a-designer-get-paid",
+     "sourceTitle": "How much does a designer get paid (DesignCrowd)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "DesignCrowd pays contest winnings and participation payments via Payoneer or PayPal.",
+     "quote": "If you win a contest or receive a participation payment, your payment will be paid via Payoneer or PayPal.",
+     "sourceUrl": "https://www.designcrowd.com/help/article/how-do-i-get-paid",
+     "sourceTitle": "How do I get paid (DesignCrowd)",
+     "sourceDate": null,
+     "lane": "payer"
+    }
+   ],
+   "opened": [
+    "https://www.designcrowd.com/help/article/how-do-i-get-paid",
+    "https://www.designcrowd.com/help/article/how-much-does-a-designer-get-paid",
+    "https://www.designcrowd.com/help/article/what-are-the-different-statuses-of-a-project"
+   ],
+   "failed": [],
+   "notes": "No DesignCrowd page found giving days from project close to payout. Buyer prepayment terms were not opened."
+  },
+  {
+   "id": "F30",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: the Gigwalk iOS app was last updated in December 2019 (v3.0.13), so the platform is effectively stale. MTurk closed on Sept 30 2026, and Clickworker pays weekly.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Answered by known facts; not re-researched."
+  }
+ ]
+}

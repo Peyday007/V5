@@ -1,0 +1,362 @@
+[
+ {
+  "id": "Q1",
+  "question": "Do Phoenix-area real estate agents have active listings requiring drone photography/videography in the next 60 days with year-end budget availability?",
+  "area": "real estate market demand timing",
+  "decision": "whether to target real estate agents as primary buyers",
+  "invalidates": "if no active listings or budget constraints exist",
+  "searches": [
+   "Phoenix real estate listings November 2026",
+   "Arizona real estate agent surveys",
+   "year-end 2026 real estate marketing budgets"
+  ]
+ },
+ {
+  "id": "Q2",
+  "question": "What is the average price real estate agents in Phoenix pay for drone photography packages (10-15 edited photos + 1-2 minute video)?",
+  "area": "pricing benchmarks for real estate drone services",
+  "decision": "pricing strategy for real estate drone content packages",
+  "invalidates": "if market rates are below $150 per package making $4,500 goal impossible",
+  "searches": [
+   "Phoenix real estate drone photography pricing",
+   "Arizona real estate marketing service costs",
+   "real estate agent photography budget surveys"
+  ]
+ },
+ {
+  "id": "Q3",
+  "question": "How quickly do real estate agents in Phoenix typically pay for drone services after delivery?",
+  "area": "payment terms and cash flow timing",
+  "decision": "whether real estate agent payment terms fit 60-day cash requirement",
+  "invalidates": "if payment takes 45+ days post-delivery making 60-day settlement impossible",
+  "searches": [
+   "Phoenix real estate agent payment terms",
+   "real estate drone service payment cycles",
+   "Arizona real estate marketing vendor payment practices"
+  ]
+ },
+ {
+  "id": "Q4",
+  "question": "What percentage of Phoenix real estate listings currently use drone content versus traditional photography?",
+  "area": "market penetration and competition level",
+  "decision": "whether real estate drone market is saturated or growing",
+  "invalidates": "if drone usage is <5% indicating insufficient demand or >80% indicating oversaturation",
+  "searches": [
+   "Phoenix MLS drone content usage statistics",
+   "Arizona real estate marketing trends 2026",
+   "real estate listing photography methods survey"
+  ]
+ },
+ {
+  "id": "Q5",
+  "question": "Do construction companies and engineering firms in Arizona have active projects with year-end budgets for drone surveying services?",
+  "area": "construction market demand timing",
+  "decision": "whether to target construction/engineering as primary buyers",
+  "invalidates": "if no active projects or budget constraints exist in construction sector",
+  "searches": [
+   "Arizona construction projects Q4-Q1 2026-2027",
+   "Arizona engineering firms drone surveying demand",
+   "year-end 2026 construction budgets Arizona"
+  ]
+ },
+ {
+  "id": "Q6",
+  "question": "What are typical rates for drone surveying services (orthomosaics, elevation models, CAD files) in Arizona?",
+  "area": "surveying service pricing benchmarks",
+  "decision": "pricing strategy for surveying data services",
+  "invalidates": "if rates are below $300 per survey making revenue goal unachievable",
+  "searches": [
+   "Arizona drone surveying service pricing",
+   "engineering firm drone survey costs",
+   "construction surveying rates Phoenix"
+  ]
+ },
+ {
+  "id": "Q7",
+  "question": "How long does it typically take to process and deliver professional drone survey data?",
+  "area": "processing time and workflow capacity",
+  "decision": "whether surveying fits within 20 hours/week constraint",
+  "invalidates": "if processing takes 8+ hours per survey exceeding weekly capacity",
+  "searches": [
+   "drone survey data processing time",
+   "professional drone survey workflow",
+   "Arizona surveying company turnaround times"
+  ]
+ },
+ {
+  "id": "Q8",
+  "question": "What payment terms do construction firms typically use for subcontracted drone services?",
+  "area": "construction payment terms",
+  "decision": "whether construction payments fit 60-day cash requirement",
+  "invalidates": "if payment terms exceed 60 days from project completion",
+  "searches": [
+   "construction subcontractor payment terms Arizona",
+   "engineering firm vendor payment cycles",
+   "Arizona construction industry payment practices"
+  ]
+ },
+ {
+  "id": "Q9",
+  "question": "Which online marketplaces or platforms have active buyers seeking drone footage in Arizona?",
+  "area": "marketplace demand and platform viability",
+  "decision": "which platforms to list drone content on for licensing revenue",
+  "invalidates": "if no platforms have active Arizona-specific drone footage buyers",
+  "searches": [
+   "stock drone footage marketplaces 2026",
+   "Arizona aerial footage demand platforms",
+   "drone footage licensing platforms active buyers"
+  ]
+ },
+ {
+  "id": "Q10",
+  "question": "What commission rates do stock footage marketplaces pay for drone content sales?",
+  "area": "licensing revenue per sale",
+  "decision": "whether licensing can generate $4,500 in 60 days",
+  "invalidates": "if commission rates are <5% requiring impossible volume of sales",
+  "searches": [
+   "Shutterstock drone footage commission rates",
+   "Adobe Stock aerial footage payouts",
+   "Pond5 drone video royalties 2026"
+  ]
+ },
+ {
+  "id": "Q11",
+  "question": "How quickly do stock footage marketplaces process and approve new drone content submissions?",
+  "area": "content approval and monetization timeline",
+  "decision": "whether licensing can generate revenue within 60-day window",
+  "invalidates": "if approval takes 30+ days delaying revenue generation",
+  "searches": [
+   "stock footage platform content approval times",
+   "drone footage submission processing",
+   "Shutterstock contributor approval timeline"
+  ]
+ },
+ {
+  "id": "Q12",
+  "question": "What is the typical sale price for Arizona-specific drone footage on stock platforms?",
+  "area": "per-unit revenue potential",
+  "decision": "pricing and volume needed for licensing revenue goal",
+  "invalidates": "if average sale price is <$10 requiring impossible sales volume",
+  "searches": [
+   "Arizona drone footage stock prices",
+   "Phoenix aerial stock footage pricing",
+   "desert landscape drone video sale values"
+  ]
+ },
+ {
+  "id": "Q13",
+  "question": "Do real estate agents in Phoenix use virtual tour platforms that pay referral commissions?",
+  "area": "virtual tour affiliate marketing opportunities",
+  "decision": "whether to pursue virtual tour brokerage model",
+  "invalidates": "if no referral programs exist or pay <10% commission",
+  "searches": [
+   "Matterport affiliate program Arizona",
+   "real estate virtual tour referral commissions",
+   "virtual staging company partner programs"
+  ]
+ },
+ {
+  "id": "Q14",
+  "question": "What is the cost structure for creating professional virtual tours (drone + ground imagery + platform fees)?",
+  "area": "virtual tour production costs",
+  "decision": "whether virtual tour service can be profitable within capital constraint",
+  "invalidates": "if production costs exceed $100 per tour making $4,500 goal impossible",
+  "searches": [
+   "virtual tour production costs 2026",
+   "Matterport pricing for real estate agents",
+   "professional virtual tour service costs"
+  ]
+ },
+ {
+  "id": "Q15",
+  "question": "How long does it take to create and deliver a complete virtual tour package?",
+  "area": "production time per virtual tour",
+  "decision": "whether virtual tours fit within 20 hours/week capacity",
+  "invalidates": "if each tour requires 10+ hours exceeding weekly capacity",
+  "searches": [
+   "virtual tour creation time breakdown",
+   "Matterport tour production workflow",
+   "real estate virtual tour turnaround time"
+  ]
+ },
+ {
+  "id": "Q16",
+  "question": "What payment terms do virtual tour platforms use for real estate agent referrals?",
+  "area": "virtual tour payment timelines",
+  "decision": "whether virtual tour commissions fit 60-day cash requirement",
+  "invalidates": "if payment takes 45+ days from tour delivery",
+  "searches": [
+   "virtual tour platform payment schedules",
+   "Matterport affiliate payment timing",
+   "real estate technology vendor payment terms"
+  ]
+ },
+ {
+  "id": "Q17",
+  "question": "Are there construction companies in Arizona with urgent drone mapping needs for projects ending in January 2027?",
+  "area": "construction project timing and urgency",
+  "decision": "whether construction market has immediate demand in 60-day window",
+  "invalidates": "if no projects end before February 2027",
+  "searches": [
+   "Arizona construction project completion dates December 2026-January 2027",
+   "Phoenix commercial construction timelines",
+   "Arizona infrastructure project schedules"
+  ]
+ },
+ {
+  "id": "Q18",
+  "question": "What is the market rate for urgent/express drone surveying services in Arizona?",
+  "area": "premium pricing for expedited services",
+  "decision": "whether rush services can command higher rates to meet revenue goal",
+  "invalidates": "if express rates are same as standard rates",
+  "searches": [
+   "express drone surveying rates Arizona",
+   "rush drone mapping pricing",
+   "emergency drone surveying costs"
+  ]
+ },
+ {
+  "id": "Q19",
+  "question": "Do land surveying firms in Arizona subcontract drone work, and what do they pay?",
+  "area": "subcontracting opportunities in surveying",
+  "decision": "whether to pursue surveying subcontracting model",
+  "invalidates": "if firms don't subcontract or pay below $200 per job",
+  "searches": [
+   "Arizona land surveying firms drone subcontracting",
+   "professional surveying drone services outsourcing",
+   "construction surveying subcontractor rates"
+  ]
+ },
+ {
+  "id": "Q20",
+  "question": "What is the typical workflow and timeline for subcontracted drone surveying from flight to delivery?",
+  "area": "surveying subcontracting operational efficiency",
+  "decision": "whether surveying subcontracting fits time and capacity constraints",
+  "invalidates": "if workflow exceeds 4 hours per survey",
+  "searches": [
+   "drone surveying subcontractor workflow",
+   "professional survey data processing timeline",
+   "surveying firm drone service delivery process"
+  ]
+ },
+ {
+  "id": "Q21",
+  "question": "Are there online marketplaces connecting real estate agents with drone service providers?",
+  "area": "real estate drone marketplace availability",
+  "decision": "whether to use existing platforms vs direct outreach",
+  "invalidates": "if no relevant marketplaces exist with active buyers",
+  "searches": [
+   "real estate drone service marketplaces",
+   "PropTech platforms for real estate photography",
+   "real estate agent drone provider directories"
+  ]
+ },
+ {
+  "id": "Q22",
+  "question": "What commission or fee do real estate drone marketplaces charge and pay to providers?",
+  "area": "marketplace fee structure",
+  "decision": "net revenue per job through marketplace channels",
+  "invalidates": "if fees exceed 30% making profitability difficult",
+  "searches": [
+   "real estate photography marketplace fees",
+   "DroneBase provider payout rates",
+   "real estate tech platform commission structures"
+  ]
+ },
+ {
+  "id": "Q23",
+  "question": "How quickly do real estate agents book and pay for drone services through online platforms?",
+  "area": "platform booking and payment speed",
+  "decision": "whether marketplace channels meet 60-day cash requirement",
+  "invalidates": "if platform booking/payment cycles exceed 30 days",
+  "searches": [
+   "real estate photography platform booking speed",
+   "online drone service marketplace payment terms",
+   "real estate agent service booking timelines"
+  ]
+ },
+ {
+  "id": "Q24",
+  "question": "What is the competition level for real estate drone services in Phoenix metro area?",
+  "area": "market saturation and competitive pricing",
+  "decision": "whether to compete on price or differentiate services",
+  "invalidates": "if market is oversaturated with providers charging <$150",
+  "searches": [
+   "Phoenix real estate drone service competition",
+   "Arizona drone photography market saturation",
+   "real estate drone provider density Phoenix"
+  ]
+ },
+ {
+  "id": "Q25",
+  "question": "Do real estate brokerages in Phoenix have corporate accounts with preferred drone vendors?",
+  "area": "bulk purchasing opportunities",
+  "decision": "whether to target brokerages vs individual agents",
+  "invalidates": "if brokerages don't have vendor programs or minimums exceed capital",
+  "searches": [
+   "Phoenix real estate brokerage vendor programs",
+   "corporate real estate photography contracts",
+   "large Arizona real estate brokerages preferred vendors"
+  ]
+ },
+ {
+  "id": "Q26",
+  "question": "What is the minimum viable price point for real estate drone services in Phoenix market?",
+  "area": "price sensitivity and market floor",
+  "decision": "lowest sustainable pricing strategy",
+  "invalidates": "if market floor is below $100 per service",
+  "searches": [
+   "Phoenix real estate photography price sensitivity",
+   "Arizona real estate agent photography budget limits",
+   "affordable drone photography Phoenix"
+  ]
+ },
+ {
+  "id": "Q27",
+  "question": "How many real estate transactions typically close in Phoenix during December 2026-January 2027 period?",
+  "area": "seasonal market volume",
+  "decision": "whether market volume supports $4,500 revenue goal",
+  "invalidates": "if transaction volume is insufficient for required sales volume",
+  "searches": [
+   "Phoenix real estate transaction volume December 2026",
+   "Arizona housing market December-January trends",
+   "Phoenix metro home sales December 2026"
+  ]
+ },
+ {
+  "id": "Q28",
+  "question": "What are the legal requirements for commercial drone operations in Arizona beyond FAA Part 107?",
+  "area": "regulatory compliance costs and restrictions",
+  "decision": "whether operations require additional permits or insurance",
+  "invalidates": "if additional licensing/insurance costs exceed capital budget",
+  "searches": [
+   "Arizona commercial drone regulations 2026",
+   "Phoenix drone operation permits",
+   "Arizona drone insurance requirements"
+  ]
+ },
+ {
+  "id": "Q29",
+  "question": "What is the typical turnaround time for real estate agents needing drone content before listing launch?",
+  "area": "client urgency and scheduling patterns",
+  "decision": "whether to offer expedited services at premium rates",
+  "invalidates": "if clients have flexible 2+ week timelines reducing urgency premium",
+  "searches": [
+   "real estate listing drone photography timing",
+   "pre-listing marketing content deadlines",
+   "Arizona real estate agent listing preparation timelines"
+  ]
+ },
+ {
+  "id": "Q30",
+  "question": "What marketing channels are most effective for real estate agents to discover drone service providers?",
+  "area": "customer acquisition channel effectiveness",
+  "decision": "primary marketing channel to invest limited capital in",
+  "invalidates": "if most effective channels require >$1,500 ad spend or 30+ day sales cycles",
+  "searches": [
+   "real estate agent service discovery channels",
+   "Phoenix real estate marketing channels 2026",
+   "how real estate agents find photography vendors"
+  ]
+ }
+]

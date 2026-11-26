@@ -1,0 +1,332 @@
+[
+ {
+  "id": "F1",
+  "question": "What is the average cost per acquisition (CPA) for a $50\u2011$100 winter accessory sold via Meta (Facebook/Instagram) ads targeting Minnesota shoppers during Thanksgiving\u2011week?",
+  "area": "ad cost & conversion",
+  "decision": "whether a paid\u2011social campaign can generate $20k gross within 90 days on a $5k ad budget",
+  "invalidates": "If CPA > $50, the $5k budget cannot meet the revenue goal",
+  "searches": [
+   "Meta ad benchmarks for apparel winter accessories",
+   "Minnesota Thanksgiving\u2011week ad performance reports"
+  ]
+ },
+ {
+  "id": "F2",
+  "question": "Can a dropshipping supplier (e.g., DropCommerce, CJDropshipping, or Printful) guarantee US delivery of winter accessories by Dec\u202f10\u202f2026 for orders placed after Nov\u202f26\u202f2026?",
+  "area": "fulfillment timing",
+  "decision": "whether the product can be shipped before the holiday buying window closes",
+  "invalidates": "If delivery exceeds Dec\u202f10, buyers will likely not purchase for holiday gifting",
+  "searches": [
+   "DropCommerce US fulfillment lead times 2026",
+   "Printful holiday shipping schedule"
+  ]
+ },
+ {
+  "id": "F3",
+  "question": "What is the typical markup percentage that successful holiday\u2011season dropshipping stores achieve on winter accessories sold at $50\u2011$100 price points?",
+  "area": "pricing & margin",
+  "decision": "setting a realistic price that yields >30% gross margin while staying competitive",
+  "invalidates": "If typical markup is <20%, the $5k spend may not cover costs and profit",
+  "searches": [
+   "holiday dropshipping store profit margins 2026",
+   "Winter accessories average wholesale vs retail prices"
+  ]
+ },
+ {
+  "id": "F4",
+  "question": "How many qualified leads can a $5,000 Facebook ad spend realistically generate for a new winter\u2011accessory store in the Minneapolis market within 30 days?",
+  "area": "lead volume",
+  "decision": "whether the funnel can produce enough sales to hit $20k in 90 days",
+  "invalidates": "If lead count < 400 (assuming 5% conversion), revenue goal is unattainable",
+  "searches": [
+   "Facebook ad CPA for apparel in Midwest 2026",
+   "Lead generation benchmarks for e\u2011commerce holiday campaigns"
+  ]
+ },
+ {
+  "id": "F5",
+  "question": "Are there any licensing or trademark restrictions on selling custom\u2011branded winter accessories (e.g., beanies, scarves) that would require the owner to hold a specific license?",
+  "area": "legal/compliance",
+  "decision": "whether a subcontractor can handle production without owner\u2011held licenses",
+  "invalidates": "If a license is required and owner lacks it, the model fails",
+  "searches": [
+   "US trademark rules for custom apparel resale",
+   "Printful licensing requirements for branded merchandise"
+  ]
+ },
+ {
+  "id": "F6",
+  "question": "What is the average time from ad click to order fulfillment for a Shopify store using a US\u2011based dropshipper (e.g., DropCommerce) during the holiday season?",
+  "area": "order\u2011to\u2011cash cycle",
+  "decision": "ensuring cash is received within the 90\u2011day window",
+  "invalidates": "If cash receipt typically exceeds 45 days post\u2011click, revenue may not be realized in time",
+  "searches": [
+   "Shopify dropshipping order fulfillment timeline 2026",
+   "Holiday season e\u2011commerce cash flow benchmarks"
+  ]
+ },
+ {
+  "id": "F7",
+  "question": "What are the platform fees (Shopify, payment processors, dropshipper) as a percentage of gross sales for a $20k holiday store?",
+  "area": "cost structure",
+  "decision": "calculating net profit after fees to ensure >$20k gross translates to sufficient cash",
+  "invalidates": "If total fees >15% of revenue, profit margin may drop below target",
+  "searches": [
+   "Shopify transaction fees 2026",
+   "DropCommerce cost structure for US merchants"
+  ]
+ },
+ {
+  "id": "F8",
+  "question": "Can a freelance Facebook ad manager be hired for a flat fee (e.g., $1,500) who will set up, launch, and auto\u2011optimize campaigns without any owner oversight?",
+  "area": "operational staffing",
+  "decision": "whether outsourcing ad management fits within the $5k capital and zero\u2011owner\u2011hours constraint",
+  "invalidates": "If no such freelancer exists or costs >$2,000, budget may be exceeded",
+  "searches": [
+   "Freelance Facebook ad manager flat\u2011fee packages 2026",
+   "Upwork ad manager rates for holiday campaigns"
+  ]
+ },
+ {
+  "id": "F9",
+  "question": "What is the average refund/return rate for winter accessories sold online during the 2026 holiday season?",
+  "area": "risk & returns",
+  "decision": "adjusting revenue projections for potential refunds",
+  "invalidates": "If return rate >20%, net revenue may fall short of $20k",
+  "searches": [
+   "2026 e\u2011commerce return rates apparel holiday",
+   "Printful return policy statistics"
+  ]
+ },
+ {
+  "id": "F10",
+  "question": "Are there any seasonal advertising restrictions (e.g., ad approval delays) on promoting winter apparel on Meta platforms in late November?",
+  "area": "ad compliance",
+  "decision": "ensuring ads can go live immediately to capture Thanksgiving\u2011week traffic",
+  "invalidates": "If ads are delayed >7 days, early sales window is lost",
+  "searches": [
+   "Meta holiday advertising policy 2026",
+   "Ad approval times for apparel November 2026"
+  ]
+ },
+ {
+  "id": "F11",
+  "question": "What is the typical time for a buyer to receive a payout from a Shopify store when using Stripe or PayPal, assuming orders are fulfilled in the US?",
+  "area": "cash\u2011in timing",
+  "decision": "confirming that cash can be collected within the 90\u2011day deadline",
+  "invalidates": "If payout takes >30 days after order, cash may not be realized in time",
+  "searches": [
+   "Stripe payout schedule US merchants 2026",
+   "PayPal disbursement timing e\u2011commerce"
+  ]
+ },
+ {
+  "id": "F12",
+  "question": "What is the average cost to acquire a cold\u2011email meeting with a small\u2011business owner interested in outsourcing holiday ad management, and does the conversion to a $1,500 contract occur within 30 days?",
+  "area": "alternative acquisition channel",
+  "decision": "whether cold\u2011email outreach could replace paid ads within budget",
+  "invalidates": "If cost per meeting >$150 and conversion <10%, not viable",
+  "searches": [
+   "Instantly cold\u2011email cost per meeting 2026",
+   "Conversion rates from cold\u2011email to ad\u2011management contracts"
+  ]
+ },
+ {
+  "id": "F13",
+  "question": "Is there a proven affiliate program for winter accessories that pays \u226510% commission on each $50\u2011$100 sale and settles within 30 days?",
+  "area": "partner acquisition",
+  "decision": "whether affiliate marketing can drive sales without owner involvement",
+  "invalidates": "If commissions are lower or settlement period >45 days, profit and cash flow suffer",
+  "searches": [
+   "Affiliate programs winter apparel 2026 commission rates",
+   "Affiliate payout schedules e\u2011commerce"
+  ]
+ },
+ {
+  "id": "F14",
+  "question": "What is the average customer acquisition cost (CAC) for a Shopify store that uses a pre\u2011built dropshipping template (e.g., Tradelle $49) plus $1,500 ad spend?",
+  "area": "total acquisition cost",
+  "decision": "ensuring total CAC stays below $30 per sale to meet margin goals",
+  "invalidates": "If CAC >$40, profit margin may be insufficient",
+  "searches": [
+   "Tradelle pre\u2011built dropshipping store performance 2026",
+   "Case studies Shopify dropshipping CAC holiday"
+  ]
+ },
+ {
+  "id": "F15",
+  "question": "Do any US\u2011based print\u2011on\u2011demand suppliers (e.g., Printful) offer a bulk discount for ordering 50+ winter beanies that would lower unit cost below $15?",
+  "area": "supplier pricing",
+  "decision": "whether bulk pricing can improve margins enough to meet $20k target",
+  "invalidates": "If bulk discount does not exist, margin may be too thin",
+  "searches": [
+   "Printful bulk pricing winter beanies 2026",
+   "Printful volume discount policy"
+  ]
+ },
+ {
+  "id": "F16",
+  "question": "What is the average time for a customer to complete checkout on a new Shopify store with a simple product line, assuming mobile traffic dominates?",
+  "area": "conversion funnel speed",
+  "decision": "optimizing checkout to reduce drop\u2011off and meet sales velocity",
+  "invalidates": "If checkout abandonment >70%, sales volume may be insufficient",
+  "searches": [
+   "Shopify checkout conversion rates mobile 2026",
+   "Average checkout time e\u2011commerce winter 2026"
+  ]
+ },
+ {
+  "id": "F17",
+  "question": "Are there any seasonal discounts or promotions offered by Meta that could lower the effective CPA for holiday campaigns?",
+  "area": "ad cost optimization",
+  "decision": "potentially stretching the $5k budget further",
+  "invalidates": "If no discounts exist, CPA remains as per baseline",
+  "searches": [
+   "Meta holiday ad credit program 2026",
+   "Facebook ad discounts Thanksgiving 2026"
+  ]
+ },
+ {
+  "id": "F18",
+  "question": "What is the typical churn rate for one\u2011time holiday purchases (i.e., repeat purchases within 90 days) for winter accessories?",
+  "area": "repeat revenue potential",
+  "decision": "whether to plan for any upsell or repeat sales to boost revenue",
+  "invalidates": "If repeat rate <5%, upsell strategy is negligible",
+  "searches": [
+   "Winter apparel repeat purchase rate 2026",
+   "E\u2011commerce repeat customer statistics holiday season"
+  ]
+ },
+ {
+  "id": "F19",
+  "question": "Can a fully automated order\u2011to\u2011fulfillment workflow be set up using Zapier or Make.com that requires zero manual intervention after initial store launch?",
+  "area": "automation feasibility",
+  "decision": "ensuring the owner\u2019s zero\u2011hours constraint is met",
+  "invalidates": "If manual order handling is required, the model fails",
+  "searches": [
+   "Zapier Shopify order automation Printful 2026",
+   "Make.com dropshipping workflow tutorial"
+  ]
+ },
+ {
+  "id": "F20",
+  "question": "What is the average profit margin for a $50\u2011$100 winter accessory sold via dropshipping versus a custom\u2011print\u2011on\u2011demand model?",
+  "area": "model comparison",
+  "decision": "choosing between dropshipping and POD for best margin",
+  "invalidates": "If POD margin is significantly lower, dropshipping is preferred",
+  "searches": [
+   "Dropshipping vs POD profit margin winter apparel 2026",
+   "Printful vs DropCommerce cost comparison"
+  ]
+ },
+ {
+  "id": "F21",
+  "question": "Are there any existing affiliate networks that specialize in holiday fashion accessories and provide real\u2011time tracking for commissions?",
+  "area": "affiliate channel availability",
+  "decision": "whether to add affiliate sales without owner involvement",
+  "invalidates": "If no suitable network exists, affiliate route is not viable",
+  "searches": [
+   "Holiday fashion affiliate networks 2026",
+   "Affiliate tracking platforms for apparel"
+  ]
+ },
+ {
+  "id": "F22",
+  "question": "What is the average time to get a Shopify store approved for a custom domain and SSL, assuming a rapid setup?",
+  "area": "store launch timeline",
+  "decision": "ensuring the store can go live before Thanksgiving week",
+  "invalidates": "If setup takes >7 days, early sales window is lost",
+  "searches": [
+   "Shopify store launch timeline 2026",
+   "Custom domain SSL activation Shopify"
+  ]
+ },
+ {
+  "id": "F23",
+  "question": "Do any US\u2011based fulfillment centers (e.g., ShipBob) offer same\u2011day or next\u2011day shipping for winter accessories ordered after Nov\u202f26\u202f2026?",
+  "area": "shipping speed",
+  "decision": "enhancing buyer confidence for holiday gifting",
+  "invalidates": "If fastest shipping is >5 days, some holiday buyers may not purchase",
+  "searches": [
+   "ShipBob holiday shipping timelines 2026",
+   "US fulfillment center same\u2011day shipping winter apparel"
+  ]
+ },
+ {
+  "id": "F24",
+  "question": "What is the average customer support cost (per ticket) for a small e\u2011commerce store during the holiday season?",
+  "area": "operational expense",
+  "decision": "budgeting for any outsourced support needed without owner involvement",
+  "invalidates": "If support cost >$5 per order, profit margin may be eroded",
+  "searches": [
+   "Holiday season e\u2011commerce support cost 2026",
+   "Outsourced customer service rates for Shopify stores"
+  ]
+ },
+ {
+  "id": "F25",
+  "question": "Is there a proven ROI threshold (e.g., ROAS >2) for Facebook ad campaigns selling winter accessories that can be achieved with a $5k spend?",
+  "area": "ad performance benchmark",
+  "decision": "setting realistic expectations for ad spend efficiency",
+  "invalidates": "If historical ROAS for similar products is <1.5, $5k may not generate $20k",
+  "searches": [
+   "Facebook ads ROAS winter apparel 2026",
+   "Case studies $5k ad spend holiday e\u2011commerce"
+  ]
+ },
+ {
+  "id": "F26",
+  "question": "What is the average time for a US\u2011based virtual assistant to set up and manage a Facebook ad campaign for a Shopify store, given a $1,500 flat fee?",
+  "area": "service delivery timeline",
+  "decision": "ensuring campaign launch occurs within the first two weeks",
+  "invalidates": "If setup takes >14 days, early sales window is reduced",
+  "searches": [
+   "VA Facebook ad management turnaround time 2026",
+   "Freelance ad manager onboarding timeline"
+  ]
+ },
+ {
+  "id": "F27",
+  "question": "Do any payment processors offer instant settlement (within 24\u202fhours) for e\u2011commerce sales, and what fees do they charge?",
+  "area": "instant cash flow",
+  "decision": "potentially accelerating cash receipt to meet the 90\u2011day goal",
+  "invalidates": "If instant settlement fees exceed 5% of revenue, margin suffers",
+  "searches": [
+   "Instant payout payment processors 2026",
+   "Stripe instant payout fees"
+  ]
+ },
+ {
+  "id": "F28",
+  "question": "What is the average customer lifetime value (CLV) for a buyer of winter accessories who also purchases other seasonal items later in the year?",
+  "area": "future revenue potential",
+  "decision": "whether to position the business as a recurring seasonal brand",
+  "invalidates": "If CLV is low (<$100), focusing on one\u2011off sales only may limit growth",
+  "searches": [
+   "Winter accessory CLV e\u2011commerce 2026",
+   "Seasonal repeat purchase value apparel"
+  ]
+ },
+ {
+  "id": "F29",
+  "question": "Are there any restrictions on using AI\u2011generated product descriptions for winter accessories on Shopify, per current platform policies?",
+  "area": "content compliance",
+  "decision": "whether AI can be used to create product copy without manual editing",
+  "invalidates": "If AI content is prohibited, manual copywriting would require owner time or extra cost",
+  "searches": [
+   "Shopify AI content policy 2026",
+   "Etsy AI guidelines relevance to Shopify"
+  ]
+ },
+ {
+  "id": "F30",
+  "question": "What is the average cost of a professional product photo shoot (or AI\u2011generated mockup) for a winter accessory catalog of 10 items?",
+  "area": "creative asset cost",
+  "decision": "budgeting for visual assets without exceeding $5k total spend",
+  "invalidates": "If cost >$1,000, remaining budget may be insufficient for ads",
+  "searches": [
+   "AI product mockup services pricing 2026",
+   "Budget product photography for e\u2011commerce winter apparel"
+  ]
+ }
+]
