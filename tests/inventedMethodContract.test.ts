@@ -83,6 +83,23 @@ describe('the method contract between prompt and parser', () => {
     expect(parsed.rejections[5]).toMatch(/empty and it carries no design/);
   });
 
+  it('C53: refuses a method that names no stance or no thinking, however valid its program, and says which is missing', () => {
+    const parsed = parseInvented(
+      JSON.stringify({
+        methods: [
+          method({ name: 'deposit first', stance: undefined, program: [{ op: 'OPERATOR', key: 'timing:deposit', target: 'cop_1' }] }),
+          method({ name: 'partner channel', thinking: '   ', program: [{ op: 'OPERATOR', key: 'partner:referral-partner' }] }),
+          method({ name: 'bare focus', stance: '', thinking: '' }),
+          method({ name: 'kept', program: [{ op: 'FOCUS', count: 1 }] }),
+        ],
+      }),
+      brief,
+    );
+    expect(parsed.directions.map((d) => d.name)).toEqual(['kept']);
+    expect(parsed.refused).toBe(3);
+    expect(parsed.rejections).toEqual(['"deposit first": it has no stance', '"partner channel": it has no thinking', '"bare focus": it has no stance, thinking']);
+  });
+
   it('the prompt says to leave an unused design out, and how ids are written', () => {
     const prompt = inventPrompt(brief, 0, []);
     expect(prompt).toMatch(/Leave "design" out of a method that brings in no new arrangement/);

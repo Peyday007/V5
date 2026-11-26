@@ -25,7 +25,7 @@ import type { CaseDimensions, PlanningCase } from '../bench/planningReliability/
 import { MECHANISM_CASES } from '../bench/planningReliability/mechanismCases.ts';
 import { buildTemplate, closeWorldDatabase, proveDeliverables, runWorld, type Template } from '../bench/planningReliability/world.ts';
 import { committeeInputOf, committeeOf, reviewPlan } from '../server/services/goals/committee.ts';
-import { gateIntegrity, type PlanAcceptance, type PlanReading } from '../server/services/goals/plan.ts';
+import { gateIntegrity, type PlanAcceptance, type PlanReading, type PlanStep } from '../server/services/goals/plan.ts';
 import { sendCommitteeNeeds } from '../server/services/goals/portfolioNeeds.ts';
 
 const dims = (industry: string, mechanism: string): CaseDimensions => ({ capital: 'none', target: 'small', deadline: 'long', industry, mechanism, autonomy: 'unlimited', missingEvidence: 'none', contradictoryEvidence: false, objectiveChanged: false });
@@ -138,6 +138,19 @@ describe('the investment committee on the real planner', () => {
     const gated = gate(challengeAnswered(forcedAccepted(r)));
     expect(gated.committee!.blocks).toBe(false);
     expect(gated.acceptance.status).toBe('ACCEPTED');
+  });
+
+  it('C60: refuses an acceptance the committee passes when the plan breaks an integrity rule', { timeout: 300_000 }, async () => {
+    const r = readings.get(LEGITIMATE.id) ?? (await read(LEGITIMATE));
+    const clean = challengeAnswered(forcedAccepted(r));
+    // The same legitimate plan, with one step titled by an internal key instead of the action a person takes.
+    const keyed: PlanStep = { order: r.steps.length + 1, label: 'focus:4', detail: 'concentrate outreach', startDay: { low: 0, high: 0 }, cost: 0, basis: 'ESTIMATE', owner: 'BRAIN', ownerReason: null, dependsOn: null, kill: 'k', execution: [] };
+    const gated = gate({ ...clean, steps: [...clean.steps, keyed] });
+    expect(gated.committee!.blocks).toBe(false);
+    expect(gated.integrity!.map((v) => v.rule)).toContain('NO_INTERNAL_KEYS');
+    expect(gated.acceptance).toMatchObject({ status: 'CANDIDATE_ONLY', probability: null, accepted: null });
+    expect(gated.acceptance.shortfalls.join(' ')).toMatch(/NO_INTERNAL_KEYS/);
+    expect(gated.verdict).not.toBe('RECOMMENDABLE');
   });
 
   it('(c) turns a disputed fact into an investigation the existing needs owner takes', { timeout: 300_000 }, async () => {
