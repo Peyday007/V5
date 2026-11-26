@@ -71,8 +71,8 @@ const CODING_ROUTES = [
   { ...base, title: 'Python reporting automation', payer: 'Accounting firms', offer: 'Maintained Python reporting scripts', price: 800, monthly: true, performer: 'SUBCONTRACTOR', fulfiller: 'A freelance Python developer', directCost: 300, ownerHoursPerDeal: 1 },
   // Spelled loosely: a string flag and a price written per month.
   { ...base, title: 'WordPress care plan', payer: 'Local restaurants with WordPress sites', offer: 'Monthly site updates and backups', price: '$300/month', monthly: 'true', performer: 'SUBCONTRACTOR', fulfiller: 'A freelance WordPress developer', directCost: 60, ownerHoursPerDeal: 0.25 },
-  // 3 buyers × 40 hours = 120 hours a month against about 43: over the owner's weekly time.
-  { ...base, title: 'On-call developer for agencies', payer: 'Marketing agencies', offer: 'Overflow front-end development', price: 2000, monthly: true, performer: 'OWNER', fulfiller: 'The owner', directCost: 0, ownerHoursPerDeal: 40 },
+  // One buyer alone takes 50 hours a month against about 43: not even one fits the owner's weekly time.
+  { ...base, title: 'On-call developer for agencies', payer: 'Marketing agencies', offer: 'Overflow front-end development', price: 2000, monthly: true, performer: 'OWNER', fulfiller: 'The owner', directCost: 0, ownerHoursPerDeal: 50 },
   { ...base, title: 'One-off landing page builds', payer: 'Startup founders', offer: 'A landing page build', price: 3000, monthly: false, performer: 'OWNER', fulfiller: 'The owner', directCost: 0, ownerHoursPerDeal: 10 },
   { ...base, title: 'Paid-ads managed app', payer: 'E-commerce stores', offer: 'A managed ads dashboard', price: 900, monthly: true, performer: 'SUBCONTRACTOR', fulfiller: 'A freelance developer', directCost: 100, capital: 2000, ownerHoursPerDeal: 1 },
 ];
@@ -102,7 +102,7 @@ describe("a recurring goal's routes are held to its limits in the goal's own uni
     const filed = await opportunitiesWithRecordPrefix(projectId, goalRoutePrefix(goalId));
     expect(filed.map((one) => one.title).sort()).toEqual(['Python reporting automation', 'React maintenance retainer', 'WordPress care plan']);
     expect(filed.find((one) => one.title === 'WordPress care plan')!.priceCents).toBe(30_000);
-    expect(outcome.rejected[0]!.why).toMatch(/120 owner hour\(s\) a month for the 3 buyer\(s\).*43 allowed a month/);
+    expect(outcome.rejected[0]!.why).toMatch(/one buyer needs about 50 owner hour\(s\) a month, more than the 43 allowed a month \(the target would take 3, about 150 hours\)/);
 
     // The prompt states the owner's time as the goal does, and what a monthly route's hours mean.
     expect(prompts[0]).toMatch(/at most 10 hour\(s\) a week/);
@@ -129,6 +129,14 @@ describe("a recurring goal's routes are held to its limits in the goal's own uni
     const { routes, rejected } = parseRoutes({ routes: CODING_ROUTES }, ctx);
     expect(routes).toHaveLength(3);
     expect(rejected.map((one) => one.rule)).toEqual(['HOURS', 'NOT_MONTHLY', 'CAPITAL']);
+  });
+
+  it('keeps a route that carries part of the target inside the hours: the plan adds routes up (dec1125c p06)', () => {
+    const ctx: RouteContext = { objective: 'x', currency: 'USD', remaining: 500, daysLeft: 7, capitalLimit: 0, hoursLimit: 15, hoursPerWeek: null, resources: null, industry: null, recurring: false, exclusions: [], delivers: [], held: [], refuted: [], ownerLabour: { offered: true, evidence: 'I can put in 15 hours' } };
+    const gig = { ...base, title: 'Four hours of deliveries', payer: 'Delivery app customers', offer: 'Deliveries by bicycle', price: 100, monthly: false, performer: 'OWNER', fulfiller: 'The owner', directCost: 0, capital: 0, ownerHoursPerDeal: 4, daysToFirstCash: 2, ownerFit: 'Uses the 15 hours the owner offered' };
+    // 5 such sales would take 20 hours, more than 15: the route alone is not the target, but one sale fits.
+    expect(parseRoutes({ routes: [gig] }, ctx).rejected).toEqual([]);
+    expect(parseRoutes({ routes: [{ ...gig, ownerHoursPerDeal: 16 }] }, ctx).rejected.map((one) => one.rule)).toEqual(['HOURS']);
   });
 });
 

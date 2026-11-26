@@ -193,9 +193,9 @@ describe('a goal is given whole routes from its objective', () => {
     expect(rejected.map((one) => one.why).join(' | ')).not.toMatch(/same buyer type/);
   });
 
-  it('rejects a route needing more owner hours than the limit allows', () => {
+  it('rejects a route whose one sale needs more owner hours than the limit allows', () => {
     const ctx: RouteContext = { objective: 'x', currency: 'USD', remaining: 3000, daysLeft: 30, capitalLimit: null, hoursLimit: 5, resources: null, industry: null, recurring: false, exclusions: [], delivers: [], held: [], refuted: [] };
-    const owner = { ...ANSWER.routes[1]!, performer: 'OWNER', ownerHoursPerDeal: 3, fulfiller: 'The owner edits online' };
+    const owner = { ...ANSWER.routes[1]!, performer: 'OWNER', ownerHoursPerDeal: 6, fulfiller: 'The owner edits online' };
     const { routes: kept, rejected } = parseRoutes({ routes: [owner] }, ctx);
     expect(kept).toHaveLength(0);
     expect(rejected[0]!.why).toMatch(/owner hour/);

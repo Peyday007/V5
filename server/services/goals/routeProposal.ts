@@ -835,10 +835,20 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       reject('its direct cost is not below its price', 'MARGIN');
       continue;
     }
+    /*
+     * A route is refused on hours only when not even one sale fits the owner's
+     * time (dec1125c p06, 2026-11-26). It used to be refused when it could not
+     * carry the whole target alone inside the hours — but a plan is a set of
+     * routes whose hours the plan adds up and trims (`withoutSpareOwnerWork`),
+     * so two plasma donations, a five-hour labour shift and four hours of
+     * deliveries, each a third of $500 inside 15 hours together, were each
+     * refused for not being all of it. What the route alone would need is kept
+     * in the reason when it does break, and the plan holds the sum.
+     */
     const hours = routeHours({ price, directCost, ownerHoursPerDeal, monthly }, ctx);
-    if (hours && hours.needed > hours.allowed) {
+    if (hours && ownerHoursPerDeal > hours.allowed + 1e-9) {
       reject(
-        `needs about ${Math.round(hours.needed)} owner hour(s) ${hours.unit} for the ${hours.deals} ${monthly ? 'buyer(s)' : 'sale(s)'} the target takes, more than the ${Math.round(hours.allowed)} allowed ${hours.unit}`,
+        `one ${monthly ? 'buyer' : 'sale'} needs about ${Math.round(ownerHoursPerDeal * 10) / 10} owner hour(s) ${hours.unit}, more than the ${Math.round(hours.allowed)} allowed ${hours.unit} (the target would take ${hours.deals}, about ${Math.round(hours.needed)} hours)`,
         'HOURS',
       );
       continue;
