@@ -119,3 +119,13 @@ See `UNCERTAINTY.md`.
 - PARTIAL: E-001, E-002, E-010, E-011, E-012 F3.
 - INVALID: none.
 - All harness outputs re-ran byte-identically.
+
+## H. Separating probe E-017 (finish_reason recorded on production, run 45774422897)
+
+- **CR-01** upstream mechanism: **ESTABLISHED for truncation.**
+  - At the production budget of 4,000 tokens: `finish_reason: length`, 4,000/4,000 completion tokens, 11k characters of reasoning, `[DONE]` received, no error, the answer cut off mid-route.
+  - The same prompt completes at 16,000 tokens (5,046 used) and with low reasoning effort at 4,000 (1,384 used).
+  - A stream drop and H1c are excluded for this sample. The E0 empties remain SUPPORTED, consistent with the same mechanism.
+  - This supersedes G's "NOT SEPARATED" for E-002.
+- **CR-16**: the partial loss is reproduced on production. A truncated reply parsed to 2 routes and the third left no record.
+- **New interaction (I-W1e×CR-01).** The W1e repair delivers 105 findings instead of 40, which makes a 9k-token prompt and a longer reasoning chain under the unchanged budget. The repair raised the truncation incidence. This is a repair-induced amplification and belongs in the graph.

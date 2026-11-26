@@ -1,0 +1,34 @@
+# brain_get_document_text(document_id=doc_09545a208e0d4fef8c62) project prj_630132c1875545548727 — readable:true extractionStatus:READY totalChars:15629 truncated:false
+# Saved: verbatim executive body (through "What this packet does not settle") + claim ids/URLs of the evidence ledger; ledger passages abbreviated.
+[page 1]
+Qualify: Notion Template Customization Service — market: Notion consulting (custom Notion template and workspace builds), sold mainly through Notion's own consultant directory.
+Executive summary. No published fact found rules this route out. But the specific channel the proposal names is gated in a way the proposal does not mention. To be listed in Notion's consultant directory/Marketplace, a supplier must first become an approved Notion consulting partner. That means completing three badges, applying, meeting client-experience requirements and passing the Administrator and Service Specialist certifications, which are counted per unique individual [clm_7cbc3dcc0e794cf9b832]. Those certifications are awarded to individuals through a proctored exam with webcam monitoring and ID verification [clm_df9fd49a792f4900929a]. Our inference: an operation run by AI workers could use this channel only through a certified human partner. Notion also says applications may be declined where case studies are thin or no named delivery team with SLAs exists. That is a risk for a new operation, not an outright exclusion [clm_9c76bac821a04388a550]. No published rule was found that bars selling custom Notion builds outside the directory [clm_9c76bac821a04388a550].
+Price (market evidence about what competitors charge, not evidence that anyone would pay this operation). Sanja's directory profile publishes $135/hour and a project budget of $1,000-$20,000. That band is higher than the $250-$1,000 band the proposal implies, and it is priced per hour or engagement, not monthly [clm_21c3aa9a1d1c4bbd9c9d]. A June 2026 self-reported survey of 112 practitioners reports a median hourly rate of EUR 100-150, a directory median of $130/hour, and a most common entry project of EUR 2,000-5,000 [clm_b30461624dec470695a8].
+Current demand. Sanja's profile shows dated client reviews from Aug 6 to Aug 28, 2026, including 'Custom built workspace', out of 28 ratings [clm_380f7352cfe84cb1ac18]. These are completed purchases from a human consultant, not demand for this operation. The payer lane was settled by an earlier dive and was not re-researched here.
+Contact mode. The published route is inbound: buyers filter the directory by budget and click Book or View profile, which leads to booking links and contact forms, with no telephone call required. No buyer list or buyer email addresses are published, so the only route found runs through the gated listing [clm_a5559c19a6ae47b28c19].
+Fulfilment and cost. The named fulfillers are human directory consultants such as Sanja at $135/hour. No published subcontracting or white-label terms were found, so the per-sale cost of having such a consultant fulfil for us is unknown [clm_9e85fdc6b9954b56bdfc]. The only published direct input cost found is $100-$150 per certification track [clm_b20d997e1109466fb330]. Delivery labour cost is unknown, not zero.
+Timing. No payment terms for directory-sourced custom builds are published. One consultancy publishes an 8-week sprint from EUR 19,500, paid as two instalments of EUR 9,750 and invoiced in USD [clm_5e125d7a253044e29081]. For the adjacent route of selling ready-made templates on Notion Marketplace, Notion takes 8% plus $0.40 per sale and holds funds for 14 days. Payouts run biweekly with a $20 minimum, refunds are allowed within 14 days, and sellers must first be approved from a waitlist [clm_f9e605c998d84ff992de].
+Effort. 53% of typical engagements run 1-3 months, but no source publishes hours of human time [clm_0e206fdd867a4d498c7f].
+Buyer volume. No published count of buyers of custom Notion builds was found in the directory, the partner pages, the survey or a web search. Notion's user count measures product reach, not buyers [clm_75a27428b1b04a27a6b2].
+Bottleneck and first steps (drawn from the claims above). The bottleneck is access to buyers: the one published channel requires a certified individual and an approved partnership [clm_7cbc3dcc0e794cf9b832][clm_df9fd49a792f4900929a]. Acting on this route would first need a certified human partner. The alternative is a different, non-directory channel, for which no published buyer route was found [clm_a5559c19a6ae47b28c19]. Up-front capital found is limited to the certification fees [clm_b20d997e1109466fb330]. Every step beyond reading needs separate commercial authorization from a person.
+What this packet does not settle
+- buyer_volume: no published count of buyers of custom Notion template/workspace builds (directory, partner page, June 2026 survey and web search checked).
+- effort: no published hours of human time per custom build; only engagement duration is published.
+- cost_evidence: no published subcontract or white-label rate at which a listed consultant would fulfil builds for a third party.
+- timing: no published payment terms for custom builds bought through the Notion directory.
+- contact_mode: no published outbound route (buyer list or emails) to buyers of custom Notion builds.
+- comparable_demand, acquisition_access, exit_evidence, ruled_out: nothing accepted.
+Evidence ledger (abbreviated: id — source URL — retrieved)
+- clm_7cbc3dcc0e794cf9b832 — https://www.notion.com/help/become-a-notion-partner — 2026-11-26
+- clm_df9fd49a792f4900929a — https://www.notion.com/help/badges-and-certifications — 2026-11-26
+- clm_9c76bac821a04388a550 — https://www.notion.com/help/become-a-notion-partner — 2026-11-26
+- clm_21c3aa9a1d1c4bbd9c9d — https://www.notion.com/@go2sanja — 2026-11-26
+- clm_b30461624dec470695a8 — https://matthiasfrank.de/research/the-state-of-notion-consulting-in-2026-pricing-breakdown/ — 2026-11-26
+- clm_380f7352cfe84cb1ac18 — https://www.notion.com/@go2sanja (reviews dated 2026-08-06..08-28) — 2026-11-26
+- clm_a5559c19a6ae47b28c19 — https://www.notion.com/explore-consultants — 2026-11-26
+- clm_b20d997e1109466fb330 — https://www.notion.com/help/badges-and-certifications — 2026-11-26
+- clm_f9e605c998d84ff992de — https://www.notion.com/help/selling-on-marketplace — 2026-11-26
+- clm_5e125d7a253044e29081 — https://matthiasfrank.de/en/notion-consultant-cost/ — 2026-11-26
+- clm_0e206fdd867a4d498c7f — matthiasfrank.de survey — 2026-11-26
+- clm_75a27428b1b04a27a6b2 — matthiasfrank.de survey; text: "No published count of buyers of custom Notion template/workspace builds was found. ... coverage of Notion's ~100 million users measures product reach, not buyers of custom builds." — 2026-11-26
+- clm_9e85fdc6b9954b56bdfc — https://www.notion.com/@go2sanja — 2026-11-26
