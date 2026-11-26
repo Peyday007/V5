@@ -150,15 +150,11 @@ describe('R03: readPathways keeps partial arrangements', () => {
     expect(reading.nextActions.length).toBeGreaterThan(0);
   });
 
-  it('puts every partial move after the modelled ones and reads the portfolio from money only', () => {
+  it('leaves a goal with modelled pathways exactly as it was', () => {
     const base = readPathways({ modelled: [opening()], considered: [], target, portfolio: null, permissionsMissing: [], rounds: [], now });
     const withPartial = readPathways({ modelled: [opening()], considered: [], target, portfolio: null, permissionsMissing: [], rounds: [], now, partial: { projectId: 'prj_opp04', arrangements: [arrangement('p1')] } });
-    expect(withPartial.pathways.map((p) => p.opportunityId)).toEqual(['cop_found', 'arr_p1']);
-    expect(withPartial.portfolio).toEqual(base.portfolio);
-    expect(withPartial.informationValue).toEqual(base.informationValue);
-    const firstPartial = withPartial.nextActions.findIndex((a) => a.opportunityId === 'arr_p1');
-    expect(withPartial.nextActions.slice(0, base.nextActions.length)).toEqual(base.nextActions.slice(0, base.nextActions.length));
-    if (firstPartial >= 0) expect(firstPartial).toBeGreaterThanOrEqual(Math.min(base.nextActions.length, 12));
+    expect(withPartial).toEqual(base);
+    expect(withPartial.pathways.map((p) => p.opportunityId)).toEqual(['cop_found']);
   });
 });
 

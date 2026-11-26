@@ -1683,10 +1683,11 @@ export function readPathways(input: {
   now: Date;
   capabilities?: BrainCapabilities | null;
   /**
-   * The goal's in-scope constructed arrangements (OPP-04): those the model did
-   * not read are kept as partial pathways with every unpriced input UNKNOWN,
-   * never dropped. Their moves follow every modelled pathway's; they take no
-   * part in the living portfolio or the information value, which read money.
+   * The goal's in-scope constructed arrangements (OPP-04): when the model read
+   * none of the goal's openings or designs, they are kept as partial pathways
+   * with every unpriced input UNKNOWN rather than leaving the goal with none.
+   * They take no part in the living portfolio or the information value, which
+   * read money; a goal with modelled pathways reads exactly as it did.
    */
   partial?: { projectId: string; arrangements: readonly ConstructedArrangement[] } | null;
 }): PathwayReading {
@@ -1706,7 +1707,8 @@ export function readPathways(input: {
   const modelledPathways = chosen.map((one) =>
     pathwayOf(one, judged.get(one.opportunity.id) ?? null, { remaining, daysLeft, currency: input.target.currency, perArrangement, outreachPerDay: outreach.high, permissionsMissing: input.permissionsMissing, now: input.now, capabilities: input.capabilities ?? null }),
   );
-  const partial = input.partial
+  // Only where the model priced nothing: a goal that already has modelled pathways reads exactly as it did.
+  const partial = input.partial && modelledPathways.length === 0
     ? partialPathways(input.partial.arrangements, new Set(input.modelled.map((one) => one.opportunity.id)), {
         projectId: input.partial.projectId,
         remaining,
