@@ -757,6 +757,10 @@ const GOAL_MECHANISM: CompilerProfile = {
         'A kind of buyer that repeatedly pays for this: at least two distinct, dated published ' +
         'examples of such buyers paying for it (requests, listings, price pages, case studies), ' +
         'each attributed and with its URL. Say who those buyers are and how they are reached. ' +
+        'The claim itself names who pays and says that they pay, for what, and at what price ' +
+        'where a source shows one (these buyers pay this kind of supplier this price for this ' +
+        'work): this profile has no separate payer lane, so a payer written anywhere else never ' +
+        'reaches the opening, and a pattern that does not say its buyers pay is kept as context. ' +
         'One example is a request and belongs in demand_signal; a general statement that a ' +
         'market is large is neither.',
       necessity: 'CONDITIONAL',
