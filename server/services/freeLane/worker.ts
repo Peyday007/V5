@@ -2917,16 +2917,21 @@ export function asksByPriority(
 /** Packets holding claimable rows of these types, best priority first, bounded. */
 async function waitingPackets(projectIds: string[], types: readonly string[]): Promise<string[]> {
   const now = queueNow();
-  const rows = await getDb().all<{ orchestration_id: string }>(
-    `SELECT orchestration_id, MAX(priority) AS top FROM work_items
+  // Each project's best packet before any project's second, as the claim scan orders rows (`claimWork`).
+  const rows = await getDb().all<{ orchestration_id: string; project_id: string; top: number | string; oldest: string; live: number | string }>(
+    `SELECT orchestration_id, MIN(project_id) AS project_id, MAX(priority) AS top, MIN(available_at) AS oldest,
+            MIN(CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END) AS live
+       FROM work_items
       WHERE ${CLAIMABLE_SQL} AND orchestration_id IS NOT NULL
         AND project_id IN (${projectIds.map(() => '?').join(', ')})
         AND work_type IN (${types.map(() => '?').join(', ')})
       GROUP BY orchestration_id
-      ORDER BY MAX(priority) DESC, CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END, orchestration_id LIMIT 10`,
+      ORDER BY MAX(priority) DESC, live, MIN(available_at), orchestration_id LIMIT 50`,
     [now, now, ...projectIds, ...types],
   );
-  return rows.map((row) => row.orchestration_id);
+  return packetsByAllocation(
+    rows.map((row) => ({ id: row.orchestration_id, top: Number(row.top) - Number(row.live) / 2, shift: 0, projectId: row.project_id, oldest: row.oldest })),
+  ).slice(0, 10);
 }
 
 /**
@@ -2971,13 +2976,30 @@ export function resetResearchShifts(): void {
 /**
  * Packets in the order the decision in force says: each packet's best waiting
  * priority plus the step of the purposes it serves (the highest step among
- * them, as for a bin — `binPriorityShift`). Ties keep stored priority, then id.
- * Pure.
+ * them, as for a bin — `binPriorityShift`). Within one stepped priority, each
+ * project's best packet goes before any project's second (`turn`), then the
+ * oldest waiting item, as the claim scan orders rows (`claimWork`): ordering
+ * ties by packet id let a few projects' packets take every scarce fragment
+ * start while another goal's research waited. Pure.
  */
-export function packetsByAllocation(packets: readonly { id: string; top: number; shift: number }[]): string[] {
-  return [...packets]
-    .sort((a, b) => b.top + b.shift - (a.top + a.shift) || b.top - a.top || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    .map((one) => one.id);
+export function packetsByAllocation(packets: readonly { id: string; top: number; shift: number; projectId?: string; oldest?: string }[]): string[] {
+  const score = (one: { top: number; shift: number }) => one.top + one.shift;
+  const byScore = [...packets].sort(
+    (a, b) => score(b) - score(a) || b.top - a.top || (a.oldest ?? '').localeCompare(b.oldest ?? '') || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  // A packet's turn is its place among its own project's packets at the same score.
+  const seen = new Map<string, number>();
+  const turn = new Map<string, number>();
+  for (const one of byScore) {
+    const key = `${one.projectId ?? one.id}|${score(one)}`;
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    turn.set(one.id, n);
+  }
+  return byScore
+    .map((one, index) => ({ one, index }))
+    .sort((a, b) => score(b.one) - score(a.one) || turn.get(a.one.id)! - turn.get(b.one.id)! || a.index - b.index)
+    .map(({ one }) => one.id);
 }
 
 /** How many packets a take asks in decision order before the ordinary scan. */
@@ -2986,12 +3008,12 @@ const ALLOCATED_PACKETS = 5;
 /** Packets holding claimable rows of these types, ordered by the decision in force, bounded. */
 async function allocatedPackets(projectIds: string[], types: readonly string[], shifts: Record<string, number>): Promise<string[]> {
   const now = queueNow();
-  const rows = await getDb().all<{ orchestration_id: string; project_id: string; top: number | string }>(
-    `SELECT orchestration_id, MIN(project_id) AS project_id, MAX(priority) AS top FROM work_items
+  const rows = await getDb().all<{ orchestration_id: string; project_id: string; top: number | string; oldest: string }>(
+    `SELECT orchestration_id, MIN(project_id) AS project_id, MAX(priority) AS top, MIN(available_at) AS oldest FROM work_items
       WHERE ${CLAIMABLE_SQL} AND orchestration_id IS NOT NULL
         AND project_id IN (${projectIds.map(() => '?').join(', ')})
         AND work_type IN (${types.map(() => '?').join(', ')})
-      GROUP BY orchestration_id ORDER BY MAX(priority) DESC, orchestration_id LIMIT 50`,
+      GROUP BY orchestration_id ORDER BY MAX(priority) DESC, MIN(available_at), orchestration_id LIMIT 50`,
     [now, now, ...projectIds, ...types],
   );
   if (rows.length === 0) return [];
@@ -3003,6 +3025,8 @@ async function allocatedPackets(projectIds: string[], types: readonly string[], 
       id: row.orchestration_id,
       top: Number(row.top),
       shift: binPriorityShift(purposes.get(row.orchestration_id) ?? [], shifts as Parameters<typeof binPriorityShift>[1]),
+      projectId: row.project_id,
+      oldest: row.oldest,
     })),
   ).slice(0, ALLOCATED_PACKETS);
 }
