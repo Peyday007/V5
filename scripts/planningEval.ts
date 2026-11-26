@@ -686,6 +686,25 @@ async function probe(): Promise<void> {
   }
   out('variant', mode || 'none');
   let prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
+  if (mode.includes('consistent')) {
+    // The fix on claude/owner-labour-consistency (operatingModelSentenceFor), applied to the deployed prompt's text.
+    const labour = ctx['ownerLabour'] as { offered?: boolean; evidence?: string } | null | undefined;
+    const { OPERATING_MODEL_SENTENCE } = await import('../server/domain/operatingModel.ts');
+    const at = prompt.indexOf(OPERATING_MODEL_SENTENCE);
+    const tail = 'count every one of those hours.';
+    const end = prompt.indexOf(tail, at);
+    if (labour?.offered && at >= 0 && end > at) {
+      prompt =
+        prompt.slice(0, at) +
+        `For this goal the owner offered their own work ("${labour.evidence}"), so the standing rule that the owner does no physical work does not apply to it: ` +
+        'routes the owner personally performs — in person, deliveries, shifts, gigs and services included — are allowed, inside their stated hours, ' +
+        'using the skills and assets their words state or work that needs no particular skill, licence or equipment they did not state. ' +
+        'Set performer OWNER and count every one of those hours. Work can also be done by an independent supplier or subcontractor that this operation coordinates, ' +
+        'and AI and software should do as much of the remaining work as possible.' +
+        prompt.slice(end + tail.length);
+      out('consistent', 'applied');
+    } else out('consistent', { offered: !!labour?.offered, at, end });
+  }
   if (mode.includes('labour')) prompt = prompt.replace('using only the skills and assets their words state and inside their stated hours', 'using the skills and assets their words state, or work that needs none, inside their stated hours');
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
