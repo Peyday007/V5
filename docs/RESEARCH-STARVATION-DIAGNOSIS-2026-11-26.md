@@ -17,8 +17,9 @@ The trace and the probe were run with the read-only `trace` and `probe` commands
 
 | step | p02 | p06 | p10 | all |
 |---|---|---|---|---|
-| research fragments planned | 8 | 6 | 4 | 18 |
-| fragments actually executed | 2 | 2 | 0 | 4 (22%) |
+| research fragments planned | 6 | 6 | 4 | 16 |
+| research attempts made (free-lane items) | 2 (both handed back) | 2 | 0 | 4 |
+| fragments completed | 0 | 1 (+1 blocked: required lane empty) | 0 | 1 (6%) |
 | web search results found | 18 | 6 | 0 | 24 |
 | pages successfully read | 2 | 3 | 0 | 5 (21% of found) |
 | claims extracted | 0 | 3 | 0 | 3 |
@@ -35,8 +36,8 @@ Across Brain in the last 24 hours, the search requests broke down as follows:
 | Firecrawl | 5 | — | 27 at its daily ceiling |
 | keyed Google | — | — | not configured |
 
-**Where information stops.** The first stop is execution: 78% of fragments had not run after about
-4.5 hours. Of the work that did run, search and reading lost most of the rest, through refused
+**Where information stops.** The first stop is execution: 14 of 16 fragments were still queued after about 4.5 hours, and
+only 1 completed. Of the work that did run, search and reading lost most of the rest, through refused
 searches and unreadable or off-topic pages.
 
 **The p06 finding.** The only "finding" that reached a proposer was an absence statement from an
@@ -84,8 +85,8 @@ for gpt-oss (2026-11-25). With live web search, the stronger model wrote 7/10 us
 three goals, 0 relevant facts reached planning. That is a 100% loss between "research planned"
 and "planner input":
 
-- 78% is lost at execution.
-- 79% of the remainder is lost at search and reading.
+- 94% of planned fragments never completed (14 of 16 still queued after 4.5 hours).
+- 79% of found pages were never read.
 - 100% of what survived verification was irrelevant to the goal.
 
 **Effect of supplying facts.** Supplying the facts materially improved the outcome on the same
