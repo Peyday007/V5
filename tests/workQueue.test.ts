@@ -183,6 +183,23 @@ describe('atomic claiming', () => {
     expect(claimed.map((c) => c.workItemId)).toEqual([high, mid, low]);
   });
 
+  it('gives each project its turn within a priority before any project’s next item, then the oldest', async () => {
+    // Project A's backlog is older; B's one item arrives after it. Oldest-first
+    // across projects made B wait behind A's whole queue (production 2026-11-26:
+    // a goal's research not started in six hours behind older goals' fragments).
+    const a1 = await add(projectA, { priority: 8 });
+    const a2 = await add(projectA, { priority: 8 });
+    const a3 = await add(projectA, { priority: 8 });
+    const b1 = await add(projectB, { priority: 8 });
+    const urgent = await add(projectA, { priority: 9 });
+    const claimed = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA, projectB]), limit: 5 });
+    const order = claimed.map((c) => c.workItemId);
+    expect(order[0]).toBe(urgent);
+    // A's first and B's only item share the first turn at priority 8; A's later items follow.
+    expect(new Set(order.slice(1, 3))).toContain(b1);
+    expect(new Set(order)).toEqual(new Set([urgent, a1, a2, a3, b1]));
+  });
+
   it('refuses work in a project the worker is not a member of', async () => {
     await add(projectB);
     const claimed = await claimWork({ workerId: workerOne, scopes: scopesFor([projectA]) });

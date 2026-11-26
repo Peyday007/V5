@@ -20,7 +20,10 @@ import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { createGoal } from '../server/services/goals/decide.ts';
-import { opportunitiesWithRecordPrefix } from '../server/repos/cashPortfolio.ts';
+import { createOpportunity, liveOpeningsWithRecordPrefix, opportunitiesWithRecordPrefix } from '../server/repos/cashPortfolio.ts';
+import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
+import { DISQUALIFIED_FIELD } from '../server/services/cash/engineCard.ts';
 import { recordWorkstreamEvent, workstreamEventsOfKind } from '../server/repos/register.ts';
 import { goalRoutePrefix } from '../server/domain/routeOrigin.ts';
 import { advanceGoalPlans, forgetGoalReadings } from '../server/services/goals/plan.ts';
@@ -29,6 +32,7 @@ import {
   parseRoutes,
   proposeGoalRoutes,
   ROUTE_EVENT,
+  ROUTE_FAILED_ASKS_PER_DAY,
   ROUTE_PROPOSAL_EVERY_MS,
   ROUTE_RETRY_AFTER_FAILURE_MS,
   routeAskDue,
@@ -148,6 +152,48 @@ describe('a goal left without routes is asked again within half an hour on any p
     expect(routeAskDue([{ createdAt: at(now, ROUTE_RETRY_AFTER_FAILURE_MS + 60_000), detail: { outcome: 'NO_ANSWER' } }], now, { retryOnly: true }).due).toBe(true);
     expect(routeAskDue([{ createdAt: at(now, ROUTE_PROPOSAL_EVERY_MS + 60_000), detail: { outcome: 'PROPOSED', filed: ['cop_1'] } }], now, { retryOnly: true }).due).toBe(false);
     expect(routeAskDue([{ createdAt: at(now, ROUTE_PROPOSAL_EVERY_MS + 60_000), detail: { outcome: 'NO_MODEL' } }], now, { retryOnly: true }).due).toBe(false);
+  });
+
+  it('a goal research has left with nothing live is asked again like a failed ask, with every ask of the day counted', () => {
+    const now = new Date();
+    const filed = { outcome: 'PROPOSED', filed: ['cop_1'], existing: [] };
+    const ask = [{ createdAt: at(now, ROUTE_RETRY_AFTER_FAILURE_MS + 60_000), detail: filed }];
+    // Its routes still live: the ordinary interval, and the retry-only pass leaves it.
+    expect(routeAskDue(ask, now, { live: 1 }).due).toBe(false);
+    expect(routeAskDue(ask, now, { retryOnly: true, live: 1 }).due).toBe(false);
+    // Everything it held ruled out: due after the retry spacing, on either pass, saying why.
+    expect(routeAskDue(ask, now, { live: 0 }).due).toBe(true);
+    expect(routeAskDue(ask, now, { retryOnly: true, live: 0 }).due).toBe(true);
+    const early = routeAskDue([{ createdAt: at(now, ROUTE_RETRY_AFTER_FAILURE_MS - 60_000), detail: filed }], now, { live: 0 });
+    expect(early).toMatchObject({ due: false });
+    expect((early as { reason: string }).reason).toContain('ruled out everything it held');
+    // Filing and refuting cannot cycle: past the day's cap of asks it waits the ordinary interval.
+    const many = Array.from({ length: ROUTE_FAILED_ASKS_PER_DAY }, (_, i) => ({ createdAt: at(now, ROUTE_RETRY_AFTER_FAILURE_MS + 60_000 + i * 60_000), detail: filed }));
+    expect(routeAskDue(many, now, { live: 0 }).due).toBe(false);
+  });
+
+  it('counts a goal’s live routes: archived, declined and research-ruled-out openings are not live', async () => {
+    const prefix = goalRoutePrefix(goalId);
+    const mode = (await getCashMode(projectId))!;
+    const open = async (name: string) =>
+      (
+        await createOpportunity({
+          projectId,
+          cashModeId: mode.id,
+          ownerUserId: mode.ownerUserId,
+          title: name,
+          mechanism: 'PRODUCTIZED_SERVICE',
+          currency: 'USD',
+          externalRecordId: `${prefix}${name}`,
+          source: 'A route',
+        })
+      ).id;
+    expect(await liveOpeningsWithRecordPrefix(projectId, prefix)).toBe(0);
+    const a = await open('a');
+    await open('b');
+    expect(await liveOpeningsWithRecordPrefix(projectId, prefix)).toBe(2);
+    await recordCardFact({ projectId, opportunityId: a, field: DISQUALIFIED_FIELD, kind: 'EVIDENCE', value: 'research found no buyer pays for it', decidedBy: 'test' });
+    expect(await liveOpeningsWithRecordPrefix(projectId, prefix)).toBe(1);
   });
 
   it('the plan pass arms the retry with no reading held and no read taken, and not before its time', async () => {
