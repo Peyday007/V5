@@ -3094,12 +3094,13 @@ export function positionDecomposition(questions: readonly PositionResearchQuesti
  * what. `patternStatesPayer` is that same rule, read from the same word list,
  * so the question and the harvest cannot drift apart. No bar is lowered: the
  * claim still passes the gate and the lane's two-example floor, and a pattern
- * that names no payer still files nothing.
+ * that names no payer still files nothing. It carries no double quotes: the
+ * free lane reads a quoted phrase in a question as a search query.
  */
 export const PATTERN_PAYER_SENTENCE =
   'Write each repeating-buyer (demand_pattern) claim so that the claim itself names who pays and says that they pay, ' +
-  'for what, and at what price where a source shows one — "<these buyers> pay <this kind of supplier> <price> for <this work>", ' +
-  'never only "<buyers> commission <work>": a pattern that does not say its buyers pay is kept as context and never becomes an opening. ';
+  'for what, and at what price where a source shows one (these buyers pay this kind of supplier this price for this work), ' +
+  'never only that buyers commission the work: a pattern that does not say its buyers pay is kept as context and never becomes an opening. ';
 
 /**
  * How a constructed round's answer becomes an opening, said in the question.

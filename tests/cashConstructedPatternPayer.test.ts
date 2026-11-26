@@ -61,7 +61,9 @@ describe('a constructed pattern claim must say who pays (CONSTRUCTION.ROUNDS_FIL
     expect(OPENING_SENTENCE).toContain(PATTERN_PAYER_SENTENCE);
     expect(PATTERN_PAYER_SENTENCE).toMatch(/names who pays and says that they pay/);
     // The template the sentence offers satisfies the harvest's own rule.
-    expect(patternStatesPayer('<these buyers> pay <this kind of supplier> <price> for <this work>')).toBe(true);
+    expect(patternStatesPayer('these buyers pay this kind of supplier this price for this work')).toBe(true);
+    // No quoted phrase: the free lane would read it as a search query.
+    expect(PATTERN_PAYER_SENTENCE).not.toContain('"');
   });
 
   it('every constructed question — reverse and confirm-or-refute — asks for the payer in the claim', async () => {
