@@ -22,7 +22,7 @@
 1. **The outcome is unchanged on E1.** In this single replay the wave-1 repairs did not turn the known-bad case into a plan. The cause moved: the critic veto is not reached, because the failure now happens one step earlier.
 2. **A truncated reply is treated as a success.** `askModel` (`routeProposal.ts:1436-1447`) retries only on *wholly empty* content. A reply that stops mid-JSON passes as an answer. Nothing records `finish_reason` (`modelBench.ts:81-166`), so the record cannot say *why* it stopped.
    - This is the same mechanism as E-001's empty replies: the completion budget (4000/8000 tokens with hidden reasoning) runs out. It shows up as a second symptom.
-   - Status: **SUPPORTED, strengthened.** The reply was cut mid-token-stream at a latency comparable to the empties, with no error.
+   - Status (corrected by Gate B GB-12): **NOT SEPARATED** — a dropped stream erased by `readStream:166` leaves an identical record; see GATE-B.md §2. The reply was cut mid-token-stream at a latency comparable to the empties, with no error.
 3. **The parser discards destructively and reports nothing.** `parseRoutes(routesJson(content))` on a truncated object yields no routes and **no rejection**. The loss is not counted as a parse failure, so neither the probe nor production can tell "the model proposed nothing" from "the model's answer was cut off".
    - This is a new defect in the parsing class (RC9 family).
    - It conceals RC1-a from every downstream reading.

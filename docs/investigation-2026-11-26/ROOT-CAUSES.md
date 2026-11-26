@@ -89,3 +89,33 @@ See `UNCERTAINTY.md`.
 | CR-10 extended | GA-09: `buildPlanSet` is a second "best" ranking persisted in the forecast. GA-01: a model challenge inside `optimizePortfolio` can replace `portfolio.best` and withdraw the 90% claim on every read. | There are at least two more selectors, one of them model-driven. CR-01/CR-02 apply to this call site too. |
 | CR-16 extended | GA-24: a reply whose routes all failed the rules (routes=0, rejected>0) ends the model fallback chain (routeProposal.ts:2095-2110). | One weak model's rule-rejected reply ends the ask. |
 | new CR-17 (SUPPORTED, code) | GA-03/GA-29: `changeObjective` keeps the old links and does not make routes due (up to 6 h). `planInputsFingerprint` ignores knowledge and world-model facts, library verdicts and person facts, so a goal held NOT_SUPPORTED stays stuck through those changes. | Change propagation (Map C Q-R009) fails. The owner's goal changes are not acted on promptly, and the plan does not re-read when relevant evidence changes. |
+
+## G. Corrections from Gate B (independent diagnostic-validity review, reviews/GATE-B.md). These supersede the rows above where they conflict.
+
+- **CR-01.** Statuses:
+  - ESTABLISHED: Brain accepts incomplete turns and cannot tell a length stop, a reasoning-only reply, a stream drop or a stream error apart. Evidence: `readStream:166` erases the error when partial content arrived, `askModel` drops `completionTokens`, and no `finish_reason` is read. The E0 empties were not the idle cut.
+  - SUPPORTED only: the reasoning-budget explanation (H1b) for the E0 empties.
+  - NOT SEPARATED: E-002's E1 truncation, between a budget stop and a stream drop or reset.
+  - NOT EXCLUDED: H1c, the answer placed in the reasoning field.
+  - The separating experiment is GATE-B.md §2 (U-01). The correction class therefore has to cover both turn completeness and stream-error surfacing; it cannot be "raise the budget" alone.
+- **CR-03.** Two claims change status:
+  - **Withdrawn** as defects: "true WINDOW/CAPITAL violations kept". The critic is instructed to REPAIR a disputed figure (W1b). Whether a live critic does repair is an **untested** critic-compliance question.
+  - **ESTABLISHED, unchanged**: a drop citing a non-existent finding (F999) or no rule at all is accepted; a co-rule defeats the WINDOW-only guard; the recorded false drops still drop.
+- **CR-04.** The "spend over capital not caught" injection has no defined correct answer, because no rule says whether acquisition spend is bounded by capital or recycled from proceeds (GB-60s).
+  - Restated: **the requirement itself is unspecified**. Map C Q-R042 (cash-flow timeline and peak capital) has no implementation.
+  - ESTABLISHED, unchanged: the W1c rule fires only when the model fills the new field.
+- **CR-06.** Window misses are refused loudly (correct behaviour). Capital misses become "no capital limit".
+  - **Amount misses silently create a goal with no target** (GB-G). This is a stronger and separate defect.
+  - The production `objectiveAssist` second-read path remains untested.
+- **CR-07.** The newest-first DB-limit claim (E-012 F3) is simulated, not executed through `projectEvidenceClaims`. Status SUPPORTED, pending that execution.
+- **Register.**
+  - Regenerated after fixing GB-48/49/50, with 4 more overrides.
+  - New counts: 88 recheck-after-change, 73 unverified, 41 incomplete, 16 reusable.
+  - The C23-M override is now INCOMPLETE (confounded) rather than CONTRADICTED. The map's idle-cut attribution remains contradicted, recorded in the note.
+  - 14 questions carry a `spec_defect`: the test as written cannot detect its intended failure.
+
+**Diagnostic validity (Gate B).**
+- VERIFIED_DIAGNOSTIC: E-012 delivery and dedupe, E-013 (objective reader), E-014, E-015, E-016, L-001.
+- PARTIAL: E-001, E-002, E-010, E-011, E-012 F3.
+- INVALID: none.
+- All harness outputs re-ran byte-identically.
