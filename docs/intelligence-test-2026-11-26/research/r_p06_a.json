@@ -1,0 +1,547 @@
+{
+ "goal": "p06",
+ "worker": "p06_a",
+ "results": [
+  {
+   "id": "Q1",
+   "status": "PARTIAL",
+   "answer": "No source found measuring what Seattle small businesses will pay for a 2-hour remote inbox triage. US virtual-assistant rate benchmarks are about $15-$42/hour (US average $25.77/hour; general admin $15-$28/hour), implying roughly $30-$85 for a 2-hour job, far below the $250-per-job figure the route assumes.",
+   "facts": [
+    {
+     "claim": "US virtual assistants mostly charge $15-$42 per hour, with a US average of $25.77 per hour (HoneyBook, Aug 31 2026).",
+     "quote": "Most VAs charge between $15–$42 per hour",
+     "sourceUrl": "https://www.honeybook.com/blog/virtual-assistant-pricing",
+     "sourceTitle": "Virtual assistant pricing: How to set and raise your rates (HoneyBook)",
+     "sourceDate": "2026-08-31",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "HoneyBook (2026) gives a US average VA rate of $25.77 per hour.",
+     "quote": "the average rate in the U.S. is $25.77 per hour",
+     "sourceUrl": "https://www.honeybook.com/blog/virtual-assistant-pricing",
+     "sourceTitle": "Virtual assistant pricing: How to set and raise your rates (HoneyBook)",
+     "sourceDate": "2026-08-31",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "HoneyBook (2026) prices general administrative VA support, the category covering email triage, at $15-$28 per hour.",
+     "quote": "General administrative support | $15–$28/hour",
+     "sourceUrl": "https://www.honeybook.com/blog/virtual-assistant-pricing",
+     "sourceTitle": "Virtual assistant pricing: How to set and raise your rates (HoneyBook)",
+     "sourceDate": "2026-08-31",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Payscale lists Seattle WA virtual assistant pay at $13-$30 per hour (average $14.74), but from only 6 salary profiles last updated in 2018; this is a wage, not a client price.",
+     "quote": "The average hourly pay for a Virtual Assistant is $14.74 in 2026",
+     "sourceUrl": "https://www.payscale.com/research/US/Job=Virtual_Assistant/Hourly_Rate/a3547520/Seattle-WA",
+     "sourceTitle": "Average Virtual Assistant Hourly Pay in Seattle, Washington (Payscale)",
+     "sourceDate": null,
+     "lane": "comparable_demand"
+    }
+   ],
+   "opened": [
+    "https://www.honeybook.com/blog/virtual-assistant-pricing",
+    "https://www.payscale.com/research/US/Job=Virtual_Assistant/Hourly_Rate/a3547520/Seattle-WA",
+    "https://www.fiverr.com/resources/costs/virtual-assistant",
+    "https://www.ziprecruiter.com/Jobs/Email-Management-Virtual-Assistant"
+   ],
+   "failed": [
+    "https://www.fiverr.com/resources/costs/virtual-assistant: 403",
+    "https://www.ziprecruiter.com/Jobs/Email-Management-Virtual-Assistant: 403"
+   ],
+   "notes": "Searched for email-management VA rates and Seattle VA wages. No source states a Seattle small-business willingness to pay for a 2-hour triage specifically. The Payscale Seattle figure is weak (6 profiles, 2018). The per-job dollar range is arithmetic on the hourly rates, not a sourced figure."
+  },
+  {
+   "id": "Q2",
+   "status": "ANSWERED",
+   "answer": "Neither Upwork nor Fiverr pays the assistant instantly, and both make the hiring client pay first. On Upwork the client funds an escrowed milestone before work starts, and after approval or a 14-day auto-release the funds sit in a 5-day security hold. On Fiverr the client pays upfront, and earnings clear 14 days after completion (7 days for Seller Plus/Top Rated/Pro). The PeoplePerHour terms could not be opened. The premise that some platform allows per-task instant payout without the hirer's money up front is not supported.",
+   "facts": [
+    {
+     "claim": "On Upwork fixed-price contracts, the client deposits milestone funds into escrow before work, and freelancers are told to start only once a milestone is funded (Upwork help, updated 2026-10-26).",
+     "quote": "Only begin work when a milestone is funded.",
+     "sourceUrl": "https://support.upwork.com/api/v2/help_center/en-us/articles/44564821903763.json",
+     "sourceTitle": "Understanding milestones on fixed price contracts (Upwork Help)",
+     "sourceDate": "2026-10-26",
+     "lane": "delivery_requirements"
+    },
+    {
+     "claim": "Upwork holds fixed-price funds that the client deposits.",
+     "quote": "We hold the fixed-price funds your client deposits in a secure account.",
+     "sourceUrl": "https://support.upwork.com/api/v2/help_center/en-us/articles/44564821903763.json",
+     "sourceTitle": "Understanding milestones on fixed price contracts (Upwork Help)",
+     "sourceDate": "2026-10-26",
+     "lane": "payer"
+    },
+    {
+     "claim": "After an Upwork fixed-price milestone is approved or auto-released, funds go to Pending for a five-day security hold before withdrawal.",
+     "quote": "Once payment is approved or auto-released, the funds move to Pending for a five-day security hold.",
+     "sourceUrl": "https://support.upwork.com/api/v2/help_center/en-us/articles/211063718.json",
+     "sourceTitle": "Get Paid for Fixed Price Contracts (Upwork Help)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "On Upwork, only hourly contracts are eligible for 'faster payments' (help article updated 2026-10-18).",
+     "quote": "only your hourly contracts are eligible for faster payments",
+     "sourceUrl": "https://support.upwork.com/api/v2/help_center/en-us/articles/40368885170579.json",
+     "sourceTitle": "Why haven't my funds arrived yet if I qualify for faster payments (Upwork Help)",
+     "sourceDate": "2026-10-18",
+     "lane": "timing"
+    },
+    {
+     "claim": "Fiverr freelancer revenue becomes available 14 days after order completion, or 7 days for Seller Plus, Top Rated and Pro freelancers (Fiverr help, updated 2026-11-24).",
+     "quote": "Your revenue becomes available 14 days after the order is completed. For Seller Plus, TRS, and Pro Talent freelancers, the clearance period is 7 days",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/360010639617-A-freelancer-s-guide-to-the-Fiverr-order-process",
+     "sourceTitle": "A freelancer's guide to the Fiverr order process (Fiverr Help)",
+     "sourceDate": "2026-11-24",
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://support.upwork.com/api/v2/help_center/en-us/articles/211063718.json",
+    "https://support.upwork.com/api/v2/help_center/en-us/articles/44564821903763.json",
+    "https://support.upwork.com/api/v2/help_center/en-us/articles/40368885170579.json",
+    "https://help.fiverr.com/hc/en-us/articles/360010639617-A-freelancer-s-guide-to-the-Fiverr-order-process",
+    "https://wise.com/us/blog/how-to-get-paid-on-fiverr",
+    "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+    "https://help.fiverr.com/hc/en-us/articles/360011421198-FAQs-for-freelancers",
+    "https://www.peopleperhour.com/discover/news/freelancer-payments-process",
+    "https://support.peopleperhour.com/api/v2/help_center/en-us/articles/205218327.json"
+   ],
+   "failed": [
+    "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts: 403 (read via the help-center JSON API instead)",
+    "https://help.fiverr.com/hc/en-us/articles/360011421198-FAQs-for-freelancers: 403",
+    "https://www.peopleperhour.com/discover/news/freelancer-payments-process: empty content",
+    "https://support.peopleperhour.com/api/v2/help_center/en-us/articles/205218327.json: 403"
+   ],
+   "notes": "The PeoplePerHour clearing period is unverified; a search snippet showed a 7-day clearing example from 2021, which was not opened. The Wise quote is weak for 'pays upfront' (the summary said 'Buyers pay upfront', but the verbatim quote is the release sentence). A Wise fact about Fiverr buyers paying upfront was dropped because its verbatim quote did not state the claim."
+  },
+  {
+   "id": "Q3",
+   "status": "PARTIAL",
+   "answer": "No platform data gives a typical turnaround for 24-hour logo delivery. A June 2026 review says only a handful of Fiverr designers deliver within 24 hours, while others take up to 3 or 7 days. An unsourced November 2026 page puts a standard Fiverr logo at 5-14 days with revisions, and Fiverr Pro at 24-72h for first concepts and 3-7 days for the full project. Fiverr also lets the buyer take 3 days (extendable) to accept a delivery.",
+   "facts": [
+    {
+     "claim": "A Top10.com review (June 14, 2026) says only a handful of Fiverr logo designers deliver within 24 hours; others deliver in up to 3 or up to 7 days.",
+     "quote": "There are just a handful of Fiverr designers that will deliver in up to 24 hours",
+     "sourceUrl": "https://www.top10.com/logo-design/top-reads/fiverr-vs-tailor-brands-which-logo-design-firm-is-right-for-your-business",
+     "sourceTitle": "Fiverr vs Tailor Brands (Top10.com)",
+     "sourceDate": "2026-06-14",
+     "lane": "fulfiller"
+    },
+    {
+     "claim": "An editorial page with no stated data source (Nov 2026) puts standard Fiverr logo projects at 5-14 days including revision rounds.",
+     "quote": "Average completion: 5–14 days with revision rounds.",
+     "sourceUrl": "https://eonati2.github.io/Eonati2/how-long-does-logo-design-take.html",
+     "sourceTitle": "How long does logo design take (Eonati)",
+     "sourceDate": "2026-11-01",
+     "lane": "timing"
+    },
+    {
+     "claim": "The same page puts Fiverr Pro logo first concepts at 24-72 hours and the full project with revisions at 3-7 days.",
+     "quote": "First concepts in 24–72 hrs. Full project with revisions: 3–7 days.",
+     "sourceUrl": "https://eonati2.github.io/Eonati2/how-long-does-logo-design-take.html",
+     "sourceTitle": "How long does logo design take (Eonati)",
+     "sourceDate": "2026-11-01",
+     "lane": "timing"
+    },
+    {
+     "claim": "On Fiverr, an order auto-completes if the buyer takes no action within three days of delivery, and the buyer can extend review by up to 5 days, more than once (Fiverr help, 2026-11-24).",
+     "quote": "If no action is taken within three days of delivery, the system will automatically complete the order.",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/37552517993105-The-complete-guide-to-your-Fiverr-order-Statuses-and-process",
+     "sourceTitle": "The complete guide to your Fiverr order: Statuses and process (Fiverr Help)",
+     "sourceDate": "2026-11-24",
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://www.top10.com/logo-design/top-reads/fiverr-vs-tailor-brands-which-logo-design-firm-is-right-for-your-business",
+    "https://eonati2.github.io/Eonati2/how-long-does-logo-design-take.html",
+    "https://help.fiverr.com/hc/en-us/articles/37552517993105-The-complete-guide-to-your-Fiverr-order-Statuses-and-process",
+    "https://fiverr.com/brandsidentity/create-perfect-business-logo-design-in-24-hours",
+    "https://www.fiverr.com/cyber_avanza/design-logo-in-24-hours"
+   ],
+   "failed": [
+    "https://fiverr.com/brandsidentity/create-perfect-business-logo-design-in-24-hours: 403",
+    "https://www.fiverr.com/cyber_avanza/design-logo-in-24-hours: 403 (also 403 via curl)"
+   ],
+   "notes": "Fiverr and Upwork gig and listing pages are all 403 from this environment, so a sample of 24-hour logo gigs could not be read. Search results show many gigs titled '24 hours', but snippets are not evidence. No Upwork turnaround data was found. The Eonati source date is given only as 'November 2026', so day 01 is a placeholder."
+  },
+  {
+   "id": "Q4",
+   "status": "PARTIAL",
+   "answer": "Neither marketplace pays a 'broker' commission; both run affiliate programs that pay per referred customer. DesignCrowd's official page says affiliates are paid when a referred customer launches a project, and a third-party directory lists $35 per order. 99designs affiliate payouts are reported by a third-party directory at $60-$100 per sale, with internally conflicting figures of $35-$80. No official 99designs terms were opened.",
+   "facts": [
+    {
+     "claim": "DesignCrowd's official affiliate page says affiliates earn money when a referred customer launches a project; it states no amount.",
+     "quote": "Earn money when a customer you refer launches a project.",
+     "sourceUrl": "https://www.designcrowd.com/affiliate",
+     "sourceTitle": "Earn money as an affiliate (DesignCrowd)",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "A third-party directory (Lasso, updated Nov 17 2026) lists the DesignCrowd affiliate commission as $35 per order, with a 60-day cookie and a $50 payout threshold.",
+     "quote": "$35 per order",
+     "sourceUrl": "https://getlasso.co/affiliate/designcrowd/",
+     "sourceTitle": "DesignCrowd Affiliate Program (Lasso)",
+     "sourceDate": "2026-11-17",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "A third-party directory (Lasso, updated Nov 26 2026) lists the 99designs affiliate commission as $60-$100 per sale; its structured data says $35-$80 per referral.",
+     "quote": "$60 - $100 Per Sale",
+     "sourceUrl": "https://getlasso.co/affiliate/99designs/",
+     "sourceTitle": "99designs Affiliate Program (Lasso)",
+     "sourceDate": "2026-11-26",
+     "lane": "price_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.designcrowd.com/affiliate",
+    "https://getlasso.co/affiliate/designcrowd/",
+    "https://getlasso.co/affiliate/99designs/"
+   ],
+   "failed": [],
+   "notes": "The official 99designs affiliate terms were not found or opened. Search snippets showed conflicting figures ($40 per new customer, 5-15%, and a listing marked paused), which are not recorded. The affiliate model pays per referral, not a margin on resold work."
+  },
+  {
+   "id": "Q5",
+   "status": "ANSWERED",
+   "answer": "All three can pay out the same day for a fee. Stripe: 2.9% + 30¢ per domestic card, standard payout in 2 business days (the first payout typically takes 7-14 days), Instant Payouts at 1.5% (50¢ minimum) within about 30 minutes, but new users are not immediately eligible. PayPal: 3.49% + $0.49 for checkout or commercial payments, 2.99% for goods and services, instant transfer at 1.5% (50¢ minimum), but new sellers' first payments can be held up to 21 days. Square: 3.3% + 30¢ for online and invoice payments on the free plan, next-business-day deposit, instant transfer at 1.95%.",
+   "facts": [
+    {
+     "claim": "Stripe charges 2.9% + 30¢ per successful domestic card transaction in the US (stripe.com/pricing, Nov 2026).",
+     "quote": "2.9% + 30¢",
+     "sourceUrl": "https://stripe.com/pricing",
+     "sourceTitle": "Stripe Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Stripe Instant Payouts cost 1.5% of payout volume with a 50¢ minimum fee.",
+     "quote": "1.5% of Instant Payouts volume",
+     "sourceUrl": "https://stripe.com/pricing",
+     "sourceTitle": "Stripe Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Stripe Instant Payouts typically settle within 30 minutes, any day including weekends.",
+     "quote": "funds typically settle in the associated payout account within 30 minutes",
+     "sourceUrl": "https://docs.stripe.com/payouts/instant-payouts",
+     "sourceTitle": "Instant Payouts for Stripe Dashboard users (Stripe Docs)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "New Stripe users are not immediately eligible for Instant Payouts.",
+     "quote": "New Stripe users aren’t immediately eligible for Instant Payouts.",
+     "sourceUrl": "https://docs.stripe.com/payouts/instant-payouts",
+     "sourceTitle": "Instant Payouts for Stripe Dashboard users (Stripe Docs)",
+     "sourceDate": null,
+     "lane": "risk"
+    },
+    {
+     "claim": "Stripe's first payout typically completes 7-14 days after the first live payment; US settlement is 2 business days.",
+     "quote": "Stripe typically schedules your initial payout to complete within 7–14 days",
+     "sourceUrl": "https://docs.stripe.com/payouts",
+     "sourceTitle": "Payouts (Stripe Docs)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "PayPal US charges 3.49% + a fixed fee ($0.49 USD) for PayPal Checkout (merchant fees page last updated Nov 4 2026).",
+     "quote": "PayPal Checkout | 3.49% + fixed fee",
+     "sourceUrl": "https://www.paypal.com/us/webapps/mpp/merchant-fees",
+     "sourceTitle": "PayPal Merchant Fees (US)",
+     "sourceDate": "2026-11-04",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "PayPal US instant transfer costs 1.50% of the amount transferred, with a 0.50 USD minimum.",
+     "quote": "1.50% of amount transferred",
+     "sourceUrl": "https://www.paypal.com/us/webapps/mpp/merchant-fees",
+     "sourceTitle": "PayPal Merchant Fees (US)",
+     "sourceDate": "2026-11-04",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "PayPal holds a new seller's initial payments for up to 21 days.",
+     "quote": "we hold the initial payments you receive for up to 21 days",
+     "sourceUrl": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+     "sourceTitle": "New PayPal Sellers: Payments on Hold (PayPal Help)",
+     "sourceDate": null,
+     "lane": "risk"
+    },
+    {
+     "claim": "Square US charges 3.3% + 30¢ for online and invoice card payments on its Free plan (2.9% + 30¢ on Plus/Premium).",
+     "quote": "3.3% + 30¢",
+     "sourceUrl": "https://squareup.com/us/en/payments/our-fees",
+     "sourceTitle": "Square fees (US)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Square instant transfers cost 1.95% per transfer, on top of processing fees.",
+     "quote": "Instant transfers cost a 1.95% fee per transfer, in addition to Square standard card processing fees.",
+     "sourceUrl": "https://squareup.com/help/us/en/article/5405-instant-deposit",
+     "sourceTitle": "Instant transfers (Square Support)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Square standard transfers: payments taken before 5 PM PT are in the bank account the next business day.",
+     "quote": "Payments taken before 5 PM PT/8 PM ET will be available in your bank account the next business day.",
+     "sourceUrl": "https://squareup.com/help/us/en/article/5405-instant-deposit",
+     "sourceTitle": "Instant transfers (Square Support)",
+     "sourceDate": null,
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://stripe.com/pricing",
+    "https://support.stripe.com/questions/june-2024-pricing-update-for-instant-payouts-for-businesses-in-the-united-states",
+    "https://docs.stripe.com/payouts/instant-payouts",
+    "https://docs.stripe.com/payouts",
+    "https://www.paypal.com/us/webapps/mpp/merchant-fees",
+    "https://www.paypal.com/us/cshelp/article/why-is-my-payment-on-hold-or-unavailable-help101",
+    "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+    "https://squareup.com/us/en/payments/pricing",
+    "https://squareup.com/us/en/payments/our-fees",
+    "https://squareup.com/help/us/en/article/5405-instant-deposit",
+    "https://squareup.com/us/en/invoices/pricing"
+   ],
+   "failed": [
+    "https://support.stripe.com/questions/june-2024-pricing-update-for-instant-payouts-for-businesses-in-the-united-states: 301 redirect to stripe.com/pricing",
+    "https://www.paypal.com/us/cshelp/article/why-is-my-payment-on-hold-or-unavailable-help101: page is about refunds, not holds",
+    "https://squareup.com/us/en/payments/pricing: truncated, no fees",
+    "https://squareup.com/us/en/invoices/pricing: 429"
+   ],
+   "notes": "The Square 3.3% + 30¢ quote is the category label; the figure comes from the same table row as read by the fetch tool. PayPal's 2.99% goods-and-services rate is in the page but not quoted separately."
+  },
+  {
+   "id": "Q6",
+   "status": "UNANSWERED",
+   "answer": "No count of recent Seattle-based CSV-cleanup or spreadsheet-automation job postings could be established. Upwork job pages were blocked (403), and no Seattle-specific postings were found in search results.",
+   "facts": [],
+   "opened": [
+    "https://www.upwork.com/freelance-jobs/data-cleansing/"
+   ],
+   "failed": [
+    "https://www.upwork.com/freelance-jobs/data-cleansing/: 403"
+   ],
+   "notes": "Searched for 'Upwork jobs data cleaning CSV Seattle WA posted'. Results were freelancer service listings and Upwork hire-by-city pages (Kirkland, Tacoma), not Seattle client job posts. Upwork and Fiverr pages return 403 from this environment (WebFetch and curl). A snippet mentioned 329 data-cleaning jobs on Upwork with no location, unverified. Freelancer.com was not tried within budget."
+  },
+  {
+   "id": "Q7",
+   "status": "PARTIAL",
+   "answer": "No source gives a row capacity for free AI tools. OpenAI's API documentation lists a Free tier only as 'allowed geography' with a $100/month usage limit, and does not say which models it can call. Google AI Studio's rate-limit page marks most models 'Not supported' on the free tier and lists one (Gemini Decision 1) at 200 RPM / 50,000 TPM / 10,000 requests per day. At 10,000 RPD, a 10,000-row file is feasible within 48 hours at one row per request, if that model suits the task. This is arithmetic, not a sourced figure.",
+   "facts": [
+    {
+     "claim": "OpenAI's API rate-limit documentation (Nov 2026) lists a Free usage tier whose qualification is being in an allowed geography, with a $100/month usage limit; per-model limits are published only for paid tiers.",
+     "quote": "User must be in an allowed geography",
+     "sourceUrl": "https://developers.openai.com/api/docs/guides/rate-limits",
+     "sourceTitle": "Rate limits (OpenAI API docs)",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    },
+    {
+     "claim": "Google AI Studio's rate-limit page (Nov 2026) lists free-tier RPM and RPD for Gemini Omni Flash as 'Not supported'.",
+     "quote": "Not supported",
+     "sourceUrl": "https://aistudio.google.com/docs/rate-limits",
+     "sourceTitle": "Rate limits (Google AI Studio docs)",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    },
+    {
+     "claim": "Google AI Studio's rate-limit page lists Gemini Decision 1 free-tier limits as 200 requests per minute, 50,000 tokens per minute and 10,000 requests per day.",
+     "quote": "10,000",
+     "sourceUrl": "https://aistudio.google.com/docs/rate-limits",
+     "sourceTitle": "Rate limits (Google AI Studio docs)",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    }
+   ],
+   "opened": [
+    "https://developers.openai.com/api/docs/guides/rate-limits",
+    "https://ai.google.dev/gemini-api/docs/rate-limits",
+    "https://aistudio.google.com/docs/rate-limits"
+   ],
+   "failed": [
+    "https://ai.google.dev/gemini-api/docs/rate-limits: 301 redirect to aistudio.google.com/docs/rate-limits"
+   ],
+   "notes": "The Google table values came from the fetch tool reading the table; the verbatim quotes are only the table cells, so treat them as moderate confidence. Third-party pages disagree on whether the OpenAI API has any free text-generation tier; not opened. No row limits for free CSV-cleaning tools were found. Consumer ChatGPT free limits were not researched."
+  },
+  {
+   "id": "Q8",
+   "status": "PARTIAL",
+   "answer": "Upwork listings could not be opened (403). On Contra, comparable fixed-price CSV/Excel cleanup offers are $107 for up to 10,000 rows (3 days), $50 for up to 5,000 rows (24-48h), and $100 for up to 5,000 rows (1 week). 10,000-row cleanup is therefore priced around $50-$110+ on these listings. Upwork's own rates are unverified.",
+   "facts": [
+    {
+     "claim": "A Contra freelancer offers Excel data cleaning starting at $107 for datasets up to 10,000 rows, with 3-day duration (Contra listing, Nov 2026).",
+     "quote": "Starting at $107 for datasets up to 10,000 rows.",
+     "sourceUrl": "https://contra.com/s/OcXlQZAZ-excel-data-cleaning-and-structuring",
+     "sourceTitle": "Excel Data Cleaning & Structuring (Contra)",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "A Contra freelancer offers Excel/CSV cleanup starting at $50 for one file up to 5,000 rows, typically delivered in 24-48 hours.",
+     "quote": "The base price covers one file with up to 5,000 rows and one revision.",
+     "sourceUrl": "https://contra.com/s/NrWP3LZX-excel-and-csv-data-cleanup-in-24-hours",
+     "sourceTitle": "Excel & CSV Data Cleanup in 24 Hours (Contra)",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "A Contra freelancer prices spreadsheet data cleanup at $100 for one source up to 5,000 rows, with 1-week duration.",
+     "quote": "$100 - 1 source, up to 5,000 rows.",
+     "sourceUrl": "https://contra.com/s/r3UoFZcm-data-cleanup-messy-spreadsheets-to-standardized-tables",
+     "sourceTitle": "Data cleanup: messy spreadsheets to standardized tables (Contra)",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    }
+   ],
+   "opened": [
+    "https://contra.com/s/OcXlQZAZ-excel-data-cleaning-and-structuring",
+    "https://contra.com/s/NrWP3LZX-excel-and-csv-data-cleanup-in-24-hours",
+    "https://contra.com/s/r3UoFZcm-data-cleanup-messy-spreadsheets-to-standardized-tables",
+    "https://www.upwork.com/services/product/development-it-csv-excel-cleanup-20k-rows-reusable-python-script-1984807116720974025"
+   ],
+   "failed": [
+    "https://www.upwork.com/services/product/development-it-csv-excel-cleanup-20k-rows-reusable-python-script-1984807116720974025: 403 (WebFetch and curl)"
+   ],
+   "notes": "Search snippets showed Fiverr packages at $15-$20 for 10k rows and $70 for 10k rows/72h, plus Upwork tiers of $10-$30. All Fiverr and Upwork pages return 403, so none of those figures is recorded. These are asking prices, not transaction prices."
+  },
+  {
+   "id": "Q9",
+   "status": "PARTIAL",
+   "answer": "TaskRabbit offers a Virtual Assistant category ('managing your inbox') that lists Seattle among its cities. Taskers are paid via Stripe, mostly within 1-3 business days after completion, which can exceed 48 hours. Gigwalk's iOS app was last updated in December 2019 (version 3.0.13), and it pays by PayPal after a gig is approved with no stated timing, so it is not evidenced as a live channel for digital services. No Seattle-specific micro-task marketplace with guaranteed 24-48h payout was found.",
+   "facts": [
+    {
+     "claim": "TaskRabbit's Virtual & Online Tasks category includes Virtual Assistant work such as managing an inbox.",
+     "quote": "Get important tasks done efficiently today, from organizing files to managing your inbox and more.",
+     "sourceUrl": "https://www.taskrabbit.com/services/online-tasks",
+     "sourceTitle": "Virtual & Online Tasks (TaskRabbit)",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "TaskRabbit's virtual-assistant page lists Seattle among cities offering the service, and payment is handled in-platform.",
+     "quote": "Pay securely and leave a review, all through Taskrabbit.",
+     "sourceUrl": "https://www.taskrabbit.com/m/online-tasks/virtual-assistant",
+     "sourceTitle": "Virtual Assistant (TaskRabbit)",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "TaskRabbit pays Taskers through Stripe, and most payouts arrive within 1-3 business days after task completion (TaskRabbit blog, updated July 27 2026).",
+     "quote": "Most arrive within 1–3 business days after task completion.",
+     "sourceUrl": "https://www.taskrabbit.com/blog/how-pricing-works-on-taskrabbit-and-what-it-means-for-your-earnings/",
+     "sourceTitle": "How Pricing Works on Taskrabbit — and What It Means for Your Earnings",
+     "sourceDate": "2026-07-27",
+     "lane": "timing"
+    },
+    {
+     "claim": "The Gigwalk iOS app's latest version is 3.0.13, released Dec 4 2019; it pays via PayPal once a job is finished and approved.",
+     "quote": "Gigwalk links to PayPal, so once a job is finished and approved, the money is sent directly to your account.",
+     "sourceUrl": "https://apps.apple.com/us/app/gigwalk/id391881025",
+     "sourceTitle": "Gigwalk (App Store)",
+     "sourceDate": "2019-12-04",
+     "lane": "risk"
+    }
+   ],
+   "opened": [
+    "https://www.taskrabbit.com/services/online-tasks",
+    "https://www.taskrabbit.com/m/online-tasks/virtual-assistant",
+    "https://www.taskrabbit.com/m/online-tasks/virtual-assistant/seattle",
+    "https://www.taskrabbit.com/blog/how-pricing-works-on-taskrabbit-and-what-it-means-for-your-earnings/",
+    "https://apps.apple.com/us/app/gigwalk/id391881025"
+   ],
+   "failed": [
+    "https://www.taskrabbit.com/m/online-tasks/virtual-assistant/seattle: 404"
+   ],
+   "notes": "TaskRabbit Tasker registration requirements and fees, and Seattle VA rates, were not verified. Gigwalk's current operating status could not be confirmed either way; no shutdown notice was found. Seattle is listed per the fetch tool's reading of the city list (no verbatim city quote captured)."
+  },
+  {
+   "id": "Q10",
+   "status": "ANSWERED",
+   "answer": "Premise partly false: the Fiverr Revenue Card was discontinued in December 2022 (existing holders only), and the buyer's payment method does not change seller payout timing. After delivery, the order auto-completes in 3 days unless the buyer acts (review can be extended by 5 days). Revenue then clears 14 days after completion (7 days for Seller Plus/Top Rated/Pro), and PayPal withdrawal takes about 24 hours. A new seller's typical order-to-cash is therefore about 17-18+ days, well over 7 days. Early Payout (1% fee, can be immediate) is limited to Top Rated and Seller Plus Premium sellers.",
+   "facts": [
+    {
+     "claim": "The Fiverr Revenue Card was discontinued in December 2022 and is only available to existing cardholders (Fiverr help, updated 2026-11-25).",
+     "quote": "The Fiverr Revenue Card was discontinued in December 2022. It is only available for existing cardholders.",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/360010530058-Withdrawing-your-earnings-managing-payout-methods",
+     "sourceTitle": "Withdrawing your earnings & managing payout methods (Fiverr Help)",
+     "sourceDate": "2026-11-25",
+     "lane": "other"
+    },
+    {
+     "claim": "Fiverr PayPal withdrawals take 24 hours with a $0 fee and a $1 minimum.",
+     "quote": "PayPal 24 hours $0 USD $1 USD",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/360010530058-Withdrawing-your-earnings-managing-payout-methods",
+     "sourceTitle": "Withdrawing your earnings & managing payout methods (Fiverr Help)",
+     "sourceDate": "2026-11-25",
+     "lane": "timing"
+    },
+    {
+     "claim": "Fiverr revenue becomes available 14 days after order completion, or 7 days for Seller Plus, Top Rated and Pro freelancers.",
+     "quote": "Your revenue becomes available 14 days after the order is completed. For Seller Plus, TRS, and Pro Talent freelancers, the clearance period is 7 days",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/360010639617-A-freelancer-s-guide-to-the-Fiverr-order-process",
+     "sourceTitle": "A freelancer's guide to the Fiverr order process (Fiverr Help)",
+     "sourceDate": "2026-11-24",
+     "lane": "timing"
+    },
+    {
+     "claim": "A Fiverr order auto-completes three days after delivery if the buyer takes no action.",
+     "quote": "If no action is taken within three days of delivery, the system will automatically complete the order.",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/37552517993105-The-complete-guide-to-your-Fiverr-order-Statuses-and-process",
+     "sourceTitle": "The complete guide to your Fiverr order: Statuses and process (Fiverr Help)",
+     "sourceDate": "2026-11-24",
+     "lane": "timing"
+    },
+    {
+     "claim": "Fiverr buyers can extend the review period by up to 5 days, more than once, delaying completion.",
+     "quote": "You can extend the review period by up to 5 days.",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/37552517993105-The-complete-guide-to-your-Fiverr-order-Statuses-and-process",
+     "sourceTitle": "The complete guide to your Fiverr order: Statuses and process (Fiverr Help)",
+     "sourceDate": "2026-11-24",
+     "lane": "risk"
+    },
+    {
+     "claim": "Fiverr Early Payout charges 1% of the clearing amount and is available to Top Rated and Seller Plus Premium members (Fiverr help, updated 2026-11-25).",
+     "quote": "Early payout is available to Top Rated freelancers and Seller Plus Premium members.",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/4402267122449-Early-Payout",
+     "sourceTitle": "Early Payout (Fiverr Help)",
+     "sourceDate": "2026-11-25",
+     "lane": "timing"
+    },
+    {
+     "claim": "Fiverr Early Payout fee is 1% of the total clearing amount each time it is used.",
+     "quote": "A fee of 1% of the total clearing amount applies each time you use early payout.",
+     "sourceUrl": "https://help.fiverr.com/hc/en-us/articles/4402267122449-Early-Payout",
+     "sourceTitle": "Early Payout (Fiverr Help)",
+     "sourceDate": "2026-11-25",
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://help.fiverr.com/hc/en-us/articles/360010530058-Withdrawing-your-earnings-managing-payout-methods",
+    "https://help.fiverr.com/hc/en-us/articles/360010639617-A-freelancer-s-guide-to-the-Fiverr-order-process",
+    "https://help.fiverr.com/hc/en-us/articles/37552517993105-The-complete-guide-to-your-Fiverr-order-Statuses-and-process",
+    "https://help.fiverr.com/hc/en-us/articles/4402267122449-Early-Payout",
+    "https://help.fiverr.com/hc/en-us/articles/9234443621137",
+    "https://wise.com/us/blog/how-to-get-paid-on-fiverr",
+    "https://help.fiverr.com/hc/en-us/articles/360011421198-FAQs-for-freelancers",
+    "https://help.fiverr.com/hc/en-us/articles/4402267122449-Early-Payout"
+   ],
+   "failed": [
+    "https://help.fiverr.com/hc/en-us/articles/360011421198-FAQs-for-freelancers: 403",
+    "https://help.fiverr.com/hc/en-us/articles/4402267122449-Early-Payout: 403 via WebFetch (read via help-center JSON API with curl)"
+   ],
+   "notes": "Fiverr help articles were read via the Zendesk JSON API (help.fiverr.com/api/v2/help_center/en-us/articles/<id>.json); the URLs given are the canonical html_url. Order-to-cash timing is arithmetic over the sourced periods."
+  }
+ ]
+}

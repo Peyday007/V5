@@ -1,0 +1,328 @@
+[
+ {
+  "id": "F1",
+  "question": "Are there Seattle\u2011based virtual assistants on TaskRabbit who accept per\u2011task payment and can start within the next 12\u202fhours?",
+  "area": "fulfiller availability",
+  "decision": "whether to pursue the Rapid Email Inbox Triage route",
+  "invalidates": "If no such VA exists, the email\u2011triage offer is not viable",
+  "searches": [
+   "TaskRabbit Seattle virtual assistant availability",
+   "TaskRabbit per\u2011task payment policy"
+  ]
+ },
+ {
+  "id": "F2",
+  "question": "What is the average time from task completion on TaskRabbit to payout via Stripe for a new user in November 2026?",
+  "area": "payment timing",
+  "decision": "can the $500 be received within 7\u202fdays",
+  "invalidates": "If payout exceeds 7\u202fdays, the route fails",
+  "searches": [
+   "TaskRabbit payout schedule Stripe instant payouts eligibility 2026"
+  ]
+ },
+ {
+  "id": "F3",
+  "question": "Do any Upwork freelancers offer hourly \u201cfaster payments\u201d to US clients and are they willing to accept a 15\u2011hour, $500 total contract?",
+  "area": "platform payout speed",
+  "decision": "whether to use Upwork hourly contracts for a quick\u2011cash VA service",
+  "invalidates": "If faster payments are unavailable to new freelancers, Upwork hourly is unsuitable",
+  "searches": [
+   "Upwork faster payments eligibility new freelancers 2026",
+   "Upwork hourly rates Seattle virtual assistant"
+  ]
+ },
+ {
+  "id": "F4",
+  "question": "Can a Seattle\u2011based small business pay for a 2\u2011hour email triage service via Venmo Instant Transfer or Zelle and have the funds settle within minutes?",
+  "area": "buyer payment method",
+  "decision": "choice of payment channel for immediate cash",
+  "invalidates": "If small businesses cannot or will not use Venmo/Zelle, need alternative",
+  "searches": [
+   "Venmo business instant transfer fees 2026",
+   "Zelle small business acceptance Seattle 2026"
+  ]
+ },
+ {
+  "id": "F5",
+  "question": "Is a Seattle business license required for a home\u2011based owner offering virtual\u2011assistant services with <$500 revenue in 2026?",
+  "area": "legal compliance",
+  "decision": "whether to incur $73 license fee (which exceeds capital)",
+  "invalidates": "If license is mandatory, the $0 capital constraint blocks the route",
+  "searches": [
+   "Seattle business license requirement for <$500 revenue 2026",
+   "Seattle home\u2011based service license exemption"
+  ]
+ },
+ {
+  "id": "F6",
+  "question": "What is the typical response time for a buyer on Fiverr Pro to accept a 24\u2011hour logo design gig and release payment immediately?",
+  "area": "buyer behavior",
+  "decision": "feasibility of 24\u2011hour logo brokerage",
+  "invalidates": "If buyers wait for escrow or take days to release, route fails",
+  "searches": [
+   "Fiverr Pro logo design buyer payment timing 2026",
+   "Fiverr escrow release speed for logo projects"
+  ]
+ },
+ {
+  "id": "F7",
+  "question": "Are there freelance designers on Fiverr who guarantee 24\u2011hour delivery for $80\u2011$120 projects and accept post\u2011delivery payment?",
+  "area": "fulfiller cost & terms",
+  "decision": "margin calculation for logo brokerage",
+  "invalidates": "If no such designers exist, cannot meet price target",
+  "searches": [
+   "Fiverr 24\u2011hour logo design gig price 2026",
+   "Fiverr designer payment after delivery policy"
+  ]
+ },
+ {
+  "id": "F8",
+  "question": "What is the fastest payout method for earnings on Fiverr (e.g., Early Payout) and what eligibility criteria must be met in November 2026?",
+  "area": "payout speed",
+  "decision": "whether Fiverr earnings can be accessed within 7\u202fdays",
+  "invalidates": "If Early Payout not available, funds may be locked 14\u202fdays",
+  "searches": [
+   "Fiverr Early Payout eligibility 2026",
+   "Fiverr payout timeline after 24\u2011hour gig"
+  ]
+ },
+ {
+  "id": "F9",
+  "question": "Can a contractor on Contra deliver a 10,000\u2011row CSV cleanup for $80 and receive payment via Stripe Instant Transfer within 48\u202fhours?",
+  "area": "service pricing & payout",
+  "decision": "viability of AI\u2011Assisted CSV Data Cleanup service",
+  "invalidates": "If price too low for contractor or payout slower than 7\u202fdays, route fails",
+  "searches": [
+   "Contra CSV cleanup rates 2026",
+   "Contra payment methods instant payout"
+  ]
+ },
+ {
+  "id": "F10",
+  "question": "Do free OpenAI API tier limits (100\u202fUSD/month) allow processing of 10,000 rows of data cleaning within 48\u202fhours without hitting rate limits?",
+  "area": "technical feasibility",
+  "decision": "whether the owner can perform data cleanup themselves without cost",
+  "invalidates": "If API limits are exceeded, need paid tier (capital needed)",
+  "searches": [
+   "OpenAI free tier usage limits 2026 CSV cleaning",
+   "OpenAI rate limits for data cleaning scripts"
+  ]
+ },
+ {
+  "id": "F11",
+  "question": "What is the average hourly rate that Seattle businesses are willing to pay for a virtual assistant to triage 200 emails in 2\u202fhours?",
+  "area": "buyer willingness to pay",
+  "decision": "pricing of Rapid Email Inbox Triage",
+  "invalidates": "If market price < $70, margin insufficient",
+  "searches": [
+   "Seattle small business virtual assistant pricing 2026",
+   "Email triage service rates US 2026"
+  ]
+ },
+ {
+  "id": "F12",
+  "question": "Are there any local Seattle BNI chapters actively seeking referral partners for virtual\u2011assistant services during the holiday week?",
+  "area": "buyer acquisition channel",
+  "decision": "whether to leverage BNI for immediate leads",
+  "invalidates": "If no BNI meetings or no interest, channel not usable",
+  "searches": [
+   "Seattle BNI meeting schedule November 2026",
+   "BNI referral demand virtual assistant"
+  ]
+ },
+ {
+  "id": "F13",
+  "question": "What is the processing time for a Stripe Instant Payout for a brand\u2011new account created on 2026\u201111\u201126?",
+  "area": "payment processing",
+  "decision": "can Stripe be used for same\u2011day cash",
+  "invalidates": "If new accounts cannot use Instant Payout, need alternative",
+  "searches": [
+   "Stripe Instant Payout new account eligibility 2026",
+   "Stripe payout timeline first transaction"
+  ]
+ },
+ {
+  "id": "F14",
+  "question": "Do any online marketplaces (e.g., Upwork, Fiverr) allow the buyer to pre\u2011pay the full amount into escrow before work begins, and release it instantly after delivery?",
+  "area": "escrow & cash flow",
+  "decision": "whether escrow delays cash receipt beyond 7\u202fdays",
+  "invalidates": "If escrow hold >5\u202fdays, route fails",
+  "searches": [
+   "Upwork escrow release timing 2026",
+   "Fiverr escrow after gig completion"
+  ]
+ },
+ {
+  "id": "F15",
+  "question": "What is the typical response time for a small Seattle business to reply to a cold\u2011email pitch offering a $70 email\u2011triage service during the Thanksgiving week?",
+  "area": "cold outreach effectiveness",
+  "decision": "whether cold\u2011email outreach can generate a buyer within 3\u202fdays",
+  "invalidates": "If reply rate too low, cold\u2011email not viable",
+  "searches": [
+   "B2B cold email reply rate Seattle small business 2026",
+   "Thanksgiving week email marketing response rates"
+  ]
+ },
+ {
+  "id": "F16",
+  "question": "Are there any Seattle\u2011based freelancers willing to accept a net\u2011payment after delivery (i.e., no upfront deposit) for a $120 logo design project?",
+  "area": "fulfiller payment terms",
+  "decision": "ability to collect full payment up\u2011front from buyer",
+  "invalidates": "If designers require upfront escrow, cash flow blocked",
+  "searches": [
+   "Seattle freelance logo designer payment after delivery 2026",
+   "Freelance designer escrow requirements"
+  ]
+ },
+ {
+  "id": "F17",
+  "question": "What are the transaction fees and net payout for receiving $500 via PayPal Instant Transfer to a US bank account in November 2026?",
+  "area": "net revenue after fees",
+  "decision": "whether PayPal can deliver required net cash",
+  "invalidates": "If fees reduce net below $500, route insufficient",
+  "searches": [
+   "PayPal instant transfer fees US 2026",
+   "PayPal payout timeline"
+  ]
+ },
+ {
+  "id": "F18",
+  "question": "Is there a demand surge for holiday\u2011season marketing services (e.g., email cleanup, quick design) among Seattle small businesses between Nov\u202f23\u2011Dec\u202f2, 2026?",
+  "area": "seasonal demand",
+  "decision": "whether to target holiday marketing spend",
+  "invalidates": "If demand low, holiday\u2011focused offers ineffective",
+  "searches": [
+   "Seattle small business holiday marketing spend 2026",
+   "Black Friday small business service demand"
+  ]
+ },
+ {
+  "id": "F19",
+  "question": "Can the owner legally operate as a sole proprietor offering virtual\u2011assistant services without a Seattle business license if projected revenue stays under $4,000?",
+  "area": "legal threshold",
+  "decision": "need for license fee",
+  "invalidates": "If license required regardless of revenue, capital insufficient",
+  "searches": [
+   "Seattle business license exemption under $4,000 revenue 2026",
+   "Washington state sole proprietor requirements"
+  ]
+ },
+ {
+  "id": "F20",
+  "question": "What is the average time for a TaskRabbit payout to clear via Stripe Instant Transfer for a new user after task completion?",
+  "area": "payout speed",
+  "decision": "whether TaskRabbit can meet 7\u2011day cash goal",
+  "invalidates": "If payout >7\u202fdays, TaskRabbit not viable",
+  "searches": [
+   "TaskRabbit Stripe Instant Transfer processing time 2026"
+  ]
+ },
+ {
+  "id": "F21",
+  "question": "Do any online gig platforms (e.g., PeoplePerHour) offer a fast\u2011clear option for freelancers with <\u00a32,000 earnings, and what is the clearance time?",
+  "area": "alternative platforms",
+  "decision": "whether to consider PeoplePerHour for quick cash",
+  "invalidates": "If fast\u2011clear unavailable to new freelancers, platform unsuitable",
+  "searches": [
+   "PeoplePerHour fast clearing eligibility 2026"
+  ]
+ },
+ {
+  "id": "F22",
+  "question": "What is the average cost for a 2\u2011hour email triage service on TaskRabbit Seattle, and does the platform allow a per\u2011task flat fee instead of hourly?",
+  "area": "pricing & platform rules",
+  "decision": "setting competitive price while covering VA cost",
+  "invalidates": "If platform forces hourly rates that reduce margin, route fails",
+  "searches": [
+   "TaskRabbit flat fee email triage Seattle 2026",
+   "TaskRabbit pricing structure per task"
+  ]
+ },
+ {
+  "id": "F23",
+  "question": "Are there any Seattle\u2011based data\u2011cleaning freelancers on Upwork who accept a fixed\u2011price $80 job and release funds within 48\u202fhours after client approval?",
+  "area": "fulfiller sourcing",
+  "decision": "feasibility of CSV cleanup service via Upwork",
+  "invalidates": "If freelancers require longer timelines, cash flow delayed",
+  "searches": [
+   "Upwork data cleaning fixed price turnaround 2026",
+   "Upwork payment release after fixed\u2011price approval"
+  ]
+ },
+ {
+  "id": "F24",
+  "question": "What is the net amount after Stripe processing (2.9% + $0.30) and Instant Payout (1.5%) fees for a $500 payment received on the same day?",
+  "area": "net cash after fees",
+  "decision": "whether Stripe fees leave enough to meet $500 net goal",
+  "invalidates": "If net < $500, need higher gross price",
+  "searches": [
+   "Stripe processing fee calculator 2026",
+   "Stripe Instant Payout fee impact"
+  ]
+ },
+ {
+  "id": "F25",
+  "question": "Do Seattle small businesses accept payment via Square Instant Transfer, and what is the settlement time for a $500 transaction?",
+  "area": "buyer payment preference",
+  "decision": "alternative to Stripe/Venmo",
+  "invalidates": "If Square not accepted or settlement >7\u202fdays, not useful",
+  "searches": [
+   "Square instant transfer acceptance Seattle businesses 2026",
+   "Square settlement time US 2026"
+  ]
+ },
+ {
+  "id": "F26",
+  "question": "Is there a Craigslist Services posting fee ($5) that can be recouped quickly enough to not affect the $500 target, and how fast do responses typically arrive?",
+  "area": "low\u2011cost acquisition channel",
+  "decision": "whether Craigslist is a viable lead source",
+  "invalidates": "If response time >7\u202fdays, not viable",
+  "searches": [
+   "Craigslist services response time Seattle 2026",
+   "Craigslist posting fee impact on small service offers"
+  ]
+ },
+ {
+  "id": "F27",
+  "question": "What is the average conversion rate for a $70 email\u2011triage offer posted on a local Seattle Facebook Marketplace group?",
+  "area": "conversion rate",
+  "decision": "expected number of leads needed to hit $500",
+  "invalidates": "If conversion <5%, may need more time/effort than 15\u202fhours",
+  "searches": [
+   "Facebook Marketplace service offer conversion rate Seattle 2026"
+  ]
+ },
+ {
+  "id": "F28",
+  "question": "Can the owner legally subcontract a virtual assistant through TaskRabbit without being the official employer, thus avoiding payroll taxes?",
+  "area": "legal subcontracting",
+  "decision": "whether to treat VA as independent contractor",
+  "invalidates": "If law requires employer registration, capital needed for taxes",
+  "searches": [
+   "TaskRabbit subcontractor legal responsibilities Seattle 2026",
+   "Independent contractor rules Washington state"
+  ]
+ },
+ {
+  "id": "F29",
+  "question": "What is the typical turnaround time for a 24\u2011hour logo design project on DesignCrowd, and does the platform allow immediate buyer payment before work starts?",
+  "area": "platform suitability for logo brokerage",
+  "decision": "feasibility of 24\u2011hour logo brokerage via DesignCrowd",
+  "invalidates": "If DesignCrowd requires longer timelines or escrow, not viable",
+  "searches": [
+   "DesignCrowd logo design turnaround 2026",
+   "DesignCrowd payment before project start"
+  ]
+ },
+ {
+  "id": "F30",
+  "question": "Are there any Seattle\u2011based micro\u2011task platforms (e.g., Gigwalk) that pay via PayPal instantly after task completion?",
+  "area": "alternative gig platforms",
+  "decision": "whether to use Gigwalk for quick cash tasks",
+  "invalidates": "If platform closed or payout delayed, not usable",
+  "searches": [
+   "Gigwalk payout schedule PayPal 2026",
+   "Seattle micro\u2011task platforms instant payment"
+  ]
+ }
+]
