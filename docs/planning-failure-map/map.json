@@ -994,7 +994,7 @@
    "evidence": "4/4 fallback replies invented refusals; p02 run-1 \"no physical work\".",
    "component": "route prompt STEP 1",
    "rc": "RC3",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: route prompt STEP 1: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C02-R",
@@ -1009,7 +1009,7 @@
    "evidence": "Integration diag: profile kept only in event detail, re-derived each ask.",
    "component": "routeProposal record",
    "rc": "RC7",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: routeProposal record: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C02-I",
@@ -1024,7 +1024,7 @@
    "evidence": "p02: every output led with Part 107 aerial work. | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
    "component": "ROUTE_RULES.OWNER_FIT",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: ROUTE_RULES.OWNER_FIT: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C02-F",
@@ -1036,10 +1036,10 @@
    "test": "Profile contradicts owner words; is it corrected?",
    "expected": "Code compares profile to words and drops inventions.",
    "status": "FAIL",
-   "evidence": "No check exists (code).",
+   "evidence": "Controlled proof run (2026-11-26, C01-C42 agent): the owner-profile reader drops only fields its own reply marks 'not stated'/'none'/'n/a'; it never compares the profile with the owner's words, so a skill or asset the model invents is kept and reaches the route ask. The map's expected behaviour (a profile contradicting the owner's words is corrected) is not implemented.",
    "component": "ownerProfileOf",
-   "rc": "RC3",
-   "proof": "UNPROVEN"
+   "rc": "RC17",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: ownerProfileOf: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. Partial: the c\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C02-X",
@@ -1054,7 +1054,7 @@
    "evidence": "p06: no output proposed the owner's own paid work.",
    "component": "directionPrompt",
    "rc": "RC5",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: directionPrompt: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C02-M",
@@ -1099,7 +1099,7 @@
    "evidence": "Integration diag: regex re-implemented in goalScenario, worthResearching, answers.",
    "component": "operatingModel",
    "rc": "RC3",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: operatingModel: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. The three gate\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C03-I",
@@ -1129,7 +1129,7 @@
    "evidence": "p02 \"fly about 20 hours\" read as labour after ad40c37; unverified on fresh goals.",
    "component": "ownerLabourOffer",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: ownerLabourOffer: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C03-X",
@@ -1144,7 +1144,7 @@
    "evidence": "p06 final: no owner-performed route proposed.",
    "component": "route prompt",
    "rc": "RC5",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: route prompt: an existing test (tests/planningFailureMapWave2.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave2.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C04-P",
@@ -1189,7 +1189,7 @@
    "evidence": "Last ask's CRITIQUE drops fed back (routeProposal ~1836); multi-ask effect unmeasured.",
    "component": "routeContext refuted",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: routeContext refuted: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. Pins that refu\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C04-F",
@@ -1249,7 +1249,7 @@
    "evidence": "a1eba64 (windowEnd) present in final prompts.",
    "component": "limitLines",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: limitLines: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C05-I",
@@ -1264,7 +1264,7 @@
    "evidence": "No computed check (code). | REVIEW 2: test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.",
    "component": "applyCritique",
    "rc": "RC2",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: applyCritique: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. A WINDOW drop with a repair is re-checked on the repaired figures (DEADLINE in parseRoutes), and kept when t\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C05-F",
@@ -1279,7 +1279,7 @@
    "evidence": "None (code). | REVIEW 2: test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.",
    "component": "applyCritique",
    "rc": "RC2",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: applyCritique: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C05-X",
@@ -1294,7 +1294,7 @@
    "evidence": "p02/p10 critic errors.",
    "component": "critic",
    "rc": "RC2",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: critic: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C05-M",
@@ -1339,7 +1339,7 @@
    "evidence": "40 cap.",
    "component": "findingsOf",
    "rc": "RC4",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: findingsOf: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C06-I",
@@ -1384,7 +1384,7 @@
    "evidence": "p06/p10 local options absent.",
    "component": "proposer",
    "rc": "RC5",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: proposer: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C07-P",
@@ -1429,7 +1429,7 @@
    "evidence": "Scout\u2192refuted loop exists; starved.",
    "component": "scout loop",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: scout loop: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. Pins the code \" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C07-F",
@@ -1459,7 +1459,7 @@
    "evidence": "discovery REMOTE_AI_FOCUS.",
    "component": "discovery",
    "rc": "RC3",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: discovery: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. discoveryFocusFor in server/services/cash/discovery.ts\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C07-M",
@@ -1489,7 +1489,7 @@
    "evidence": "p02 final cap: 6 routes, 4 mechanisms; others 1 route.",
    "component": "proposer",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: proposer: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C08-R",
@@ -1504,7 +1504,7 @@
    "evidence": "Critic dropped most.",
    "component": "critic",
    "rc": "RC2",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: critic: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C08-I",
@@ -1519,7 +1519,7 @@
    "evidence": "No computed economics. | REVIEW 2: test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.",
    "component": "parseRoutes",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: parseRoutes: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C08-F",
@@ -1534,7 +1534,7 @@
    "evidence": "Replacement ask exists; effect not visible in probes.",
    "component": "critiqueAndRevise",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: critiqueAndRevise: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. Replacement pr\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C08-X",
@@ -1564,7 +1564,7 @@
    "evidence": "Hours/margin rejections correct (30Q); capital/window not computed.",
    "component": "parseRoutes",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: parseRoutes: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C09-R",
@@ -1579,7 +1579,7 @@
    "evidence": "replacementPrompt names failures; refuted list.",
    "component": "routeProposal",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: routeProposal: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C09-I",
@@ -1609,7 +1609,7 @@
    "evidence": "OWNER_FIT missing-field drop. | REVIEW 2: test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.",
    "component": "parseRoutes",
    "rc": "RC9",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: parseRoutes: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. parseRoutes re\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C09-X",
@@ -1624,7 +1624,7 @@
    "evidence": "Critic contradicts code-passed routes on false grounds.",
    "component": "critic",
    "rc": "RC2",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: critic: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. A critic's DROP on WINDOW/CAPITAL alone is not a second verdict on limits the parser passed: the route stand\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C10-P",
@@ -1639,7 +1639,7 @@
    "evidence": "Directions carry decisiveUnknown (production SCOUT asks). | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
    "component": "directionPrompt",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: directionPrompt: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C10-R",
@@ -1759,7 +1759,7 @@
    "evidence": "Questions command salvages; production route path unchanged.",
    "component": "ask",
    "rc": "RC1",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: ask: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. askModel retries an empty reply once with twice the token budget\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C11-X",
@@ -2134,7 +2134,7 @@
    "evidence": "GROUND_LANES (9fb993c).",
    "component": "groundsOf",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: groundsOf: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C16-F",
@@ -2149,7 +2149,7 @@
    "evidence": "Gate contract. | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
    "component": "gate",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: gate: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. Pinned at find\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C16-X",
@@ -2269,7 +2269,7 @@
    "evidence": "9fb993c.",
    "component": "groundsOf",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: groundsOf: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C18-I",
@@ -2284,7 +2284,7 @@
    "evidence": "GROUND_LANES test. | REVIEW 2: test-validity review: the evidence cited contradicts PASS.",
    "component": "groundsOf",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: groundsOf: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C18-F",
@@ -2344,7 +2344,7 @@
    "evidence": "Display only (integration diag).",
    "component": "knowledge",
    "rc": "RC7",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: knowledge: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. findingsOf drops a claim whose contradictionState is REFUTED\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C19-I",
@@ -2494,7 +2494,7 @@
    "evidence": "critiquePrompt includes findings.",
    "component": "critiquePrompt",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: critiquePrompt: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C21-I",
@@ -2524,7 +2524,7 @@
    "evidence": "Prompts 35 KB ok.",
    "component": "",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. findingsOf caps at FINDINGS_SHOWN (lanes taken in turn past the budget), so the prompt is budgeted rather th\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C21-X",
@@ -2719,7 +2719,7 @@
    "evidence": "Mis-citations (p10 F2 for price; consumer fact for B2B).",
    "component": "proposer",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: proposer: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. groundsOf acce\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C24-R",
@@ -2764,7 +2764,7 @@
    "evidence": "30Q p06 R1all: Upwork route contradicted by payout-hold facts dropped by the critic, correctly (grader). | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
    "component": "",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C24-X",
@@ -2839,7 +2839,7 @@
    "evidence": "W1c: economics line + ACQUISITION refusal (tests); production pending.",
    "component": "",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C25-F",
@@ -2854,7 +2854,7 @@
    "evidence": "None. | REVIEW 2: test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.",
    "component": "",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C25-X",
@@ -2899,7 +2899,7 @@
    "evidence": "p06 routes ignored 10/14-day holds; critic misread net-30.",
    "component": "proposer/critic",
    "rc": "RC2",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: proposer/critic: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. routeEconomics.firstCashBy from today + daysToFirstCash\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C26-R",
@@ -2914,7 +2914,7 @@
    "evidence": "30Q all-findings arm: payout facts shown; under the old 40 cap they were cut. Cap raised (W1e); production recheck pending.",
    "component": "",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C26-I",
@@ -2989,7 +2989,7 @@
    "evidence": "Cut by cap (p02 FB CPL, p10 cold-email cost).",
    "component": "findingsOf",
    "rc": "RC4",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: findingsOf: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C27-I",
@@ -3004,7 +3004,7 @@
    "evidence": "",
    "component": "",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C27-F",
@@ -3034,7 +3034,7 @@
    "evidence": "",
    "component": "",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation. parseRoutes holds capital plus the first buyer's acquisition cost to the capital limit\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C28-P",
@@ -3079,7 +3079,7 @@
    "evidence": "MARGIN rule worked (p06). | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
    "component": "parseRoutes",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: parseRoutes: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C28-F",
@@ -3109,7 +3109,7 @@
    "evidence": "p10 nobody takes sales calls.",
    "component": "proposer",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: proposer: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. An OWNER route\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C29-P",
@@ -3199,7 +3199,7 @@
    "evidence": "Hours/margin correct; OWNER_FIT missing-field incorrect.",
    "component": "parseRoutes",
    "rc": "RC9",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: parseRoutes: an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C30-R",
@@ -3229,7 +3229,7 @@
    "evidence": "No repair.",
    "component": "",
    "rc": "RC9",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C30-F",
@@ -3274,7 +3274,7 @@
    "evidence": ">=4 false drops; 14/18 dropped.",
    "component": "critic",
    "rc": "RC17,RC2",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: critic: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. critiqueJson r\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C31-R",
@@ -3289,7 +3289,7 @@
    "evidence": "No computed figures. | REVIEW 2: test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.",
    "component": "",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C31-I",
@@ -3364,7 +3364,7 @@
    "evidence": "Code: critiqueAndRevise asks replacements when fewer than ROUTES_MIN_SURVIVING survive; not exercised by the eval probe, production effect unmeasured.",
    "component": "critiqueAndRevise",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: critiqueAndRevise: an existing test (tests/routeCritique.test.ts) already failed under the mutation. The replacement ask in critiqueAndRevise; detected by the existing DB-backed routeCritique test\" \u2192 tests/routeCritique.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C32-R",
@@ -3439,7 +3439,7 @@
    "evidence": "Critic scores; no economics.",
    "component": "applyCritique",
    "rc": "RC8",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: applyCritique: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C33-R",
@@ -3499,7 +3499,7 @@
    "evidence": "RC11/RC13: generators are not arbitrated.",
    "component": "",
    "rc": "RC11,RC13",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : an existing test (tests/planningFailureMapWave1.test.ts) already failed under the mutation\" \u2192 tests/planningFailureMapWave1.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C34-P",
@@ -3514,7 +3514,7 @@
    "evidence": "routes carry assumptions. | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
    "component": "proposer",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: proposer: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C34-R",
@@ -3739,7 +3739,7 @@
    "evidence": "operator_learnings rows. | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
    "component": "routeProposal:1911",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: routeProposal:1911: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C37-R",
@@ -3754,7 +3754,7 @@
    "evidence": "No reader. | REVIEW 2: test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.",
    "component": "routeContext",
    "rc": "RC7",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: routeContext: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C37-I",
@@ -3814,7 +3814,7 @@
    "evidence": "NEW_FINDINGS_FOR_REASK.",
    "component": "routeAskDue",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: routeAskDue: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C38-R",
@@ -3859,7 +3859,7 @@
    "evidence": "ROUTE_RETRY_AFTER_FAILURE_MS 30 min.",
    "component": "",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. routeAskDue: a\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C38-X",
@@ -3889,7 +3889,7 @@
    "evidence": "Empty \u2192 weaker fallback; parse loss.",
    "component": "",
    "rc": "RC1",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. Pins the parse\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C39-R",
@@ -3934,7 +3934,7 @@
    "evidence": "Report flags repetition.",
    "component": "",
    "rc": "",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: : no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. routeAskDue: t\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C39-X",
@@ -4069,7 +4069,7 @@
    "evidence": "Strong model inert (no key).",
    "component": "strongRouteModels",
    "rc": "RC1",
-   "proof": "UNPROVEN"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: strongRouteModels: no existing test in tests/planningFailureMapWave1.test.ts, tests/planningFailureMapWave2.test.ts failed under the mutation; the new test in tests/planningFailureMapC01to42.test.ts does. strongRouteMod\" \u2192 tests/planningFailureMapC01to42.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C41-F",
