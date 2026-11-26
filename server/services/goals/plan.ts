@@ -2532,6 +2532,28 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const refusedSteps = target.achieved || refusedInfeasible
       ? []
       : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory() });
+    /*
+     * A refused model still has the goal's constructed arrangements (production r01.opp-04,
+     * 2026-11-26: 30 live goals read, none with a pathway). A live goal reads them as pathways —
+     * each input marked, unknowns stating no value — so a partial arrangement is kept and its
+     * cheapest next move named, never abandoned because the model could not price it (S-0061).
+     * The plan's own readings below are composed exactly as before.
+     */
+    const refusedRounds = await recentGoalRounds(target.projectId, goal.id);
+    const refusedPathways =
+      !target.achieved && (target.daysLeft ?? 0) > 0
+        ? readPathways({
+            modelled: [...model.considered, ...(model.estimates ?? [])],
+            considered: [],
+            target,
+            portfolio: model.portfolio,
+            permissionsMissing: permissions,
+            rounds: refusedRounds,
+            now,
+            capabilities: await brainCapabilities(target.projectId, target.currency),
+            partial: inGoalScope(arrangements, model),
+          })
+        : null;
     const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
@@ -2585,11 +2607,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         ...diagnoseGoalResearch({
           considered: [],
           excludedReasons: model.excluded.filter((one) => one.rule !== 'STOPPED').map((one) => one.reason),
-          rounds: await recentGoalRounds(target.projectId, goal.id),
+          rounds: refusedRounds,
           remaining: target.remainingCents / 100,
         }),
       ],
-      pathways: null,
+      pathways: refusedPathways,
       reconstruction: refusedReconstruction,
       adoption: refusedPlan.adoption,
       steps: refusedSteps,
@@ -2959,6 +2981,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     rounds,
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
+    // The designs the model neither priced nor considered are kept and marked, never dropped (S-0061).
+    partial: inGoalScope(arrangements, model),
   });
   trace('pathways');
   /*

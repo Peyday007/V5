@@ -92,7 +92,7 @@ describe('probe r01.opp-04 on rows', () => {
     expect(getProbe('r01.opp-04')).not.toBeNull();
   });
 
-  it('fails with no live goal, and with a live goal that has no pathway, rather than passing on nothing', async () => {
+  it('is UNKNOWN with no live goal, and judges the pathways a fresh live goal\'s constructed arrangements produce', async () => {
     const none = await getProbe('r01.opp-04')!({});
     expect(none.ok).toBeNull();
     expect(none.detail).toMatch(/no live goal/);
@@ -102,9 +102,11 @@ describe('probe r01.opp-04 on rows', () => {
     const g = await createWorkstream({ projectId: project.id, title: 'Goal', intent: 'Reach the figure.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
     await setTerms(g.id, { dueAt: new Date(now.getTime() + 30 * 86_400_000).toISOString(), ownerUserId: userId }, `person:${userId}`);
     expect((await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 100_000, currency: 'USD', projectId: project.id, now: new Date(now.getTime() - 60_000) })).ok).toBe(true);
-    const empty = await getProbe('r01.opp-04')!({});
-    expect(empty.detail).toMatch(/none has a pathway|could not be read/);
-    expect(empty.ok).toBe(/could not be read/.test(empty.detail) ? null : false);
+    // A refused model still reads its constructed arrangements as marked pathways (repair episode 2, S-0061):
+    // the probe judges them rather than finding nothing. With none at all it would fail.
+    const read = await getProbe('r01.opp-04')!({});
+    expect(read.detail).toMatch(/pathway\(s\) across|none has a pathway|could not be read/);
+    expect(read.ok).toBe(/could not be read/.test(read.detail) ? null : /none has a pathway/.test(read.detail) ? false : true);
   });
 
   it('is UNKNOWN, never FAIL, when a live goal\'s plan cannot be read (production 2026-11-12: pool exhausted)', async () => {
