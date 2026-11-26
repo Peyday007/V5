@@ -36,3 +36,17 @@ describe('a chat turn without tools is streamed', () => {
     expect(sent['stream']).toBeUndefined();
   });
 });
+
+describe('a stream cut before the answer ends is an error, not an answer', () => {
+  it('keeps the partial text but names the cut, so the turn is retried', async () => {
+    const sse = ['data: {"choices":[{"delta":{"content":"{\\"routes\\":[{\\"title\\":"}}]}', ''].join('\n');
+    const fetchImpl = (async () => new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } })) as unknown as typeof fetch;
+    const r = await chatFor(endpoint, fetchImpl)([{ role: 'user', content: 'x' }]);
+    expect(r.error).toMatch(/stream ended before the answer did/);
+  });
+  it('a stream that ends with a finish reason and no [DONE] is complete', async () => {
+    const sse = ['data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}', ''].join('\n');
+    const fetchImpl = (async () => new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } })) as unknown as typeof fetch;
+    expect(await chatFor(endpoint, fetchImpl)([{ role: 'user', content: 'x' }])).toMatchObject({ content: 'ok', error: null });
+  });
+});

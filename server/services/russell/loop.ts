@@ -1979,7 +1979,17 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * and launches stay bounded by each grant, so the bound that matters is
        * the tick's time; under database pressure only the floor is judged.
        */
-      const goalMax = databasePressure().state === 'SHEDDING' ? GOAL_JUDGMENTS_PER_TICK : GOAL_JUDGMENTS_MAX_PER_TICK;
+      /*
+       * Judging is cheap and spends nothing (production, 2026-11-26: 0.6–3 s an
+       * idea, 18 in 20 s), and a tick is long when it reads many goals' plans,
+       * so the floor of five under pressure left 30 fresh goals' 605 ideas
+       * unjudged for hours — no research ever started on goals with days to
+       * run. Every tick now judges until its time budget, which is what binds;
+       * under pressure the budget halves rather than the count.
+       */
+      const shed = databasePressure().state === 'SHEDDING';
+      const goalMax = GOAL_JUDGMENTS_MAX_PER_TICK;
+      const goalBudgetMs = shed ? GOAL_JUDGING_BUDGET_MS / 2 : GOAL_JUDGING_BUDGET_MS;
       const goalIdeas = await unjudgedGoalIdeas(goalMax);
       // The cycle's own count still goes to whatever is next, so other work is not starved behind the goal's.
       const goalIds = new Set(goalIdeas.map((one) => one.id));
@@ -1994,7 +2004,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
       const started = Date.now();
       let judgedGoal = 0;
       for (const candidate of goalIdeas) {
-        if (judgedGoal >= GOAL_JUDGMENTS_PER_TICK && Date.now() - started >= GOAL_JUDGING_BUDGET_MS) break;
+        if (judgedGoal >= GOAL_JUDGMENTS_PER_TICK && Date.now() - started >= goalBudgetMs) break;
         await judgeOne(candidate.id);
         judgedGoal += 1;
       }
@@ -3942,7 +3952,7 @@ export const GOAL_JUDGMENTS_PER_TICK = 5;
 /** At most this many a tick, past the floor only while `GOAL_JUDGING_BUDGET_MS` lasts. */
 export const GOAL_JUDGMENTS_MAX_PER_TICK = 40;
 /** How long one tick keeps judging a live goal's ideas past the floor. */
-export const GOAL_JUDGING_BUDGET_MS = 20_000;
+export const GOAL_JUDGING_BUDGET_MS = 45_000;
 
 /**
  * A live goal's unjudged ideas, one project's turn at a time.
