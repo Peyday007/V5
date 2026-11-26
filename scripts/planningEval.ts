@@ -661,6 +661,7 @@ async function probe(): Promise<void> {
   ctx['today'] = new Date().toISOString().slice(0, 10);
   const findings = (ctx['findings'] as unknown[] | undefined) ?? [];
   const scout = findings.length < 3;
+  out('objective', { objective: ctx['objective'] ?? null, remaining: ctx['remaining'] ?? null, daysLeft: ctx['daysLeft'] ?? null, capitalLimit: ctx['capitalLimit'] ?? null, hoursLimit: ctx['hoursLimit'] ?? null, resources: ctx['resources'] ?? null });
   out('mode', { supplied: !!supplied, findings: findings.length, stage: scout ? 'SCOUT' : 'ROUTE' });
   out('findings', findings);
   const { modelsFor } = await import('../server/services/operator/run.ts');
@@ -733,6 +734,7 @@ async function questions(): Promise<void> {
     'Reply with exactly one JSON object and nothing else:',
     `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"questions":[{"id":"Q1","question":"the question, specific to this owner, place and time","area":"the uncertainty it addresses, in a few words","decision":"which decision its answer changes","invalidates":"what answer would rule an opportunity out, or null","searches":["web searches or sources that would answer it"]}]}`,
   ].join('\n\n');
+  out('objective', { objective: ctx['objective'] ?? null, remaining: ctx['remaining'] ?? null, daysLeft: ctx['daysLeft'] ?? null, capitalLimit: ctx['capitalLimit'] ?? null, hoursLimit: ctx['hoursLimit'] ?? null, hoursPerWeek: ctx['hoursPerWeek'] ?? null, resources: ctx['resources'] ?? null });
   out('mode', { followUp, findings: findings.length, count });
   out('prompt_chars', prompt.length);
   const { modelsFor } = await import('../server/services/operator/run.ts');
