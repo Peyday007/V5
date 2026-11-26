@@ -304,3 +304,58 @@ export async function goalRoundsAwaitingLaunch(projectId: string): Promise<numbe
   );
   return Number(rows[0]?.n ?? 0);
 }
+
+/**
+ * The research priority a stopped goal's queued work returns to: the base the
+ * packet runner enqueues at before any goal boost (`enqueueResearchItem`).
+ */
+export const STOPPED_GOAL_RESEARCH_PRIORITY = 6;
+
+/** The packets one goal reaches, and the projects no other live goal works in, as a boolean over a `work_items` row (no alias). */
+function goalWorkItemSql(goalId: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(goalId)) throw new Error(`not a goal id: ${goalId}`);
+  const one = `SELECT '${goalId}'`;
+  return (
+    `(orchestration_id IN (${goalPacketIdsSql(one)})` +
+    ` OR project_id IN (SELECT g.project_id FROM workstreams g WHERE g.id = '${goalId}' AND g.project_id IS NOT NULL` +
+    ` UNION SELECT g2.target_project_id FROM workstreams g2 WHERE g2.id = '${goalId}' AND g2.target_project_id IS NOT NULL)` +
+    // A project another live goal works in is that goal's too: only the packets name this goal's share of it.
+    ` AND project_id NOT IN (SELECT lp.project_id FROM workstreams lp WHERE lp.id IN (${LIVE_GOAL_IDS_SQL}) AND lp.id <> '${goalId}' AND lp.project_id IS NOT NULL` +
+    ` UNION SELECT lp2.target_project_id FROM workstreams lp2 WHERE lp2.id IN (${LIVE_GOAL_IDS_SQL}) AND lp2.id <> '${goalId}' AND lp2.target_project_id IS NOT NULL))`
+  );
+}
+
+/**
+ * A cancelled goal's queued research gives up the boost it was enqueued with.
+ *
+ * The goal boost is written into `work_items.priority` when an item is
+ * enqueued, and nothing took it back when the goal stopped. Production
+ * 2026-11-26 01:05Z (`planningEval stall --run all`): with keyed search spent,
+ * the free lane admitted two research fragments at a time Brain-wide, and 837
+ * evaluation fragments were QUEUED at priority 8-9, most of them for goals
+ * already cancelled (retired rounds dev1-dev5). A fresh goal's dives, at 8,
+ * queued behind cancelled goals' dives at 9: a stopped goal outranked a live
+ * one. Nothing is discarded: the items stay QUEUED at the base research
+ * priority, behind every live goal's research and level with untargeted
+ * backlog, and `restoreGoalResearch` lifts them again on reinstatement. An item
+ * whose packet also serves another live goal keeps its boost. Idempotent.
+ */
+export async function yieldStoppedGoalResearch(goalId: string): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE work_items SET priority = ?
+      WHERE state = 'QUEUED' AND priority > ? AND ${goalWorkItemSql(goalId)}
+        AND NOT ${liveGoalWorkItemSql()}`,
+    [STOPPED_GOAL_RESEARCH_PRIORITY, STOPPED_GOAL_RESEARCH_PRIORITY],
+  );
+  return result.changes;
+}
+
+/** The reverse, on reinstatement: the goal's queued research at base priority takes the goal boost again. */
+export async function restoreGoalResearch(goalId: string, boost: number): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE work_items SET priority = ?
+      WHERE state = 'QUEUED' AND priority = ? AND ${goalWorkItemSql(goalId)}`,
+    [Math.min(9, STOPPED_GOAL_RESEARCH_PRIORITY + boost), STOPPED_GOAL_RESEARCH_PRIORITY],
+  );
+  return result.changes;
+}
