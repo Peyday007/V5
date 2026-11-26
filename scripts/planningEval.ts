@@ -860,6 +860,52 @@ async function items(): Promise<void> {
   out('fragment_starts_6h', await q(`SELECT COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at > ? AND reason LIKE '%RESEARCH_FRAGMENT%'`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]));
 }
 
+/**
+ * focus --run R / unfocus: the owner's priority override (2026-11-26, "PRIORITY
+ * OVERRIDE — BRAIN INTELLIGENCE COMPLETION MISSION"): every live goal outside
+ * evaluation run R is paused so its bins stop taking research slots and model
+ * capacity, through the ordinary pause decision (nothing cancelled; resuming
+ * continues it). A goal owed to a customer is never paused. The decision is the
+ * owner's, recorded as his with the instruction it came from; `unfocus` resumes
+ * exactly the goals this paused, read from their own GOAL_PAUSED events.
+ */
+const FOCUS_REASON = "Paused by the owner's priority override of 2026-11-26 (Brain intelligence completion mission is priority #1; the backlog is deferred, not deleted). Executed by the mission's coordinating session; `planningEval unfocus` resumes it.";
+async function focus(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const { pause } = await import('../server/services/goals/decide.ts');
+  const admins = (await listUsers()).filter((user) => user.isBrainAdmin && !user.disabledAt && user.kind === 'PERSON');
+  if (admins.length !== 1) fail(`the override is the owner's; found ${admins.length} enabled administrators`);
+  const keep = new Set((await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id));
+  let paused = 0;
+  for (const goal of await listWorkstreams()) {
+    if (goal.archivedAt || goal.cancelledAt || goal.pausedAt) continue;
+    if (goal.projectId && keep.has(goal.projectId)) continue;
+    if (goal.commitment === 'CUSTOMER') {
+      console.log(`EVAL focus kept ${goal.id} (owed to a customer)`);
+      continue;
+    }
+    if (!goal.target) continue;
+    const r = await pause(goal.id, FOCUS_REASON, `person:${admins[0]!.id}`);
+    console.log(`EVAL focus ${goal.id} ${r.ok ? 'paused' : `not paused: ${r.reason}`} ${goal.title.slice(0, 80)}`);
+    if (r.ok) paused += 1;
+  }
+  console.log(`EVAL focus: ${paused} goal(s) paused; run ${run} keeps its capacity`);
+}
+async function unfocus(): Promise<void> {
+  const { resume } = await import('../server/services/goals/decide.ts');
+  const { workstreamEventsOfKind } = await import('../server/repos/register.ts');
+  let resumed = 0;
+  for (const goal of await listWorkstreams()) {
+    if (!goal.pausedAt || goal.archivedAt || goal.cancelledAt) continue;
+    const events = await workstreamEventsOfKind(goal.id, 'GOAL_PAUSED', new Date(0).toISOString(), 5);
+    if (!events[0] || !String(events[0].summary ?? '').startsWith("Paused by the owner's priority override of 2026-11-26")) continue;
+    const r = await resume(goal.id, 'planning-evaluation:unfocus');
+    console.log(`EVAL unfocus ${goal.id} ${r.ok ? 'resumed' : `not resumed: ${r.reason}`}`);
+    if (r.ok) resumed += 1;
+  }
+  console.log(`EVAL unfocus: ${resumed} goal(s) resumed`);
+}
+
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
@@ -872,6 +918,8 @@ try {
   else if (command === 'probe') await probe();
   else if (command === 'items') await items();
   else if (command === 'questions') await questions();
+  else if (command === 'focus') await focus();
+  else if (command === 'unfocus') await unfocus();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
 } finally {
