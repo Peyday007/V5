@@ -48,7 +48,7 @@ import { createHash } from 'node:crypto';
 import type { OperatorModel } from '../../domain/operator.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
-import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, operatingModelSentenceFor, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
 import {
   BUYER_PROBLEM_FIELD,
   COMPARABLE_DEMAND_FIELD,
@@ -340,10 +340,7 @@ function limitLines(ctx: RouteContext): string[] {
     ctx.industry ? `The owner confined this goal to: ${ctx.industry}. Every route must be in it.` : 'No industry is excluded: choose on economics, time to cash and whether it can be done.',
     ctx.recurring ? 'The target is monthly recurring revenue: every route must be billed monthly.' : '',
     ctx.exclusions.length ? `The owner excluded: ${ctx.exclusions.join('; ')}.` : '',
-    OPERATING_MODEL_SENTENCE,
-    ctx.ownerLabour?.offered
-      ? `For this goal only, the owner offered their own work ("${ctx.ownerLabour.evidence}"): routes the owner personally performs — in person included — are allowed, using only the skills and assets their words state and inside their stated hours. Set performer OWNER and count every one of those hours.`
-      : '',
+    operatingModelSentenceFor(ctx.ownerLabour ?? null),
   ].filter(Boolean);
 }
 

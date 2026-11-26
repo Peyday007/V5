@@ -611,9 +611,9 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       else unread.push(`"${m[0]}": a second hours limit`);
     }
   }
-  // "Zero hours of my time", "without spending any of my own hours": a limit of nothing, never no limit (invariant 39).
+  // "Zero hours of my time", "without spending any of my own hours", "I can't put any hours in": a limit of nothing, never no limit (invariant 39).
   if (hoursCeiling === null) {
-    const none = /\b(?:I'm not|I am not|I won't be|I will not be)\s+doing\s+(?:any\s+(?:of\s+)?)?(?:the\s+)?work\b|\b(?:don't|do not|won't|will not)\s+(?:want to\s+)?(?:put in|spend|give it)\s+any\s+(?:hours|time)\b|\b(?:zero|no)\s+(?:hours?|time)\s+(?:of\s+)?(?:my|our|owner)\b|\bwithout\s+(?:spending\s+|using\s+)?any\s+(?:of\s+)?(?:my|our)\s+(?:own\s+)?(?:hours|time)\b/i.exec(text);
+    const none = /\b(?:I'm not|I am not|I won't be|I will not be)\s+doing\s+(?:any\s+(?:of\s+)?)?(?:the\s+)?work\b|\b(?:don't|do not|won't|will not|can't|cannot|can not)\s+(?:want to\s+)?(?:put in|spend|give it)\s+any\s+(?:hours|time)\b|\b(?:don't|do not|won't|will not|can't|cannot|can not)\s+(?:want to\s+)?(?:put|spend|give)\s+any\s+(?:hours|time)\s+(?:in|into it)\b|\b(?:zero|no)\s+(?:hours?|time)\s+(?:of\s+)?(?:my|our|owner)\b|\bwithout\s+(?:spending\s+|using\s+)?any\s+(?:of\s+)?(?:my|our)\s+(?:own\s+)?(?:hours|time)\b/i.exec(text);
     if (none) {
       hoursCeiling = 0;
       constraintSpans.push({ start: none.index, end: none.index + none[0].length, text: none[0] });

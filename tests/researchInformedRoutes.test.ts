@@ -100,6 +100,16 @@ describe('scouting: directions before anything is priced', () => {
     expect(routePrompt(ctx())).toMatch(/licence, certification or trade, at least one route sells that licensed or trade work itself/);
   });
 
+  it('states the operating rule the code enforces: a goal that offers the owner\'s work does not also forbid it (dec1125c p06)', () => {
+    const standing = routePrompt(ctx());
+    expect(standing).toMatch(/the owner does no physical work — no travel, no deliveries/);
+    const offered = routePrompt(ctx({ ownerLabour: { offered: true, evidence: 'I can put in 15 hours' } as never }));
+    expect(offered).not.toMatch(/the owner does no physical work —/);
+    expect(offered).toMatch(/I can put in 15 hours/);
+    expect(offered).toMatch(/work that needs no particular skill/);
+    expect(offered).toMatch(/deliveries, shifts, gigs and services included/);
+  });
+
   it('keeps a whole direction and refuses one without a decisive unknown', () => {
     const { directions, rejected } = parseDirections(JSON.stringify({ directions: [direction, { ...direction, title: 'Vague', payer: 'Anyone', decisiveUnknown: '' }] }), ctx({ ownerLabour: { offered: true, evidence: 'I run two embroidery machines' } as never }));
     expect(directions.map((one) => one.title)).toEqual(['Embroidered staff uniforms for local cafés']);
