@@ -79,6 +79,23 @@ describe('the acceptance rule', () => {
     expect(a.accepted!.opportunityIds).toEqual(['cop_agency']);
   });
 
+  it("C49: holds the evidenced lower bound to the goal's own required confidence, not to a fraction of it", () => {
+    // The owner stated 80%: the engine does not owe a 90% claim, but its defensible lower bound must still clear 80%.
+    const objective = { requiredConfidence: { value: 0.8, source: 'STATED' as const, statement: 'the owner asked for 80% confidence' } };
+    const evidenced = (low: number): GoalPortfolio => ({
+      ...portfolio({ basis: 'PROBABILITY', reach: 0.86 }),
+      assurance: { status: 'RANGE', claimsAtLeast90: false, range: { low, high: 0.93 }, coverage: 0.86, validationProblems: [], tailSettledP10: null, sample: { events: 120, from: 'STATED' }, reason: `calibrated evidence (smallest sample 120) puts the lower bound at ${Math.round(low * 100)}%` },
+    } as GoalPortfolio);
+    const short = judgeAcceptance({ achieved: false, chosen: null, portfolio: evidenced(0.76), measuredChance: null, considered: complete, objective });
+    expect(short.required).toBe(0.8);
+    expect(short.status).toBe('CANDIDATE_ONLY');
+    expect(short.probability).toBeNull();
+    expect(short.shortfalls.join(' ')).toMatch(/defensible lower bound is 76% over its smallest sample \(.*\), under the required 80%/);
+    const cleared = judgeAcceptance({ achieved: false, chosen: null, portfolio: evidenced(0.82), measuredChance: null, considered: complete, objective });
+    expect(cleared.status).toBe('ACCEPTED');
+    expect(cleared.probability).toMatchObject({ basis: 'EVIDENCED_PORTFOLIO', lowerBound: 0.82 });
+  });
+
   it('does not accept an evidenced combination whose member still misses a link', () => {
     const a = judgeAcceptance({ achieved: false, chosen: null, portfolio: portfolio({ basis: 'PROBABILITY', reach: 0.99 }), measuredChance: null, considered: [{ opportunityId: 'cop_agency', missing: ['FULFILMENT'] }] });
     expect(a.status).toBe('CANDIDATE_ONLY');

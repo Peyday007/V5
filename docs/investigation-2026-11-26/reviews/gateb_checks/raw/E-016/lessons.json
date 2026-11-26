@@ -1,0 +1,162 @@
+{
+ "outcomes": [
+  "PROPOSED",
+  "PROPOSED",
+  "PROPOSED"
+ ],
+ "turns": [
+  {
+   "label": "primary",
+   "role": "proposer",
+   "maxTokens": 4000,
+   "replyChars": 604,
+   "lessonsSection": false,
+   "lessonAlpha": false
+  },
+  {
+   "label": "primary",
+   "role": "critic",
+   "maxTokens": 3000,
+   "replyChars": 20,
+   "lessonsSection": false,
+   "lessonAlpha": false
+  },
+  {
+   "label": "primary",
+   "role": "proposer",
+   "maxTokens": 4000,
+   "replyChars": 470,
+   "lessonsSection": true,
+   "lessonAlpha": true
+  },
+  {
+   "label": "primary",
+   "role": "critic",
+   "maxTokens": 3000,
+   "replyChars": 20,
+   "lessonsSection": false,
+   "lessonAlpha": false
+  },
+  {
+   "label": "primary",
+   "role": "proposer",
+   "maxTokens": 4000,
+   "replyChars": 432,
+   "lessonsSection": false,
+   "lessonAlpha": false
+  },
+  {
+   "label": "primary",
+   "role": "critic",
+   "maxTokens": 3000,
+   "replyChars": 20,
+   "lessonsSection": false,
+   "lessonAlpha": false
+  }
+ ],
+ "events": [
+  {
+   "at": "2026-11-27T13:58:35.653Z",
+   "summary": "Routes: 1 proposed from 3 research finding(s) and filed as openings; no critique (primary: no parseable critique).",
+   "outcome": "PROPOSED",
+   "model": "primary",
+   "reason": null,
+   "detailKeys": [
+    "outcome",
+    "model",
+    "filed",
+    "existing",
+    "rejected",
+    "rejectedByRule",
+    "refutedShown",
+    "owner",
+    "critique",
+    "grounded",
+    "superseded",
+    "rethink",
+    "stage",
+    "findingsSeen",
+    "findingsShown"
+   ],
+   "rethink": null,
+   "critique": {
+    "outcome": "FAILED",
+    "model": null,
+    "reason": "primary: no parseable critique",
+    "reviews": [],
+    "ranking": [],
+    "replacementsAsked": false,
+    "replacements": 0
+   }
+  },
+  {
+   "at": "2026-11-26T12:58:35.653Z",
+   "summary": "Routes: 1 proposed from 3 research finding(s) and filed as openings; no critique (primary: no parseable critique).",
+   "outcome": "PROPOSED",
+   "model": "primary",
+   "reason": null,
+   "detailKeys": [
+    "outcome",
+    "model",
+    "filed",
+    "existing",
+    "rejected",
+    "rejectedByRule",
+    "refutedShown",
+    "owner",
+    "critique",
+    "grounded",
+    "superseded",
+    "rethink",
+    "stage",
+    "findingsSeen",
+    "findingsShown"
+   ],
+   "rethink": null,
+   "critique": {
+    "outcome": "FAILED",
+    "model": null,
+    "reason": "primary: no parseable critique",
+    "reviews": [],
+    "ranking": [],
+    "replacementsAsked": false,
+    "replacements": 0
+   }
+  },
+  {
+   "at": "2026-11-26T06:57:35.653Z",
+   "summary": "Routes: 1 proposed from 3 research finding(s) and filed as openings; no critique (primary: no parseable critique).",
+   "outcome": "PROPOSED",
+   "model": "primary",
+   "reason": null,
+   "detailKeys": [
+    "outcome",
+    "model",
+    "filed",
+    "existing",
+    "rejected",
+    "rejectedByRule",
+    "refutedShown",
+    "owner",
+    "critique",
+    "grounded",
+    "superseded",
+    "rethink",
+    "stage",
+    "findingsSeen",
+    "findingsShown"
+   ],
+   "rethink": "LESSON-ALPHA: agencies buy editing by the episode, not by retainer.",
+   "critique": {
+    "outcome": "FAILED",
+    "model": null,
+    "reason": "primary: no parseable critique",
+    "reviews": [],
+    "ranking": [],
+    "replacementsAsked": false,
+    "replacements": 0
+   }
+  }
+ ],
+ "operatorLearnings": []
+}

@@ -48,7 +48,7 @@ import { createHash } from 'node:crypto';
 import type { OperatorModel } from '../../domain/operator.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
-import { breaksOperatingModel, operatingModelSentenceFor, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, operatingModelSentenceFor, operatingFactsOf, operatingFit, ownerLabourOffer, ownerLabourWithHours, type OwnerLabour } from '../../domain/operatingModel.ts';
 import {
   BUYER_PROBLEM_FIELD,
   COMPARABLE_DEMAND_FIELD,
@@ -104,9 +104,30 @@ export const ROUTES_PER_DAY = 6;
  * earlier 90 s ("The operation was aborted due to timeout", production
  * 2026-11-25). The pass never waits on it: the ask runs in the background.
  */
-export const ROUTE_ATTEMPT_MS = 240_000;
+export const ROUTE_ATTEMPT_MS = 300_000;
+/**
+ * Output budgets for a route ask's turns. A reasoning model spends hidden
+ * reasoning tokens from the same budget: at 2,500–4,000 gpt-oss-120b returned
+ * content "" with no error in 47–85 s on 6 of 12 asks, and question replies
+ * were cut off mid-JSON; the model exam at 16,000 had 0 of 47 empty replies
+ * (root-cause challenge, 2026-11-26). Streamed (`chatFor`), a long reasoning
+ * turn is not cut by the GPU proxy's idle limit either.
+ */
+export const ROUTE_TOKENS = { route: 14_000, direction: 12_000, critique: 10_000 } as const;
+/**
+ * Models measured unfit to reason about routes, by the model they route to.
+ * The production fallback combo served poolside/laguna-xs-2.1 on every call of
+ * the blind model exam (2026-11-26): 1 of 30 correct, 0 of 11 on commercial
+ * planning, 19 critical errors. It wrote the invented owner refusals, the
+ * 445-beanie route and the critiques that dropped sound routes, because it
+ * both proposed and then critiqued its own answers after one primary failure.
+ * No answer is better than its answer: the ask records NO_ANSWER and retries
+ * on the ordinary failure interval. Named by label so a measured replacement
+ * can be admitted by changing the list, not the code path.
+ */
+export const ROUTE_UNFIT_MODEL_LABELS: readonly string[] = ['free:auto/best-coding'];
 /** All the models' turns together end inside this: each turn is given what is left, at most `ROUTE_ATTEMPT_MS`. */
-export const ROUTE_BUDGET_MS = 360_000;
+export const ROUTE_BUDGET_MS = 720_000;
 /** Goals whose routes are being asked for at once, across the process. */
 export const ROUTE_MAX_IN_FLIGHT = 2;
 
@@ -198,7 +219,7 @@ export interface RouteFinding {
  * client, agency pricing). A route ask of 120 findings is about 40 KB, inside every
  * model's context; past it, findings are chosen across lanes (`findingsOf`).
  */
-export const FINDINGS_SHOWN = 120;
+export const FINDINGS_SHOWN = 160;
 /** A goal with fewer findings than this scouts directions before it proposes priced routes. */
 export const FINDINGS_FOR_ROUTES = 3;
 /** New findings since the last ask that make a fresh, grounded ask due without waiting the ordinary interval. */
@@ -857,7 +878,9 @@ export function economicsLine(route: ProposedRoute, ctx: RouteContext): string {
   return [
     `COMPUTED (exact): each ${unit} earns ${money(e.marginPerSale, ctx.currency)} after its direct cost${route.acquisitionCostPerSale !== null ? ` and ${money(route.acquisitionCostPerSale, ctx.currency)} to win the buyer` : ''}`,
     `alone it needs ${e.salesNeeded} ${route.monthly ? 'paying buyer(s)' : 'sale(s)'} for the ${money(ctx.remaining, ctx.currency)} still needed`,
-    e.acquisitionSpend !== null ? `winning them costs ${money(e.acquisitionSpend, ctx.currency)} in total` : 'it states no cost to win a buyer',
+    e.acquisitionSpend !== null
+      ? `winning them costs ${money(e.acquisitionSpend, ctx.currency)} in total${ctx.capitalLimit !== null && e.acquisitionSpend + route.capital > ctx.capitalLimit ? `, more than the ${money(ctx.capitalLimit, ctx.currency)} capital, so it reaches the target only by reinvesting what early sales bring in` : ''}`
+      : 'it states no cost to win a buyer',
     `${Math.round(e.ownerHours * 10) / 10} owner hour(s)`,
     e.firstCashBy ? `first money by ${e.firstCashBy}${ctx.today ? ` (the window ends ${windowEnd(ctx.today, ctx.daysLeft)})` : ''}` : '',
     e.buyersShort ? `it counts only ${route.buyerCount} such buyers, fewer than it needs alone` : '',
@@ -945,6 +968,11 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
     const acquisitionCostPerSale = acquisitionRaw === null ? null : Math.max(0, acquisitionRaw);
     if (acquisitionCostPerSale !== null && acquisitionCostPerSale >= price - directCost) {
       reject(`winning a buyer costs ${money(acquisitionCostPerSale, ctx.currency)}, at least the ${money(price - directCost, ctx.currency)} a sale earns after its direct cost`, 'ACQUISITION');
+      continue;
+    }
+    // The first buyer must be won before any money comes back, so its cost and the route's own capital come out of the limit together.
+    if (acquisitionCostPerSale !== null && ctx.capitalLimit !== null && capital + acquisitionCostPerSale > ctx.capitalLimit) {
+      reject(`its ${money(capital, ctx.currency)} up front and ${money(acquisitionCostPerSale, ctx.currency)} to win the first buyer exceed the ${money(ctx.capitalLimit, ctx.currency)} allowed`, 'CAPITAL');
       continue;
     }
     /*
@@ -1102,15 +1130,36 @@ function objectsIn(text: string): Record<string, unknown>[] {
   return out;
 }
 
-/** The owner profile a reply carries under `owner`, or null when it carries none that says anything. Pure. */
-export function ownerProfileOf(text: string): OwnerProfile | null {
+const PROFILE_FILLER = new Set(['with', 'have', 'owns', 'owner', 'their', 'they', 'from', 'that', 'this', 'some', 'good', 'basic', 'strong', 'experience', 'skills', 'skill', 'able', 'access', 'about', 'very', 'into', 'also']);
+const profileWords = (text: string): string[] =>
+  (text.toLowerCase().match(/[a-z0-9][a-z0-9'+-]{2,}/g) ?? []).map((w) => w.replace(/'s$/, '').replace(/(ing|ed|es|s)$/, '')).filter((w) => w.length >= 3 && !PROFILE_FILLER.has(w));
+
+/**
+ * Whether a skill or asset the reply lists is something the owner's words say
+ * (planning failure map C02-F, 2026-11-26): the reader dropped only what its own
+ * reply marked "not stated", so a skill the model invented ("photography",
+ * "an Etsy audience") was kept and every later ask built routes on it. An item
+ * is kept when one of its content words appears in the owner's words; the
+ * words themselves stay in every prompt, so nothing the owner said is lost.
+ */
+export function groundedInWords(item: string, words: string): boolean {
+  const said = new Set(profileWords(words));
+  return profileWords(item).some((w) => said.has(w));
+}
+
+/**
+ * The owner profile a reply carries under `owner`, or null when it carries none
+ * that says anything. Given the owner's `words`, the skills and assets it lists
+ * are only those the words support. Pure.
+ */
+export function ownerProfileOf(text: string, words?: string | null): OwnerProfile | null {
   for (const obj of objectsIn(text)) {
     const raw = obj['owner'];
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const o = raw as Record<string, unknown>;
     const profile: OwnerProfile = {
-      skills: statedList(o['skills']),
-      assets: statedList(o['assets']),
+      skills: statedList(o['skills']).filter((one) => !words || groundedInWords(one, words)),
+      assets: statedList(o['assets']).filter((one) => !words || groundedInWords(one, words)),
       location: stated(o['location'], 160),
       hours: stated(o['hours'], 160),
       capital: stated(o['capital'], 160),
@@ -1119,6 +1168,11 @@ export function ownerProfileOf(text: string): OwnerProfile | null {
     if (profile.skills.length || profile.assets.length || profile.location || profile.hours || profile.capital || profile.refusals.length) return profile;
   }
   return null;
+}
+
+/** The owner's own words a route context carries: the objective and what they said they have. */
+export function ownerWordsOf(ctx: Pick<RouteContext, 'objective' | 'resources'>): string {
+  return [ctx.objective, ctx.resources].filter(Boolean).join(' ');
 }
 
 /** "skills: Spanish; assets: a van; location: Columbus, Ohio". Pure. */
@@ -1247,7 +1301,7 @@ export interface RankedRoute {
  */
 export function applyCritique(routes: readonly ProposedRoute[], critique: RouteCritique, ctx: RouteContext): { ranked: RankedRoute[]; dropped: RejectedRoute[] } {
   const dropped: RejectedRoute[] = [];
-  const survivors: { route: ProposedRoute; index: number; score: number; why: string; repaired: boolean }[] = [];
+  const survivors: { route: ProposedRoute; index: number; score: number; why: string; repaired: boolean; against?: boolean }[] = [];
   routes.forEach((route, i) => {
     const review = critique.reviews.find((one) => one.index === i + 1);
     if (!review) {
@@ -1268,7 +1322,7 @@ export function applyCritique(routes: readonly ProposedRoute[], critique: RouteC
     const numericOnly = review.verdict === 'DROP' && review.failed.length > 0 && review.failed.every((rule) => (NUMERIC_RULES as readonly string[]).includes(rule));
     if (numericOnly && !review.repair) {
       const score = RULE_KEYS.reduce((sum, rule) => sum + (review.scores[rule] ?? 0), 0);
-      survivors.push({ route, index: i + 1, score: score - 100, why: `kept against the critique, which objected only on ${review.failed.join(', ')} — limits the code checked on the route's own figures: ${review.why}`.slice(0, 400), repaired: false });
+      survivors.push({ route, index: i + 1, score, against: true, why: `kept against the critique, which objected only on ${review.failed.join(', ')} — limits the code checked on the route's own figures: ${review.why}`.slice(0, 400), repaired: false });
       return;
     }
     const verdict = numericOnly && review.repair ? 'REPAIR' : review.verdict;
@@ -1294,7 +1348,8 @@ export function applyCritique(routes: readonly ProposedRoute[], critique: RouteC
     const at = critique.ranking.indexOf(index);
     return at < 0 ? Number.POSITIVE_INFINITY : at;
   };
-  survivors.sort((a, b) => placeOf(a.index) - placeOf(b.index) || b.score - a.score || a.index - b.index);
+  // A route kept against the critique ranks after every route the critic kept, whatever place the critic gave it.
+  survivors.sort((a, b) => Number(!!a.against) - Number(!!b.against) || placeOf(a.index) - placeOf(b.index) || b.score - a.score || a.index - b.index);
   return { ranked: survivors.map((one, i) => ({ route: one.route, rank: i + 1, score: one.score, why: one.why, repaired: one.repaired })), dropped };
 }
 
@@ -1447,7 +1502,7 @@ export async function askModel(chat: ChatFn, system: string, content: string, ma
 
 async function operatorChats(deps: RouteDeps, timeoutMs: () => number): Promise<{ label: string; chat: ChatFn }[]> {
   const operator = await (deps.models ?? (async () => (await import('../operator/run.ts')).modelsFor()))().catch(() => [] as OperatorModel[]);
-  const models = [...strongRouteModels(deps.env ?? process.env), ...challengerModels(operator)];
+  const models = [...strongRouteModels(deps.env ?? process.env), ...challengerModels(operator)].filter((model) => !ROUTE_UNFIT_MODEL_LABELS.includes(model.label));
   return models.map((model) => ({
     label: model.label,
     // Each turn is given what the budget has left, never more than one attempt's bound.
@@ -1609,7 +1664,7 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
       hoursLimit: target.hoursCeiling,
       hoursPerWeek: target.scope?.hoursPerWeek ?? null,
       resources: target.resources,
-      ownerLabour: ownerLabourOffer(ownerWords(goal), target.resources),
+      ownerLabour: ownerLabourWithHours(ownerLabourOffer(ownerWords(goal), target.resources), { perWeek: target.scope?.hoursPerWeek ?? null, total: target.hoursCeiling }, [ownerWords(goal), target.resources].filter(Boolean).join(' ')),
       industry: target.scope?.industry ?? null,
       recurring: target.scope?.recurring === 'MONTHLY',
       exclusions: exclusions.map((one) => exclusionLabel(one)),
@@ -1871,7 +1926,7 @@ async function critiqueAndRevise(
       failures.push('out of time');
       break;
     }
-    const r = await ask(chat, CRITIC_SYSTEM, critiquePrompt(ctx, first.routes, first.owner), 3000);
+    const r = await ask(chat, CRITIC_SYSTEM, critiquePrompt(ctx, first.routes, first.owner), ROUTE_TOKENS.critique);
     if (r.error) {
       failures.push(`${label}: ${r.error.slice(0, 80)}`);
       continue;
@@ -1895,7 +1950,7 @@ async function critiqueAndRevise(
     const content = replacementPrompt(ctx, ROUTES_PER_ASK - ranked.length, ranked.map((one) => one.route), applied.dropped);
     for (const { label, chat } of order) {
       if (left() < 5_000) break;
-      const r = await ask(chat, PROPOSER_SYSTEM, content, 4000);
+      const r = await ask(chat, PROPOSER_SYSTEM, content, ROUTE_TOKENS.route);
       if (r.error) {
         failures.push(`replacements, ${label}: ${r.error.slice(0, 80)}`);
         continue;
@@ -2034,7 +2089,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
     let got: { directions: ProposedDirection[]; rejected: RejectedRoute[]; model: string; owner: OwnerProfile | null } | null = null;
     for (const { label, chat } of chats) {
       if (deadline - clock() < 5_000) break;
-      const r = await ask(chat, PROPOSER_SYSTEM, prompt, 3500);
+      const r = await ask(chat, PROPOSER_SYSTEM, prompt, ROUTE_TOKENS.direction);
       if (r.error) {
         failures.push(`${label}: ${r.error.slice(0, 80)}`);
         continue;
@@ -2044,7 +2099,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
         failures.push(`${label}: no parseable directions`);
         continue;
       }
-      got = { ...one, model: label, owner: ownerProfileOf(r.content) };
+      got = { ...one, model: label, owner: ownerProfileOf(r.content, ownerWordsOf(read.ctx)) };
       break;
     }
     if (!got) {
@@ -2059,7 +2114,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       const order = [...chats.filter((one) => one.label === got!.model), ...chats.filter((one) => one.label !== got!.model)];
       for (const { label, chat } of order) {
         if (deadline - clock() < 5_000) break;
-        const r = await ask(chat, CRITIC_SYSTEM, directionCritiquePrompt(read.ctx, got.directions), 2500);
+        const r = await ask(chat, CRITIC_SYSTEM, directionCritiquePrompt(read.ctx, got.directions), ROUTE_TOKENS.critique);
         if (r.error) continue;
         review = critiqueJson(r.content, got.directions.length);
         if (review) {
@@ -2094,7 +2149,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   let parsed: { routes: ProposedRoute[]; rejected: RejectedRoute[]; model: string; owner: OwnerProfile | null; rethink: string | null } | null = null;
   for (const { label, chat } of chats) {
     if (deadline - clock() < 5_000) break;
-    const r = await ask(chat, PROPOSER_SYSTEM, prompt, 4000);
+    const r = await ask(chat, PROPOSER_SYSTEM, prompt, ROUTE_TOKENS.route);
     if (r.error) {
       failures.push(`${label}: ${r.error.slice(0, 80)}`);
       continue;
@@ -2104,7 +2159,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       failures.push(`${label}: no parseable routes`);
       continue;
     }
-    parsed = { ...one, model: label, owner: ownerProfileOf(r.content), rethink: rethinkOf(r.content) };
+    parsed = { ...one, model: label, owner: ownerProfileOf(r.content, ownerWordsOf(read.ctx)), rethink: rethinkOf(r.content) };
     break;
   }
   if (!parsed) {

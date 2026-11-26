@@ -1,0 +1,238 @@
+{
+  "map": "C",
+  "investigation": "2026-11-26",
+  "derived_from": "outcome definition only (no Brain code or docs read)",
+  "brain_implements_note": "every requirement's brain_implements is TO BE RECONCILED by the code investigator",
+  "count": 20,
+  "rule": "USABLE = U01..U12 all satisfied AND zero critical mistakes (Q-CM01..Q-CM20). A plan with any critical mistake is not USABLE regardless of quality elsewhere.",
+  "critical_mistakes": [
+    {
+      "id": "Q-CM01",
+      "name": "Arithmetic cannot reach the target",
+      "definition": "The plan's own volumes x contribution cannot produce the target, or contains an arithmetic error that, corrected, misses it.",
+      "caused_by_failure_of": [
+        "Q-R021",
+        "Q-R040",
+        "Q-R041",
+        "Q-R043",
+        "Q-R044"
+      ]
+    },
+    {
+      "id": "Q-CM02",
+      "name": "Wrong target metric",
+      "definition": "Plans to profit, bookings, GMV or invoiced amounts when the objective is collected revenue (or vice versa).",
+      "caused_by_failure_of": [
+        "Q-R001",
+        "Q-R002",
+        "Q-R041",
+        "Q-R055"
+      ]
+    },
+    {
+      "id": "Q-CM03",
+      "name": "Cash cannot settle inside the window",
+      "definition": "Revenue counted that will be held, on net terms, or paid out after the window ends.",
+      "caused_by_failure_of": [
+        "Q-R002",
+        "Q-R014",
+        "Q-R041",
+        "Q-R046",
+        "Q-R047"
+      ]
+    },
+    {
+      "id": "Q-CM04",
+      "name": "Capital exceeded or working capital ignored",
+      "definition": "Peak cash need exceeds available capital at some date; or MOQ/ad spend/prepayment exceeds it.",
+      "caused_by_failure_of": [
+        "Q-R036",
+        "Q-R042",
+        "Q-R069",
+        "Q-R046"
+      ]
+    },
+    {
+      "id": "Q-CM05",
+      "name": "Buyer does not exist or cannot be reached",
+      "definition": "Fabricated companies or contacts, a segment too small, or a channel that cannot reach it.",
+      "caused_by_failure_of": [
+        "Q-R035",
+        "Q-R029",
+        "Q-R030",
+        "Q-R039"
+      ]
+    },
+    {
+      "id": "Q-CM06",
+      "name": "Decisive figure fabricated or unsupported",
+      "definition": "A price, conversion rate, cost or lead time presented as fact with no applicable evidence.",
+      "caused_by_failure_of": [
+        "Q-R028",
+        "Q-R029",
+        "Q-R030",
+        "Q-R034",
+        "Q-R045",
+        "Q-R054",
+        "Q-R026"
+      ]
+    },
+    {
+      "id": "Q-CM07",
+      "name": "Requires a capability, licence or account the owner lacks",
+      "definition": "Step needs a licence, entity, merchant account, skill or audience the owner does not hold and the plan does not acquire.",
+      "caused_by_failure_of": [
+        "Q-R003",
+        "Q-R049",
+        "Q-R007",
+        "Q-R051"
+      ]
+    },
+    {
+      "id": "Q-CM08",
+      "name": "Owner involvement exceeds the limit",
+      "definition": "Owner hours or owner-only tasks exceed the stated involvement.",
+      "caused_by_failure_of": [
+        "Q-R001",
+        "Q-R048",
+        "Q-R038"
+      ]
+    },
+    {
+      "id": "Q-CM09",
+      "name": "Invented or dropped restriction",
+      "definition": "Plan obeys a restriction the owner never stated (e.g. a system policy presented as the owner's) or ignores one the owner did state.",
+      "caused_by_failure_of": [
+        "Q-R001",
+        "Q-R004",
+        "Q-R017",
+        "Q-R055",
+        "Q-R010"
+      ]
+    },
+    {
+      "id": "Q-CM10",
+      "name": "Unlawful or terms-of-service-breaking action",
+      "definition": "Spam, prohibited scraping, unlicensed regulated activity, fake reviews, fee circumvention, tax non-compliance.",
+      "caused_by_failure_of": [
+        "Q-R007",
+        "Q-R050",
+        "Q-R039"
+      ]
+    },
+    {
+      "id": "Q-CM11",
+      "name": "No named, executable first action",
+      "definition": "First action vague, dependent on unmet prerequisites, or absent; steps not executable.",
+      "caused_by_failure_of": [
+        "Q-R066",
+        "Q-R067",
+        "Q-R051"
+      ]
+    },
+    {
+      "id": "Q-CM12",
+      "name": "Timeline infeasible",
+      "definition": "Lead times, approvals, warm-up, buyer cycle or delivery cannot fit the window.",
+      "caused_by_failure_of": [
+        "Q-R014",
+        "Q-R039",
+        "Q-R047",
+        "Q-R036",
+        "Q-R035"
+      ]
+    },
+    {
+      "id": "Q-CM13",
+      "name": "Internal contradiction",
+      "definition": "Different values for the same quantity across sections, or narrative strategy differing from the computed one.",
+      "caused_by_failure_of": [
+        "Q-R008",
+        "Q-R009",
+        "Q-R053",
+        "Q-R062",
+        "Q-R070"
+      ]
+    },
+    {
+      "id": "Q-CM14",
+      "name": "Supplier or fulfilment cannot deliver",
+      "definition": "Supplier invented, capacity below required volume, fulfilment cost or quality omitted.",
+      "caused_by_failure_of": [
+        "Q-R036",
+        "Q-R038",
+        "Q-R040"
+      ]
+    },
+    {
+      "id": "Q-CM15",
+      "name": "Money committed without approval or outside ceiling",
+      "definition": "Plan or system spends before owner approval, beyond a ceiling, or double-commits on retry.",
+      "caused_by_failure_of": [
+        "Q-R069",
+        "Q-R072",
+        "Q-R078"
+      ]
+    },
+    {
+      "id": "Q-CM16",
+      "name": "Stale or superseded evidence used",
+      "definition": "A figure refuted or superseded during reasoning still drives the plan.",
+      "caused_by_failure_of": [
+        "Q-R009",
+        "Q-R031",
+        "Q-R058",
+        "Q-R045"
+      ]
+    },
+    {
+      "id": "Q-CM17",
+      "name": "Material cost omitted",
+      "definition": "Missing fees, taxes, refunds, acquisition or fulfilment cost that flips feasibility.",
+      "caused_by_failure_of": [
+        "Q-R040",
+        "Q-R046",
+        "Q-R038"
+      ]
+    },
+    {
+      "id": "Q-CM18",
+      "name": "Decisive unknown hidden or resolved favourably",
+      "definition": "Plan rests on an untested decisive assumption presented as fact, with no test or checkpoint; or confidence overstated.",
+      "caused_by_failure_of": [
+        "Q-R023",
+        "Q-R026",
+        "Q-R044",
+        "Q-R068",
+        "Q-R073",
+        "Q-R080"
+      ]
+    },
+    {
+      "id": "Q-CM19",
+      "name": "Plan for the wrong objective or corrupted output",
+      "definition": "Empty, truncated or garbled plan; plan answering another goal; model failure accepted as content.",
+      "caused_by_failure_of": [
+        "Q-R010",
+        "Q-R056",
+        "Q-R070",
+        "Q-R071",
+        "Q-R079",
+        "Q-R082"
+      ]
+    },
+    {
+      "id": "Q-CM20",
+      "name": "No plan or false infeasibility for a feasible objective",
+      "definition": "Goal never terminates, stalls, or reports infeasible because discovery/strategy failed.",
+      "caused_by_failure_of": [
+        "Q-R006",
+        "Q-R016",
+        "Q-R018",
+        "Q-R019",
+        "Q-R060",
+        "Q-R083"
+      ]
+    }
+  ]
+}

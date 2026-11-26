@@ -212,7 +212,14 @@ describe('a proposal is critiqued, replaced where it fails and ranked', () => {
   });
 });
 
-describe("the plan's choice among unresearched routes follows the critique's rank", () => {
+/*
+ * Each case reads a whole goal plan (readGoalPlan, 50 evaluations). On the
+ * release runners it measured 26.0 s and 29.5 s (Deploys 45788180566 and
+ * 45774248643) and 31.8 s on 45796709343, which failed only on the suite's
+ * 30 s default, while it takes 10-14 s locally. The bound is the work's, not a
+ * loosened assertion.
+ */
+describe("the plan's choice among unresearched routes follows the critique's rank", { timeout: 90_000 }, () => {
   const retainer = (i: number) => ({
     ...base, title: `Route ${i} retainer`, buyerKind: 'B2B', payer: `Buyer segment ${'abc'[i]}`, offer: `Monthly service ${i}`, price: 900, monthly: true, channel: 'Direct email to published contacts',
     fulfiller: 'A freelancer, $100 a month', directCost: 100, ownerHoursPerDeal: 0.5, daysToFirstCash: 7, ownerFit: 'Uses the owner\'s Spanish',

@@ -686,24 +686,27 @@ async function probe(): Promise<void> {
   const { modelsFor } = await import('../server/services/operator/run.ts');
   const { challengerModels } = await import('../server/services/operator/decisions.ts');
   const { chatFor } = await import('../server/services/cheap/modelBench.ts');
-  const models = challengerModels(await modelsFor());
+  // The production route ask's model set and budgets (`operatorChats`, `ROUTE_TOKENS`).
+  const unfit = ((P as unknown as Record<string, unknown>)['ROUTE_UNFIT_MODEL_LABELS'] as readonly string[] | undefined) ?? [];
+  const tokens = ((P as unknown as Record<string, unknown>)['ROUTE_TOKENS'] as { route: number; critique: number; direction: number } | undefined) ?? { route: 4000, critique: 3000, direction: 3500 };
+  const models = challengerModels(await modelsFor()).filter((m) => !unfit.includes(m.label));
   out('models', models.map((m) => m.label));
   const prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
   // The exact ask, so a control can put the identical prompt to another model.
   out('prompt', prompt);
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
-    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
+    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 300_000);
     const started = Date.now();
     // The production turn: an empty reply is retried with twice the budget, then an error (`askModel`).
-    const r = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, system, prompt, 4000);
+    const r = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, system, prompt, scout ? tokens.direction : tokens.route);
     out('reply', { model: model.label, error: r.error ?? null, ms: Date.now() - started, content: String(r.content ?? '').slice(0, 9000) });
     if (r.error || !r.content) continue;
     const parsed = scout ? P['parseDirections']!(r.content, ctx) : P['parseRoutes']!(P['routesJson']!(r.content), ctx);
     out('parsed', parsed);
     if (!scout) {
       const routes = (parsed as { routes: unknown[] }).routes;
-      const critic = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.", String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))), 3000);
+      const critic = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.", String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))), tokens.critique);
       const critique = critic.content ? P['critiqueJson']!(critic.content, routes.length) : null;
       out('critique', critique ? P['applyCritique']!(routes, critique, ctx) : { error: critic.error ?? 'unreadable' });
     }
@@ -860,6 +863,164 @@ async function items(): Promise<void> {
   out('fragment_starts_6h', await q(`SELECT COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at > ? AND reason LIKE '%RESEARCH_FRAGMENT%'`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]));
 }
 
+/**
+ * judging --run R: whether Brain's idea judge is reaching a run's ideas, read
+ * only — the Russell cycle's last run and error, ideas judged Brain-wide by
+ * hour, the run's unjudged ideas by kind and age, and where the run's first
+ * unjudged ideas stand in the judge's own queue (`unjudgedGoalIdeas`).
+ */
+async function judging(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const out = (label: string, value: unknown) => console.log(`JUDGING ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[] = []): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  const projects = (await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id);
+  const marks = projects.map(() => '?').join(',') || "''";
+  out('cycle', await q(`SELECT state, pause_reason, last_ran_at, SUBSTR(COALESCE(last_error, ''), 1, 4000) AS last_error, max_launches_per_cycle, lease_expires_at FROM russell_cycle`));
+  const since = new Date(Date.now() - 6 * 3_600_000).toISOString();
+  out('judged_by_hour', await q(`SELECT SUBSTR(updated_at, 1, 13) AS hour, COUNT(*) AS n FROM russell_candidates WHERE priority IS NOT NULL AND updated_at > ? GROUP BY 1 ORDER BY 1`, [since]));
+  out('run_ideas', await q(`SELECT state, CASE WHEN priority IS NULL THEN 'unjudged' ELSE priority END AS judged, COUNT(*) AS n, MIN(created_at) AS oldest FROM russell_candidates WHERE project_id IN (${marks}) GROUP BY 1, 2 ORDER BY n DESC`, projects));
+  const { unjudgedGoalIdeas } = await import('../server/services/russell/loop.ts');
+  const started = Date.now();
+  const head = await unjudgedGoalIdeas(400).catch((error: unknown) => [{ id: `error: ${String((error as Error)?.message ?? error).slice(0, 200)}` }]);
+  out('goal_queue', { ms: Date.now() - started, length: head.length, runIdeasInFirst40: head.slice(0, 40).filter((one) => projects.length && false).length });
+  const ids = head.map((one) => one.id);
+  const runSet = new Set((await q(`SELECT id FROM russell_candidates WHERE project_id IN (${marks})`, projects)).map((row) => String(row['id'])));
+  out('goal_queue_head', await q(`SELECT c.id, c.project_id, c.state, c.priority, c.created_at, c.updated_at, SUBSTR(c.title, 1, 80) AS title FROM russell_candidates c WHERE c.id IN (${ids.slice(0, 30).map(() => '?').join(',') || "''"})`, ids.slice(0, 30)));
+  out('goal_queue_positions', { firstRunIdeaAt: ids.findIndex((id) => runSet.has(id)), runIdeasInQueue: ids.filter((id) => runSet.has(id)).length, queueProjects: (await q(`SELECT COUNT(DISTINCT project_id) AS n FROM russell_candidates WHERE id IN (${ids.slice(0, 200).map(() => '?').join(',') || "''"})`, ids.slice(0, 200)))[0] });
+}
+
+/**
+ * launching --run R: why a run's judged ideas do or do not become missions, read
+ * only — each project's launchable ideas beside its research grant's slots
+ * (`launchableByProject`, the reading the launch pass and the capacity reader
+ * share), where the run's ideas fall in the launch window (`nextLaunchable`),
+ * and the run's queued ideas that carry no compiled specification.
+ */
+async function launching(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const out = (label: string, value: unknown) => console.log(`LAUNCHING ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[] = []): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  const projects = (await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id);
+  const runSet = new Set(projects);
+  const marks = projects.map(() => '?').join(',') || "''";
+  const loop = await import('../server/services/russell/loop.ts');
+  const { researchMissionSlots } = await import('../server/services/russell/launch.ts');
+  const byProject = await loop.launchableByProject().catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as unknown as Awaited<ReturnType<typeof loop.launchableByProject>>);
+  const mine = byProject.filter((one) => runSet.has(one.projectId));
+  out('brain_wide', { projects: byProject.length, waiting: byProject.reduce((n, one) => n + (one.waiting ?? 0), 0), free: byProject.reduce((n, one) => n + (one.free ?? 0), 0) });
+  out('run_launchable', { projects: mine.length, waiting: mine.reduce((n, one) => n + one.waiting, 0), free: mine.reduce((n, one) => n + one.free, 0), noGrant: mine.filter((one) => !one.slots).length });
+  const slots: Record<string, unknown>[] = [];
+  for (const id of projects.slice(0, 30)) slots.push({ project: id, slots: await researchMissionSlots(id).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error).slice(0, 200) })) });
+  out('run_slots', slots);
+  const window = await loop.nextLaunchable(200).catch(() => []);
+  const ids = window.map((one) => one.candidateId);
+  const owners = new Map((await q(`SELECT id, project_id FROM russell_candidates WHERE id IN (${ids.map(() => '?').join(',') || "''"})`, ids)).map((row) => [String(row['id']), String(row['project_id'])]));
+  out('launch_window', { length: window.length, runIdeas: window.filter((one) => runSet.has(owners.get(one.candidateId) ?? '')).length, firstRunAt: window.findIndex((one) => runSet.has(owners.get(one.candidateId) ?? '')), fitting: window.filter((one) => one.fitsFreeSlot).length });
+  out('run_queued', await q(`SELECT CASE WHEN judgment LIKE '%"missionSpec"%' THEN 'spec' ELSE 'no_spec' END AS spec, COUNT(*) AS n FROM russell_candidates WHERE project_id IN (${marks}) AND state = 'QUEUED' GROUP BY 1`, projects));
+  out('run_missions', await q(`SELECT state, COUNT(*) AS n, MAX(created_at) AS last FROM russell_missions WHERE project_id IN (${marks}) GROUP BY 1`, projects));
+  out('grants', await q(`SELECT project_id, purpose, state, max_concurrent FROM russell_goals WHERE project_id IN (${marks}) LIMIT 40`, projects));
+  const since = new Date(Date.now() - 12 * 3_600_000).toISOString();
+  out('missions_by_hour', await q(`SELECT SUBSTR(created_at, 1, 13) AS hour, COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM russell_missions WHERE created_at > ? GROUP BY 1 ORDER BY 1`, [since]));
+  out('cycle', await q(`SELECT state, last_ran_at, lease_expires_at, SUBSTR(COALESCE(last_error, ''), 1, 1500) AS last_error FROM russell_cycle`));
+  out('launch_events', await q(`SELECT event_type AS kind, COUNT(*) AS n, MAX(created_at) AS last FROM project_events WHERE created_at > ? AND (event_type LIKE '%LAUNCH%' OR event_type LIKE 'RUSSELL_MISSION%') GROUP BY 1 ORDER BY n DESC LIMIT 20`, [since]));
+  out('run_events', await q(`SELECT event_type AS kind, COUNT(*) AS n, MAX(created_at) AS last FROM project_events WHERE project_id IN (${marks}) AND created_at > ? AND (event_type LIKE '%LAUNCH%' OR event_type LIKE '%MISSION%' OR event_type LIKE '%REFUS%' OR event_type LIKE '%PARK%') GROUP BY 1 ORDER BY n DESC LIMIT 20`, [...projects, since]));
+}
+
+/**
+ * judge-one --run R: the experiment that settles why a run's ideas sit unjudged —
+ * Brain's own judgment of the run's oldest unjudged idea, exactly as the tick's
+ * judge pass makes it (`judgeCandidate`), with the archive read timed apart.
+ * Judging spends nothing; it is the decision the tick would record.
+ */
+async function judgeOne(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const projects = (await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id);
+  const marks = projects.map(() => '?').join(',') || "''";
+  const rows = await getDb().all<{ id: string; title: string }>(`SELECT id, title FROM russell_candidates WHERE project_id IN (${marks}) AND priority IS NULL AND state = 'CAPTURED' ORDER BY created_at LIMIT 1`, projects);
+  if (!rows[0]) fail('no unjudged idea in this run');
+  const { getCandidate } = await import('../server/repos/russellCandidates.ts');
+  const { askArchive, judgeCandidate } = await import('../server/services/russell/planning.ts');
+  const candidate = await getCandidate(rows[0].id);
+  let t = Date.now();
+  const archive = await askArchive(candidate!).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error) }));
+  console.log(`JUDGE archive ${JSON.stringify({ ms: Date.now() - t, claimsConsidered: (archive as { claimsConsidered?: number }).claimsConsidered ?? null, error: (archive as { error?: string }).error ?? null })}`);
+  t = Date.now();
+  const outcome = await judgeCandidate(rows[0].id).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error) }));
+  console.log(`JUDGE judged ${JSON.stringify({ id: rows[0].id, title: rows[0].title.slice(0, 100), ms: Date.now() - t, outcome })}`);
+}
+
+/**
+ * judge-pass: one run of the tick's own 'judge-unjudged' goal loop, outside the
+ * tick, timed per idea — the experiment that separates "the pass fails on the
+ * head of its queue" from "the tick never executes the pass".
+ */
+async function judgePass(): Promise<void> {
+  const loop = await import('../server/services/russell/loop.ts');
+  const { judgeCandidate } = await import('../server/services/russell/planning.ts');
+  const { databasePressure } = await import('../server/db/pressure.ts').catch(() => ({ databasePressure: () => ({ state: 'UNKNOWN' }) }));
+  const pressure = (databasePressure as () => { state: string })().state;
+  const goalMax = pressure === 'SHEDDING' ? loop.GOAL_JUDGMENTS_PER_TICK : loop.GOAL_JUDGMENTS_MAX_PER_TICK;
+  let t = Date.now();
+  const ideas = await loop.unjudgedGoalIdeas(goalMax);
+  console.log(`PASS queue ${JSON.stringify({ pressure, goalMax, ideas: ideas.length, ms: Date.now() - t })}`);
+  const started = Date.now();
+  let judged = 0;
+  for (const idea of ideas) {
+    if (judged >= loop.GOAL_JUDGMENTS_PER_TICK && Date.now() - started >= loop.GOAL_JUDGING_BUDGET_MS) break;
+    t = Date.now();
+    const outcome = await judgeCandidate(idea.id).catch((error: unknown) => ({ threw: String((error as Error)?.message ?? error).slice(0, 200) }));
+    console.log(`PASS idea ${JSON.stringify({ id: idea.id, ms: Date.now() - t, outcome })}`);
+    judged += 1;
+  }
+  console.log(`PASS done ${JSON.stringify({ judged, ms: Date.now() - started })}`);
+}
+
+/**
+ * focus --run R / unfocus: the owner's priority override (2026-11-26, "PRIORITY
+ * OVERRIDE — BRAIN INTELLIGENCE COMPLETION MISSION"): every live goal outside
+ * evaluation run R is paused so its bins stop taking research slots and model
+ * capacity, through the ordinary pause decision (nothing cancelled; resuming
+ * continues it). A goal owed to a customer is never paused. The decision is the
+ * owner's, recorded as his with the instruction it came from; `unfocus` resumes
+ * exactly the goals this paused, read from their own GOAL_PAUSED events.
+ */
+const FOCUS_REASON = "Paused by the owner's priority override of 2026-11-26 (Brain intelligence completion mission is priority #1; the backlog is deferred, not deleted). Executed by the mission's coordinating session; `planningEval unfocus` resumes it.";
+async function focus(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const { pause } = await import('../server/services/goals/decide.ts');
+  const admins = (await listUsers()).filter((user) => user.isBrainAdmin && !user.disabledAt && user.kind === 'PERSON');
+  if (admins.length !== 1) fail(`the override is the owner's; found ${admins.length} enabled administrators`);
+  const keep = new Set((await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id));
+  let paused = 0;
+  for (const goal of await listWorkstreams()) {
+    if (goal.archivedAt || goal.cancelledAt || goal.pausedAt) continue;
+    if (goal.projectId && keep.has(goal.projectId)) continue;
+    if (goal.commitment === 'CUSTOMER') {
+      console.log(`EVAL focus kept ${goal.id} (owed to a customer)`);
+      continue;
+    }
+    if (!goal.target) continue;
+    const r = await pause(goal.id, FOCUS_REASON, `person:${admins[0]!.id}`);
+    console.log(`EVAL focus ${goal.id} ${r.ok ? 'paused' : `not paused: ${r.reason}`} ${goal.title.slice(0, 80)}`);
+    if (r.ok) paused += 1;
+  }
+  console.log(`EVAL focus: ${paused} goal(s) paused; run ${run} keeps its capacity`);
+}
+async function unfocus(): Promise<void> {
+  const { resume } = await import('../server/services/goals/decide.ts');
+  const { workstreamEventsOfKind } = await import('../server/repos/register.ts');
+  let resumed = 0;
+  for (const goal of await listWorkstreams()) {
+    if (!goal.pausedAt || goal.archivedAt || goal.cancelledAt) continue;
+    const events = await workstreamEventsOfKind(goal.id, 'GOAL_PAUSED', new Date(0).toISOString(), 5);
+    if (!events[0] || !String(events[0].summary ?? '').startsWith("Paused by the owner's priority override of 2026-11-26")) continue;
+    const r = await resume(goal.id, 'planning-evaluation:unfocus');
+    console.log(`EVAL unfocus ${goal.id} ${r.ok ? 'resumed' : `not resumed: ${r.reason}`}`);
+    if (r.ok) resumed += 1;
+  }
+  console.log(`EVAL unfocus: ${resumed} goal(s) resumed`);
+}
+
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
@@ -872,6 +1033,12 @@ try {
   else if (command === 'probe') await probe();
   else if (command === 'items') await items();
   else if (command === 'questions') await questions();
+  else if (command === 'focus') await focus();
+  else if (command === 'judging') await judging();
+  else if (command === 'launching') await launching();
+  else if (command === 'judge-one') await judgeOne();
+  else if (command === 'judge-pass') await judgePass();
+  else if (command === 'unfocus') await unfocus();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
 } finally {

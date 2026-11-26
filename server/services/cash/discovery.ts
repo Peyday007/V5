@@ -68,7 +68,7 @@
  * rather than being asserted away by whoever created it.
  */
 import { joinRouteEvidence } from './routeEvidence.ts';
-import { OPERATING_MODEL_SENTENCE, ownerLabourOffer } from '../../domain/operatingModel.ts';
+import { OPERATING_MODEL_SENTENCE, ownerLabourOffer, ownerLabourWithHours } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
 import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
@@ -995,8 +995,8 @@ export const REMOTE_AI_FOCUS =
  * 2026-11-26: a licensed drone pilot and an owner offering 15 hours were both
  * searched for "work this operation can run entirely online"). Pure.
  */
-export function discoveryFocusFor(objective: string | null | undefined): string {
-  const labour = ownerLabourOffer(objective);
+export function discoveryFocusFor(objective: string | null | undefined, hours: { perWeek?: number | null; total?: number | null } = {}): string {
+  const labour = ownerLabourWithHours(ownerLabourOffer(objective), hours, objective ?? '');
   if (!labour.offered) return REMOTE_AI_FOCUS;
   return (
     `The owner offered their own work for this goal ("${labour.evidence}"), so look first for work buyers book and pay the owner for directly, in person included, using what their words say they have — then for work independent contractors or suppliers perform while this operation sells, books, refers or subcontracts it, and for work fulfilled with AI-produced digital output. ` +
@@ -1122,6 +1122,8 @@ export async function openGoalDiscovery(input: {
     resources: string | null;
     capitalBeforeProofCents?: number | null;
     capitalPerWeekCents?: number | null;
+    hoursCeiling?: number | null;
+    hoursPerWeek?: number | null;
   };
   bestReach: number | null;
   /** Openings Brain already holds for the goal, so a new round looks elsewhere. */
@@ -1318,7 +1320,7 @@ export async function openGoalDiscovery(input: {
       `Report ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly. A small price is not a reason to leave a way out: a $50–$300 service or sale that many households or businesses buy again and again counts by its total, so give how many buyers there are and how often each buys. Leave out only one-off contests, bounties and submissions that pay a few hundred at most. ` +
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?' +
-      ` ${discoveryFocusFor(goalRow?.intent ?? input.goal.title)}` +
+      ` ${discoveryFocusFor(goalRow?.intent ?? input.goal.title, { perWeek: input.target.hoursPerWeek ?? null, total: input.target.hoursCeiling ?? null })}` +
       ` ${GOAL_OPENING_SENTENCE}` +
       (input.diagnosis ? ` ${input.diagnosis}` : '') +
       (learned ? ` ${learned}` : '') +

@@ -6,13 +6,13 @@ constraints. This file is the single current record; history is in
 `docs/PLANNING-9-10-INVESTIGATION-2026-11-24.md` and
 `docs/PLANNING-ROUTE-GENERATION-2026-11-25.md`. Update it at every milestone.
 
-Updated 2026-11-25 15:45Z.
+Updated 2026-11-26 06:10Z.
 
 ## Production
 
 | | |
 |---|---|
-| serving revision | 74691c7 (#1318), confirmed: "Deploy to Fly" succeeded and the evaluation run printed `SERVING_REVISION 74691c7` |
+| serving revision | 442a657 released ("Deploy to Fly" success, run 45755236567, ~04:30Z); a8c4699 (RC13 repairs W1i/W1j) deploying 05:41Z |
 | release check | a release counts only when the Deploy run's "Deploy to Fly" job succeeds; merges are held while a Deploy runs |
 
 ## Measured results (fresh goals, objective only, production, independent judge)
@@ -26,6 +26,7 @@ Updated 2026-11-25 15:45Z.
 | dec1125 (other session) | a46ae60 | 10 | routes only: about 3/10 credible | — |
 | dev4 | 74691c7 | 12 | created 15:37Z, read pending | — |
 | dec1125b (other session) | 74691c7 | 10 | created, read pending | — |
+| dev6 | 07e901e → 442a657 (read 05:16Z) | 12 | **0/12**: 6 'no candidate' (best combination prices an unpriced constructed arrangement, same arrangement ids reused across unrelated goals), 6 QUANT critical (readings of $18M–$30M toward $1.5K–$2K goals, e.g. 'fractional aircraft ownership' for a $0 pickup-truck owner) — RC13, owned by the other session | 6 |
 
 ## How a fresh goal is run
 
@@ -50,14 +51,21 @@ never shown to development workers; an independent judge (no code access) grades
 3. mid-course changes not yet exercised (d08, d12)
 4. a stated licence or trade is not yet forced into at least one route (added only if dev4 shows the miss)
 
+## Queue repairs (2026-11-26)
+
+- #1332: a cancelled goal's queued research drops to base priority 6 (reinstatement restores it).
+- #1337: the yield runs as id lists and chunked primary-key updates; a 12-goal `retire` took >90 min before, 64–229 s after on production. dev1–dev5 yielded 504 items.
+- Binding research constraint remains keyed search: `fragmentSearchRoom` is 2 Brain-wide while DuckDuckGo refuses, and Firecrawl's 15-credit daily ceiling is spent in the first hour of each UTC day.
+
 ## Workers
 
 | worker | task | state |
 |---|---|---|
-| integration owner (this session) | releases, eval rounds, merges between deploys | dev4 read at about 16:25Z |
+| integration owner (this session) | releases, eval rounds, merges between deploys | dev6 re-read one hour after a8c4699 is live |
 | independent judge agents | grade routes and plans without code access | next: dev4 |
-| other session (5NBN) | its own decisive-10 run on 74691c7 (dec1125b) | reads routes at about 16:30Z |
+| other session (5NBN) | dec1125 series, research-starvation diagnosis | retiring dec1125/b/c, retracing dec1125d |
+| planning-failure-map session | RC13–RC15 repairs (W1i, W1j in a8c4699) | live with a8c4699 |
 
 ## Time
 
-Measured: the mission started 2026-11-25 at about 00:15Z, so 15.5 h have been used. Estimate to verified completion: not yet defensible; it needs the first graded round with research complete.
+Measured: the mission started 2026-11-25 at about 00:15Z, so about 30 h have been used. Estimate to verified completion: not yet defensible; it needs the first graded round with research complete.

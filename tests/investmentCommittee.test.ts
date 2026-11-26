@@ -137,6 +137,29 @@ describe('each role on its own', () => {
     expect(reviewRole('QUANT', input([leg()])).verdict).toBe('PASS');
   });
 
+  it('C58: QUANT rebuilds one deal, not the proven volume, from a leg whose repeats all come from one payer (§116)', () => {
+    // A hospital system's purchase history proves 12 orders a year, but every one is the same payer: a second deal is not evidenced.
+    const meridian = leg({
+      id: 'cop_meridian',
+      path: {
+        title: 'Staff allergen-awareness handouts for Meridian Regional Health System',
+        buyer: fact('Meridian Regional Health System'),
+        revenuePerDeal: fact(450, 'PROVEN', 'Meridian paid $450 for the last handout pack (invoice on file)'),
+        fulfilmentCost: fact(50),
+        volume: fact(12, 'PROVEN', "12 orders in the last 12 months on Meridian's own purchase history"),
+        gaps: ['ONE_PAYER_REPEATS'],
+        contribution: { p10: 400, p50: 2_400, p90: 4_800 },
+      },
+      demand: { deals: { p10: 1, p50: 6, p90: 12 }, price: { p10: 450, p50: 450, p90: 450 } },
+    });
+    const rebuilt = evidencedReach([meridian]);
+    expect(rebuilt.byLeg).toEqual([{ opportunityId: 'cop_meridian', deals: 1, net: 400, amount: 400 }]);
+    const q = reviewRole('QUANT', input([meridian], { reach: 0.62, presentedHigh: 4_800, settledP50: 2_400 }, { remaining: 4_000 }));
+    expect(q.verdict).toBe('FAIL');
+    expect(q.defects[0]).toMatchObject({ fact: 'reach', critical: true });
+    expect(q.defects[0]!.why).toMatch(/at most \$400/);
+  });
+
   it('OWNER_PROXY fails speculation dressed as repeatable business (critical), routine owner delivery, and a goal the evidence does not reach', () => {
     const o = reviewRole('OWNER_PROXY', audited);
     expect(o.defects.find((d) => d.opportunityId === 'cop_github')).toMatchObject({ fact: 'mechanism', critical: true });

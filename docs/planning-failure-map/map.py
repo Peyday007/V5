@@ -46,7 +46,7 @@ ROOT_CAUSES = {
    wrong='Fragments are not executed, 69% of searches are refused, no keyed search provider is configured, Firecrawl is held to 15 credits/day, and the read-capable routine workers are not members of evaluation projects.',
    owner='research coordinator/queue; server/services/sources/*; owner items (keyed search key)',
    proof='A fresh goal\'s research completes its planned fragments and its plan reads >=20 relevant verified facts within the goal window.',
-   evidence='RESEARCH-STARVATION-DIAGNOSIS: 1/16 fragments completed; 30Q traces: 0/1/0 completions after ~6 h; searches 785/1142 refused.'),
+   evidence='RESEARCH-STARVATION-DIAGNOSIS: 1/16 fragments completed; 30Q traces: 0/1/0 completions after ~6 h; searches 785/1142 refused. Operator capacity 06:20-07:00Z (RC6 owner session_01QF5Tk5NBNTchKMwPJPQFEc): about 20 research fragments SUCCEEDED per hour Brain-wide; the GPU lane is held below its slot target (inFlight 3 of 8) by "database connections contended"; each restart holds the free lane at START_TARGET=2 for 10 min and resumes at half the saved target (16 restarts/24h, about 160 min/day); fragmentSearchRoom is 2 Brain-wide once Firecrawl hits its ceiling (34 CEILING vs 7 ANSWERED/24h; DDG 817 refused vs 416 answered). The free-lane database-saturation brake fired 253 times/24h while checkouts waited 0 ms p95, a false brake, corrected by #1342 (queue session). Projection: 30 goals x about 6 fragments = about 9 h for a first round.'),
  'RC7': dict(name='No shared per-goal working state', kind='coordination',
    wrong='Each faculty writes its conclusions to its own store; the next faculty re-derives or never reads them (rethink and calibration lessons, owner profile, committee questions, plan verdict and binding factor are not inputs to the route ask).',
    owner='goal plan reading + routeContext',
@@ -457,6 +457,176 @@ setq('C04','X','FAIL','fm1126a f01: the plan reading is built from constructed a
 REPAIRS += [
  dict(id='W1i', rc='RC15', what='Objective reader: monthly figure with a start month (deadline end of that month), "more than" spending limits, bare spans ("about two weeks"), "N hours a week at most" read as a rate, "zero time"/"not going to do any of the work" as zero hours, "don\'t want to put any money in"/"nothing, no savings" as no capital.', owner='intent.ts', depends='', state='MERGED_PENDING_PRODUCTION', evidence='tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally'),
  dict(id='W1j', rc='RC1', what='chatFor streams every turn without tools, so reasoning past the 100 s proxy idle cut still answers.', owner='cheap/modelBench.ts', depends='', state='MERGED_PENDING_PRODUCTION', evidence='tests/chatStreaming.test.ts; model exam pass 2'),
- dict(id='W3a', rc='RC13', what='The owner\'s plan must not be built from constructed arrangements that read nothing of the owner: route the owner\'s words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.', owner='cash/construct.ts; goals/plan.ts', depends='', state='OPEN', evidence=''),
+ dict(id='W3a', rc='RC13', what='The owner\'s plan must not be built from constructed arrangements that read nothing of the owner: route the owner\'s words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.', owner='cash/construct.ts; goals/plan.ts (integration owner session_01QF5Tk7etm6MGmaFuHMd6eZ)', depends='', state='MERGED_PENDING_PRODUCTION', evidence='PR #1345 (8a2c568): a constructed design reaches a goal plan only if its precedent is one of that goal\'s own route openings; tests/ownerRoutesLeadConstruction.test.ts. Motivating production read: dev6 0/12 usable on a8c4699 (6 QUANT critical on generic arrangements, 6 no-candidate).'),
  dict(id='W3b', rc='RC14', what='A route and critique model that passes the commercial-planning exam: BRAIN_ROUTE_MODEL with an Anthropic key (owner), or the owner lifting the §84 reservation so Claude routines may plan goals.', owner='owner decision; routeProposal strongRouteModels', depends='owner', state='BLOCKED_MISSING_AUTHORITY', evidence='model exam'),
 ]
+
+# ---- UNKNOWN questions answered from evidence already held (no test repeated) ----
+_E = {
+ 'C01-F': ('PASS', 'fm1126a create log: unread phrases are named and the goal is refused rather than guessed ("nothing was created. Unread: …").'),
+ 'C13-R': ('PASS', 'p06 trace: searches answered (6) reached the free-lane worker and pages were read (3).'),
+ 'C13-I': ('FAIL', 'stall 2026-11-26: every queued research fragment sits at priority 9 (eval) or 8/6 by purpose, never by the decision its answer changes; 1,167 waiting.'),
+ 'C14-I': ('FAIL', 'stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value.'),
+ 'C15-R': ('PASS', 'p06 trace: pages read → 3 claims extracted.'),
+ 'C16-R': ('PASS', 'p06 trace: accepted claims appear in findings_now and were shown to a route ask (findingsShown 1).'),
+ 'C16-X': ('PASS', 'stall rejections: extraction then verification ("source does not directly support" 12 rejected).'),
+ 'C17-I': ('PASS', 'groundsOf cites only shown findings of a fitting lane (tests); production gate rejects unsupported claims before they become findings.'),
+ 'C20-R': ('PASS', 'Integration diagnosis: 80 buyers linked to Census counts reach arrangement buyer counts.'),
+ 'C20-I': ('FAIL', 'Integration diagnosis: a wrong link reads "buyers established … the next research round asks for conversion".'),
+ 'C20-X': ('FAIL', 'Integration diagnosis: the knowledge library feeds arrangements only; route asks never read it.'),
+ 'C22-X': ('FAIL', 'Integration diagnosis §4.1: no shared per-goal working state.'),
+ 'C24-R': ('PASS', '30Q probes: every parsed route was critiqued (critique records per route).'),
+ 'C24-F': ('PASS', '30Q p06 R1all: Upwork route contradicted by payout-hold facts dropped by the critic, correctly (grader).'),
+ 'C26-R': ('NEEDS RECHECK', '30Q all-findings arm: payout facts shown; under the old 40 cap they were cut. Cap raised (W1e); production recheck pending.'),
+ 'C26-F': ('NEEDS RECHECK', 'W1b: a disputed timing is a repair the code re-checks (tests); production pending.'),
+ 'C28-R': ('NEEDS RECHECK', 'As C26-R, for fulfiller facts.'),
+ 'C29-R': ('PASS', '30Q: the critic cited A.R.S. 32-101 survey law from the findings.'),
+ 'C30-R': ('PASS', 'Route events record rejectedByRule; probe parsed.rejected lists rule and reason.'),
+ 'C32-P': ('NEEDS RECHECK', 'Code: critiqueAndRevise asks replacements when fewer than ROUTES_MIN_SURVIVING survive; not exercised by the eval probe, production effect unmeasured.'),
+ 'C32-R': ('NEEDS RECHECK', 'Code: replacements are parsed and ranked after kept routes, not critiqued again.'),
+ 'C32-F': ('PASS', 'Code + event detail: replacement failures are named in critique.reason.'),
+ 'C33-R': ('FAIL', 'Integration diagnosis: four different "best" strategies in one production reading.'),
+ 'C33-I': ('FAIL', 'Same: the chosen route does not decide the plan reading (fm1126a f01 plan built from constructed arrangements).'),
+ 'C33-F': ('PASS', 'fm1126a f01 read: "NOT ACCEPTED: no candidate plan yet" — says so.'),
+ 'C33-X': ('FAIL', 'RC11/RC13: generators are not arbitrated.'),
+ 'C35-R': ('PASS', 'fm1126a f01 read: report lines and acceptance sentence shown.'),
+ 'C36-R': ('PASS', 'fm1126a f01 read: steps reach the owner view (their content fails C36-P).'),
+ 'C37-I': ('NEEDS RECHECK', 'W1h: rethinks of earlier asks are now read (code); production effect pending.'),
+ 'C38-R': ('NEEDS RECHECK', 'planningEval update writes the owner\'s change into target resources read by routeContext (code); not exercised.'),
+ 'C01-I': ('NEEDS RECHECK', 'Same path as C38-R; not exercised on production.'),
+ 'C04-F': ('UNKNOWN', ''),
+ 'C39-R': ('PASS', 'Route events record why an ask failed (NO_ANSWER reasons in trace route_asks).'),
+ 'C40-R': ('FAIL', 'Integration diagnosis: 4 of 6 live goals "[NOBODY] Brain judges each idea on its next pass".'),
+ 'C41-R': ('FAIL', 'Code: operationsReport.ts:327 judges model adequacy by tool-call success; no route-outcome measure changes routing.'),
+ 'C41-F': ('FAIL', 'Code: the fallback (1/30 on the model exam) is never benched; challengerModels order is fixed.'),
+ 'C42-P': ('FAIL', 'fm1126a f01: chosen null; steps are research on generic arrangements.'),
+ 'C42-R': ('PASS', 'fm1126a f01: the reading reaches the owner surface (read output).'),
+ 'C25-I': ('NEEDS RECHECK', 'W1c: economics line + ACQUISITION refusal (tests); production pending.'),
+ 'C09-I': ('NEEDS RECHECK', 'Rejections and critique drops are fed to the next ask (code); multi-ask effect unmeasured.'),
+ 'C23-X': ('NEEDS RECHECK', 'Capacity 2026-11-26: GPU 8/16 slots with "errors acceptable"; route-ask behaviour under that load unmeasured.'),
+}
+for qid,(st,ev) in _E.items():
+    cid,dim=qid.split('-')
+    for c in CAPS:
+        if c[0]==cid:
+            c[4][dim]['status']=st; c[4][dim]['evidence']=ev
+            if qid in ('C13-I','C14-I'): c[4][dim]['rc']='RC6'
+            if qid in ('C20-I','C20-X'): c[4][dim]['rc']='RC10'
+            if qid in ('C22-X','C40-R'): c[4][dim]['rc']='RC7'
+            if qid in ('C33-R','C33-I','C33-X'): c[4][dim]['rc']='RC11,RC13'
+            if qid in ('C41-R','C41-F'): c[4][dim]['rc']='RC1,RC14'
+            if qid=='C42-P': c[4][dim]['rc']='RC13'
+
+# ---- fm1126b (2026-11-26 06:24Z, frozen revision a8c46995): intake ----
+for c in CAPS:
+    if c[0]=='C01':
+        c[4]['P']['status']='PASS'
+        c[4]['P']['evidence']='fm1126b on a8c46995: 30 of 30 fresh goals read and created (fm1126a on the earlier reader: 26, with 3+ misread). Amount, window, capital and hours match a human reading on all 30 (local read of the batch).'
+PROGRESS.append(dict(at='2026-11-26 06:24Z', measure='fm1126b: 30 fresh goals created on frozen revision a8c46995; plans to be read and graded blind after research runs', usable='pending', note='create log in scratchpad; read and grade to follow'))
+
+# ==== Phase 4: independent reviews (2026-11-26 ~06:40Z), applied ====
+import json as _json, os as _os
+_D=_os.path.dirname(_os.path.abspath(__file__))
+REVIEWS = {k:_json.load(open(_os.path.join(_D,f'review_{k}.json'))) for k in ('coverage','validity','causes')}
+
+# Reviewer 1: every uncovered component becomes a capability examined on all five dimensions.
+for i,g in enumerate(REVIEWS['coverage']['gaps']):
+    cid=f'C{43+i}'
+    comp=g['code']
+    CAPS.append((cid,'Reviewer-1 coverage',g['capability'],g['why'],dict(
+        P=d(g['question'],'Correct as stated; failure observable as: '+g['observable'],U,'',comp),
+        R=d(f'Does what {g["capability"]} decides reach the components downstream of {comp.split(":")[0]}?','Its result is read where the plan is decided.',U,'',comp),
+        I=d(f'Does a change in {g["capability"]}\'s result change the plan reading?','The owner\'s plan changes when it does.',U,'',comp),
+        F=d(f'When {g["capability"]} fails (throws, returns nothing, or returns a wrong answer), is it detected and recovered?','The failure is recorded and the plan does not silently rest on it.',U,'',comp),
+        X=d(f'Does {g["capability"]} still work combined with the route proposer, research and acceptance on a fresh goal?','The combined plan is consistent with it.',U,'',comp),
+    )))
+
+# Reviewer 2: status disputes the evidence supports, applied as stated.
+def _set(qid, st, why):
+    cid,dim=qid.split('-')
+    for c in CAPS:
+        if c[0]==cid and dim in c[4]:
+            c[4][dim]['status']=st; c[4][dim]['evidence']=(c[4][dim]['evidence']+' | REVIEW 2: '+why).strip(' |'); return
+for qid in ['C17-P','C18-I','C20-R']: _set(qid,'FAIL','test-validity review: the evidence cited contradicts PASS.')
+for qid in ['C02-M','C10-P','C15-I','C16-F','C17-X','C34-P','C37-P','C02-I','C13-R','C14-R','C24-F','C28-I','C29-I','C35-R','C36-R']:
+    _set(qid,'RECHECK','test-validity review: rests on one example, a field existing, or a contract — not a demonstration.')
+for qid in ['C21-P','C21-X','C19-I','C23-F','C25-R','C25-F','C31-F','C31-R','C09-F','C30-F','C03-P','C03-I','C05-I','C05-F','C08-I','C37-R']:
+    _set(qid,'RECHECK','test-validity review: the evidence describes code since changed; the repaired behaviour must be re-demonstrated on production.')
+_set('C23-M','FAIL','root-cause challenge + validity review: empty replies arrive in 47–85 s (< the 100 s cut) — they are the token budget, not the proxy; the proxy explains the 524s only.')
+_set('C01-P','RECHECK','validity review: f07 and f24 were misread on fm1126b; repaired W2c and checked against blind expected readings of all 30 (tests/objectiveFreshBatchBlind.test.ts, 30/30) — production re-demonstration pending.')
+_set('C01-F','RECHECK','validity review: the earlier evidence came from the old reader.')
+
+# Reviewer 3: the root-cause map restructured on the evidence.
+ROOT_CAUSES['RC1']['wrong'] = 'A model turn is not checked before it counts. Two distinct mechanisms: (a) HTTP 524 after ~125 s — the GPU pod proxy closes a non-streamed connection idle for 100 s (exam pass 2: streaming served every one); (b) content "" with no error in 47–85 s — the output budget (2,500–4,000 tokens) is spent on hidden reasoning (RC16). An empty reply was never treated as a failed turn.'
+ROOT_CAUSES['RC2']['kind'] = 'SYMPTOM of RC17 (and RC14)'
+ROOT_CAUSES['RC2']['evidence'] += ' | REVIEW 3: most cited misreadings were written by the fallback (laguna, 1/30) critiquing its own routes after one primary failure; the code-level veto weakness is real but secondary.'
+ROOT_CAUSES['RC8']['kind'] = 'SYMPTOM of RC17/RC14 (code check is the safeguard)'
+ROOT_CAUSES['RC8']['evidence'] += ' | REVIEW 3: every concrete instance came from the fallback model.'
+ROOT_CAUSES['RC5']['kind'] = 'SYMPTOM of RC3'
+ROOT_CAUSES['RC5']['evidence'] += ' | REVIEW 3: the anchoring questions were written under a LIMITS block carrying the standing online-only rule.'
+ROOT_CAUSES['RC11']['kind'] = 'SYMPTOM of RC7 (no shared goal record)'
+ROOT_CAUSES['RC12']['kind'] = 'CONTRADICTED as a cause of unusable plans (graders judged content, not acceptance state); kept as a readiness-signal defect'
+ROOT_CAUSES['RC3']['wrong'] += ' REVIEW 3 + fresh batch: the lift reached none of the prompts actually sent — every final 30Q prompt, the strong control\'s included, carried "run entirely online" for owners offering work; the phrase reader missed 14 of 30 fresh owners who stated hours.'
+ROOT_CAUSES['RC16'] = dict(name='Output budgets too small for a reasoning model', kind='software+model',
+   wrong='Route, critique and direction asks gave gpt-oss-120b 2,500–4,000 max_tokens; hidden reasoning consumed them and the reply arrived empty or cut mid-JSON.',
+   owner='routeProposal.ts (ROUTE_TOKENS)', proof='Production route asks show no empty or truncated primary replies; exam at 16,000 had 0/47 empty.',
+   evidence='Root-cause challenge: empty replies in 47–85 s with error:null (planner/final_*.txt, probe1_*.txt); question replies cut mid-JSON (questions/*.raw.txt).')
+ROOT_CAUSES['RC17'] = dict(name='Model fall-through has no competence floor; the proposer critiques itself', kind='coordination+model',
+   wrong='After one primary failure the fallback combo (laguna-xs-2.1: 1/30, 0/11 planning, 19 critical errors) both proposed and critiqued; the critic order puts the proposing model first, so the check is not independent.',
+   owner='routeProposal.ts operatorChats / critiqueAndRevise', proof='No route ask is answered or critiqued by a model below the planning bar; production route events show the fallback never serves.',
+   evidence='Root-cause challenge: 6 of 12 probes and 2 of 3 question sets served by the fallback; routeProposal.ts "The model that proposed critiques first".')
+ROOT_CAUSES['RC18'] = dict(name='The evaluation was underpowered and its grading standard drifted', kind='measurement',
+   wrong='Three goals, one sample per arm, one grader per goal whose bar moved between days; the rubric had no cause categories separating model, research capacity, timing and code.',
+   owner='evaluation (planningEval, grading rubric)', proof='30 fresh goals on one frozen revision, graded blind with a fixed rubric that records a cause category per failure.',
+   evidence='30Q report: "Today\'s grader was stricter"; validity review on GRADING.md / GRADING-E2E.md.')
+for qid,rc in [('C23-R','RC16'),('C41-F','RC17,RC14'),('C31-P','RC17,RC2'),('C25-P','RC17,RC8'),('C11-P','RC3,RC5')]:
+    cid,dim=qid.split('-')
+    for c in CAPS:
+        if c[0]==cid and dim in c[4]: c[4][dim]['rc']=rc
+REPAIRS += [
+ dict(id='W2a', rc='RC17', what='Route asks, critiques and direction asks never use a model measured unfit (ROUTE_UNFIT_MODEL_LABELS: the fallback combo); with no fit model left the ask records NO_ANSWER and retries on the failure interval.', owner='routeProposal.ts operatorChats; planningEval probe parity', depends='', state='BRANCH_PENDING_DEPLOY', evidence='tests/planningFailureMapWave2.test.ts; sensitivity C41-F'),
+ dict(id='W2b', rc='RC16', what='Output budgets 14,000 / 12,000 / 10,000 (route / direction / critique); attempt bound 300 s, ask budget 720 s.', owner='routeProposal.ts ROUTE_TOKENS', depends='W1j streaming', state='BRANCH_PENDING_DEPLOY', evidence='sensitivity C23-R'),
+ dict(id='W2c', rc='RC3', what='An owner who gives the goal hours has offered their work (ownerLabourWithHours), in route asks and discovery; "I can work all day / full time" read as an offer.', owner='domain/operatingModel.ts; routeProposal routeContext; discovery', depends='', state='BRANCH_PENDING_DEPLOY', evidence='sensitivity C03-P; blind fixture 30/30'),
+ dict(id='W2d', rc='RC15', what='Reader: negated "spend more than" only (own regression removed); a floor ("more than $600") never a ceiling; a named break is the window; a job\'s hours are not time given, the extra hours are.', owner='intent.ts', depends='', state='BRANCH_PENDING_DEPLOY', evidence='tests/objectiveFreshBatchBlind.test.ts (blind readings, 30/30); sensitivity C01-*'),
+ dict(id='W2e', rc='RC1', what='A stream that ends without a finish reason or [DONE] is an error, not an answer.', owner='modelBench.ts readStream', depends='', state='BRANCH_PENDING_DEPLOY', evidence='sensitivity C23-I'),
+ dict(id='W2f', rc='RC2', what='A route kept against the critic ranks after every route the critic kept (the earlier fixture hid that it did not).', owner='routeProposal.ts applyCritique', depends='', state='BRANCH_PENDING_DEPLOY', evidence='sensitivity C31-X'),
+ dict(id='W2g', rc='RC8', what='Capital plus the first buyer\'s cost must fit the limit; the critic is told when the target needs reinvested proceeds; the critique prompt is tested to carry the computed line.', owner='routeProposal.ts parseRoutes/economicsLine', depends='', state='BRANCH_PENDING_DEPLOY', evidence='sensitivity C25-X, C25-R'),
+ dict(id='W2h', rc='RC18', what='Fresh 30-goal evaluation on one frozen revision; blind graders with a fixed rubric recording a cause category per failure.', owner='planningEval; GRADING-E2E', depends='', state='IN_PROGRESS', evidence='fm1126b created 06:24Z on a8c46995'),
+]
+
+# ==== fm1126b production observations (07:10–08:10Z) and RC19 ====
+ROOT_CAUSES['RC19'] = dict(name="A goal's research never starts: its ideas are not judged within the goal's window", kind='coordination+software',
+   wrong="The tick's judge pass judged at most 5 goal ideas a tick under database pressure, ticks run many minutes when dozens of goal plans are read in sequence (30–40 s each), and the goal-idea queue held ideas of cancelled and paused goals (matched by how they were made, never by whether their goal still runs) ahead of live goals'. 30 fresh goals produced 605 ideas; none was judged in 1.5 h, so no mission, fragment or claim existed and every plan stayed on generic constructed estimates.",
+   owner='russell/loop.ts judge-unjudged pass; goals/goalWork.ts goalIdeaSql',
+   proof="On a fresh batch, each live goal's first ideas are judged within one tick and its first research fragments are queued within the hour.",
+   evidence="planningEval judging (08:00Z): run ideas 605 CAPTURED unjudged, head of the goal queue created 05:56–06:08Z by the retired fm1126a and paused goals, updated_at = created_at; judge-one: one judgment 1.75 s; judge-pass: the pass body judged 18 in 20 s — so the pass works and is starved by budget and queue, not broken.")
+setq('C14','P','FAIL','fm1126b: 0 research fragments, 0 work items, 0 claims for 30 fresh goals 1.5 h after creation (stall, items, judging probes).','RC19')
+setq('C14','I','FAIL','The goal-idea queue is not ordered by live goal or decision value: cancelled and paused goals\' ideas head it (judging probe 08:00Z).','RC19')
+setq('C10','R','FAIL','fm1126b f01: 4 owner-fit directions filed with decisive unknowns; their 4 validation dives sat CAPTURED, unjudged, so the unknowns never became research.','RC19')
+setq('C07','P','RECHECK','fm1126b f01 (production, revision a8c46995 with wave 1): the scout named 4 directions fitting the owner (gig grocery delivery, local business delivery partner, holiday decoration transport, weekend junk haul) where fm1126a\'s plan had led with fractional aircraft ownership. One goal; the batch read will decide.','RC5,RC3')
+setq('C42','P','FAIL','fm1126b f01: the plan the owner is handed is still the constructed estimates ("No found opening is far enough along to model"), because the owner-fit directions have no research yet (RC19) and constructed arrangements read nothing of the owner (RC13).','RC19,RC13')
+REPAIRS.append(dict(id='W2i', rc='RC19', what="Goal ideas are goal work only while their goal is live (goalIdeaSql: LIVE_GOAL_PROJECT_IDS_SQL); the judge pass judges up to 40 goal ideas a tick until a 45 s budget, halved under pressure instead of falling to 5.", owner='goals/goalWork.ts; russell/loop.ts', depends='', state='BRANCH_PENDING_DEPLOY', evidence='tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I'))
+PROGRESS.append(dict(at='2026-11-26 08:10Z', measure='fm1126b mid-run: research never started on any of 30 goals (RC19); the batch measures RC19, not planning. Acceptance restarts on a new frozen revision after wave 2 deploys.', usable='n/a', note='judging, judge-one and judge-pass probes'))
+
+# ---- wave 2 merged (PR #1346, dcc34fed), deploy 45783978454 ----
+for r in REPAIRS:
+    if r['state']=='BRANCH_PENDING_DEPLOY': r['state']='MERGED_PENDING_PRODUCTION'; r['evidence']+=' | PR #1346'
+    if r['state']=='MERGED_PENDING_PRODUCTION' and r['id'].startswith('W1'): r['evidence']+=' | PRs #1339/#1341 deployed; production verification pending the next batch'
+
+# --- 2026-11-26 09:26-09:55Z: fm1126b read on dcc34fe (wave 2 live) ---
+next(r for r in REPAIRS if r['id']=='W2i').update(state='DEPLOYED_PARTIAL', evidence='Deploy 45788180566 (dcc34fe) success. Judging on production: fm1126b 143 ideas judged WORTH_DOING with compiled missions by 09:40Z (was 0 at 08:00Z); 944 still unjudged behind other live eval goals. Judging works; launch does not (RC20).')
+PROGRESS.append(dict(at='2026-11-26 09:30Z', measure='fm1126b read on dcc34fe: 30/30 NO_CANDIDATE. Every goal holds 1-4 owner-fit openings (89 total, e.g. Tulsa truck: junk haul, delivery partner, holiday setup), all unpriced; 0 missions, 0 fragments, 0 claims for the run.', usable='0/30', note='read_fm1126b_0926, stall, judging and launching probes; the blocker is launch, not planning (RC20)'))
+ROOT_CAUSES['RC20'] = dict(name="A live goal's judged ideas never launch: the launch window ranks paused and ended goals' price questions and rounds as goal work", kind='coordination+software',
+   wrong="goalPriceSql and goalRoundSql (goals/goalWork.ts) named ideas as goal work by how they were made, never by whether their goal still runs, so in nextLaunchable's order (fits, goal tier, per-project turn, tier) paused and ended goals' price questions (tier 0) and rounds (tier 1) stood ahead of a live goal's dives and ideas (tiers 2-3). A tick fills 5-30 launches inside a 30 s budget and ticks run ~17 min, so the head was refilled from other projects every tick. The packet runner's plan-read boost used the same ungated predicate.",
+   owner='goals/goalWork.ts goalPriceSql, goalRoundSql (read by russell/loop.ts nextLaunchable and research/packetRunner.ts servesGoalPlanRead)',
+   proof="On a fresh batch, each live goal's judged ideas launch missions within a tick or two of being judged, and its first fragments run within the hour.",
+   evidence="planningEval launching (09:45-09:55Z, dcc34fe): run 143 judged ideas, all with missionSpec, 30 grants at 6 free slots each, run ideas first at launch-window position 33, 0 run missions in 3 h; Brain-wide 31-86 missions an hour across 22-41 projects; 152 projects with 2483 launchable ideas. Isolated: tests/goalIdeasEachProjectsTurn 'launches a live goal's judged idea before a paused goal's judged price questions' fails on the unfixed predicate (paused price question first) and passes with the gate.")
+setq('C14','R','FAIL',"fm1126b on dcc34fe: ideas judged, missions 0 — the launch window ranked paused and ended goals' price questions and rounds as goal work (launching probe 09:45Z).",'RC20')
+REPAIRS.append(dict(id='W2j', rc='RC20', what="Every goal tier is a live goal's work: goalPriceSql and goalRoundSql are gated on liveGoalProjectSql (LIVE_GOAL_PROJECT_IDS_SQL), as goalIdeaSql and goalDiveSql already were; goalRoundsAwaitingLaunch keeps its reading.", owner='goals/goalWork.ts', depends='W2i', state='BRANCH_PENDING_DEPLOY', evidence="tests/goalIdeasEachProjectsTurn.test.ts known-bad fails without the gate, passes with it; test:impacted 117 passed; launch-window and price-priority suites 264 passed"))
+PROGRESS.append(dict(at='2026-11-26 09:59Z', measure="dev6 (12 goals, integration owner's read) on dcc34fe vs 442a657: still 0/12. 10/12 moved from QUANT-critical or no-candidate on generic constructed arrangements (RC13, #1345 effective: no $18M-$30M readings) to 'no live opportunity far enough along to model' (unpriced openings); d06 and d07 now lead with found openings. Research 7-10 RESEARCHING packets per goal, before RC20.", usable='0/12', note='reported by session_01QF5Tk7etm6MGmaFuHMd6eZ; next read about 60 min after 2f91d08 is live'))
+next(r for r in REPAIRS if r['id']=='W3a').update(state='DEPLOYED_EFFECTIVE_PARTIAL', evidence=next(r for r in REPAIRS if r['id']=='W3a')['evidence']+' Production dev6 09:59Z on dcc34fe: the generic constructed readings are gone in 10/12 cases; plans now wait on pricing the owner-fit openings (RC20/RC6).')
+setq('C02','F','FAIL',"Controlled proof run (2026-11-26, C01-C42 agent): the owner-profile reader drops only fields its own reply marks 'not stated'/'none'/'n/a'; it never compares the profile with the owner's words, so a skill or asset the model invents is kept and reaches the route ask. The map's expected behaviour (a profile contradicting the owner's words is corrected) is not implemented.",'RC17')
+next(r for r in REPAIRS if r['id']=='W2j').update(state='DEPLOYED_VERIFIED', evidence="Deploy 45807923254 (baa7192) success. planningEval launching 11:3xZ on baa7192: run ideas first in the launch window at position 0 (was 33), 168 fitting the run's free slots, 12 fm1126b missions RUNNING (was 0 for 3 h). Two releases before it were refused only by pre-existing test timeouts (routeCritique 31.8 s, calebDurability 34.2 s), now bounded by their measured time.")
+setq('C14','R','PASS',"fm1126b on baa7192 (RC20 live): judged ideas launch — first in the window, 12 missions RUNNING within minutes of release (launching probe).",'RC20')
+PROGRESS.append(dict(at='2026-11-26 11:35Z', measure='RC20 verified on production: fm1126b research launches (12 missions RUNNING). Plans still unpriced; first research results expected over the next hours at about 20 fragments/h Brain-wide.', usable='0/30 (research in progress)', note='launching probe on baa7192'))
+REPAIRS.append(dict(id='W2k', rc='RC17', what="The owner profile holds only skills and assets the owner's own words support (ownerProfileOf with the words; groundedInWords), so a skill or asset the model invents never reaches the route ask, the critic or discovery.", owner='goals/routeProposal.ts', depends='', state='BRANCH_PENDING_DEPLOY', evidence="tests/planningFailureMapWave2 'C02-F: the owner profile holds only what the owner said' fails without the grounding, passes with it; test:impacted 200 passed"))

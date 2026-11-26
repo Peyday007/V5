@@ -1,0 +1,263 @@
+{
+ "a_labourEquipment_p02": {
+  "labour": {
+   "offered": true,
+   "evidence": "I can fly about 20 hours a week"
+  },
+  "routePrompt": {
+   "operatingLine": "- For this goal the owner offered their own work (\"I can fly about 20 hours a week\"), so the standing rule that the owner does no physical work does not apply to it: routes the owner personally performs — in person, deliveries, shifts, gigs and services included — are allowed, inside their stated hours, using the skills and assets their words state or work that needs no particular skill, licence or equipment they did not state. Set performer OWNER and count every one of those hours. Work can also be done by an independent supplier or subcontractor that this operation coordinates, and AI and software should do as much of the remaining work as possible.",
+   "standingSentenceInLimits": false,
+   "standingMarkAnywhere": true,
+   "directMeans": "The owner offers their own work, so first consider how they are paid directly for work they can do now with what they have — tasks, shifts, gigs and local services buyers book and pay for through a platform or directly, settling inside the window — before any route that brokers or resells other people's work or sells a digital product; brokering earns only a margin and needs buyers first."
+  },
+  "critiquePrompt": {
+   "standingSentence": false,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": false,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": false,
+   "focusHead": "The owner offered their own work for this goal (\"I can fly about 20 hours a week\"), so look first for work buyers book and pay the owner for directly, in person",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": true
+  }
+ },
+ "a_labour_p06": {
+  "labour": {
+   "offered": true,
+   "evidence": "I can put in 15 hours"
+  },
+  "routePrompt": {
+   "operatingLine": "- For this goal the owner offered their own work (\"I can put in 15 hours\"), so the standing rule that the owner does no physical work does not apply to it: routes the owner personally performs — in person, deliveries, shifts, gigs and services included — are allowed, inside their stated hours, using the skills and assets their words state or work that needs no particular skill, licence or equipment they did not state. Set performer OWNER and count every one of those hours. Work can also be done by an independent supplier or subcontractor that this operation coordinates, and AI and software should do as much of the remaining work as possible.",
+   "standingSentenceInLimits": false,
+   "standingMarkAnywhere": true,
+   "directMeans": "The owner offers their own work, so first consider how they are paid directly for work they can do now with what they have — tasks, shifts, gigs and local services buyers book and pay for through a platform or directly, settling inside the window — before any route that brokers or resells other people's work or sells a digital product; brokering earns only a margin and needs buyers first."
+  },
+  "critiquePrompt": {
+   "standingSentence": false,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": false,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": false,
+   "focusHead": "The owner offered their own work for this goal (\"I can put in 15 hours\"), so look first for work buyers book and pay the owner for directly, in person included,",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": true
+  }
+ },
+ "b_nothing": {
+  "labour": {
+   "offered": false,
+   "refused": null
+  },
+  "routePrompt": {
+   "operatingLine": "- This operation is run entirely online, with AI and software doing as much of the work as possible: the owner does no physical work — no travel, no deliveries, no distributing anything, no meeting customers, no performing a service and no running a physical operation. Work that is physical is still in scope when an independent supplier or subcontractor performs it and this operation coordinates it remotely, as a broker, referrer or subcontracting coordinator. Look in every country and region: where the buyers are is a business choice made on demand, margin, fulfilment access, how fast money settles, competition and how much can be automated — never on where the owner lives.",
+   "standingSentenceInLimits": true,
+   "standingMarkAnywhere": true,
+   "directMeans": null
+  },
+  "critiquePrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": true,
+   "focusHead": "Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), a",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": false
+  }
+ },
+ "c_refusesPhysical": {
+  "labour": {
+   "offered": false,
+   "refused": "I won't do any physical work"
+  },
+  "routePrompt": {
+   "operatingLine": "- This operation is run entirely online, with AI and software doing as much of the work as possible: the owner does no physical work — no travel, no deliveries, no distributing anything, no meeting customers, no performing a service and no running a physical operation. Work that is physical is still in scope when an independent supplier or subcontractor performs it and this operation coordinates it remotely, as a broker, referrer or subcontracting coordinator. Look in every country and region: where the buyers are is a business choice made on demand, margin, fulfilment access, how fast money settles, competition and how much can be automated — never on where the owner lives.",
+   "standingSentenceInLimits": true,
+   "standingMarkAnywhere": true,
+   "directMeans": null
+  },
+  "critiquePrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": true,
+   "focusHead": "Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), a",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": false
+  }
+ },
+ "c_noHours_p10": {
+  "labour": {
+   "offered": false,
+   "refused": null
+  },
+  "routePrompt": {
+   "operatingLine": "- This operation is run entirely online, with AI and software doing as much of the work as possible: the owner does no physical work — no travel, no deliveries, no distributing anything, no meeting customers, no performing a service and no running a physical operation. Work that is physical is still in scope when an independent supplier or subcontractor performs it and this operation coordinates it remotely, as a broker, referrer or subcontracting coordinator. Look in every country and region: where the buyers are is a business choice made on demand, margin, fulfilment access, how fast money settles, competition and how much can be automated — never on where the owner lives.",
+   "standingSentenceInLimits": true,
+   "standingMarkAnywhere": true,
+   "directMeans": null
+  },
+  "critiquePrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": true,
+   "focusHead": "Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), a",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": false
+  }
+ },
+ "f_evenings": {
+  "labour": {
+   "offered": false,
+   "refused": null
+  },
+  "routePrompt": {
+   "operatingLine": "- This operation is run entirely online, with AI and software doing as much of the work as possible: the owner does no physical work — no travel, no deliveries, no distributing anything, no meeting customers, no performing a service and no running a physical operation. Work that is physical is still in scope when an independent supplier or subcontractor performs it and this operation coordinates it remotely, as a broker, referrer or subcontracting coordinator. Look in every country and region: where the buyers are is a business choice made on demand, margin, fulfilment access, how fast money settles, competition and how much can be automated — never on where the owner lives.",
+   "standingSentenceInLimits": true,
+   "standingMarkAnywhere": true,
+   "directMeans": null
+  },
+  "critiquePrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": true,
+   "focusHead": "Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), a",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": false
+  }
+ },
+ "f_pressureWasher": {
+  "labour": {
+   "offered": false,
+   "refused": null
+  },
+  "routePrompt": {
+   "operatingLine": "- This operation is run entirely online, with AI and software doing as much of the work as possible: the owner does no physical work — no travel, no deliveries, no distributing anything, no meeting customers, no performing a service and no running a physical operation. Work that is physical is still in scope when an independent supplier or subcontractor performs it and this operation coordinates it remotely, as a broker, referrer or subcontracting coordinator. Look in every country and region: where the buyers are is a business choice made on demand, margin, fulfilment access, how fast money settles, competition and how much can be automated — never on where the owner lives.",
+   "standingSentenceInLimits": true,
+   "standingMarkAnywhere": true,
+   "directMeans": null
+  },
+  "critiquePrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": true,
+   "focusHead": "Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), a",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": false
+  }
+ },
+ "f_licensedElectrician": {
+  "labour": {
+   "offered": true,
+   "evidence": "I'm a licensed electrician"
+  },
+  "routePrompt": {
+   "operatingLine": "- For this goal the owner offered their own work (\"I'm a licensed electrician\"), so the standing rule that the owner does no physical work does not apply to it: routes the owner personally performs — in person, deliveries, shifts, gigs and services included — are allowed, inside their stated hours, using the skills and assets their words state or work that needs no particular skill, licence or equipment they did not state. Set performer OWNER and count every one of those hours. Work can also be done by an independent supplier or subcontractor that this operation coordinates, and AI and software should do as much of the remaining work as possible.",
+   "standingSentenceInLimits": false,
+   "standingMarkAnywhere": true,
+   "directMeans": "The owner offers their own work, so first consider how they are paid directly for work they can do now with what they have — tasks, shifts, gigs and local services buyers book and pay for through a platform or directly, settling inside the window — before any route that brokers or resells other people's work or sells a digital product; brokering earns only a margin and needs buyers first."
+  },
+  "critiquePrompt": {
+   "standingSentence": false,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": false,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": false,
+   "focusHead": "The owner offered their own work for this goal (\"I'm a licensed electrician\"), so look first for work buyers book and pay the owner for directly, in person incl",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": true
+  }
+ },
+ "f_happyToDrive": {
+  "labour": {
+   "offered": false,
+   "refused": null
+  },
+  "routePrompt": {
+   "operatingLine": "- This operation is run entirely online, with AI and software doing as much of the work as possible: the owner does no physical work — no travel, no deliveries, no distributing anything, no meeting customers, no performing a service and no running a physical operation. Work that is physical is still in scope when an independent supplier or subcontractor performs it and this operation coordinates it remotely, as a broker, referrer or subcontracting coordinator. Look in every country and region: where the buyers are is a business choice made on demand, margin, fulfilment access, how fast money settles, competition and how much can be automated — never on where the owner lives.",
+   "standingSentenceInLimits": true,
+   "standingMarkAnywhere": true,
+   "directMeans": null
+  },
+  "critiquePrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "directionPrompt": {
+   "standingSentence": true,
+   "standingMarkAnywhere": true
+  },
+  "discovery": {
+   "focusIsOnlineOnly": true,
+   "focusHead": "Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), a",
+   "questionNoFrame_hasStandingSentence": true,
+   "questionWithFrame_hasStandingSentence": true,
+   "questionWithFrame_saysNoPhysicalPresence": true,
+   "questionWithFrame_excludesHourlyPositions": true,
+   "bothLiftAndStandingInSameQuestion": false
+  }
+ }
+}

@@ -1,0 +1,763 @@
+{
+ "note": "Lead crosswalk, Map C requirements -> existing 42 capabilities (docs/planning-failure-map). Judgement-based; subject to Gate A review. ~ = partial.",
+ "rows": [
+  {
+   "req": "Q-R001",
+   "title": "Structured objective specification",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C01"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R002",
+   "title": "Target-metric semantics",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C01"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R003",
+   "title": "Owner capability and asset profile",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C02"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R004",
+   "title": "Constraint provenance: owner constraint vs system policy",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C02",
+    "C03"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R005",
+   "title": "Ambiguity resolution with minimal owner involvement",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C01"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R006",
+   "title": "Objective feasibility pre-screen and honest infeasibility",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C09"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R007",
+   "title": "Jurisdiction and location determination",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C06"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R008",
+   "title": "One shared per-goal understanding",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C04"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R009",
+   "title": "Change propagation and staleness",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C38"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R010",
+   "title": "Goal isolation and scoped knowledge reuse",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R011",
+   "title": "Assumption register",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C34"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R012",
+   "title": "Durable, resumable reasoning state",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C40"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R013",
+   "title": "Economic environment model",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C06"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R014",
+   "title": "Calendar and time arithmetic",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C05"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R015",
+   "title": "Owner-advantage mapping",
+   "criticality": "MINOR",
+   "existing_caps": [
+    "C02"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R016",
+   "title": "Broad opportunity discovery without a fixed catalog",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C07"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R017",
+   "title": "Conservative, revisitable hard-constraint screening",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C09"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R018",
+   "title": "Generalization to unfamiliar objectives",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R019",
+   "title": "Genuinely different strategies",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C08"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R020",
+   "title": "Complete strategy specification",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C24",
+    "C36"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R021",
+   "title": "Backward decomposition from the target",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R022",
+   "title": "Completion of partial strategies",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R023",
+   "title": "Decisive-unknown identification",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C10"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R024",
+   "title": "Research bounded by decision value",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C12"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R025",
+   "title": "Answerable research questions",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C11"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R026",
+   "title": "Unknowns never resolved favourably by default",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R027",
+   "title": "Research queue execution",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C14"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R028",
+   "title": "Source capture with provenance",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C15",
+    "C16"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R029",
+   "title": "Faithful evidence extraction",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C16"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R030",
+   "title": "Evidence verification and quality grading",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C17"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R031",
+   "title": "Evidence conflict handling without overwrite",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C19"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R032",
+   "title": "Reuse of existing evidence before new research",
+   "criticality": "MINOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R033",
+   "title": "Adaptive search strategy",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C13"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R034",
+   "title": "Reconstruction of unpublished figures",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R035",
+   "title": "Buyer existence, reachability and willingness to pay",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C20",
+    "C27"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R036",
+   "title": "Supplier and seller analysis",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C28"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R037",
+   "title": "Competitor and alternative analysis",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R038",
+   "title": "Fulfilment analysis",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C28"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R039",
+   "title": "Acquisition channel access and performance",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C27"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R040",
+   "title": "Unit economics with all material costs",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C25"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R041",
+   "title": "Volume and funnel model to collected revenue",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C25"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R042",
+   "title": "Cash-flow timeline and peak capital requirement",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C25",
+    "C26"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R043",
+   "title": "Deterministic arithmetic verification",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C25",
+    "C30"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R044",
+   "title": "Uncertainty and probability of reaching target",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R045",
+   "title": "Provenance for every plan figure",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C16",
+    "C21"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R046",
+   "title": "Payment acceptance and settlement feasibility",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C26"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R047",
+   "title": "Critical-path timing feasibility",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C05"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R048",
+   "title": "Owner-involvement budget",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C01",
+    "C09"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R049",
+   "title": "Capability, licence and credential requirements",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C02"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R050",
+   "title": "Legal, regulatory and terms-of-service compliance",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C29"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R051",
+   "title": "System's own executional capacity",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R052",
+   "title": "Independent adversarial critique",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C31"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R053",
+   "title": "Internal contradiction detection",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C19",
+    "C34"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R054",
+   "title": "Unsupported-assumption detection",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C34"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R055",
+   "title": "Objective and constraint conformance check",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C09",
+    "C31"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R056",
+   "title": "Model-output validation",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C23"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R057",
+   "title": "Critic calibration",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R058",
+   "title": "Evidence-triggered revision",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C38"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R059",
+   "title": "Planned repair, not blind retry",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C39"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R060",
+   "title": "Convergence and termination",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C35"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R061",
+   "title": "Comparison on a common basis",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C33"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R062",
+   "title": "Single arbiter for competing proposals",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C33",
+    "C04"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R063",
+   "title": "Defensible selection rationale",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C33"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R064",
+   "title": "Model routing, escalation and independence",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C41"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R065",
+   "title": "Fallback strategy",
+   "criticality": "MINOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R066",
+   "title": "Executable step plan",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C36"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R067",
+   "title": "Named first action",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C36"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R068",
+   "title": "Checkpoints and kill criteria",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R069",
+   "title": "Money-commitment schedule",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R070",
+   "title": "Plan rendering from the structured model",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R071",
+   "title": "Deterministic usable-plan completeness validator",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R072",
+   "title": "Plan readiness separate from money-commitment approval",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C35"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R073",
+   "title": "Honest status and confidence disclosure",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C42"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R074",
+   "title": "Execution result capture",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R075",
+   "title": "Prediction-vs-outcome attribution",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R076",
+   "title": "Learning that changes later decisions",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C37"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R077",
+   "title": "Learning from reasoning failures without test-set overfit",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R078",
+   "title": "Safe execution of external effects",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R079",
+   "title": "Model provider failure resilience",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C39"
+   ],
+   "match": "COVERED_BY_CAPABILITY"
+  },
+  {
+   "req": "Q-R080",
+   "title": "Research infrastructure failure handling",
+   "criticality": "CRITICAL",
+   "existing_caps": [
+    "C13",
+    "C39"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R081",
+   "title": "Work queue and worker reliability",
+   "criticality": "MAJOR",
+   "existing_caps": [
+    "C40",
+    "C14"
+   ],
+   "match": "PARTIAL"
+  },
+  {
+   "req": "Q-R082",
+   "title": "Database integrity and recovery",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R083",
+   "title": "Per-goal compute and research budget",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R084",
+   "title": "End-to-end trace for diagnosis",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R085",
+   "title": "Frozen, identifiable revision and reproducibility",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R086",
+   "title": "Unfamiliar, feasible objective suite",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R087",
+   "title": "Independent grading against the usable-plan rubric",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R088",
+   "title": "Acceptance computation",
+   "criticality": "CRITICAL",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  },
+  {
+   "req": "Q-R089",
+   "title": "Failure classification to requirements",
+   "criticality": "MAJOR",
+   "existing_caps": [],
+   "match": "NO_EXISTING_CAPABILITY"
+  }
+ ]
+}

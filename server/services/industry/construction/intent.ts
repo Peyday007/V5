@@ -254,7 +254,7 @@ const SUFFIX_SRC = String.raw`(?:k|m|mm|bn|thousand|million|billion)\b`;
 const CODE_SRC = String.raw`(?:usd|eur|gbp|dollars?|euros?|pounds?|bucks)\b`;
 /** One figure with whatever marks it as money, for embedding in a phrase. */
 const MP = String.raw`(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s?${NUMBER_SRC}(?:\s?${SUFFIX_SRC})?(?:\s?${CODE_SRC})?`;
-const LIMIT = String.raw`(?:at most|no more than|not more than|more than|up to|under|less than|below|a maximum of|maximum of|max(?:imum)?|only|just|about|around|roughly|approximately|maybe|close to|nearly|almost)`;
+const LIMIT = String.raw`(?:at most|no more than|not more than|up to|under|less than|below|a maximum of|maximum of|max(?:imum)?|only|just|about|around|roughly|approximately|maybe|close to|nearly|almost)`;
 /** The verbs of "turn $1,000 into $10,000". */
 const GROW = String.raw`(?:turn|turning|grow|growing|convert|converting|multiply|multiplying|compound|compounding)`;
 const NUMBER_WORDS: Record<string, number> = {
@@ -595,6 +595,27 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
    * goal is set inside, read only when nothing else set a deadline and never a
    * rate ("about 25 hours a week") or an age ("two weeks ago").
    */
+  /*
+   * "over winter break", "during spring break": the window is the break itself,
+   * so the money is due by its end — never today plus a stated length (root-
+   * cause challenge, 2026-11-26: "over winter break, about two weeks" read as a
+   * window ending 10 December, before the break begins). US school breaks:
+   * winter to 3 January, spring to 31 March, summer to 31 August.
+   */
+  if (deadline === null) {
+    const brk = /\b(?:over|during|for|this|on)\s+(?:the\s+|my\s+|our\s+)?(winter|christmas|holiday|spring|summer)\s+(?:break|vacation|holidays?)\b/i.exec(text);
+    if (brk && !overlaps({ start: brk.index, end: brk.index + brk[0].length }, consumed)) {
+      const kind = brk[1]!.toLowerCase();
+      const [month, day] = kind === 'spring' ? [2, 31] : kind === 'summer' ? [7, 31] : [0, 3];
+      let year = now.getUTCFullYear() + (month === 0 ? 1 : 0);
+      let at = endOfDay(year, month, day);
+      if (at && at.getTime() <= now.getTime()) at = endOfDay(++year, month, day);
+      deadlineSeen(brk.index, brk.index + brk[0].length, at, brk[0]);
+      // The break's stated length ("about two weeks") is its duration, not a second deadline.
+      const length = new RegExp(String.raw`\b(?:about|around|roughly|approximately)\s+(${COUNT_SRC})\s+(days?|weeks?)\b`, 'i').exec(text);
+      if (length) consumed.push({ start: length.index, end: length.index + length[0].length, text: length[0] });
+    }
+  }
   if (deadline === null) {
     const bare = new RegExp(String.raw`\b(?:about|around|roughly|approximately|for|lasting)\s+(?:the\s+next\s+)?(${COUNT_SRC})\s+(days?|weeks?|months?)\b(?!\s+(?:ago|old|of\s+(?:my|our)|(?:per|a|each|every)\s+(?:day|week|month)))`, 'gi');
     for (const m of text.matchAll(bare)) {
@@ -665,6 +686,22 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     constraintSpans.push({ start: fewHours.index, end: fewHours.index + fewHours[0].length, text: fewHours[0] });
   }
   const PER_WEEK: Record<string, number> = { day: 7, week: 1, month: 7 / 30 };
+  /*
+   * "I already work 40 hours a week, so I can do evenings and Saturdays, maybe
+   * 15 more hours": the job's hours are not time given to the goal; the extra
+   * hours are, at the job's weekly rate (fresh batch f07, 2026-11-26).
+   */
+  for (const m of text.matchAll(/\b(?:already|currently)\s+work(?:ing)?\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s+(?:a|per|each|every)\s+week\b/gi)) {
+    consumed.push({ start: m.index!, end: m.index! + m[0].length, text: m[0] });
+    const more = /\b(?:maybe\s+|about\s+|around\s+|another\s+)?(\d+(?:\.\d+)?)\s+(?:more|extra|additional)\s+(?:hours?|hrs?)\b/i.exec(text.slice(m.index! + m[0].length));
+    if (more && hoursPerWeek === null && hoursCeiling === null && deadline !== null) {
+      const at = m.index! + m[0].length + more.index;
+      consumed.push({ start: at, end: at + more[0].length, text: more[0] });
+      constraintSpans.push({ start: at, end: at + more[0].length, text: more[0] });
+      hoursPerWeek = Number(more[1]);
+      hoursCeiling = Math.round((hoursPerWeek * ((deadline as Date).getTime() - now.getTime())) / (7 * 86_400_000));
+    }
+  }
   for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s*(?:(?:of\s+\w+\s+)?(?:per|a|each|every)\s+|\/\s?)(day|week|wk|month)\b/gi)) {
     const span = { start: m.index!, end: m.index! + m[0].length, text: m[0] };
     if (overlaps(span, consumed)) continue;
@@ -690,6 +727,8 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     { role: 'PER_WEEK', re: new RegExp(String.raw`(?:${LIMIT}\s+)?${MP}\s+(?:of\s+)?(?:capital|budget)\s+(?:per|a|each|every)\s+week\b`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`(?:\b(?:using|use|with|${spend}|on|from)\s+)?(?:${LIMIT}\s+)?(?:an?\s+)?${MP}\s+(?:(?:of|in|as|for)\s+)?(?:(?:my|our|own|the|total|starting|start-up|startup|seed|initial|upfront|up-front|working)\s+)*(?:capital|budget|investment|funding|funds|cash to (?:invest|spend)|money to (?:invest|spend))\b`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:budget|capital|investment|funding|bankroll)\s+(?:(?:of|is|is only|at)\s+)?(?:${LIMIT}\s+)?${MP}`, 'gi') },
+    // "without spending more than $1,000", "I don't want to spend more than $300": a ceiling only when negated; "I have more than $600" is a floor, never a limit.
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:without|not|never|(?:don't|do not|won't|will not|can't|cannot)(?:\s+want\s+to)?)\s+${spend}\s+more\s+than\s+${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b${spend}\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)\s+(?:only\s+)?(?:have|has|got|own|can (?:spend|invest|put in|afford|spare))\s+(?:${LIMIT}\s+)?${MP}(?!\s*(?:${PER_MONTH_SRC}|(?:per|a)\s+(?:week|year)|coming in|in (?:income|revenue|sales)))`, 'gi') },
     // "…, have $100", "Got about $1,500.": the same, with the person left unsaid at the start of a clause.
@@ -713,6 +752,18 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       const explicit = /\b(?:capital|budget|investment|funding|funds|bankroll)\b/i.test(m[0]);
       const inside = tokensIn(span).filter((t) => t.marked || explicit);
       if (inside.length === 0) continue;
+      /*
+       * "I have more than $600 to spend", "can invest over $1,000": a floor of
+       * what the owner has, never the most they may tie up — named, not read as
+       * a ceiling (test-validity review, 2026-11-26). Only a negated form ("without
+       * spending more than") is a ceiling, and that pattern carries the negation.
+       */
+      const floor = inside.some((t) => /(?<!\b(?:no|not|never)\s)\b(?:more than|over|at least|upwards of|in excess of)\s*(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s*$/i.test(text.slice(Math.max(0, t.start - 22), t.start))) && !/\b(?:without|not|never|don't|do not|won't|will not|can't|cannot)\b/i.test(m[0]);
+      if (floor) {
+        for (const t of inside) if (t.role === null) t.role = 'RANGE';
+        unread.push(`"${m[0].trim()}": a floor, not a limit`);
+        continue;
+      }
       for (const t of inside) t.role = role;
       figures[role as 'CAPITAL'].push(...inside);
       if (!overlaps(span, constraintSpans)) constraintSpans.push(span);
@@ -793,6 +844,12 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
        * its own sentence's words, and only when no other phrase already set the limit.
        */
       const sentence = sentenceAround(text, t.start, t.end);
+      // "can invest more than $1,000": a floor of what the owner has is never read as the most they may tie up.
+      const floorBefore = /(?<!\b(?:no|not|never)\s)\b(?:more than|over|at least|upwards of|in excess of)\s*(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s*$/i.test(text.slice(Math.max(0, t.start - 22), t.start)) && !/\b(?:without|not|never|don't|do not|won't|will not|can't|cannot)\b[^.;]{0,30}$/i.test(text.slice(Math.max(0, t.start - 50), t.start));
+      if (floorBefore) {
+        unread.push(`"${t.raw}": a floor of the owner's money, not a limit`);
+        continue;
+      }
       if (figures.CAPITAL.length === 0 && OWNER_MONEY.test(sentence) && !/\b(?:a|per|each|every)\s+(?:week|month|year)\b/i.test(text.slice(t.end, t.end + 16))) {
         t.role = 'CAPITAL';
         figures.CAPITAL.push(t);

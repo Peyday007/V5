@@ -1,0 +1,15 @@
+# PROJECTION of brain_list_work(project_id=prj_22fb4fec295f403a8a22, limit=40), no state filter, read 2026-11-26T07:18Z. Response is priority-then-oldest order: all 40 items are from 2026-11-04..05 (no recent items reached the page). truncated=false.
+# id	workType	payload.role	state	attemptCount	failureCategory	resultSummary	createdAt
+wki_55acb8a4aaf84fb69f0f	RESEARCH_VERIFY	-	SUCCEEDED	1	null	free lane: 1 claim(s) verified against pages Brain fetched	2026-11-04T02:40:21.974Z
+wki_ef9bc880a1ae48688a1f	RESEARCH_SYNTHESIZE	-	SUCCEEDED	1	null	synthesis filed	2026-11-04T18:52:43.669Z
+wki_6b39ca1a9fcf453dbef4	RESEARCH_AUDIT	PRIMARY	SUCCEEDED	2	WORKER_ERROR	PRIMARY pass recorded	2026-11-04T19:37:55.337Z
+wki_ccf2ed9a787c47938a5c	RESEARCH_AUDIT	JUDGE	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-04T20:01:38.671Z
+wki_2481efec9815477990df	RESEARCH_AUDIT	JUDGE	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-04T20:35:52.387Z
+wki_4d86c54eb1e74b148aac	RESEARCH_AUDIT	JUDGE	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-04T20:37:24.604Z
+wki_ed195d402d3741eb879c	RESEARCH_AUDIT	PRIMARY	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-04T20:44:45.627Z
+wki_fb92afda25124c2885cd	RESEARCH_AUDIT	PRIMARY	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-04T20:53:02.437Z
+wki_205fc4f091d74ec794d1	RESEARCH_AUDIT	PRIMARY	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-a) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-04T20:54:45.444Z
+wki_ef9b89204cf44c58b4d8	RESEARCH_AUDIT	PRIMARY	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-05T04:07:17.053Z
+wki_b3c9f44ac5ef4814a978	RESEARCH_AUDIT	PRIMARY	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-05T04:21:02.161Z
+wki_7599a14d0c6b479e8b5b	RESEARCH_AUDIT	PRIMARY	FAILED	2	ATTEMPTS_EXHAUSTED	free lane (brain-b) produced no answer Brain accepted for this RESEARCH_AUDIT	2026-11-05T04:22:20.852Z
+# remaining 28 rows: RESEARCH_VERIFY/SYNTHESIZE/AUDIT SUCCEEDED (resultSummary 'free lane: N claim(s) verified against pages Brain fetched' | 'synthesis filed' | '<ROLE> pass recorded'), 2026-11-04..05; counts: 9 RESEARCH_AUDIT FAILED ATTEMPTS_EXHAUSTED of 14 RESEARCH_AUDIT rows on the page.

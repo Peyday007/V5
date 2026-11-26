@@ -1,0 +1,177 @@
+{
+ "S1_errorEvent_noContent": {
+  "content": "",
+  "error": "upstream overloaded",
+  "completionTokens": 0
+ },
+ "S2_errorEvent_afterContent": {
+  "content": "{\"routes\":[",
+  "error": null,
+  "completionTokens": 0
+ },
+ "S3_reset_noContent": {
+  "content": "",
+  "error": "socket hang up (connection reset)",
+  "completionTokens": 0
+ },
+ "S4_reset_afterContent": {
+  "content": "{\"routes\":[",
+  "error": null,
+  "completionTokens": 0
+ },
+ "S5_clean_withDone": {
+  "content": "{\"routes\":[]}",
+  "error": null,
+  "completionTokens": 7
+ },
+ "S6_reasoningOnly_lengthStop": {
+  "content": "",
+  "error": null,
+  "completionTokens": 4000
+ },
+ "S7_askModel_on_S6": {
+  "content": "",
+  "error": "an empty reply twice (no content and no error), the second with twice the token budget",
+  "keys": [
+   "content",
+   "error"
+  ]
+ },
+ "G_createGoal": [
+  {
+   "objective": "I can only spare a couple of evenings a week. I'd like to make $1,500 by the end of January with no more than two grand.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2027-01-31T23:59:59.000Z",
+   "target": {
+    "metric": "SETTLED_CASH",
+    "amountCents": 150000,
+    "currency": "USD",
+    "projectId": "prj_a5fbd8750adf4ed79f2d",
+    "capitalCeilingCents": null,
+    "hoursCeiling": null,
+    "resources": null,
+    "capitalBeforeProofCents": null,
+    "capitalPerWeekCents": null,
+    "setAt": "2026-11-26T06:00:00.000Z"
+   },
+   "readingKind": "CASH"
+  },
+  {
+   "objective": "Help me earn ten thousand bucks in the next three months; I won't do any selling myself and I've got $3k to put in.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2027-02-26T06:00:00.000Z",
+   "target": null,
+   "readingKind": "OTHER"
+  },
+  {
+   "objective": "I need 2k fast, within a fortnight. Zero budget. Maybe 6 hrs a week.",
+   "ok": false,
+   "reason": "This reads as a cash objective, but the words do not state the currency or a deadline (\"within 30 days\", \"by 2026-12-31\"); nothing was created. Unread: \"fast\": not a deadline; \"6 hrs a week\": an hours rate, not a total; currency: \"2k\" names no currency; deadline: none stated.",
+   "dueAt": null,
+   "target": null,
+   "readingKind": "CASH"
+  },
+  {
+   "objective": "Target: $750/mo recurring by March 1st. Max spend $250. I work full time so maybe 5 hours weekly.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2027-03-01T23:59:59.000Z",
+   "target": {
+    "metric": "SETTLED_CASH",
+    "amountCents": 75000,
+    "currency": "USD",
+    "projectId": "prj_8adbc07e2a5f47d393d0",
+    "capitalCeilingCents": 25000,
+    "hoursCeiling": null,
+    "resources": null,
+    "capitalBeforeProofCents": null,
+    "capitalPerWeekCents": null,
+    "setAt": "2026-11-26T06:00:00.000Z"
+   },
+   "readingKind": "CASH"
+  },
+  {
+   "objective": "Looking to net $600 this weekend. I have no money but plenty of time.",
+   "ok": false,
+   "reason": "This reads as a cash objective, but the words do not state a deadline (\"within 30 days\", \"by 2026-12-31\"); nothing was created. Unread: deadline: none stated.",
+   "dueAt": null,
+   "target": null,
+   "readingKind": "CASH"
+  },
+  {
+   "objective": "Can you get me to $12k in revenue over the next 6 weeks? Budget is capped at $4k. Ten hours a week tops.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2027-01-07T07:01:32.656Z",
+   "target": {
+    "metric": "SETTLED_CASH",
+    "amountCents": 1200000,
+    "currency": "USD",
+    "projectId": "prj_1bd2d07508164eb9a1fe",
+    "capitalCeilingCents": null,
+    "hoursCeiling": null,
+    "resources": null,
+    "capitalBeforeProofCents": null,
+    "capitalPerWeekCents": null,
+    "setAt": "2026-11-26T06:00:00.000Z"
+   },
+   "readingKind": "CASH"
+  },
+  {
+   "objective": "I want $3,000 in 45 days. I'm not putting a cent in.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2027-01-10T07:01:34.498Z",
+   "target": {
+    "metric": "SETTLED_CASH",
+    "amountCents": 300000,
+    "currency": "USD",
+    "projectId": "prj_d7f1c79229aa463e9b67",
+    "capitalCeilingCents": null,
+    "hoursCeiling": null,
+    "resources": null,
+    "capitalBeforeProofCents": null,
+    "capitalPerWeekCents": null,
+    "setAt": "2026-11-26T06:00:00.000Z"
+   },
+   "readingKind": "CASH"
+  },
+  {
+   "objective": "Half a grand in ten days, no upfront money, I'm free weekends only.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2026-12-06T06:00:00.000Z",
+   "target": null,
+   "readingKind": "OTHER"
+  },
+  {
+   "objective": "I want twenty-five hundred dollars by New Year's Eve with a $300 budget.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2026-12-31T23:59:59.000Z",
+   "target": null,
+   "readingKind": "OTHER"
+  },
+  {
+   "objective": "I can't spend more than $1k and can't work more than 8 hours total; goal is $2,000 in 3 weeks.",
+   "ok": true,
+   "reason": null,
+   "dueAt": "2026-12-17T07:01:39.403Z",
+   "target": {
+    "metric": "SETTLED_CASH",
+    "amountCents": 200000,
+    "currency": "USD",
+    "projectId": "prj_eed3a69acea340d3b1df",
+    "capitalCeilingCents": 100000,
+    "hoursCeiling": null,
+    "resources": null,
+    "capitalBeforeProofCents": null,
+    "capitalPerWeekCents": null,
+    "setAt": "2026-11-26T06:00:00.000Z"
+   },
+   "readingKind": "CASH"
+  }
+ ]
+}

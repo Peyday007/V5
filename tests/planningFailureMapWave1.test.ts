@@ -13,6 +13,7 @@ import {
   askModel,
   directMeansLine,
   directionPrompt,
+  critiquePrompt,
   economicsLine,
   findingsOf,
   parseRoutes,
@@ -50,15 +51,22 @@ const ctxOf = (over: Partial<RouteContext> = {}): RouteContext => ({
 const route = (over: Record<string, unknown> = {}) => ({
   title: 'Retainer ad management for small firms', mechanism: 'SUBCONTRACTED_FULFILMENT', industry: 'Marketing', payer: 'Small businesses running Meta ads',
   offer: 'Monthly Meta ad management', price: 1000, monthly: false, channel: 'Cold email to local firms', performer: 'SUBCONTRACTOR', fulfiller: 'An Upwork ads freelancer at $25/h',
-  directCost: 300, acquisitionCostPerSale: 300, capital: 1500, ownerHoursPerDeal: 0, daysToFirstCash: 14, buyerCount: 5000, volumeBasis: 'city directory', assumptions: 'Firms pay upfront.', ownerFit: 'Subcontracted; the owner does nothing.',
+  directCost: 300, acquisitionCostPerSale: 60, capital: 1500, ownerHoursPerDeal: 0, daysToFirstCash: 14, buyerCount: 5000, volumeBasis: 'city directory', assumptions: 'Firms pay upfront.', ownerFit: 'Subcontracted; the owner does nothing.',
   ...over,
 });
 
 describe('RC4: every distinct verified finding can reach the planner', () => {
   it('keeps two facts that share their first 160 characters and drop a refuted one', () => {
-    const head = 'PropPhoto lists real estate drone video in Mesa, Arizona as typically $129 to $300 per shoot, and the same page lists add-on pricing for twilight aerials and ';
+    // The shared opening is longer than 160 characters, so a comparison of openings alone would merge the two (sensitivity run, 2026-11-26).
+    const head = 'PropPhoto lists real estate drone video in Mesa, Arizona as typically $129 to $300 per shoot, and the same page lists its add-on pricing for twilight aerials, interior walkthroughs and ';
+    expect(head.length).toBeGreaterThan(165);
     const found = findingsOf([claim(`${head}a $100 rush fee.`), claim(`${head}a 30-second edited reel at $75.`), claim('A refuted figure that research later overturned completely.', { contradictionState: 'REFUTED' } as Partial<ResearchClaim>)]);
     expect(found.map((one) => one.text)).toEqual([`${head}a $100 rush fee.`, `${head}a 30-second edited reel at $75.`]);
+  });
+
+  it('by default shows every one of 135 distinct verified findings (the intelligence test held 111, 111 and 135)', () => {
+    const many = Array.from({ length: 135 }, (_, i) => claim(`Distinct verified fact number ${i} about prices, channels and payout timing for this goal.`, { evidenceLane: i % 2 ? 'price_evidence' : 'timing' }));
+    expect(findingsOf(many)).toHaveLength(135);
   });
 
   it('past its budget takes every lane in turn, so the newest round cannot crowd the rest out', () => {
@@ -81,11 +89,19 @@ describe('RC8: a route is held to its own arithmetic by code', () => {
     const { routes } = parseRoutes({ routes: [route()] }, ctxOf());
     expect(routes).toHaveLength(1);
     const e = routeEconomics(routes[0]!, ctxOf());
-    expect(e.marginPerSale).toBe(400);
-    expect(e.salesNeeded).toBe(50);
-    expect(e.acquisitionSpend).toBe(15000);
+    expect(e.marginPerSale).toBe(640);
+    expect(e.salesNeeded).toBe(32);
+    expect(e.acquisitionSpend).toBe(1920);
     expect(e.firstCashBy).toBe('10 December 2026');
-    expect(economicsLine(routes[0]!, ctxOf())).toMatch(/needs 50 sale\(s\).*first money by 10 December 2026 \(the window ends 24 February 2027\)/);
+    expect(economicsLine(routes[0]!, ctxOf())).toMatch(/needs 32 sale\(s\).*first money by 10 December 2026 \(the window ends 24 February 2027\)/);
+    // The critic is actually shown the computed line, not only able to compute it.
+    expect(critiquePrompt(ctxOf(), routes, null)).toContain(economicsLine(routes[0]!, ctxOf()));
+  });
+
+  it('refuses a route whose capital and first buyer together exceed the limit, and says when buyers must be bought from proceeds', () => {
+    expect(parseRoutes({ routes: [route({ capital: 4900, acquisitionCostPerSale: 200 })] }, ctxOf()).rejected[0]?.rule).toBe('CAPITAL');
+    const { routes } = parseRoutes({ routes: [route({ acquisitionCostPerSale: 200 })] }, ctxOf());
+    expect(economicsLine(routes[0]!, ctxOf())).toMatch(/reinvesting what early sales bring in/);
   });
 });
 
@@ -100,8 +116,8 @@ describe('RC9: a missing description is a gap, not a lost route', () => {
 describe('RC2: the critic cannot veto on sums the code checked', () => {
   const p02 = ctxOf({ objective: "I have a DJI Mavic 3 and my FAA Part 107 license, I'm in Phoenix.", remaining: 4500, daysLeft: 60, capitalLimit: 1500, hoursLimit: 171 });
   const aerial = route({ title: 'Listing aerials for Phoenix agents', payer: 'Phoenix listing agents', offer: 'Drone photo package per listing', price: 250, directCost: 0, acquisitionCostPerSale: 14, capital: 200, performer: 'OWNER', fulfiller: 'The owner', ownerHoursPerDeal: 2, daysToFirstCash: 7 });
-  const parsed = parseRoutes({ routes: [aerial, route({ title: 'Unlicensed topographic surveys', offer: 'Topographic survey maps', payer: 'Arizona builders' })] }, p02).routes;
-  const critique = (verdicts: RouteCritique['reviews']): RouteCritique => ({ owner: null, reviews: verdicts, ranking: [2, 1] });
+  const parsed = parseRoutes({ routes: [aerial, route({ title: 'Unlicensed topographic surveys', offer: 'Topographic survey maps', payer: 'Arizona builders', capital: 0 })] }, p02).routes;
+  const critique = (verdicts: RouteCritique['reviews'], ranking: number[] = [1, 2]): RouteCritique => ({ owner: null, reviews: verdicts, ranking });
 
   it('keeps a route dropped only on WINDOW (net 30 inside 60 days), ranked after the routes it kept', () => {
     const out = applyCritique(parsed, critique([

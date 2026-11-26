@@ -1,0 +1,456 @@
+{
+ "readAt": "2026-11-26T05:30:00Z",
+ "source": "expected readings written blind by an independent agent that saw only the owners' words (2026-11-26); case texts from the fresh evaluation batch fm1126b",
+ "cases": [
+  {
+   "case": "f01",
+   "text": "I'm in Tulsa with a pickup truck and my weekends free, maybe 16 hours a week. I need to make $1,200 by the end of December and I only have about $200 to put into anything.",
+   "expected": {
+    "amount": 1200,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2026-12-31",
+    "capitalMax": 200,
+    "hoursPerWeek": 16,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Maybe 16 hours a week' on weekends; has a pickup truck. Capital 'about $200'."
+  },
+  {
+   "case": "f02",
+   "text": "I'm a retired bookkeeper in Sarasota. I'd like an extra $800 a month starting in January, working no more than 10 hours a week from home, and I don't want to spend more than $300 getting set up. No cold calling, please.",
+   "expected": {
+    "amount": 800,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-01-31",
+    "capitalMax": 300,
+    "hoursPerWeek": 10,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Starting in January' read as January 2027 being the first full month at $800 (in hand by Jan 31); a stricter reader might want it flowing from Jan 1. 10 h/wk is a ceiling. From home only, no cold calling."
+  },
+  {
+   "case": "f03",
+   "text": "I've got $0 and I'm stuck in Columbus for Thanksgiving week with nothing to do. Can I make $300 in the next 5 days? I can work pretty much all day.",
+   "expected": {
+    "amount": 300,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2026-12-01",
+    "capitalMax": 0,
+    "hoursPerWeek": null,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Next 5 days' from Thu 2026-11-26 ends about Tue 2026-12-01 (Mon 11-30 if counted inclusively). 'Pretty much all day' isn't a number: roughly 8-12 h/day, so about 40-60 hours across the 5 days. Over a holiday weekend, in Columbus."
+  },
+  {
+   "case": "f04",
+   "text": "I own a small commercial kitchen in Providence that sits empty Monday through Wednesday. I want it to bring in $3,000 a month extra within 60 days. I can put in maybe 5 hours a week myself and have $2,000 to spend.",
+   "expected": {
+    "amount": 3000,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-01-25",
+    "capitalMax": 2000,
+    "hoursPerWeek": 5,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Within 60 days' = 2027-01-25, read as earning at the $3,000/month rate by then; a strict reader could put the first full month in hand later (about end of Feb 2027). The amount is extra revenue, not stated as profit. Asset: kitchen idle Mon-Wed. 'Maybe 5 hours'."
+  },
+  {
+   "case": "f05",
+   "text": "I speak Spanish and English fluently and live in San Antonio. I want to make $2,500 over the next 6 weeks, part-time around my day job \u2014 call it 15 hours a week \u2014 and I have about $100 to my name for this.",
+   "expected": {
+    "amount": 2500,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-01-07",
+    "capitalMax": 100,
+    "hoursPerWeek": 15,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "6 weeks from 2026-11-26. Bilingual Spanish/English. Part-time around a day job. 'About $100 to my name' is probably all the cash they have."
+  },
+  {
+   "case": "f06",
+   "text": "I have $15,000 saved and zero time \u2014 I work 70-hour weeks in finance in Chicago. I want something that earns $2,000 a month within 6 months that someone else runs day to day. I won't do anything illegal or sketchy.",
+   "expected": {
+    "amount": 2000,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-05-26",
+    "capitalMax": 15000,
+    "hoursPerWeek": 0,
+    "hoursTotal": null,
+    "offersOwnLabour": false
+   },
+   "notes": "'Within 6 months' read as the run-rate reached by 2027-05-26. The $15,000 is savings they have, not an explicit limit on what they'll spend; best reading is the most they would put in, but a careful assistant would confirm before using all of it. 'Zero time' plus someone else running it means no labour, though some oversight is probably expected. Legal and non-sketchy only."
+  },
+  {
+   "case": "f07",
+   "text": "I'm a licensed electrician in Denver. I need $6,000 by January 15th for a down payment on a used work van. I already work 40 hours a week, so I can do evenings and Saturdays, maybe 15 more hours. I have about $500.",
+   "expected": {
+    "amount": 6000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-01-15",
+    "capitalMax": 500,
+    "hoursPerWeek": 15,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "January 15 read as 2027. Licensed electrician; evenings and Saturdays, 'maybe 15 more hours'."
+  },
+  {
+   "case": "f08",
+   "text": "I'm a college student in Austin with a decent DSLR and about 10 hours a week. I'd like $1,500 by the end of the spring semester in May. I can spend $150 at most.",
+   "expected": {
+    "amount": 1500,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-05-31",
+    "capitalMax": 150,
+    "hoursPerWeek": 10,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "The spring semester probably ends in early-to-mid May 2027 (UT Austin is around mid-May). End of May is the generous reading; mid-May (about 2027-05-15) is safer. Has a DSLR."
+  },
+  {
+   "case": "f09",
+   "text": "I live in Manchester, UK, and I'm between jobs. I need \u00a31,000 within 30 days to cover rent, I've got about \u00a350 and I can work full time, 40 hours a week. I don't want to sell anything online.",
+   "expected": {
+    "amount": 1000,
+    "currency": "GBP",
+    "recurring": null,
+    "deadline": "2026-12-26",
+    "capitalMax": 50,
+    "hoursPerWeek": 40,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "30 days from 2026-11-26. For rent, so the money may be needed sooner. No selling online. Manchester, UK."
+  },
+  {
+   "case": "f10",
+   "text": "My wife and I have a three-bedroom house in Asheville with a detached garage apartment that's sitting empty. We'd like it to bring in $1,800 a month by March. We have $5,000 to fix it up and maybe 4 hours a week between us.",
+   "expected": {
+    "amount": 1800,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-03-31",
+    "capitalMax": 5000,
+    "hoursPerWeek": 4,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'By March' is ambiguous: earning by March 1, 2027 or March being the first full month (in hand by 2027-03-31). Took the latter. The 4 hours a week is for both of them together. $5,000 is for fixing up the unit."
+  },
+  {
+   "case": "f11",
+   "text": "I'm a stay-at-home dad in Boise with two little kids, so I can only do about 10 hours a week, mostly naps and evenings. I want $500 a month coming in by February. I have $250 to start.",
+   "expected": {
+    "amount": 500,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-02-28",
+    "capitalMax": 250,
+    "hoursPerWeek": 10,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'By February' read as February 2027 being the first full month (2027-02-28); could also mean by Feb 1. Hours fall in fragmented slots (naps and evenings) with kids at home."
+  },
+  {
+   "case": "f12",
+   "text": "I have a big Instagram following, around 40,000 people, mostly into home cooking. I'm in Nashville. I want to turn that into $4,000 in the next 3 months without spending more than $1,000, and I can give it 20 hours a week.",
+   "expected": {
+    "amount": 4000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-02-26",
+    "capitalMax": 1000,
+    "hoursPerWeek": 20,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "3 months from 2026-11-26. The $4,000 is a total. Unclear whether it is revenue or net of the up-to-$1,000 spend. Asset: an Instagram audience of about 40k interested in home cooking."
+  },
+  {
+   "case": "f13",
+   "text": "I'm 67, in Scottsdale, and I'm not going to do any of the work myself \u2014 I can only hire people and check in by phone. I have $8,000 and want to clear $5,000 in profit within 5 months.",
+   "expected": {
+    "amount": 5000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-04-26",
+    "capitalMax": 8000,
+    "hoursPerWeek": 0,
+    "hoursTotal": null,
+    "offersOwnLabour": false
+   },
+   "notes": "The target is PROFIT ($5,000 net of costs), not revenue. They will do no work beyond hiring and phone check-ins. $8,000 is what they have; read as the most they will spend."
+  },
+  {
+   "case": "f14",
+   "text": "I'm a registered nurse in Baltimore working three 12-hour shifts. On my four days off I could do maybe 12 hours a week. I need an extra $3,000 by the end of February and have $400 to spend.",
+   "expected": {
+    "amount": 3000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-02-28",
+    "capitalMax": 400,
+    "hoursPerWeek": 12,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "End of February 2027. RN on three 12-hour shifts; 'maybe 12 hours a week' on days off."
+  },
+  {
+   "case": "f15",
+   "text": "I live in Toronto and own a cargo van. I need to make CAD $2,000 in the next 3 weeks before Christmas. I can do 30 hours a week and have about $300 for gas and supplies.",
+   "expected": {
+    "amount": 2000,
+    "currency": "CAD",
+    "recurring": null,
+    "deadline": "2026-12-17",
+    "capitalMax": 300,
+    "hoursPerWeek": 30,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Next 3 weeks' = 2026-12-17, but 'before Christmas' could stretch it to 12-24. Took the stricter 3-week date. The $300 is presumably CAD and is for gas and supplies. Owns a cargo van."
+  },
+  {
+   "case": "f16",
+   "text": "I'm a high school math teacher in Raleigh. I want to earn $1,000 a month on the side starting in January, with no more than 6 hours a week, and I don't want to put any money in.",
+   "expected": {
+    "amount": 1000,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-01-31",
+    "capitalMax": 0,
+    "hoursPerWeek": 6,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Starting in January' read as January 2027 being the first full month. 6 h/wk is a maximum. No money in."
+  },
+  {
+   "case": "f17",
+   "text": "I run a small auto repair shop in Fresno that does fine but is slow in winter. I'd like to add $10,000 in revenue over the next 90 days. I can spend up to $3,000 and give it about 8 hours a week of my own time. No door-to-door stuff.",
+   "expected": {
+    "amount": 10000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-02-24",
+    "capitalMax": 3000,
+    "hoursPerWeek": 8,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "Added REVENUE, not profit, over 90 days from 2026-11-26. Existing auto repair shop, slow in winter. No door-to-door."
+  },
+  {
+   "case": "f18",
+   "text": "I'm in Portland, Maine with a sewing machine and a lot of fabric left over from a business I closed. I'd like to make $700 by mid-December, working maybe 20 hours a week. I don't want to spend anything new.",
+   "expected": {
+    "amount": 700,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2026-12-15",
+    "capitalMax": 0,
+    "hoursPerWeek": 20,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Mid-December' read as about 2026-12-15. 'Don't want to spend anything new' means 0 new capital, but they will use the sewing machine and fabric they already own. 'Maybe 20 hours'."
+  },
+  {
+   "case": "f19",
+   "text": "I moved to Lisbon last year and speak English, German and some Portuguese. I want \u20ac1,500 a month within 4 months, working remotely about 25 hours a week. I have \u20ac500 I can use.",
+   "expected": {
+    "amount": 1500,
+    "currency": "EUR",
+    "recurring": "MONTHLY",
+    "deadline": "2027-03-26",
+    "capitalMax": 500,
+    "hoursPerWeek": 25,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Within 4 months' read as reaching the monthly rate by 2027-03-26. Remote only. English and German, some Portuguese."
+  },
+  {
+   "case": "f20",
+   "text": "I need $40,000 in the next 6 months to pay off a loan. I'm a software engineer in the Bay Area, I can do 20 hours a week on top of my job, and I have $2,000 I can invest. I'd rather not use my employer's tools or clients.",
+   "expected": {
+    "amount": 40000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-05-26",
+    "capitalMax": 2000,
+    "hoursPerWeek": 20,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "6 months from 2026-11-26. 'Invest' $2,000. Prefers not to use the employer's tools or clients, a soft constraint that may also touch moonlighting or IP terms. Software engineer."
+  },
+  {
+   "case": "f21",
+   "text": "I'm in Detroit and I have nothing \u2014 no car, no savings, no special skills. I can work 35 hours a week. I need $1,500 by January 31st.",
+   "expected": {
+    "amount": 1500,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-01-31",
+    "capitalMax": 0,
+    "hoursPerWeek": 35,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Nothing': no car, no savings, so 0 capital. January 31 read as 2027."
+  },
+  {
+   "case": "f22",
+   "text": "I have a small warehouse space in Memphis, about 2,000 square feet, that I'm not using. I want it to make $1,500 a month within 45 days. I'll put in 3 hours a week at most and can spend $1,000.",
+   "expected": {
+    "amount": 1500,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-01-10",
+    "capitalMax": 1000,
+    "hoursPerWeek": 3,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Within 45 days' = 2027-01-10, read as earning at the monthly rate by then; the first full month in hand would be later. 3 h/wk at most. Asset: an unused warehouse of about 2,000 sq ft."
+  },
+  {
+   "case": "f23",
+   "text": "I'm a certified personal trainer in Miami. I'd like to go from basically nothing on the side to $3,500 a month within 4 months. I can do 20 hours a week and have $1,200. I don't want to work out of a big-box gym.",
+   "expected": {
+    "amount": 3500,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-03-26",
+    "capitalMax": 1200,
+    "hoursPerWeek": 20,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Within 4 months' read as reaching the $3,500/month rate by 2027-03-26. Certified trainer; not out of a big-box gym."
+  },
+  {
+   "case": "f24",
+   "text": "My teenage son and I want to make $600 together over winter break in Minneapolis-St. Paul, about two weeks, maybe 25 hours a week combined. We have a snow shovel, a snowblower and about $50.",
+   "expected": {
+    "amount": 600,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-01-03",
+    "capitalMax": 50,
+    "hoursPerWeek": 25,
+    "hoursTotal": 50,
+    "offersOwnLabour": true
+   },
+   "notes": "Exact winter break dates aren't stated. Assumed about two weeks, roughly 2026-12-21 to 2027-01-03, so the deadline is about 2027-01-03. 25 h/wk is for parent and teenage son combined (about 50 hours in total), and the son's labour is part of it. Has a shovel and a snowblower."
+  },
+  {
+   "case": "f25",
+   "text": "I'm a notary and have a reliable car in Atlanta. I want to make an extra $2,000 over the next 2 months working evenings and weekends, about 15 hours a week. I can put $600 toward it.",
+   "expected": {
+    "amount": 2000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-01-26",
+    "capitalMax": 600,
+    "hoursPerWeek": 15,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "2 months from 2026-11-26. Notary with a car; evenings and weekends."
+  },
+  {
+   "case": "f26",
+   "text": "I'm in Mexico City, I speak native Spanish and good English, and I've worked as a tour guide before. I want $1,200 USD in the next 6 weeks with about 30 hours a week. I have around $150.",
+   "expected": {
+    "amount": 1200,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-01-07",
+    "capitalMax": 150,
+    "hoursPerWeek": 30,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "6 weeks from 2026-11-26. The target is explicitly USD. 'Around $150' is probably USD too, but in Mexico City it could mean MXN (about US$8); assumed USD. Former tour guide, Spanish and English."
+  },
+  {
+   "case": "f27",
+   "text": "I'm a graphic designer in Brooklyn who just got laid off. I need $5,000 in the next 60 days to stay afloat, can work 40 hours a week, and have about $500. No cold emailing strangers, I hate it.",
+   "expected": {
+    "amount": 5000,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-01-25",
+    "capitalMax": 500,
+    "hoursPerWeek": 40,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "60 days from 2026-11-26. No cold emailing strangers. Laid-off graphic designer."
+  },
+  {
+   "case": "f28",
+   "text": "I've got a garage full of tools and a lot of woodworking experience in Spokane. I want $2,500 by Valentine's Day, working about 12 hours a week, and I can spend $700 on wood and supplies.",
+   "expected": {
+    "amount": 2500,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2027-02-14",
+    "capitalMax": 700,
+    "hoursPerWeek": 12,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "Valentine's Day 2027. The $700 is for wood and supplies. Unclear whether the $2,500 is revenue or net of materials. Woodworking with own tools."
+  },
+  {
+   "case": "f29",
+   "text": "I own a duplex in Cleveland and have $12,000 sitting in savings. I want an extra $1,000 a month in income within 5 months, and I can give it no more than 2 hours a week \u2014 I'll hire out anything else.",
+   "expected": {
+    "amount": 1000,
+    "currency": "USD",
+    "recurring": "MONTHLY",
+    "deadline": "2027-04-26",
+    "capitalMax": 12000,
+    "hoursPerWeek": 2,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "'Within 5 months' read as reaching the rate by 2027-04-26. The $12,000 is savings, not explicitly a spend limit; read as the most available, to be confirmed. At most 2 h/wk and will hire out the rest, so their own labour is minimal. Owns a duplex."
+  },
+  {
+   "case": "f30",
+   "text": "I live in Sacramento and I'm good with dogs. I need $900 in the next 3 weeks, I can do about 20 hours a week, and I've got $75 to spend. I can't drive.",
+   "expected": {
+    "amount": 900,
+    "currency": "USD",
+    "recurring": null,
+    "deadline": "2026-12-17",
+    "capitalMax": 75,
+    "hoursPerWeek": 20,
+    "hoursTotal": null,
+    "offersOwnLabour": true
+   },
+   "notes": "3 weeks from 2026-11-26. Can't drive, so the work has to be local or reachable on foot or by transit. Good with dogs."
+  }
+ ]
+}

@@ -75,6 +75,22 @@ describe('a person-set cash goal starts its project\'s research sprint', () => {
     expect(await listGoals(other)).toHaveLength(0);
   });
 
+  it('C74: never opens a sprint for a goal whose deadline has already passed', async () => {
+    const admin = await person(true);
+    const created = await createGoal({ projectId, objective: OBJECTIVE, actorRef: `person:${admin.id}`, userId: admin.id });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(created.goal.dueAt).toBeTruthy();
+    // The scheduler ticks a day after the 30-day deadline went by with no sprint started.
+    const afterDeadline = new Date(Date.parse(created.goal.dueAt!) + 24 * 60 * 60 * 1000);
+    expect(await activateGoalSprints(afterDeadline)).toEqual([]);
+    expect(await getCashMode(projectId)).toBeNull();
+    expect(await listGoals(projectId)).toHaveLength(0);
+    expect((await listWorkstreamEvents(created.goal.id)).some((e) => e.kind === GOAL_SPRINT_EVENT)).toBe(false);
+    // Before its deadline the same goal does start its sprint.
+    expect(await activateGoalSprints(new Date(Date.parse(created.goal.dueAt!) - 24 * 60 * 60 * 1000))).toEqual([expect.objectContaining({ goalId: created.goal.id, activated: true })]);
+  });
+
   it('leaves a sprint a person archived alone', async () => {
     const admin = await person(true);
     expect((await createGoal({ projectId, objective: OBJECTIVE, actorRef: `person:${admin.id}`, userId: admin.id })).ok).toBe(true);

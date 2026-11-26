@@ -1,0 +1,364 @@
+[
+ {
+  "case": "final_p02_all",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [],
+   "dropped": [
+    "ARMLS Preferred Photographer Real Estate Aerials"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "DROP",
+    "failed": [
+     "WINDOW",
+     "CHANNEL"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [],
+   "dropped": [
+    "ARMLS Preferred Photographer Real Estate Aerials"
+   ]
+  }
+ },
+ {
+  "case": "final_p02_cap",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [],
+   "dropped": [
+    "Phoenix Real Estate Aerial Photography",
+    "Construction Site Progress Mapping",
+    "Zeitview Mission Brokerage",
+    "ARMLS Preferred Photographer Program",
+    "Land Survey Data Processing",
+    "Arizona Aerial Stock Footage"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "DROP",
+    "failed": [
+     "WINDOW",
+     "CHANNEL",
+     "VALUE"
+    ]
+   },
+   {
+    "i": 2,
+    "verdict": "DROP",
+    "failed": [
+     "CHANNEL",
+     "FULFILLER",
+     "VALUE",
+     "LAWFUL"
+    ]
+   },
+   {
+    "i": 3,
+    "verdict": "DROP",
+    "failed": [
+     "CHANNEL",
+     "MARKET",
+     "VALUE"
+    ]
+   },
+   {
+    "i": 4,
+    "verdict": "DROP",
+    "failed": [
+     "WINDOW",
+     "CHANNEL",
+     "VALUE"
+    ]
+   },
+   {
+    "i": 5,
+    "verdict": "DROP",
+    "failed": [
+     "CHANNEL",
+     "VALUE",
+     "LAWFUL"
+    ]
+   },
+   {
+    "i": 6,
+    "verdict": "DROP",
+    "failed": [
+     "WINDOW",
+     "CHANNEL",
+     "VALUE"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [],
+   "dropped": [
+    "Phoenix Real Estate Aerial Photography",
+    "Construction Site Progress Mapping",
+    "Zeitview Mission Brokerage",
+    "ARMLS Preferred Photographer Program",
+    "Land Survey Data Processing",
+    "Arizona Aerial Stock Footage"
+   ]
+  }
+ },
+ {
+  "case": "final_p06_all",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [],
+   "dropped": [
+    "Contra CSV Data Cleanup Brokerage"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "DROP",
+    "failed": [
+     "CAPITAL"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [
+    {
+     "title": "Contra CSV Data Cleanup Brokerage",
+     "why": "kept against the critique, which objected only on CAPITAL — limits the code checked on the route's own figures: The plan requires a $5 Craigslist posting fee, b"
+    }
+   ],
+   "dropped": []
+  }
+ },
+ {
+  "case": "final_p10_all",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [],
+   "dropped": [
+    "Holiday Beanie Dropshipping Store"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "DROP",
+    "failed": [
+     "WINDOW",
+     "CHANNEL"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [],
+   "dropped": [
+    "Holiday Beanie Dropshipping Store"
+   ]
+  }
+ },
+ {
+  "case": "final_p10_cap",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [
+    "Local Retail Meta Ads Management"
+   ],
+   "dropped": []
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "KEEP",
+    "failed": []
+   }
+  ],
+  "ref": {
+   "ranked": [
+    {
+     "title": "Local Retail Meta Ads Management",
+     "why": "Meets all hard constraints, can generate $21k in 90 days with minimal upfront capital and no owner labor."
+    }
+   ],
+   "dropped": []
+  }
+ },
+ {
+  "case": "probe1_p02_all",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [
+    "ARMLS Real Estate Aerial Photos",
+    "Zeitview Real Estate Missions"
+   ],
+   "dropped": [
+    "Construction Drone Survey Maps"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "KEEP",
+    "failed": []
+   },
+   {
+    "i": 2,
+    "verdict": "DROP",
+    "failed": [
+     "CHANNEL",
+     "LAWFUL",
+     "EVIDENCE"
+    ]
+   },
+   {
+    "i": 3,
+    "verdict": "KEEP",
+    "failed": []
+   }
+  ],
+  "ref": {
+   "ranked": [
+    {
+     "title": "ARMLS Real Estate Aerial Photos",
+     "why": "All constraints satisfied; fast cash flow via ARMLS listings."
+    },
+    {
+     "title": "Zeitview Real Estate Missions",
+     "why": "Pilot app provides ready missions, payment within 14 days, and all evidence aligns."
+    }
+   ],
+   "dropped": [
+    "Construction Drone Survey Maps"
+   ]
+  }
+ },
+ {
+  "case": "probe1_p02_cap",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [
+    "ARMLS Real Estate Aerial Package"
+   ],
+   "dropped": [
+    "Construction Site Drone Survey"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "KEEP",
+    "failed": []
+   },
+   {
+    "i": 2,
+    "verdict": "DROP",
+    "failed": [
+     "LAWFUL",
+     "CHANNEL",
+     "MARKET",
+     "EVIDENCE"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [
+    {
+     "title": "ARMLS Real Estate Aerial Package",
+     "why": "Meets all constraints, cash arrives quickly, uses owner’s license and equipment, and is backed by market evidence."
+    }
+   ],
+   "dropped": [
+    "Construction Site Drone Survey"
+   ]
+  }
+ },
+ {
+  "case": "probe1_p06_all",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [],
+   "dropped": [
+    "Upwork Virtual Assistant Email Management"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "DROP",
+    "failed": [
+     "WINDOW",
+     "CHANNEL",
+     "MARKET",
+     "VALUE",
+     "EVIDENCE"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [],
+   "dropped": [
+    "Upwork Virtual Assistant Email Management"
+   ]
+  }
+ },
+ {
+  "case": "probe1_p06_cap",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [],
+   "dropped": [
+    "24‑Hour Logo Design Brokerage"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "DROP",
+    "failed": [
+     "CHANNEL",
+     "CAPITAL",
+     "LAWFUL",
+     "EVIDENCE"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [],
+   "dropped": [
+    "24‑Hour Logo Design Brokerage"
+   ]
+  }
+ },
+ {
+  "case": "probe1_p10_cap",
+  "epoch": "c52d6d3",
+  "recorded": {
+   "ranked": [],
+   "dropped": [
+    "Minnesota Holiday Gift Beanie Dropship"
+   ]
+  },
+  "reconstructed": [
+   {
+    "i": 1,
+    "verdict": "DROP",
+    "failed": [
+     "CHANNEL",
+     "VALUE",
+     "EVIDENCE"
+    ]
+   }
+  ],
+  "ref": {
+   "ranked": [],
+   "dropped": [
+    "Minnesota Holiday Gift Beanie Dropship"
+   ]
+  }
+ }
+]
