@@ -184,7 +184,7 @@ fragments attempted).
    prices.
 3. *Reasoning failure despite information.* The proposer priced a season
    ($650–750) against a single job's labour. The critic said the snow season was
-   "past" or "after the 90-day window" in late November in 4 of 5 runs, even
+   "past" or "after the 90-day window" in late November in 4 of 6 runs, even
    with the window's end date written out, and called remote coordination of
    cleaners "physical presence".
 4. *Model availability.* gpt-oss-120b returned empty content in 6 of 16 asks.
