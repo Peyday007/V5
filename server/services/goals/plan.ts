@@ -2982,8 +2982,14 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     rounds,
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
-    // Constructed designs the model neither considered nor priced are kept as partial pathways, never dropped (OPP-04, S-0061).
-    partial: inGoalScope(arrangements, model),
+    /*
+     * A goal whose model holds no opening and no priced design read no pathway at all (production
+     * 2026-11-26: 30 live goals, none with a pathway), so its constructed designs were abandoned for
+     * their unknowns (OPP-04, S-0061). They are kept as partial pathways there. A goal that already
+     * reads pathways keeps exactly that reading: its unpriced designs stay in the space, ranked by
+     * the construction and asked about through its price questions (`unpricedForPlan`).
+     */
+    partial: model.considered.length === 0 && (model.estimates ?? []).length === 0 ? inGoalScope(arrangements, model) : [],
   });
   trace('pathways');
   /*
