@@ -996,7 +996,7 @@ export const REMOTE_AI_FOCUS =
  * searched for "work this operation can run entirely online"). Pure.
  */
 export function discoveryFocusFor(objective: string | null | undefined, hours: { perWeek?: number | null; total?: number | null } = {}): string {
-  const labour = ownerLabourWithHours(ownerLabourOffer(objective), hours);
+  const labour = ownerLabourWithHours(ownerLabourOffer(objective), hours, objective ?? '');
   if (!labour.offered) return REMOTE_AI_FOCUS;
   return (
     `The owner offered their own work for this goal ("${labour.evidence}"), so look first for work buyers book and pay the owner for directly, in person included, using what their words say they have — then for work independent contractors or suppliers perform while this operation sells, books, refers or subcontracts it, and for work fulfilled with AI-produced digital output. ` +

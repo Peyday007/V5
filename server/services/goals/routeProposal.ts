@@ -1638,7 +1638,7 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
       hoursLimit: target.hoursCeiling,
       hoursPerWeek: target.scope?.hoursPerWeek ?? null,
       resources: target.resources,
-      ownerLabour: ownerLabourWithHours(ownerLabourOffer(ownerWords(goal), target.resources), { perWeek: target.scope?.hoursPerWeek ?? null, total: target.hoursCeiling }),
+      ownerLabour: ownerLabourWithHours(ownerLabourOffer(ownerWords(goal), target.resources), { perWeek: target.scope?.hoursPerWeek ?? null, total: target.hoursCeiling }, [ownerWords(goal), target.resources].filter(Boolean).join(' ')),
       industry: target.scope?.industry ?? null,
       recurring: target.scope?.recurring === 'MONTHLY',
       exclusions: exclusions.map((one) => exclusionLabel(one)),

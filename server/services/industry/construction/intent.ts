@@ -758,7 +758,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
        * a ceiling (test-validity review, 2026-11-26). Only a negated form ("without
        * spending more than") is a ceiling, and that pattern carries the negation.
        */
-      const floor = inside.some((t) => /\b(?:more than|over|at least|upwards of|in excess of)\s*(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s*$/i.test(text.slice(Math.max(0, t.start - 22), t.start))) && !/\b(?:without|not|never|don't|do not|won't|will not|can't|cannot)\b/i.test(m[0]);
+      const floor = inside.some((t) => /(?<!\b(?:no|not|never)\s)\b(?:more than|over|at least|upwards of|in excess of)\s*(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s*$/i.test(text.slice(Math.max(0, t.start - 22), t.start))) && !/\b(?:without|not|never|don't|do not|won't|will not|can't|cannot)\b/i.test(m[0]);
       if (floor) {
         for (const t of inside) if (t.role === null) t.role = 'RANGE';
         unread.push(`"${m[0].trim()}": a floor, not a limit`);
@@ -845,7 +845,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
        */
       const sentence = sentenceAround(text, t.start, t.end);
       // "can invest more than $1,000": a floor of what the owner has is never read as the most they may tie up.
-      const floorBefore = /\b(?:more than|over|at least|upwards of|in excess of)\s*(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s*$/i.test(text.slice(Math.max(0, t.start - 22), t.start)) && !/\b(?:without|not|never|don't|do not|won't|will not|can't|cannot)\b[^.;]{0,30}$/i.test(text.slice(Math.max(0, t.start - 50), t.start));
+      const floorBefore = /(?<!\b(?:no|not|never)\s)\b(?:more than|over|at least|upwards of|in excess of)\s*(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s*$/i.test(text.slice(Math.max(0, t.start - 22), t.start)) && !/\b(?:without|not|never|don't|do not|won't|will not|can't|cannot)\b[^.;]{0,30}$/i.test(text.slice(Math.max(0, t.start - 50), t.start));
       if (floorBefore) {
         unread.push(`"${t.raw}": a floor of the owner's money, not a limit`);
         continue;

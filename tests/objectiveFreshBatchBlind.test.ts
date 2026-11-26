@@ -34,7 +34,7 @@ describe('the objective reader agrees with blind human readings of 30 fresh requ
       expect(r.capitalCeiling ?? r.capitalAssumed?.amount ?? null).toBe(e.capitalMax);
       if (e.hoursPerWeek === 0) expect(r.hoursCeiling).toBe(0);
       else expect(r.hoursPerWeek ?? null).toBe(e.hoursPerWeek);
-      if (e.offersOwnLabour !== null) expect(ownerLabourWithHours(ownerLabourOffer(c.text), { perWeek: r.hoursPerWeek, total: r.hoursCeiling }).offered).toBe(e.offersOwnLabour);
+      if (e.offersOwnLabour !== null) expect(ownerLabourWithHours(ownerLabourOffer(c.text), { perWeek: r.hoursPerWeek, total: r.hoursCeiling }, c.text).offered).toBe(e.offersOwnLabour);
     });
   }
 });

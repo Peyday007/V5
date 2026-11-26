@@ -30,11 +30,18 @@ describe("an owner who gives the goal hours has offered their work, and the prom
   ];
   for (const [words, hours] of cases) {
     it(`"${words.slice(0, 60)}…" lifts the standing no-physical-work rule`, () => {
-      const labour = ownerLabourWithHours(ownerLabourOffer(words), hours);
+      const labour = ownerLabourWithHours(ownerLabourOffer(words), hours, words);
       expect(labour.offered).toBe(true);
       expect(operatingModelSentenceFor(labour)).not.toBe(OPERATING_MODEL_SENTENCE);
     });
   }
+  it("an hours limit on the owner's own oversight time lifts nothing (§91: the owner does no physical work)", () => {
+    const words = 'Earn 5,000 dollars a month in recurring revenue within 60 days, with no more than 10 hours a week of owner time.';
+    expect(ownerLabourWithHours(ownerLabourOffer(words), { perWeek: 10 }, words).offered).toBe(false);
+  });
+  it('hours a target carries that the words never state lift nothing', () => {
+    expect(ownerLabourWithHours(ownerLabourOffer('Collect settled cash'), { total: 200 }, 'Collect settled cash').offered).toBe(false);
+  });
   it('an explicit refusal outranks stated hours', () => {
     const labour = ownerLabourWithHours(ownerLabourOffer("I'm not going to do any of the work myself."), { perWeek: 2 });
     expect(labour.offered).toBe(false);

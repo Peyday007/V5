@@ -1,5 +1,5 @@
 {
- "at": "2026-11-26T07:54:24.588Z",
+ "at": "2026-11-26T08:13:08.304Z",
  "results": [
   {
    "id": "C01-F",
@@ -14,7 +14,7 @@
    "failing": [
     "× tests/objectiveFreshPhrasings.test.ts > objective phrasings a fresh batch exposed > \"without spending more than $X\" is the capital limit; an unnegated \"more than\" is a floor, never a ceiling"
    ],
-   "at": "2026-11-26T07:18:58.628Z"
+   "at": "2026-11-26T08:13:08.304Z"
   },
   {
    "id": "C01-I",
@@ -105,7 +105,7 @@
     "× tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I'd like $800 a month starting in January, working no more t…\" lifts the standing no-physical-work rule",
     "× tests/planningFailureMapWave2.test.ts > an owner who gives the goal hours has offered their work, and the prompt says so > \"I need $5,000 in the next 60 days and can work 40 hours a we…\" lifts the standing no-physical-work rule"
    ],
-   "at": "2026-11-26T07:19:44.972Z"
+   "at": "2026-11-26T08:13:08.304Z"
   },
   {
    "id": "C11-X",
@@ -148,9 +148,9 @@
    "knownGoodAccepted": true,
    "verified": true,
    "failing": [
-    "× tests/goalIdeasEachProjectsTurn.test.ts > a fresh goal beside an older goal’s backlog > holds no cancelled or paused goal's backlog in the goal queue ahead of a live goal (fresh batch, 2026-11-26) 1182ms"
+    "× tests/goalIdeasEachProjectsTurn.test.ts > a fresh goal beside an older goal’s backlog > holds no cancelled or paused goal's backlog in the goal queue ahead of a live goal (fresh batch, 2026-11-26) 1056ms"
    ],
-   "at": "2026-11-26T07:54:24.588Z"
+   "at": "2026-11-26T08:13:08.304Z"
   },
   {
    "id": "C19-I",

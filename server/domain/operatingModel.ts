@@ -361,8 +361,20 @@ const OWNER_OFFERS_LABOUR = new RegExp(
  * them was sent the standing "the owner does no physical work" rule as a limit
  * (reviewer 3, root-cause challenge). Pure.
  */
-export function ownerLabourWithHours(labour: OwnerLabour, hours: { perWeek?: number | null; total?: number | null }): OwnerLabour {
+export function ownerLabourWithHours(labour: OwnerLabour, hours: { perWeek?: number | null; total?: number | null }, words?: string | null): OwnerLabour {
   if (labour.offered || labour.refused) return labour;
+  /*
+   * Only hours the goal's own words give as the person's working time. A limit
+   * on "owner time" or oversight ("no more than 10 hours a week of owner time")
+   * is the time the owner keeps for deciding, and the standing rule that the
+   * owner does no physical work still binds (§91). A target that carries hours
+   * the words never state lifts nothing.
+   */
+  if (words !== undefined) {
+    const text = (words ?? '').replace(/[’‘]/g, "'");
+    if (!/\b\d+(?:\.\d+)?\s*(?:hours?|hrs?)\b|\bfull[- ]time\b/i.test(text)) return labour;
+    if (/\bowner(?:'s)?\s+time\b|\bof\s+(?:the\s+)?owner'?s?\b|\boversight\b|\bsupervis|\bto\s+(?:manage|oversee|check in)\b/i.test(text)) return labour;
+  }
   const perWeek = hours.perWeek ?? null;
   const total = hours.total ?? null;
   if (perWeek !== null && perWeek > 0) return { offered: true, evidence: `the owner gives this goal ${perWeek} hour(s) a week` };
