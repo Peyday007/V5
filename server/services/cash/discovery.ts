@@ -2506,13 +2506,47 @@ export async function harvest(input: {
  * opening that exists, a claim already filed — and a seller's own page is dropped
  * exactly as an untagged signalled claim is. A pattern does not expire like one
  * request (`observationExpiry` on the lane), so no staleness bound applies.
+ *
+ * Paged until `limit` patterns survive the code checks, not one window. A
+ * seller's own page is dropped here, after the read, and nothing marks the
+ * row, so it returns at the head of this oldest-first read on every pass: one
+ * window of such rows would starve every newer pattern behind it for ever —
+ * the defect `signalledClaims` already fixed the same way (W17). Bounded by
+ * `CONSTRUCTED_MAX_PAGES`, so a project of nothing but dropped rows costs a
+ * fixed number of reads per pass.
  */
 async function constructedPatternsWithPayer(input: {
   projectId: string;
   limit: number;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null; payer: ResearchClaim }[]> {
+  const want = Math.max(1, input.limit);
+  const out: { claim: ResearchClaim; orchestrationId: string; fragmentId: string | null; payer: ResearchClaim }[] = [];
+  for (let page = 0; page < CONSTRUCTED_MAX_PAGES && out.length < want; page += 1) {
+    const rows = await constructedPatternPage(input.projectId, want, page * want);
+    for (const row of rows) {
+      if (out.length >= want) break;
+      const [claim, payer] = await Promise.all([getClaim(row.claim_id), getClaim(row.payer_id)]);
+      if (!claim || !payer) continue;
+      if (sellersOwnPage(claim)) continue;
+      out.push({
+        claim: { ...claim, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' },
+        orchestrationId: claim.orchestrationId,
+        fragmentId: claim.fragmentId,
+        payer,
+      });
+    }
+    if (rows.length < want) break;
+  }
+  return out;
+}
+
+/** How many windows `constructedPatternsWithPayer` reads past rows its code checks drop. */
+const CONSTRUCTED_MAX_PAGES = 20;
+
+/** One oldest-first window of constructed-round patterns whose fragment holds a payer claim. */
+async function constructedPatternPage(projectId: string, limit: number, offset: number): Promise<{ claim_id: string; payer_id: string }[]> {
   const noBuyingWord = PATTERN_BUYING_WORDS.map(() => 'LOWER(c.claim) NOT LIKE ?').join(' AND ');
-  const rows = await getDb().all<{ claim_id: string; payer_id: string }>(
+  return getDb().all<{ claim_id: string; payer_id: string }>(
     `SELECT c.id AS claim_id,
             (SELECT p.id FROM research_claims p
               WHERE p.fragment_id = c.fragment_id AND p.accepted = 1 AND p.evidence_lane = ?
@@ -2551,22 +2585,9 @@ async function constructedPatternsWithPayer(input: {
            WHERE filed.project_id = o.project_id AND filed.source_claim_id = c.id
         )
       ORDER BY c.created_at, c.rowid
-      LIMIT ?`,
-    [PAYER_LANE, input.projectId, PATTERN_LANE, ...PATTERN_BUYING_WORDS.map((word) => `%${word}%`), 'goal-%-mx-%', PAYER_LANE, Math.max(1, input.limit)],
+      LIMIT ? OFFSET ?`,
+    [PAYER_LANE, projectId, PATTERN_LANE, ...PATTERN_BUYING_WORDS.map((word) => `%${word}%`), 'goal-%-mx-%', PAYER_LANE, limit, offset],
   );
-  const out: { claim: ResearchClaim; orchestrationId: string; fragmentId: string | null; payer: ResearchClaim }[] = [];
-  for (const row of rows) {
-    const [claim, payer] = await Promise.all([getClaim(row.claim_id), getClaim(row.payer_id)]);
-    if (!claim || !payer) continue;
-    if (sellersOwnPage(claim)) continue;
-    out.push({
-      claim: { ...claim, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' },
-      orchestrationId: claim.orchestrationId,
-      fragmentId: claim.fragmentId,
-      payer,
-    });
-  }
-  return out;
 }
 
 /** The lane a research fragment declares for who pays (compiler profile `payer`). */
