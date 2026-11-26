@@ -6,7 +6,7 @@
  * rendered record states the counts the data holds, and — with --accept — the
  * latest measured progress meets the owner's bar (27 of 30 fresh goals usable).
  *
- *   node scripts/planningFailureMapCheck.mjs [structure|repairs|accept]
+ *   node scripts/planningFailureMapCheck.mjs [structure|repairs|coverage|accept|all]
  */
 import { readFileSync } from 'node:fs';
 
@@ -35,6 +35,10 @@ if (which === 'structure' || which === 'all') {
 if (which === 'repairs' || which === 'all') {
   for (const r of data.repairs) ok(r.owner && r.what && r.state, `repair ${r.id} names what, owner and state`);
   for (const rc of Object.keys(data.rootCauses)) ok(data.repairs.some((r) => r.rc === rc), `root cause ${rc} has a repair`);
+}
+if (which === 'coverage') {
+  const open = data.questions.filter((q) => q.status === 'UNKNOWN');
+  ok(open.length === 0, `every diagnostic question has been examined (${open.length} still UNKNOWN: ${open.slice(0, 12).map((q) => q.id).join(', ')}${open.length > 12 ? ', …' : ''})`);
 }
 if (which === 'accept') {
   const last = data.progress[data.progress.length - 1];
