@@ -1,0 +1,135 @@
+{
+ "read_at": "2026-11-26",
+ "source": "Instantly API v2 /campaigns/analytics, /campaigns/analytics/overview, /emails?email_type=received (read-only, via proxy)",
+ "definition_engaged": "a human reply that asks for a sample, a quote, a call, or a buying detail (price, audience, area); excludes auto-replies, refusals, wrong-person and support-desk acknowledgements",
+ "campaigns": [
+  {
+   "campaign": "Venture Cleaning",
+   "campaign_id": "e5e14f82-0825-4520-916c-c1bf81766c7e",
+   "new_leads_contacted": 1331,
+   "emails_sent": 1437,
+   "unique_replies": 5,
+   "auto_replies": 7,
+   "bounced": 151,
+   "instantly_interested_label": 1,
+   "engaged_hand_classified": 1,
+   "engaged_note": "1 quote request (office manager, 5,000 sq ft, dissatisfied with current cleaner); 2 'maybe later'.",
+   "paid_orders": 0,
+   "payment_links_ever_sent": 0
+  },
+  {
+   "campaign": "AI Dispatch",
+   "campaign_id": "1d3cf504-fa08-403b-aa5c-b50d44958f0c",
+   "new_leads_contacted": 385,
+   "emails_sent": 1332,
+   "unique_replies": 6,
+   "auto_replies": 2,
+   "bounced": 33,
+   "instantly_interested_label": 3,
+   "engaged_hand_classified": 0,
+   "engaged_note": "6 replies: auto-replies, support tickets, 'remove us', 'not needed'. Instantly's 'interested 3' are auto/support replies.",
+   "paid_orders": 0,
+   "payment_links_ever_sent": 0
+  },
+  {
+   "campaign": "Neighbor Card · Camp Hill Jan 2027",
+   "campaign_id": "e4d48b2a-67f4-4f16-9c2b-8e34b0629fc1",
+   "new_leads_contacted": 453,
+   "emails_sent": 1274,
+   "unique_replies": 13,
+   "auto_replies": 9,
+   "bounced": 19,
+   "instantly_interested_label": 5,
+   "engaged_hand_classified": 5,
+   "engaged_note": "Club Pilates, IFR Furniture, Compass Health Coaching asked for a sample; Gameday Men's Health asked for a call; West Shire Decks asked the demographic. Simply Yoga conditional (other town) not counted.",
+   "paid_orders": 0,
+   "payment_links_ever_sent": 0
+  },
+  {
+   "campaign": "Local ad campaign",
+   "campaign_id": "32d5e49c-1dd7-4b30-9add-2ec432d7fa96",
+   "new_leads_contacted": 1138,
+   "emails_sent": 1138,
+   "unique_replies": 3,
+   "auto_replies": 5,
+   "bounced": 131,
+   "instantly_interested_label": 1,
+   "engaged_hand_classified": 1,
+   "engaged_note": "1 business asked what is sent and which cities (3 messages from one sender).",
+   "paid_orders": 0,
+   "payment_links_ever_sent": 0
+  },
+  {
+   "campaign": "Airyn Mailer",
+   "campaign_id": "67f09c98-66df-4fc2-9c82-d6e6a7525a91",
+   "new_leads_contacted": 202,
+   "emails_sent": 202,
+   "unique_replies": 1,
+   "auto_replies": 0,
+   "bounced": 81,
+   "instantly_interested_label": 0,
+   "engaged_hand_classified": 0,
+   "engaged_note": "1 'nah'.",
+   "paid_orders": 0,
+   "payment_links_ever_sent": 0
+  },
+  {
+   "campaign": "Neighbor Card · Camp Hill Jan 2027 · personal",
+   "campaign_id": "8af119d2-c1c1-4ebb-9d7d-7b6542eb037b",
+   "new_leads_contacted": 18,
+   "emails_sent": 47,
+   "unique_replies": 0,
+   "auto_replies": 0,
+   "bounced": 3,
+   "instantly_interested_label": 0,
+   "engaged_hand_classified": 0,
+   "engaged_note": "none",
+   "paid_orders": 0,
+   "payment_links_ever_sent": 0
+  }
+ ],
+ "neighbor_card_lead_additions_by_day": {
+  "2026-11-11": 73,
+  "2026-11-12": 334,
+  "2026-11-13": 1,
+  "2026-11-14": 5,
+  "2026-11-15": 20,
+  "2026-11-16": 3,
+  "2026-11-17": 2,
+  "2026-11-18": 1,
+  "2026-11-19": 2,
+  "2026-11-20": 1,
+  "2026-11-22": 1,
+  "personal_variant_total": 18
+ },
+ "integrations_2026-11-26": {
+  "instantly": "CONNECTED: 12 of 18 sending accounts healthy, 930/day",
+  "stripe": "REPAIRING: STRIPE_SECRET_KEY missing",
+  "google_places": "REFUSED 403",
+  "open_source_agents": "CONNECTED (sellbird 0.4.0, browser-use 0.13.14)"
+ },
+ "audit_generator_runs_2026-11-26": [
+  {
+   "target": "https://www.w3.org/WAI/demos/bad/before/home.html",
+   "pages": 3,
+   "pdf": false,
+   "issues": 48
+  },
+  {
+   "target": "same",
+   "pages": 5,
+   "pdf": true,
+   "issues": 54,
+   "elapsed_seconds": 53
+  }
+ ],
+ "access_audit_prospecting_yield": {
+  "harvested": 853,
+  "homepages_scanned": 412,
+  "scanned_with_email": 182,
+  "could_not_scan": 87,
+  "qualified": 78,
+  "source": "businesses/access-audit/README.md (2026-11-11)"
+ },
+ "courtlistener_api": "HTTP 401 without credentials (2026-11-26)"
+}
