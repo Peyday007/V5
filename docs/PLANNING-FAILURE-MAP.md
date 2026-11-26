@@ -8,7 +8,8 @@ Rendered from `docs/planning-failure-map/map.py` by `render_md.py`; edit the dat
 
 - Capabilities required: **42**
 - Diagnostic questions (5 per capability, +1 model-isolation question for each of the 8 model-dependent ones): **218**
-- PASS 45 · FAIL 96 · NEEDS RECHECK 43 · UNKNOWN 34
+- PASS 45 · FAIL 96 · RECHECK 43 · UNKNOWN 34
+- Diagnostic validity (Phase 3): CONTROLLED_FAILURE 14 · HISTORICAL_FAILURE_DETECTED 25 · KNOWN_GOOD_ONLY 23 · UNPROVEN 156
 - Root causes established: **15**
 
 ## A. What creating a successful plan requires (capability map)
@@ -64,431 +65,431 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 ### C01 Read the objective (amount, currency, window, capital, hours, recurrence, place)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C01-P | Can Brain perform it correctly? | Read 30 varied owner requests incl. "can't put any hours in", weekly vs total hours, "keeps going after". | Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed. | **PASS** | fm1126b on a8c46995: 30 of 30 fresh goals read and created (fm1126a on the earlier reader: 26, with 3+ misread). Amount, window, capital and hours match a human reading on all 30 (local read of the batch). | industry/construction/intent.ts readObjective | RC15 |
-| C01-R | Does the result reach every component that needs it? | Does the reading reach proposer, critic, planner, committee? | Same figures in every prompt and plan reading. | **PASS** | 30Q probe objective lines; plan readings use target. | goals/target.ts | — |
-| C01-I | Does the result change later decisions correctly? | Change hours from 15 to 0 mid-course. | Next ask drops owner-performed routes. | **NEEDS RECHECK** | Same path as C38-R; not exercised on production. | planningEval update path | — |
-| C01-F | Does Brain recognise and recover when it fails? | Ambiguous request ("some money soon"). | Goal flags the unread field as a question to the owner, plans nothing on a guess. | **PASS** | fm1126a create log: unread phrases are named and the goal is refused rather than guessed ("nothing was created. Unread: …"). | readObjective unread[] | — |
-| C01-X | Does it still work combined with the other capabilities? | Objective reading + operating rule + labour offer on the same goal. | No contradiction between limits and owner offer in the prompt. | **NEEDS RECHECK** | p10 "zero hours" fixed d5beaf6; not re-run on fresh goals. | routeProposal limitLines | RC3 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C01-P | Can Brain perform it correctly? | Read 30 varied owner requests incl. "can't put any hours in", weekly vs total hours, "keeps going after". | Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed. | **PASS** | fm1126b on a8c46995: 30 of 30 fresh goals read and created (fm1126a on the earlier reader: 26, with 3+ misread). Amount, window, capital and hours match a human reading on all 30 (local read of the batch). | CONTROLLED_FAILURE: re-introduced ""N hours a week at most" read as a total of N" → tests/objectiveFreshPhrasings.test.ts failed naming RC15; unmutated code accepted; re-introduced "a monthly figure with a start month refused for want of a deadline" → tests/objectiveFreshPhrasings.test.ts failed naming RC15; unmutated code accepted | industry/construction/intent.ts readObjective | RC15 |
+| C01-R | Does the result reach every component that needs it? | Does the reading reach proposer, critic, planner, committee? | Same figures in every prompt and plan reading. | **PASS** | 30Q probe objective lines; plan readings use target. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | goals/target.ts | — |
+| C01-I | Does the result change later decisions correctly? | Change hours from 15 to 0 mid-course. | Next ask drops owner-performed routes. | **RECHECK** | Same path as C38-R; not exercised on production. | UNPROVEN | planningEval update path | — |
+| C01-F | Does Brain recognise and recover when it fails? | Ambiguous request ("some money soon"). | Goal flags the unread field as a question to the owner, plans nothing on a guess. | **PASS** | fm1126a create log: unread phrases are named and the goal is refused rather than guessed ("nothing was created. Unread: …"). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | readObjective unread[] | — |
+| C01-X | Does it still work combined with the other capabilities? | Objective reading + operating rule + labour offer on the same goal. | No contradiction between limits and owner offer in the prompt. | **RECHECK** | p10 "zero hours" fixed d5beaf6; not re-run on fresh goals. | UNPROVEN | routeProposal limitLines | RC3 |
 
 ### C02 Read the owner's means without inventing them (skills, assets, licences, location, authority, refusals)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C02-P | Can Brain perform it correctly? | Owner profile in the reply for 30 requests. | Every skill/asset/refusal appears in the owner's words; "not stated" otherwise. | **FAIL** | 4/4 fallback replies invented refusals; p02 run-1 "no physical work". | route prompt STEP 1 | RC3 |
-| C02-R | Does the result reach every component that needs it? | Is the profile stored and read by the next ask/critic/discovery? | One profile per goal, read by all. | **FAIL** | Integration diag: profile kept only in event detail, re-derived each ask. | routeProposal record | RC7 |
-| C02-I | Does the result change later decisions correctly? | Owner states a licence; do routes sell the licensed work? | At least one route sells it. | **PASS** | p02: every output led with Part 107 aerial work. | ROUTE_RULES.OWNER_FIT | — |
-| C02-F | Does Brain recognise and recover when it fails? | Profile contradicts owner words; is it corrected? | Code compares profile to words and drops inventions. | **FAIL** | No check exists (code). | ownerProfileOf | RC3 |
-| C02-X | Does it still work combined with the other capabilities? | Owner with no stated skill + $0 + place. | Means = time, place; direct paid work considered. | **FAIL** | p06: no output proposed the owner's own paid work. | directionPrompt | RC5 |
-| C02-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same p06 prompt to the control model. | Control reads the owner correctly. | **PASS** | Model exam: given complete facts, Claude Opus reads constraints with 3 violations in 30; gpt-oss 8, fallback 22. The 4/4 invented refusals were the fallback's. | model | RC14 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C02-P | Can Brain perform it correctly? | Owner profile in the reply for 30 requests. | Every skill/asset/refusal appears in the owner's words; "not stated" otherwise. | **FAIL** | 4/4 fallback replies invented refusals; p02 run-1 "no physical work". | UNPROVEN | route prompt STEP 1 | RC3 |
+| C02-R | Does the result reach every component that needs it? | Is the profile stored and read by the next ask/critic/discovery? | One profile per goal, read by all. | **FAIL** | Integration diag: profile kept only in event detail, re-derived each ask. | UNPROVEN | routeProposal record | RC7 |
+| C02-I | Does the result change later decisions correctly? | Owner states a licence; do routes sell the licensed work? | At least one route sells it. | **PASS** | p02: every output led with Part 107 aerial work. | UNPROVEN | ROUTE_RULES.OWNER_FIT | — |
+| C02-F | Does Brain recognise and recover when it fails? | Profile contradicts owner words; is it corrected? | Code compares profile to words and drops inventions. | **FAIL** | No check exists (code). | UNPROVEN | ownerProfileOf | RC3 |
+| C02-X | Does it still work combined with the other capabilities? | Owner with no stated skill + $0 + place. | Means = time, place; direct paid work considered. | **FAIL** | p06: no output proposed the owner's own paid work. | UNPROVEN | directionPrompt | RC5 |
+| C02-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same p06 prompt to the control model. | Control reads the owner correctly. | **PASS** | Model exam: given complete facts, Claude Opus reads constraints with 3 violations in 30; gpt-oss 8, fallback 22. The 4/4 invented refusals were the fallback's. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | model | RC14 |
 
 ### C03 Resolve Brain's standing operating rule against the goal's own offer, once, as data
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C03-P | Can Brain perform it correctly? | Owner offering labour/equipment: does every prompt state the lift? | Route prompt, discovery and gates agree. | **FAIL** | Route prompt fixed (d5beaf6); discovery still appends REMOTE_AI_FOCUS (discovery.ts:1304). | domain/operatingModel.ts | RC3 |
-| C03-R | Does the result reach every component that needs it? | Do the three regex gates read the same resolution? | One resolution object read by all. | **FAIL** | Integration diag: regex re-implemented in goalScenario, worthResearching, answers. | operatingModel | RC3 |
-| C03-I | Does the result change later decisions correctly? | Does the lift change discovery questions? | Discovery asks about in-person work when offered. | **FAIL** | Code: REMOTE_AI_FOCUS unconditional. | discovery.ts | RC3 |
-| C03-F | Does Brain recognise and recover when it fails? | Regex misses an offer ("I can fly 20 h a week"). | A model-read offer or an explicit question; not silent refusal. | **NEEDS RECHECK** | p02 "fly about 20 hours" read as labour after ad40c37; unverified on fresh goals. | ownerLabourOffer | — |
-| C03-X | Does it still work combined with the other capabilities? | Owner offer + zero capital + 7 days. | Owner-performed routes allowed and preferred when fastest. | **FAIL** | p06 final: no owner-performed route proposed. | route prompt | RC5 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C03-P | Can Brain perform it correctly? | Owner offering labour/equipment: does every prompt state the lift? | Route prompt, discovery and gates agree. | **FAIL** | Route prompt fixed (d5beaf6); discovery still appends REMOTE_AI_FOCUS (discovery.ts:1304). | UNPROVEN | domain/operatingModel.ts | RC3 |
+| C03-R | Does the result reach every component that needs it? | Do the three regex gates read the same resolution? | One resolution object read by all. | **FAIL** | Integration diag: regex re-implemented in goalScenario, worthResearching, answers. | UNPROVEN | operatingModel | RC3 |
+| C03-I | Does the result change later decisions correctly? | Does the lift change discovery questions? | Discovery asks about in-person work when offered. | **FAIL** | Code: REMOTE_AI_FOCUS unconditional. | CONTROLLED_FAILURE: re-introduced "discovery online-only for an owner who offered work" → tests/planningFailureMapWave1.test.ts failed naming RC3; unmutated code accepted | discovery.ts | RC3 |
+| C03-F | Does Brain recognise and recover when it fails? | Regex misses an offer ("I can fly 20 h a week"). | A model-read offer or an explicit question; not silent refusal. | **RECHECK** | p02 "fly about 20 hours" read as labour after ad40c37; unverified on fresh goals. | UNPROVEN | ownerLabourOffer | — |
+| C03-X | Does it still work combined with the other capabilities? | Owner offer + zero capital + 7 days. | Owner-performed routes allowed and preferred when fastest. | **FAIL** | p06 final: no owner-performed route proposed. | UNPROVEN | route prompt | RC5 |
 
 ### C04 Keep one consistent understanding of the goal across faculties and time
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C04-P | Can Brain perform it correctly? | Read one goal's plan, report and operator view at once. | Same chosen strategy and binding factor everywhere. | **FAIL** | wst_db2e: four "best" answers, three binding diagnoses. | readGoalPlan | RC11 |
-| C04-R | Does the result reach every component that needs it? | Do lessons, refutations and committee questions reach the route ask? | Shown in routeContext. | **FAIL** | Integration diag (code). | routeContext | RC7 |
-| C04-I | Does the result change later decisions correctly? | A refuted direction: is it proposed again? | Never in another wording. | **NEEDS RECHECK** | Last ask's CRITIQUE drops fed back (routeProposal ~1836); multi-ask effect unmeasured. | routeContext refuted | — |
-| C04-F | Does Brain recognise and recover when it fails? | Goal changed by owner: are stale openings retired? | Openings inconsistent with new limits archived. | **UNKNOWN** | — | — | — |
-| C04-X | Does it still work combined with the other capabilities? | Six generators feed one goal. | One arbitrated set; no contradictory openings. | **FAIL** | fm1126a f01: the plan reading is built from constructed arrangements while the route proposer's owner-read directions are not yet openings; two generators, no arbiter. | plan set | RC11,RC13 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C04-P | Can Brain perform it correctly? | Read one goal's plan, report and operator view at once. | Same chosen strategy and binding factor everywhere. | **FAIL** | wst_db2e: four "best" answers, three binding diagnoses. | UNPROVEN | readGoalPlan | RC11 |
+| C04-R | Does the result reach every component that needs it? | Do lessons, refutations and committee questions reach the route ask? | Shown in routeContext. | **FAIL** | Integration diag (code). | UNPROVEN | routeContext | RC7 |
+| C04-I | Does the result change later decisions correctly? | A refuted direction: is it proposed again? | Never in another wording. | **RECHECK** | Last ask's CRITIQUE drops fed back (routeProposal ~1836); multi-ask effect unmeasured. | UNPROVEN | routeContext refuted | — |
+| C04-F | Does Brain recognise and recover when it fails? | Goal changed by owner: are stale openings retired? | Openings inconsistent with new limits archived. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C04-X | Does it still work combined with the other capabilities? | Six generators feed one goal. | One arbitrated set; no contradictory openings. | **FAIL** | fm1126a f01: the plan reading is built from constructed arrangements while the route proposer's owner-read directions are not yet openings; two generators, no arbiter. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | plan set | RC11,RC13 |
 
 ### C05 Calendar, season and window arithmetic
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C05-P | Can Brain perform it correctly? | Critic/proposer judge "net 30 in a 60-day window", "Dec 3-7 in a window ending Feb 24". | Correct inside/outside. | **FAIL** | 30Q: both misread by the critic. | critic | RC2 |
-| C05-R | Does the result reach every component that needs it? | Is the window end date in every prompt? | Explicit end date. | **PASS** | a1eba64 (windowEnd) present in final prompts. | limitLines | — |
-| C05-I | Does the result change later decisions correctly? | Does a correct date change keep/drop? | Drops on window only when computed outside. | **FAIL** | No computed check (code). | applyCritique | RC2 |
-| C05-F | Does Brain recognise and recover when it fails? | A wrong date claim: detected? | Code overrules. | **FAIL** | None (code). | applyCritique | RC2 |
-| C05-X | Does it still work combined with the other capabilities? | Season + payment terms + delivery lead time combined. | Computed first-cash day inside window. | **FAIL** | p02/p10 critic errors. | critic | RC2 |
-| C05-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same critique prompt to the control model. | Control does the arithmetic right. | **FAIL** | Model exam: gpt-oss 8 and the fallback 22 constraint violations in 30, Claude 3; date and window arithmetic errors concentrate in the open models. | model | RC14 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C05-P | Can Brain perform it correctly? | Critic/proposer judge "net 30 in a 60-day window", "Dec 3-7 in a window ending Feb 24". | Correct inside/outside. | **FAIL** | 30Q: both misread by the critic. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | critic | RC2 |
+| C05-R | Does the result reach every component that needs it? | Is the window end date in every prompt? | Explicit end date. | **PASS** | a1eba64 (windowEnd) present in final prompts. | UNPROVEN | limitLines | — |
+| C05-I | Does the result change later decisions correctly? | Does a correct date change keep/drop? | Drops on window only when computed outside. | **FAIL** | No computed check (code). | UNPROVEN | applyCritique | RC2 |
+| C05-F | Does Brain recognise and recover when it fails? | A wrong date claim: detected? | Code overrules. | **FAIL** | None (code). | UNPROVEN | applyCritique | RC2 |
+| C05-X | Does it still work combined with the other capabilities? | Season + payment terms + delivery lead time combined. | Computed first-cash day inside window. | **FAIL** | p02/p10 critic errors. | UNPROVEN | critic | RC2 |
+| C05-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same critique prompt to the control model. | Control does the arithmetic right. | **FAIL** | Model exam: gpt-oss 8 and the fallback 22 constraint violations in 30, Claude 3; date and window arithmetic errors concentrate in the open models. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | model | RC14 |
 
 ### C06 Know the local economic environment (buyers in the place, market conditions, season)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C06-P | Can Brain perform it correctly? | Plan cites local, dated market facts. | Demand facts are local and current. | **NEEDS RECHECK** | With supplied research yes (p02 listings, ARMLS); production research 0 facts. | research→findings | RC6 |
-| C06-R | Does the result reach every component that needs it? | Do local facts reach the proposer? | Yes, within the findings budget. | **FAIL** | 40 cap. | findingsOf | RC4 |
-| C06-I | Does the result change later decisions correctly? | Off-season facts drop seasonal routes? | Yes. | **NEEDS RECHECK** | p02 December listings drop found by follow-ups, not reflected in plans. | proposer | — |
-| C06-F | Does Brain recognise and recover when it fails? | No local facts: does Brain ask for them? | Research asks local demand first. | **NEEDS RECHECK** | Questions did ask (p02 Q1, Q27); production does not execute. | questions | RC6 |
-| C06-X | Does it still work combined with the other capabilities? | Local facts + owner means + window. | Fastest local buyers considered first. | **FAIL** | p06/p10 local options absent. | proposer | RC5 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C06-P | Can Brain perform it correctly? | Plan cites local, dated market facts. | Demand facts are local and current. | **RECHECK** | With supplied research yes (p02 listings, ARMLS); production research 0 facts. | UNPROVEN | research→findings | RC6 |
+| C06-R | Does the result reach every component that needs it? | Do local facts reach the proposer? | Yes, within the findings budget. | **FAIL** | 40 cap. | UNPROVEN | findingsOf | RC4 |
+| C06-I | Does the result change later decisions correctly? | Off-season facts drop seasonal routes? | Yes. | **RECHECK** | p02 December listings drop found by follow-ups, not reflected in plans. | UNPROVEN | proposer | — |
+| C06-F | Does Brain recognise and recover when it fails? | No local facts: does Brain ask for them? | Research asks local demand first. | **RECHECK** | Questions did ask (p02 Q1, Q27); production does not execute. | UNPROVEN | questions | RC6 |
+| C06-X | Does it still work combined with the other capabilities? | Local facts + owner means + window. | Fastest local buyers considered first. | **FAIL** | p06/p10 local options absent. | UNPROVEN | proposer | RC5 |
 
 ### C07 Discover opportunities without being given a strategy
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C07-P | Can Brain perform it correctly? | Directions for 30 fresh goals. | Strongest evidence-supported path among those named in >=27/30. | **FAIL** | 30Q: strongest path named in 1/3 goals (p02); none p06. | directionPrompt/proposer | RC5 |
-| C07-R | Does the result reach every component that needs it? | Do discovered directions reach research and the planner? | Each direction's decisive unknown is researched. | **FAIL** | Dives starved (RC6). | validation dives | RC6 |
-| C07-I | Does the result change later decisions correctly? | Research refutes a direction: replaced? | Replacement direction differs structurally. | **NEEDS RECHECK** | Scout→refuted loop exists; starved. | scout loop | — |
-| C07-F | Does Brain recognise and recover when it fails? | All directions refuted. | New directions from a different mechanism. | **UNKNOWN** | — | — | — |
-| C07-X | Does it still work combined with the other capabilities? | Discovery + owner means + constraints. | No online-only bias for owners with physical means. | **FAIL** | discovery REMOTE_AI_FOCUS. | discovery | RC3 |
-| C07-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the same direction prompt. | Control names the strongest path. | **FAIL** | Model exam commercial planning: Claude 10/11, gpt-oss 4/11, Qwen 1/11, fallback 0/11. 30Q control (Claude Sonnet, Brain's prompt) also missed p06's strongest path, so the prompt shares the failure (RC5). | prompt | RC14,RC5 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C07-P | Can Brain perform it correctly? | Directions for 30 fresh goals. | Strongest evidence-supported path among those named in >=27/30. | **FAIL** | 30Q: strongest path named in 1/3 goals (p02); none p06. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | directionPrompt/proposer | RC5 |
+| C07-R | Does the result reach every component that needs it? | Do discovered directions reach research and the planner? | Each direction's decisive unknown is researched. | **FAIL** | Dives starved (RC6). | UNPROVEN | validation dives | RC6 |
+| C07-I | Does the result change later decisions correctly? | Research refutes a direction: replaced? | Replacement direction differs structurally. | **RECHECK** | Scout→refuted loop exists; starved. | UNPROVEN | scout loop | — |
+| C07-F | Does Brain recognise and recover when it fails? | All directions refuted. | New directions from a different mechanism. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C07-X | Does it still work combined with the other capabilities? | Discovery + owner means + constraints. | No online-only bias for owners with physical means. | **FAIL** | discovery REMOTE_AI_FOCUS. | UNPROVEN | discovery | RC3 |
+| C07-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the same direction prompt. | Control names the strongest path. | **FAIL** | Model exam commercial planning: Claude 10/11, gpt-oss 4/11, Qwen 1/11, fallback 0/11. 30Q control (Claude Sonnet, Brain's prompt) also missed p06's strongest path, so the prompt shares the failure (RC5). | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | prompt | RC14,RC5 |
 
 ### C08 Generate genuinely different approaches
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C08-P | Can Brain perform it correctly? | Routes in one ask: distinct mechanisms/buyers. | >=2 structurally different where evidence allows. | **NEEDS RECHECK** | p02 final cap: 6 routes, 4 mechanisms; others 1 route. | proposer | — |
-| C08-R | Does the result reach every component that needs it? | Distinct routes survive to the plan set. | Yes. | **FAIL** | Critic dropped most. | critic | RC2 |
-| C08-I | Does the result change later decisions correctly? | Alternatives compared on computed economics. | Yes. | **FAIL** | No computed economics. | parseRoutes | RC8 |
-| C08-F | Does Brain recognise and recover when it fails? | Only one route proposed: asked for more? | Replacement ask with different mechanism. | **NEEDS RECHECK** | Replacement ask exists; effect not visible in probes. | critiqueAndRevise | — |
-| C08-X | Does it still work combined with the other capabilities? | Diversity + constraints + evidence. | Diverse and feasible. | **FAIL** | Outputs mostly single routes. | proposer | RC5 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C08-P | Can Brain perform it correctly? | Routes in one ask: distinct mechanisms/buyers. | >=2 structurally different where evidence allows. | **RECHECK** | p02 final cap: 6 routes, 4 mechanisms; others 1 route. | UNPROVEN | proposer | — |
+| C08-R | Does the result reach every component that needs it? | Distinct routes survive to the plan set. | Yes. | **FAIL** | Critic dropped most. | UNPROVEN | critic | RC2 |
+| C08-I | Does the result change later decisions correctly? | Alternatives compared on computed economics. | Yes. | **FAIL** | No computed economics. | UNPROVEN | parseRoutes | RC8 |
+| C08-F | Does Brain recognise and recover when it fails? | Only one route proposed: asked for more? | Replacement ask with different mechanism. | **RECHECK** | Replacement ask exists; effect not visible in probes. | UNPROVEN | critiqueAndRevise | — |
+| C08-X | Does it still work combined with the other capabilities? | Diversity + constraints + evidence. | Diverse and feasible. | **FAIL** | Outputs mostly single routes. | UNPROVEN | proposer | RC5 |
 
 ### C09 Pre-screen against hard limits (capital, hours, window, lawful)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C09-P | Can Brain perform it correctly? | Routes breaching capital/hours/window rejected by code. | Correctly rejected, no false rejects. | **NEEDS RECHECK** | Hours/margin rejections correct (30Q); capital/window not computed. | parseRoutes | RC8 |
-| C09-R | Does the result reach every component that needs it? | Rejection reasons reach the next ask. | Yes. | **PASS** | replacementPrompt names failures; refuted list. | routeProposal | — |
-| C09-I | Does the result change later decisions correctly? | Next ask avoids the breach. | Yes. | **NEEDS RECHECK** | Rejections and critique drops are fed to the next ask (code); multi-ask effect unmeasured. | — | — |
-| C09-F | Does Brain recognise and recover when it fails? | False reject (rule misfires). | Rule reports and route kept for review. | **FAIL** | OWNER_FIT missing-field drop. | parseRoutes | RC9 |
-| C09-X | Does it still work combined with the other capabilities? | Pre-screen + critic. | No double-jeopardy contradictions. | **FAIL** | Critic contradicts code-passed routes on false grounds. | critic | RC2 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C09-P | Can Brain perform it correctly? | Routes breaching capital/hours/window rejected by code. | Correctly rejected, no false rejects. | **RECHECK** | Hours/margin rejections correct (30Q); capital/window not computed. | UNPROVEN | parseRoutes | RC8 |
+| C09-R | Does the result reach every component that needs it? | Rejection reasons reach the next ask. | Yes. | **PASS** | replacementPrompt names failures; refuted list. | UNPROVEN | routeProposal | — |
+| C09-I | Does the result change later decisions correctly? | Next ask avoids the breach. | Yes. | **RECHECK** | Rejections and critique drops are fed to the next ask (code); multi-ask effect unmeasured. | UNPROVEN | — | — |
+| C09-F | Does Brain recognise and recover when it fails? | False reject (rule misfires). | Rule reports and route kept for review. | **FAIL** | OWNER_FIT missing-field drop. | UNPROVEN | parseRoutes | RC9 |
+| C09-X | Does it still work combined with the other capabilities? | Pre-screen + critic. | No double-jeopardy contradictions. | **FAIL** | Critic contradicts code-passed routes on false grounds. | UNPROVEN | critic | RC2 |
 
 ### C10 Identify what must be known before choosing (decisive unknowns)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C10-P | Can Brain perform it correctly? | Each direction names its decisive unknown. | Specific, checkable, decision-bearing. | **PASS** | Directions carry decisiveUnknown (production SCOUT asks). | directionPrompt | — |
-| C10-R | Does the result reach every component that needs it? | Unknown becomes the first research question. | Yes. | **NEEDS RECHECK** | routeValidationQuestion exists; execution starved. | validation.ts | RC6 |
-| C10-I | Does the result change later decisions correctly? | Answer to unknown keeps/kills the direction. | Yes. | **NEEDS RECHECK** | Loop starved. | scout loop | RC6 |
-| C10-F | Does Brain recognise and recover when it fails? | Unknown unanswerable: recognised? | Marked and replaced. | **UNKNOWN** | — | — | — |
-| C10-X | Does it still work combined with the other capabilities? | Unknowns across directions de-duplicated. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C10-P | Can Brain perform it correctly? | Each direction names its decisive unknown. | Specific, checkable, decision-bearing. | **PASS** | Directions carry decisiveUnknown (production SCOUT asks). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | directionPrompt | — |
+| C10-R | Does the result reach every component that needs it? | Unknown becomes the first research question. | Yes. | **RECHECK** | routeValidationQuestion exists; execution starved. | UNPROVEN | validation.ts | RC6 |
+| C10-I | Does the result change later decisions correctly? | Answer to unknown keeps/kills the direction. | Yes. | **RECHECK** | Loop starved. | UNPROVEN | scout loop | RC6 |
+| C10-F | Does Brain recognise and recover when it fails? | Unknown unanswerable: recognised? | Marked and replaced. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C10-X | Does it still work combined with the other capabilities? | Unknowns across directions de-duplicated. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C11 Ask useful, non-anchored research questions
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C11-P | Can Brain perform it correctly? | 30 questions per goal from the owner's words. | Distinct, specific, cover means/buyers/price/channel/fulfilment/cash/legal; not anchored. | **FAIL** | 30Q: p06/p10 anchored on brokerage/dropshipping; p02 good. | directionPrompt framing | RC5 |
-| C11-R | Does the result reach every component that needs it? | Questions become research work. | Each question queued with a decision. | **FAIL** | Production executes ~6%. | research queue | RC6 |
-| C11-I | Does the result change later decisions correctly? | Answers change routes. | Yes. | **PASS** | 30Q: facts killed Upwork/Fiverr/dropship routes. | proposer | — |
-| C11-F | Does Brain recognise and recover when it fails? | Model fails to answer (timeout/unparsed). | Retried, salvaged. | **NEEDS RECHECK** | Questions command salvages; production route path unchanged. | ask | RC1 |
-| C11-X | Does it still work combined with the other capabilities? | Questions + owner means. | Ask how owner can be paid directly. | **FAIL** | p06. | directionPrompt | RC5 |
-| C11-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the question prompt. | Less anchored. | **NEEDS RECHECK** | Not run on the question prompt; the model exam's evidence-interpretation errors (gpt-oss 61, Claude 1) predict the gap. | model | RC14 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C11-P | Can Brain perform it correctly? | 30 questions per goal from the owner's words. | Distinct, specific, cover means/buyers/price/channel/fulfilment/cash/legal; not anchored. | **FAIL** | 30Q: p06/p10 anchored on brokerage/dropshipping; p02 good. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | directionPrompt framing | RC5 |
+| C11-R | Does the result reach every component that needs it? | Questions become research work. | Each question queued with a decision. | **FAIL** | Production executes ~6%. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | research queue | RC6 |
+| C11-I | Does the result change later decisions correctly? | Answers change routes. | Yes. | **PASS** | 30Q: facts killed Upwork/Fiverr/dropship routes. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | proposer | — |
+| C11-F | Does Brain recognise and recover when it fails? | Model fails to answer (timeout/unparsed). | Retried, salvaged. | **RECHECK** | Questions command salvages; production route path unchanged. | UNPROVEN | ask | RC1 |
+| C11-X | Does it still work combined with the other capabilities? | Questions + owner means. | Ask how owner can be paid directly. | **FAIL** | p06. | CONTROLLED_FAILURE: re-introduced "the owner's direct paid work never considered first" → tests/planningFailureMapWave1.test.ts failed naming RC5; unmutated code accepted | directionPrompt | RC5 |
+| C11-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on the question prompt. | Less anchored. | **RECHECK** | Not run on the question prompt; the model exam's evidence-interpretation errors (gpt-oss 61, Claude 1) predict the gap. | UNPROVEN | model | RC14 |
 
 ### C12 Prioritise follow-ups and stop when research cannot change the decision
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C12-P | Can Brain perform it correctly? | Follow-ups after findings. | Decision-bearing, not already answered. | **FAIL** | 30Q: 35/90 follow-ups already answered or no decision value; narrow. | questions follow-up | RC5 |
-| C12-R | Does the result reach every component that needs it? | Follow-up answers reach the planner. | Yes, ahead of older ones. | **FAIL** | Newest-first cap displaced key older facts (p10). | findingsOf | RC4 |
-| C12-I | Does the result change later decisions correctly? | Follow-ups change the plan. | Yes when material. | **FAIL** | Final grades no better than round 1. | proposer | — |
-| C12-F | Does Brain recognise and recover when it fails? | No answer found: stops? | Records and stops. | **PASS** | Workers recorded UNANSWERED honestly. | workers | — |
-| C12-X | Does it still work combined with the other capabilities? | Follow-ups + selection. | Questions target the chosen strategy's weakest leg. | **NEEDS RECHECK** | Partly (p02 insurance, seasonality). | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C12-P | Can Brain perform it correctly? | Follow-ups after findings. | Decision-bearing, not already answered. | **FAIL** | 30Q: 35/90 follow-ups already answered or no decision value; narrow. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | questions follow-up | RC5 |
+| C12-R | Does the result reach every component that needs it? | Follow-up answers reach the planner. | Yes, ahead of older ones. | **FAIL** | Newest-first cap displaced key older facts (p10). | CONTROLLED_FAILURE: re-introduced "newest-first fill crowding out other lanes" → tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted | findingsOf | RC4 |
+| C12-I | Does the result change later decisions correctly? | Follow-ups change the plan. | Yes when material. | **FAIL** | Final grades no better than round 1. | UNPROVEN | proposer | — |
+| C12-F | Does Brain recognise and recover when it fails? | No answer found: stops? | Records and stops. | **PASS** | Workers recorded UNANSWERED honestly. | UNPROVEN | workers | — |
+| C12-X | Does it still work combined with the other capabilities? | Follow-ups + selection. | Questions target the chosen strategy's weakest leg. | **RECHECK** | Partly (p02 insurance, seasonality). | UNPROVEN | — | — |
 
 ### C13 Search provider availability and capacity
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C13-P | Can Brain perform it correctly? | Searches answered per day. | Enough for planned questions. | **FAIL** | 785/1142 refused; Firecrawl 7/day; no keyed search. | sources/* | RC6 |
-| C13-R | Does the result reach every component that needs it? | Results reach workers. | Yes. | **PASS** | p06 trace: searches answered (6) reached the free-lane worker and pages were read (3). | — | — |
-| C13-I | Does the result change later decisions correctly? | Capacity allocated by decision value. | Yes. | **FAIL** | stall 2026-11-26: every queued research fragment sits at priority 9 (eval) or 8/6 by purpose, never by the decision its answer changes; 1,167 waiting. | — | RC6 |
-| C13-F | Does Brain recognise and recover when it fails? | Provider refuses: falls back. | Yes. | **NEEDS RECHECK** | DDG lite/html fallback; still 69% refused. | sources | — |
-| C13-X | Does it still work combined with the other capabilities? | Capacity under 18+ goals. | Shared fairly. | **NEEDS RECHECK** | 585d3fb shares capacity; unmeasured. | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C13-P | Can Brain perform it correctly? | Searches answered per day. | Enough for planned questions. | **FAIL** | 785/1142 refused; Firecrawl 7/day; no keyed search. | UNPROVEN | sources/* | RC6 |
+| C13-R | Does the result reach every component that needs it? | Results reach workers. | Yes. | **PASS** | p06 trace: searches answered (6) reached the free-lane worker and pages were read (3). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C13-I | Does the result change later decisions correctly? | Capacity allocated by decision value. | Yes. | **FAIL** | stall 2026-11-26: every queued research fragment sits at priority 9 (eval) or 8/6 by purpose, never by the decision its answer changes; 1,167 waiting. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC6 |
+| C13-F | Does Brain recognise and recover when it fails? | Provider refuses: falls back. | Yes. | **RECHECK** | DDG lite/html fallback; still 69% refused. | UNPROVEN | sources | — |
+| C13-X | Does it still work combined with the other capabilities? | Capacity under 18+ goals. | Shared fairly. | **RECHECK** | 585d3fb shares capacity; unmeasured. | UNPROVEN | — | — |
 
 ### C14 Research work executes (fragments complete)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C14-P | Can Brain perform it correctly? | Fragments completed in 6 h. | >=80%. | **FAIL** | 1/18 (30Q traces). | research coordinator | RC6 |
-| C14-R | Does the result reach every component that needs it? | Completed fragments file claims. | Yes. | **PASS** | p06 3 claims filed. | gate | — |
-| C14-I | Does the result change later decisions correctly? | Queue ordered by decision value. | Yes. | **FAIL** | stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value. | — | RC6 |
-| C14-F | Does Brain recognise and recover when it fails? | Fragment faults: retried elsewhere. | Yes. | **NEEDS RECHECK** | #1018 class fixes; unmeasured here. | — | — |
-| C14-X | Does it still work combined with the other capabilities? | Execution under contention with other goals. | Goal research not starved. | **FAIL** | 2,063 waiting beside 278 free slots. | — | RC6 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C14-P | Can Brain perform it correctly? | Fragments completed in 6 h. | >=80%. | **FAIL** | 1/18 (30Q traces). | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | research coordinator | RC6 |
+| C14-R | Does the result reach every component that needs it? | Completed fragments file claims. | Yes. | **PASS** | p06 3 claims filed. | UNPROVEN | gate | — |
+| C14-I | Does the result change later decisions correctly? | Queue ordered by decision value. | Yes. | **FAIL** | stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC6 |
+| C14-F | Does Brain recognise and recover when it fails? | Fragment faults: retried elsewhere. | Yes. | **RECHECK** | #1018 class fixes; unmeasured here. | UNPROVEN | — | — |
+| C14-X | Does it still work combined with the other capabilities? | Execution under contention with other goals. | Goal research not starved. | **FAIL** | 2,063 waiting beside 278 free slots. | UNPROVEN | — | RC6 |
 
 ### C15 Open and read the pages
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C15-P | Can Brain perform it correctly? | Pages read per page found. | High. | **FAIL** | Production 21%; session workers 70-80%. | sources reader | RC6 |
-| C15-R | Does the result reach every component that needs it? | Read text reaches extraction. | Yes. | **PASS** | p06 trace: pages read → 3 claims extracted. | — | — |
-| C15-I | Does the result change later decisions correctly? | Unreadable source marked unresolved, not rejected. | Yes. | **PASS** | Retrieval state contract. | gate | — |
-| C15-F | Does Brain recognise and recover when it fails? | Blocked site: alternative source. | Yes. | **NEEDS RECHECK** | Workers did; production unknown. | — | — |
-| C15-X | Does it still work combined with the other capabilities? | Reading + capacity. | Within credits. | **FAIL** | Firecrawl 15/day. | — | RC6 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C15-P | Can Brain perform it correctly? | Pages read per page found. | High. | **FAIL** | Production 21%; session workers 70-80%. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | sources reader | RC6 |
+| C15-R | Does the result reach every component that needs it? | Read text reaches extraction. | Yes. | **PASS** | p06 trace: pages read → 3 claims extracted. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C15-I | Does the result change later decisions correctly? | Unreadable source marked unresolved, not rejected. | Yes. | **PASS** | Retrieval state contract. | UNPROVEN | gate | — |
+| C15-F | Does Brain recognise and recover when it fails? | Blocked site: alternative source. | Yes. | **RECHECK** | Workers did; production unknown. | UNPROVEN | — | — |
+| C15-X | Does it still work combined with the other capabilities? | Reading + capacity. | Within credits. | **FAIL** | Firecrawl 15/day. | UNPROVEN | — | RC6 |
 
 ### C16 Extract claims with exact citations
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C16-P | Can Brain perform it correctly? | Claims carry URL, quote, date, lane. | Yes. | **PASS** | 30Q: 100% of facts had URL+quote. | workers/gate | — |
-| C16-R | Does the result reach every component that needs it? | Claims reach findings. | Yes. | **PASS** | p06 trace: accepted claims appear in findings_now and were shown to a route ask (findingsShown 1). | — | — |
-| C16-I | Does the result change later decisions correctly? | Lane decides which figure a fact can ground. | Yes. | **PASS** | GROUND_LANES (9fb993c). | groundsOf | — |
-| C16-F | Does Brain recognise and recover when it fails? | Claim without source rejected. | Yes. | **PASS** | Gate contract. | gate | — |
-| C16-X | Does it still work combined with the other capabilities? | Extraction + verification. | Yes. | **PASS** | stall rejections: extraction then verification ("source does not directly support" 12 rejected). | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C16-P | Can Brain perform it correctly? | Claims carry URL, quote, date, lane. | Yes. | **PASS** | 30Q: 100% of facts had URL+quote. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | workers/gate | — |
+| C16-R | Does the result reach every component that needs it? | Claims reach findings. | Yes. | **PASS** | p06 trace: accepted claims appear in findings_now and were shown to a route ask (findingsShown 1). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C16-I | Does the result change later decisions correctly? | Lane decides which figure a fact can ground. | Yes. | **PASS** | GROUND_LANES (9fb993c). | UNPROVEN | groundsOf | — |
+| C16-F | Does Brain recognise and recover when it fails? | Claim without source rejected. | Yes. | **PASS** | Gate contract. | UNPROVEN | gate | — |
+| C16-X | Does it still work combined with the other capabilities? | Extraction + verification. | Yes. | **PASS** | stall rejections: extraction then verification ("source does not directly support" 12 rejected). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
 
 ### C17 Verify that the evidence supports the claim
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C17-P | Can Brain perform it correctly? | Quote present in the re-read page. | >=85%. | **PASS** | 30Q: 329/428 verified (77%); remainder held back, none delivered. | tools/verify.py (eval) / gate | — |
-| C17-R | Does the result reach every component that needs it? | Only verified claims delivered. | Yes. | **NEEDS RECHECK** | True in eval; production gate checks source, not quote presence. | gate | — |
-| C17-I | Does the result change later decisions correctly? | Unverified claim cannot ground a figure. | Yes. | **PASS** | groundsOf cites only shown findings of a fitting lane (tests); production gate rejects unsupported claims before they become findings. | — | — |
-| C17-F | Does Brain recognise and recover when it fails? | Paraphrased quote detected. | Yes. | **PASS** | Verifier caught 32 NOT_FOUND. | verify | — |
-| C17-X | Does it still work combined with the other capabilities? | Verification + capacity. | Cheap. | **PASS** | Re-read cache. | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C17-P | Can Brain perform it correctly? | Quote present in the re-read page. | >=85%. | **PASS** | 30Q: 329/428 verified (77%); remainder held back, none delivered. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | tools/verify.py (eval) / gate | — |
+| C17-R | Does the result reach every component that needs it? | Only verified claims delivered. | Yes. | **RECHECK** | True in eval; production gate checks source, not quote presence. | UNPROVEN | gate | — |
+| C17-I | Does the result change later decisions correctly? | Unverified claim cannot ground a figure. | Yes. | **PASS** | groundsOf cites only shown findings of a fitting lane (tests); production gate rejects unsupported claims before they become findings. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C17-F | Does Brain recognise and recover when it fails? | Paraphrased quote detected. | Yes. | **PASS** | Verifier caught 32 NOT_FOUND. | UNPROVEN | verify | — |
+| C17-X | Does it still work combined with the other capabilities? | Verification + capacity. | Cheap. | **PASS** | Re-read cache. | UNPROVEN | — | — |
 
 ### C18 Type the evidence (what it establishes: lane, scope exact/comparable, place, date)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C18-P | Can Brain perform it correctly? | Lanes assigned correctly. | Yes. | **NEEDS RECHECK** | Workers assigned lanes; not audited. | workers | — |
-| C18-R | Does the result reach every component that needs it? | Lane reaches groundsOf. | Yes. | **PASS** | 9fb993c. | groundsOf | — |
-| C18-I | Does the result change later decisions correctly? | Mis-scoped fact rejected as grounds. | Yes. | **PASS** | GROUND_LANES test. | groundsOf | — |
-| C18-F | Does Brain recognise and recover when it fails? | Consumer fact cited for B2B channel: caught? | Yes. | **FAIL** | p10 grader: consumer fact cited for B2B channel. | groundsOf | — |
-| C18-X | Does it still work combined with the other capabilities? | Typing + critic. | Critic checks scope. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C18-P | Can Brain perform it correctly? | Lanes assigned correctly. | Yes. | **RECHECK** | Workers assigned lanes; not audited. | UNPROVEN | workers | — |
+| C18-R | Does the result reach every component that needs it? | Lane reaches groundsOf. | Yes. | **PASS** | 9fb993c. | UNPROVEN | groundsOf | — |
+| C18-I | Does the result change later decisions correctly? | Mis-scoped fact rejected as grounds. | Yes. | **PASS** | GROUND_LANES test. | UNPROVEN | groundsOf | — |
+| C18-F | Does Brain recognise and recover when it fails? | Consumer fact cited for B2B channel: caught? | Yes. | **FAIL** | p10 grader: consumer fact cited for B2B channel. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | groundsOf | — |
+| C18-X | Does it still work combined with the other capabilities? | Typing + critic. | Critic checks scope. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C19 Combine facts and detect contradictions
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C19-P | Can Brain perform it correctly? | Route contradicted by a shown fact is dropped. | Yes. | **NEEDS RECHECK** | Upwork/Fiverr payout facts killed brokerage (correct); p10 CPA facts ignored by proposer. | critic/proposer | — |
-| C19-R | Does the result reach every component that needs it? | Knowledge contradictions reach planning. | Yes. | **FAIL** | Display only (integration diag). | knowledge | RC7 |
-| C19-I | Does the result change later decisions correctly? | Refuted claims never shown. | Yes. | **FAIL** | projectEvidenceClaims ignores contradiction_state (code). | repos/research.ts | RC4 |
-| C19-F | Does Brain recognise and recover when it fails? | Contradiction resolved by better source. | Yes. | **UNKNOWN** | — | — | — |
-| C19-X | Does it still work combined with the other capabilities? | Contradiction + selection. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C19-P | Can Brain perform it correctly? | Route contradicted by a shown fact is dropped. | Yes. | **RECHECK** | Upwork/Fiverr payout facts killed brokerage (correct); p10 CPA facts ignored by proposer. | UNPROVEN | critic/proposer | — |
+| C19-R | Does the result reach every component that needs it? | Knowledge contradictions reach planning. | Yes. | **FAIL** | Display only (integration diag). | UNPROVEN | knowledge | RC7 |
+| C19-I | Does the result change later decisions correctly? | Refuted claims never shown. | Yes. | **FAIL** | projectEvidenceClaims ignores contradiction_state (code). | CONTROLLED_FAILURE: re-introduced "a refuted claim shown as a finding" → tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted | repos/research.ts | RC4 |
+| C19-F | Does Brain recognise and recover when it fails? | Contradiction resolved by better source. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C19-X | Does it still work combined with the other capabilities? | Contradiction + selection. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C20 Knowledge library matching (buyer identity, counts)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C20-P | Can Brain perform it correctly? | Fragment buyers linked to NAICS counts? | Never as established. | **FAIL** | Integration diag. | knowledge/apply.ts | RC10 |
-| C20-R | Does the result reach every component that needs it? | Counts reach arrangements. | Only real segments. | **PASS** | Integration diagnosis: 80 buyers linked to Census counts reach arrangement buyer counts. | — | — |
-| C20-I | Does the result change later decisions correctly? | A false count redirects research. | No. | **FAIL** | Integration diagnosis: a wrong link reads "buyers established … the next research round asks for conversion". | — | RC10 |
-| C20-F | Does Brain recognise and recover when it fails? | Mismatch detected. | Yes. | **FAIL** | None. | — | RC10 |
-| C20-X | Does it still work combined with the other capabilities? | Library + route proposer. | Library facts available to routes. | **FAIL** | Integration diagnosis: the knowledge library feeds arrangements only; route asks never read it. | — | RC10 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C20-P | Can Brain perform it correctly? | Fragment buyers linked to NAICS counts? | Never as established. | **FAIL** | Integration diag. | UNPROVEN | knowledge/apply.ts | RC10 |
+| C20-R | Does the result reach every component that needs it? | Counts reach arrangements. | Only real segments. | **PASS** | Integration diagnosis: 80 buyers linked to Census counts reach arrangement buyer counts. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C20-I | Does the result change later decisions correctly? | A false count redirects research. | No. | **FAIL** | Integration diagnosis: a wrong link reads "buyers established … the next research round asks for conversion". | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC10 |
+| C20-F | Does Brain recognise and recover when it fails? | Mismatch detected. | Yes. | **FAIL** | None. | UNPROVEN | — | RC10 |
+| C20-X | Does it still work combined with the other capabilities? | Library + route proposer. | Library facts available to routes. | **FAIL** | Integration diagnosis: the knowledge library feeds arrangements only; route asks never read it. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC10 |
 
 ### C21 Deliver verified findings into the proposer's reasoning input
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C21-P | Can Brain perform it correctly? | Findings shown vs verified. | All distinct verified, or a relevance-chosen set covering every ground field. | **FAIL** | 40/111, 40/111, 40/135. | findingsOf | RC4 |
-| C21-R | Does the result reach every component that needs it? | Findings reach the critic too. | Yes. | **PASS** | critiquePrompt includes findings. | critiquePrompt | — |
-| C21-I | Does the result change later decisions correctly? | Shown findings used correctly. | Yes. | **FAIL** | 8/12 D. | proposer | RC8 |
-| C21-F | Does Brain recognise and recover when it fails? | Prompt too long / truncated. | Budgeted, not silently cut. | **NEEDS RECHECK** | Prompts 35 KB ok. | — | — |
-| C21-X | Does it still work combined with the other capabilities? | Delivery + dedupe + refuted filter. | No verified finding lost. | **FAIL** | 160-char dedupe dropped 6/9. | findingsOf | RC4 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C21-P | Can Brain perform it correctly? | Findings shown vs verified. | All distinct verified, or a relevance-chosen set covering every ground field. | **FAIL** | 40/111, 40/111, 40/135. | CONTROLLED_FAILURE: re-introduced "the old 40-finding cap" → tests/researchInformedRoutes.test.ts tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted | findingsOf | RC4 |
+| C21-R | Does the result reach every component that needs it? | Findings reach the critic too. | Yes. | **PASS** | critiquePrompt includes findings. | UNPROVEN | critiquePrompt | — |
+| C21-I | Does the result change later decisions correctly? | Shown findings used correctly. | Yes. | **FAIL** | 8/12 D. | UNPROVEN | proposer | RC8 |
+| C21-F | Does Brain recognise and recover when it fails? | Prompt too long / truncated. | Budgeted, not silently cut. | **RECHECK** | Prompts 35 KB ok. | UNPROVEN | — | — |
+| C21-X | Does it still work combined with the other capabilities? | Delivery + dedupe + refuted filter. | No verified finding lost. | **FAIL** | 160-char dedupe dropped 6/9. | CONTROLLED_FAILURE: re-introduced "near-duplicates judged on the first 160 characters" → tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted | findingsOf | RC4 |
 
 ### C22 Deliver findings and conclusions to other faculties (constructor, committee, dives, report, operator)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C22-P | Can Brain perform it correctly? | Constructor reads research. | Yes. | **FAIL** | 11-17 F2 (code). | goalScenario | RC7 |
-| C22-R | Does the result reach every component that needs it? | Committee questions answered. | Yes. | **FAIL** | answeredBy [] (production). | committee | RC7 |
-| C22-I | Does the result change later decisions correctly? | Plan verdict reaches route ask. | Yes. | **FAIL** | heldTitles only. | plan.ts:5877 | RC7 |
-| C22-F | Does Brain recognise and recover when it fails? | Missed handoff detected. | Yes. | **FAIL** | Report sees repetition; operator does not act. | — | RC7 |
-| C22-X | Does it still work combined with the other capabilities? | All faculties on one record. | Yes. | **FAIL** | Integration diagnosis §4.1: no shared per-goal working state. | — | RC7 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C22-P | Can Brain perform it correctly? | Constructor reads research. | Yes. | **FAIL** | 11-17 F2 (code). | UNPROVEN | goalScenario | RC7 |
+| C22-R | Does the result reach every component that needs it? | Committee questions answered. | Yes. | **FAIL** | answeredBy [] (production). | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | committee | RC7 |
+| C22-I | Does the result change later decisions correctly? | Plan verdict reaches route ask. | Yes. | **FAIL** | heldTitles only. | UNPROVEN | plan.ts:5877 | RC7 |
+| C22-F | Does Brain recognise and recover when it fails? | Missed handoff detected. | Yes. | **FAIL** | Report sees repetition; operator does not act. | UNPROVEN | — | RC7 |
+| C22-X | Does it still work combined with the other capabilities? | All faculties on one record. | Yes. | **FAIL** | Integration diagnosis §4.1: no shared per-goal working state. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC7 |
 
 ### C23 A model turn returns a valid answer (no empty/timeout/unparseable fall-through)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C23-P | Can Brain perform it correctly? | Primary model answers route asks. | >=95% valid. | **FAIL** | gpt-oss 6/12 empty. | ask/operatorChats | RC1 |
-| C23-R | Does the result reach every component that needs it? | Valid answer used; failed answer retried. | Yes. | **FAIL** | Falls to weaker model. | ask | RC1 |
-| C23-I | Does the result change later decisions correctly? | Fallback quality equals primary. | Yes. | **FAIL** | Fallback invented refusals. | — | RC1 |
-| C23-F | Does Brain recognise and recover when it fails? | Empty content treated as error and retried with larger budget. | Yes. | **FAIL** | Code: error null on empty. | ask | RC1 |
-| C23-X | Does it still work combined with the other capabilities? | Model answers under concurrent load. | Yes. | **NEEDS RECHECK** | Capacity 2026-11-26: GPU 8/16 slots with "errors acceptable"; route-ask behaviour under that load unmeasured. | — | — |
-| C23-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same prompt, larger max_tokens. | Answers. | **PASS** | Model exam: re-asked with streaming, gpt-oss served 30/30; the empty replies are the proxy idle cut, not the model (repaired W1j). | model | RC1 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C23-P | Can Brain perform it correctly? | Primary model answers route asks. | >=95% valid. | **FAIL** | gpt-oss 6/12 empty. | CONTROLLED_FAILURE: re-introduced "a non-streamed turn cut by the 100 s proxy idle" → tests/chatStreaming.test.ts failed naming RC1; unmutated code accepted | ask/operatorChats | RC1 |
+| C23-R | Does the result reach every component that needs it? | Valid answer used; failed answer retried. | Yes. | **FAIL** | Falls to weaker model. | UNPROVEN | ask | RC1 |
+| C23-I | Does the result change later decisions correctly? | Fallback quality equals primary. | Yes. | **FAIL** | Fallback invented refusals. | UNPROVEN | — | RC1 |
+| C23-F | Does Brain recognise and recover when it fails? | Empty content treated as error and retried with larger budget. | Yes. | **FAIL** | Code: error null on empty. | CONTROLLED_FAILURE: re-introduced "an empty reply not retried with a larger budget" → tests/planningFailureMapWave1.test.ts failed naming RC1; unmutated code accepted | ask | RC1 |
+| C23-X | Does it still work combined with the other capabilities? | Model answers under concurrent load. | Yes. | **RECHECK** | Capacity 2026-11-26: GPU 8/16 slots with "errors acceptable"; route-ask behaviour under that load unmeasured. | UNPROVEN | — | — |
+| C23-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Same prompt, larger max_tokens. | Answers. | **PASS** | Model exam: re-asked with streaming, gpt-oss served 30/30; the empty replies are the proxy idle cut, not the model (repaired W1j). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | model | RC1 |
 
 ### C24 Propose routes that use the evidence correctly
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C24-P | Can Brain perform it correctly? | Routes cite findings that state the figure. | Yes. | **FAIL** | Mis-citations (p10 F2 for price; consumer fact for B2B). | proposer | RC8 |
-| C24-R | Does the result reach every component that needs it? | Proposed routes reach critic and plan. | Yes. | **PASS** | 30Q probes: every parsed route was critiqued (critique records per route). | — | — |
-| C24-I | Does the result change later decisions correctly? | Evidence changes route choice. | Yes. | **NEEDS RECHECK** | Partly (p02 prices; p06 escrow). | — | — |
-| C24-F | Does Brain recognise and recover when it fails? | Route contradicted by a fact: dropped by code or critic. | Yes. | **PASS** | 30Q p06 R1all: Upwork route contradicted by payout-hold facts dropped by the critic, correctly (grader). | — | — |
-| C24-X | Does it still work combined with the other capabilities? | Evidence + limits + owner means. | All three respected. | **FAIL** | p06 invented subcontractor. | proposer | RC8 |
-| C24-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on identical prompt. | Better use. | **FAIL** | Model exam evidence interpretation: gpt-oss 1.00/2, Claude 1.93/2; 30Q control 0/3 usable but best evidence hygiene. | model | RC14 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C24-P | Can Brain perform it correctly? | Routes cite findings that state the figure. | Yes. | **FAIL** | Mis-citations (p10 F2 for price; consumer fact for B2B). | UNPROVEN | proposer | RC8 |
+| C24-R | Does the result reach every component that needs it? | Proposed routes reach critic and plan. | Yes. | **PASS** | 30Q probes: every parsed route was critiqued (critique records per route). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C24-I | Does the result change later decisions correctly? | Evidence changes route choice. | Yes. | **RECHECK** | Partly (p02 prices; p06 escrow). | UNPROVEN | — | — |
+| C24-F | Does Brain recognise and recover when it fails? | Route contradicted by a fact: dropped by code or critic. | Yes. | **PASS** | 30Q p06 R1all: Upwork route contradicted by payout-hold facts dropped by the critic, correctly (grader). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C24-X | Does it still work combined with the other capabilities? | Evidence + limits + owner means. | All three respected. | **FAIL** | p06 invented subcontractor. | UNPROVEN | proposer | RC8 |
+| C24-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model on identical prompt. | Better use. | **FAIL** | Model exam evidence interpretation: gpt-oss 1.00/2, Claude 1.93/2; 30Q control 0/3 usable but best evidence hygiene. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | model | RC14 |
 
 ### C25 Quantitative and causal economics (price x volume, CAC vs capital, margin, hours, reach)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C25-P | Can Brain perform it correctly? | Route reach computed vs target. | Correct. | **FAIL** | 445 sales from $3k at $39 CPA. | parseRoutes | RC8 |
-| C25-R | Does the result reach every component that needs it? | Computed figures shown to critic and owner. | Yes. | **FAIL** | Only hours computed. | — | RC8 |
-| C25-I | Does the result change later decisions correctly? | Under-reaching route flagged/fixed. | Yes. | **NEEDS RECHECK** | W1c: economics line + ACQUISITION refusal (tests); production pending. | — | — |
-| C25-F | Does Brain recognise and recover when it fails? | Arithmetic error detected. | Yes. | **FAIL** | None. | — | RC8 |
-| C25-X | Does it still work combined with the other capabilities? | Economics + timing + capital. | Consistent. | **UNKNOWN** | — | — | — |
-| C25-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control on arithmetic. | Correct. | **FAIL** | Model exam reasoning correctness: gpt-oss 1.13/2, fallback 0.23, Claude 1.97; mechanical key numbers gpt-oss 7/9. | model | RC14 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C25-P | Can Brain perform it correctly? | Route reach computed vs target. | Correct. | **FAIL** | 445 sales from $3k at $39 CPA. | CONTROLLED_FAILURE: re-introduced "a route whose buyers cost more than a sale earns accepted" → tests/planningFailureMapWave1.test.ts failed naming RC8; unmutated code accepted | parseRoutes | RC8 |
+| C25-R | Does the result reach every component that needs it? | Computed figures shown to critic and owner. | Yes. | **FAIL** | Only hours computed. | CONTROLLED_FAILURE: re-introduced "the critic not told the computed first-cash date" → tests/planningFailureMapWave1.test.ts failed naming RC8; unmutated code accepted | — | RC8 |
+| C25-I | Does the result change later decisions correctly? | Under-reaching route flagged/fixed. | Yes. | **RECHECK** | W1c: economics line + ACQUISITION refusal (tests); production pending. | UNPROVEN | — | — |
+| C25-F | Does Brain recognise and recover when it fails? | Arithmetic error detected. | Yes. | **FAIL** | None. | UNPROVEN | — | RC8 |
+| C25-X | Does it still work combined with the other capabilities? | Economics + timing + capital. | Consistent. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C25-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control on arithmetic. | Correct. | **FAIL** | Model exam reasoning correctness: gpt-oss 1.13/2, fallback 0.23, Claude 1.97; mechanical key numbers gpt-oss 7/9. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | model | RC14 |
 
 ### C26 Payment terms and time to collected cash
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C26-P | Can Brain perform it correctly? | Collected-cash day computed from payout facts. | Correct. | **FAIL** | p06 routes ignored 10/14-day holds; critic misread net-30. | proposer/critic | RC2 |
-| C26-R | Does the result reach every component that needs it? | Payout facts shown. | Yes. | **NEEDS RECHECK** | 30Q all-findings arm: payout facts shown; under the old 40 cap they were cut. Cap raised (W1e); production recheck pending. | — | — |
-| C26-I | Does the result change later decisions correctly? | Settlement fact rules routes in/out. | Yes. | **NEEDS RECHECK** | Correct kills on p06. | — | — |
-| C26-F | Does Brain recognise and recover when it fails? | Misread timing corrected. | Yes. | **NEEDS RECHECK** | W1b: a disputed timing is a repair the code re-checks (tests); production pending. | — | RC2 |
-| C26-X | Does it still work combined with the other capabilities? | Timing + window + platform. | Yes. | **UNKNOWN** | — | — | RC2 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C26-P | Can Brain perform it correctly? | Collected-cash day computed from payout facts. | Correct. | **FAIL** | p06 routes ignored 10/14-day holds; critic misread net-30. | UNPROVEN | proposer/critic | RC2 |
+| C26-R | Does the result reach every component that needs it? | Payout facts shown. | Yes. | **RECHECK** | 30Q all-findings arm: payout facts shown; under the old 40 cap they were cut. Cap raised (W1e); production recheck pending. | UNPROVEN | — | — |
+| C26-I | Does the result change later decisions correctly? | Settlement fact rules routes in/out. | Yes. | **RECHECK** | Correct kills on p06. | UNPROVEN | — | — |
+| C26-F | Does Brain recognise and recover when it fails? | Misread timing corrected. | Yes. | **RECHECK** | W1b: a disputed timing is a repair the code re-checks (tests); production pending. | CONTROLLED_FAILURE: re-introduced "a disputed timing dropped instead of re-checked as a repair" → tests/planningFailureMapWave1.test.ts failed naming RC2; unmutated code accepted | — | RC2 |
+| C26-X | Does it still work combined with the other capabilities? | Timing + window + platform. | Yes. | **UNKNOWN** | — | UNPROVEN | — | RC2 |
 
 ### C27 Buyer discovery and acquisition channel reasoning
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C27-P | Can Brain perform it correctly? | Channel can produce needed buyers in window on budget. | Yes. | **FAIL** | Passive channels (ARMLS listing), cold email at 0.45% for 6 buyers in 7 days. | proposer | RC8 |
-| C27-R | Does the result reach every component that needs it? | Channel cost facts shown. | Yes. | **FAIL** | Cut by cap (p02 FB CPL, p10 cold-email cost). | findingsOf | RC4 |
-| C27-I | Does the result change later decisions correctly? | Channel cost changes volume. | Yes. | **UNKNOWN** | — | — | RC8 |
-| C27-F | Does Brain recognise and recover when it fails? | Channel inadequate: replaced. | Yes. | **UNKNOWN** | — | — | — |
-| C27-X | Does it still work combined with the other capabilities? | Channel + capital + hours. | Yes. | **UNKNOWN** | — | — | RC8 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C27-P | Can Brain perform it correctly? | Channel can produce needed buyers in window on budget. | Yes. | **FAIL** | Passive channels (ARMLS listing), cold email at 0.45% for 6 buyers in 7 days. | UNPROVEN | proposer | RC8 |
+| C27-R | Does the result reach every component that needs it? | Channel cost facts shown. | Yes. | **FAIL** | Cut by cap (p02 FB CPL, p10 cold-email cost). | UNPROVEN | findingsOf | RC4 |
+| C27-I | Does the result change later decisions correctly? | Channel cost changes volume. | Yes. | **UNKNOWN** | — | UNPROVEN | — | RC8 |
+| C27-F | Does Brain recognise and recover when it fails? | Channel inadequate: replaced. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C27-X | Does it still work combined with the other capabilities? | Channel + capital + hours. | Yes. | **UNKNOWN** | — | UNPROVEN | — | RC8 |
 
 ### C28 Fulfilment and subcontractor reasoning
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C28-P | Can Brain perform it correctly? | Named fulfiller with evidenced cost. | Yes. | **FAIL** | Invented $10/h VA; unnamed subcontractor. | proposer | RC8 |
-| C28-R | Does the result reach every component that needs it? | Fulfiller facts shown. | Yes. | **NEEDS RECHECK** | As C26-R, for fulfiller facts. | — | — |
-| C28-I | Does the result change later decisions correctly? | Fulfiller cost sets margin. | Yes. | **PASS** | MARGIN rule worked (p06). | parseRoutes | — |
-| C28-F | Does Brain recognise and recover when it fails? | No fulfiller: route repaired or dropped. | Yes. | **UNKNOWN** | — | — | — |
-| C28-X | Does it still work combined with the other capabilities? | Fulfilment + zero owner hours. | Selling/managing also delegated. | **FAIL** | p10 nobody takes sales calls. | proposer | RC8 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C28-P | Can Brain perform it correctly? | Named fulfiller with evidenced cost. | Yes. | **FAIL** | Invented $10/h VA; unnamed subcontractor. | UNPROVEN | proposer | RC8 |
+| C28-R | Does the result reach every component that needs it? | Fulfiller facts shown. | Yes. | **RECHECK** | As C26-R, for fulfiller facts. | UNPROVEN | — | — |
+| C28-I | Does the result change later decisions correctly? | Fulfiller cost sets margin. | Yes. | **PASS** | MARGIN rule worked (p06). | UNPROVEN | parseRoutes | — |
+| C28-F | Does Brain recognise and recover when it fails? | No fulfiller: route repaired or dropped. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C28-X | Does it still work combined with the other capabilities? | Fulfilment + zero owner hours. | Selling/managing also delegated. | **FAIL** | p10 nobody takes sales calls. | UNPROVEN | proposer | RC8 |
 
 ### C29 Legal and platform-terms reasoning
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C29-P | Can Brain perform it correctly? | Surveying licence, platform rules, business licence. | Correct. | **PASS** | p02 survey law flagged; Marketplace services ban found. | critic | — |
-| C29-R | Does the result reach every component that needs it? | Legal facts reach critic. | Yes. | **PASS** | 30Q: the critic cited A.R.S. 32-101 survey law from the findings. | — | — |
-| C29-I | Does the result change later decisions correctly? | Legal fact drops route. | Yes. | **PASS** | Construction surveying dropped. | — | — |
-| C29-F | Does Brain recognise and recover when it fails? | Over-strict legal veto (license cost as capital breach). | Distinguish payable-from-proceeds. | **FAIL** | p06 $73 licence used to drop. | critic | RC2 |
-| C29-X | Does it still work combined with the other capabilities? | Legal + capital + timing. | Yes. | **UNKNOWN** | — | — | RC2 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C29-P | Can Brain perform it correctly? | Surveying licence, platform rules, business licence. | Correct. | **PASS** | p02 survey law flagged; Marketplace services ban found. | UNPROVEN | critic | — |
+| C29-R | Does the result reach every component that needs it? | Legal facts reach critic. | Yes. | **PASS** | 30Q: the critic cited A.R.S. 32-101 survey law from the findings. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C29-I | Does the result change later decisions correctly? | Legal fact drops route. | Yes. | **PASS** | Construction surveying dropped. | UNPROVEN | — | — |
+| C29-F | Does Brain recognise and recover when it fails? | Over-strict legal veto (license cost as capital breach). | Distinguish payable-from-proceeds. | **FAIL** | p06 $73 licence used to drop. | UNPROVEN | critic | RC2 |
+| C29-X | Does it still work combined with the other capabilities? | Legal + capital + timing. | Yes. | **UNKNOWN** | — | UNPROVEN | — | RC2 |
 
 ### C30 Parser and mechanical validation (correct rejections; repair, not loss)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C30-P | Can Brain perform it correctly? | Rejections correct. | Yes. | **NEEDS RECHECK** | Hours/margin correct; OWNER_FIT missing-field incorrect. | parseRoutes | RC9 |
-| C30-R | Does the result reach every component that needs it? | Rejections recorded. | Yes. | **PASS** | Route events record rejectedByRule; probe parsed.rejected lists rule and reason. | — | — |
-| C30-I | Does the result change later decisions correctly? | Rejected route repaired once. | Yes. | **FAIL** | No repair. | — | RC9 |
-| C30-F | Does Brain recognise and recover when it fails? | Whole output lost to a field rule. | Never. | **FAIL** | p10 R1 all. | — | RC9 |
-| C30-X | Does it still work combined with the other capabilities? | Parser + critic + replacement. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C30-P | Can Brain perform it correctly? | Rejections correct. | Yes. | **RECHECK** | Hours/margin correct; OWNER_FIT missing-field incorrect. | UNPROVEN | parseRoutes | RC9 |
+| C30-R | Does the result reach every component that needs it? | Rejections recorded. | Yes. | **PASS** | Route events record rejectedByRule; probe parsed.rejected lists rule and reason. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C30-I | Does the result change later decisions correctly? | Rejected route repaired once. | Yes. | **FAIL** | No repair. | UNPROVEN | — | RC9 |
+| C30-F | Does Brain recognise and recover when it fails? | Whole output lost to a field rule. | Never. | **FAIL** | p10 R1 all. | CONTROLLED_FAILURE: re-introduced "a missing owner-fit sentence loses the route" → tests/planningFailureMapWave1.test.ts failed naming RC9; unmutated code accepted | — | RC9 |
+| C30-X | Does it still work combined with the other capabilities? | Parser + critic + replacement. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C31 Criticise correctly (drop only on verified grounds)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C31-P | Can Brain perform it correctly? | Critic drops only routes that truly fail. | Yes. | **FAIL** | >=4 false drops; 14/18 dropped. | critic | RC2 |
-| C31-R | Does the result reach every component that needs it? | Critic sees findings and computed figures. | Yes. | **FAIL** | No computed figures. | — | RC8 |
-| C31-I | Does the result change later decisions correctly? | A drop leads to a better route. | Yes. | **FAIL** | Outputs end with nothing. | — | RC2 |
-| C31-F | Does Brain recognise and recover when it fails? | False drop detected and overruled. | Yes. | **FAIL** | None. | — | RC2 |
-| C31-X | Does it still work combined with the other capabilities? | Critic + parser + replacement. | At least one usable route survives when one exists. | **FAIL** | 9/12 outputs no plan. | — | RC2 |
-| C31-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model as critic on the same routes. | Fewer false drops. | **NEEDS RECHECK** | Not run as critic; exam constraint and evidence errors predict false drops from open models. | model | RC14 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C31-P | Can Brain perform it correctly? | Critic drops only routes that truly fail. | Yes. | **FAIL** | >=4 false drops; 14/18 dropped. | UNPROVEN | critic | RC2 |
+| C31-R | Does the result reach every component that needs it? | Critic sees findings and computed figures. | Yes. | **FAIL** | No computed figures. | UNPROVEN | — | RC8 |
+| C31-I | Does the result change later decisions correctly? | A drop leads to a better route. | Yes. | **FAIL** | Outputs end with nothing. | UNPROVEN | — | RC2 |
+| C31-F | Does Brain recognise and recover when it fails? | False drop detected and overruled. | Yes. | **FAIL** | None. | CONTROLLED_FAILURE: re-introduced "a WINDOW-only drop removes the route (the net-30 misreading)" → tests/planningFailureMapWave1.test.ts failed naming RC2; unmutated code accepted | — | RC2 |
+| C31-X | Does it still work combined with the other capabilities? | Critic + parser + replacement. | At least one usable route survives when one exists. | **FAIL** | 9/12 outputs no plan. | UNPROVEN | — | RC2 |
+| C31-M | Is a failure the model's own, or Brain's instructions/software? (model isolated on the identical input) | Control model as critic on the same routes. | Fewer false drops. | **RECHECK** | Not run as critic; exam constraint and evidence errors predict false drops from open models. | UNPROVEN | model | RC14 |
 
 ### C32 Revise after critique (replacement routes)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C32-P | Can Brain perform it correctly? | Replacement ask runs when nothing survives. | Yes. | **NEEDS RECHECK** | Code: critiqueAndRevise asks replacements when fewer than ROUTES_MIN_SURVIVING survive; not exercised by the eval probe, production effect unmeasured. | critiqueAndRevise | — |
-| C32-R | Does the result reach every component that needs it? | Replacements critiqued. | Yes. | **NEEDS RECHECK** | Code: replacements are parsed and ranked after kept routes, not critiqued again. | — | — |
-| C32-I | Does the result change later decisions correctly? | Replacement better. | Yes. | **UNKNOWN** | — | — | — |
-| C32-F | Does Brain recognise and recover when it fails? | Replacement fails: recorded. | Yes. | **PASS** | Code + event detail: replacement failures are named in critique.reason. | — | — |
-| C32-X | Does it still work combined with the other capabilities? | Revision + economics. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C32-P | Can Brain perform it correctly? | Replacement ask runs when nothing survives. | Yes. | **RECHECK** | Code: critiqueAndRevise asks replacements when fewer than ROUTES_MIN_SURVIVING survive; not exercised by the eval probe, production effect unmeasured. | UNPROVEN | critiqueAndRevise | — |
+| C32-R | Does the result reach every component that needs it? | Replacements critiqued. | Yes. | **RECHECK** | Code: replacements are parsed and ranked after kept routes, not critiqued again. | UNPROVEN | — | — |
+| C32-I | Does the result change later decisions correctly? | Replacement better. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C32-F | Does Brain recognise and recover when it fails? | Replacement fails: recorded. | Yes. | **PASS** | Code + event detail: replacement failures are named in critique.reason. | UNPROVEN | — | — |
+| C32-X | Does it still work combined with the other capabilities? | Revision + economics. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C33 Compare and select one strategy
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C33-P | Can Brain perform it correctly? | Ranking follows computed economics and evidence. | Yes. | **FAIL** | Critic scores; no economics. | applyCritique | RC8 |
-| C33-R | Does the result reach every component that needs it? | Chosen strategy read by planner/committee/report. | Yes. | **FAIL** | Integration diagnosis: four different "best" strategies in one production reading. | — | RC11,RC13 |
-| C33-I | Does the result change later decisions correctly? | Selection changes plan reading. | Yes. | **FAIL** | Same: the chosen route does not decide the plan reading (fm1126a f01 plan built from constructed arrangements). | — | RC11,RC13 |
-| C33-F | Does Brain recognise and recover when it fails? | Tie or none: says so. | Yes. | **PASS** | fm1126a f01 read: "NOT ACCEPTED: no candidate plan yet" — says so. | — | — |
-| C33-X | Does it still work combined with the other capabilities? | Selection across generators. | One arbiter. | **FAIL** | RC11/RC13: generators are not arbitrated. | — | RC11,RC13 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C33-P | Can Brain perform it correctly? | Ranking follows computed economics and evidence. | Yes. | **FAIL** | Critic scores; no economics. | UNPROVEN | applyCritique | RC8 |
+| C33-R | Does the result reach every component that needs it? | Chosen strategy read by planner/committee/report. | Yes. | **FAIL** | Integration diagnosis: four different "best" strategies in one production reading. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC11,RC13 |
+| C33-I | Does the result change later decisions correctly? | Selection changes plan reading. | Yes. | **FAIL** | Same: the chosen route does not decide the plan reading (fm1126a f01 plan built from constructed arrangements). | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC11,RC13 |
+| C33-F | Does Brain recognise and recover when it fails? | Tie or none: says so. | Yes. | **PASS** | fm1126a f01 read: "NOT ACCEPTED: no candidate plan yet" — says so. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C33-X | Does it still work combined with the other capabilities? | Selection across generators. | One arbiter. | **FAIL** | RC11/RC13: generators are not arbitrated. | UNPROVEN | — | RC11,RC13 |
 
 ### C34 Identify risks and invalid assumptions
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C34-P | Can Brain perform it correctly? | Assumptions named per route. | Yes. | **PASS** | routes carry assumptions. | proposer | — |
-| C34-R | Does the result reach every component that needs it? | Assumptions become research. | Yes. | **NEEDS RECHECK** | searches field exists; execution starved. | — | RC6 |
-| C34-I | Does the result change later decisions correctly? | Disproved assumption drops/repairs route. | Yes. | **UNKNOWN** | — | — | — |
-| C34-F | Does Brain recognise and recover when it fails? | Hidden assumption surfaced by critic. | Yes. | **UNKNOWN** | — | — | — |
-| C34-X | Does it still work combined with the other capabilities? | Risk + economics. | Sensitivity shown. | **UNKNOWN** | — | — | RC8 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C34-P | Can Brain perform it correctly? | Assumptions named per route. | Yes. | **PASS** | routes carry assumptions. | UNPROVEN | proposer | — |
+| C34-R | Does the result reach every component that needs it? | Assumptions become research. | Yes. | **RECHECK** | searches field exists; execution starved. | UNPROVEN | — | RC6 |
+| C34-I | Does the result change later decisions correctly? | Disproved assumption drops/repairs route. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C34-F | Does Brain recognise and recover when it fails? | Hidden assumption surfaced by critic. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C34-X | Does it still work combined with the other capabilities? | Risk + economics. | Sensitivity shown. | **UNKNOWN** | — | UNPROVEN | — | RC8 |
 
 ### C35 Know when a plan is ready (and when more research is needed)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C35-P | Can Brain perform it correctly? | Readiness of a research-backed plan. | Reachable. | **FAIL** | Acceptance unattainable by research (11-17 F1). | judgeAcceptance | RC12 |
-| C35-R | Does the result reach every component that needs it? | Readiness shown to owner. | Yes. | **PASS** | fm1126a f01 read: report lines and acceptance sentence shown. | — | — |
-| C35-I | Does the result change later decisions correctly? | Not-ready names the next research. | Yes. | **NEEDS RECHECK** | Plan "missing" lists exist. | plan.ts | — |
-| C35-F | Does Brain recognise and recover when it fails? | Stalled readiness detected. | Yes. | **FAIL** | Report sees 12-hour repetition; nothing acts. | — | RC7 |
-| C35-X | Does it still work combined with the other capabilities? | Readiness + committee. | Agree. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C35-P | Can Brain perform it correctly? | Readiness of a research-backed plan. | Reachable. | **FAIL** | Acceptance unattainable by research (11-17 F1). | UNPROVEN | judgeAcceptance | RC12 |
+| C35-R | Does the result reach every component that needs it? | Readiness shown to owner. | Yes. | **PASS** | fm1126a f01 read: report lines and acceptance sentence shown. | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C35-I | Does the result change later decisions correctly? | Not-ready names the next research. | Yes. | **RECHECK** | Plan "missing" lists exist. | UNPROVEN | plan.ts | — |
+| C35-F | Does Brain recognise and recover when it fails? | Stalled readiness detected. | Yes. | **FAIL** | Report sees 12-hour repetition; nothing acts. | UNPROVEN | — | RC7 |
+| C35-X | Does it still work combined with the other capabilities? | Readiness + committee. | Agree. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C36 Convert the chosen strategy into a complete executable plan
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C36-P | Can Brain perform it correctly? | Route → steps with owners, dates, costs, first action. | Executable tomorrow. | **FAIL** | Model exam: complete executable plan Claude 4/4, gpt-oss 0/4, Qwen 0/4. Production fm1126a f01: the owner's plan is research steps on generic constructed arrangements. | goals/plan.ts steps; route→plan | RC14,RC13 |
-| C36-R | Does the result reach every component that needs it? | Steps reach the owner view. | Yes. | **PASS** | fm1126a f01 read: steps reach the owner view (their content fails C36-P). | — | — |
-| C36-I | Does the result change later decisions correctly? | Step results update the plan. | Yes. | **UNKNOWN** | — | — | — |
-| C36-F | Does Brain recognise and recover when it fails? | Step blocked: replanned. | Yes. | **UNKNOWN** | — | — | — |
-| C36-X | Does it still work combined with the other capabilities? | Plan + limits + economics. | Consistent. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C36-P | Can Brain perform it correctly? | Route → steps with owners, dates, costs, first action. | Executable tomorrow. | **FAIL** | Model exam: complete executable plan Claude 4/4, gpt-oss 0/4, Qwen 0/4. Production fm1126a f01: the owner's plan is research steps on generic constructed arrangements. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | goals/plan.ts steps; route→plan | RC14,RC13 |
+| C36-R | Does the result reach every component that needs it? | Steps reach the owner view. | Yes. | **PASS** | fm1126a f01 read: steps reach the owner view (their content fails C36-P). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C36-I | Does the result change later decisions correctly? | Step results update the plan. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C36-F | Does Brain recognise and recover when it fails? | Step blocked: replanned. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C36-X | Does it still work combined with the other capabilities? | Plan + limits + economics. | Consistent. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C37 Learn from previous findings and failures
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C37-P | Can Brain perform it correctly? | Rethink/calibration lessons recorded. | Yes. | **PASS** | operator_learnings rows. | routeProposal:1911 | — |
-| C37-R | Does the result reach every component that needs it? | Lessons read by the next ask. | Yes. | **FAIL** | No reader. | routeContext | RC7 |
-| C37-I | Does the result change later decisions correctly? | A lesson changes the next ask. | Yes. | **NEEDS RECHECK** | W1h: rethinks of earlier asks are now read (code); production effect pending. | — | RC7 |
-| C37-F | Does Brain recognise and recover when it fails? | Wrong lesson corrected. | Yes. | **UNKNOWN** | — | — | — |
-| C37-X | Does it still work combined with the other capabilities? | Lessons across goals. | Transfer. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C37-P | Can Brain perform it correctly? | Rethink/calibration lessons recorded. | Yes. | **PASS** | operator_learnings rows. | UNPROVEN | routeProposal:1911 | — |
+| C37-R | Does the result reach every component that needs it? | Lessons read by the next ask. | Yes. | **FAIL** | No reader. | UNPROVEN | routeContext | RC7 |
+| C37-I | Does the result change later decisions correctly? | A lesson changes the next ask. | Yes. | **RECHECK** | W1h: rethinks of earlier asks are now read (code); production effect pending. | UNPROVEN | — | RC7 |
+| C37-F | Does Brain recognise and recover when it fails? | Wrong lesson corrected. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C37-X | Does it still work combined with the other capabilities? | Lessons across goals. | Transfer. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C38 Adapt when circumstances change (owner change, new evidence, refutation)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C38-P | Can Brain perform it correctly? | New findings trigger a re-ask. | Yes. | **PASS** | NEW_FINDINGS_FOR_REASK. | routeAskDue | — |
-| C38-R | Does the result reach every component that needs it? | Owner change reaches prompts. | Yes. | **NEEDS RECHECK** | planningEval update writes the owner's change into target resources read by routeContext (code); not exercised. | — | — |
-| C38-I | Does the result change later decisions correctly? | Re-ask changes plan. | Yes. | **UNKNOWN** | — | — | — |
-| C38-F | Does Brain recognise and recover when it fails? | Failed ask retried soon. | Yes. | **PASS** | ROUTE_RETRY_AFTER_FAILURE_MS 30 min. | — | — |
-| C38-X | Does it still work combined with the other capabilities? | Adaptation + learning. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C38-P | Can Brain perform it correctly? | New findings trigger a re-ask. | Yes. | **PASS** | NEW_FINDINGS_FOR_REASK. | UNPROVEN | routeAskDue | — |
+| C38-R | Does the result reach every component that needs it? | Owner change reaches prompts. | Yes. | **RECHECK** | planningEval update writes the owner's change into target resources read by routeContext (code); not exercised. | UNPROVEN | — | — |
+| C38-I | Does the result change later decisions correctly? | Re-ask changes plan. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C38-F | Does Brain recognise and recover when it fails? | Failed ask retried soon. | Yes. | **PASS** | ROUTE_RETRY_AFTER_FAILURE_MS 30 min. | UNPROVEN | — | — |
+| C38-X | Does it still work combined with the other capabilities? | Adaptation + learning. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C39 Recover from model, research and software failures
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C39-P | Can Brain perform it correctly? | Model failure → retry; research fault → requeue; parse fail → salvage. | Yes. | **FAIL** | Empty → weaker fallback; parse loss. | — | RC1 |
-| C39-R | Does the result reach every component that needs it? | Failure recorded where the next faculty reads it. | Yes. | **PASS** | Route events record why an ask failed (NO_ANSWER reasons in trace route_asks). | — | — |
-| C39-I | Does the result change later decisions correctly? | Recovery restores the plan. | Yes. | **UNKNOWN** | — | — | RC1 |
-| C39-F | Does Brain recognise and recover when it fails? | Repeated failure escalates. | Yes. | **NEEDS RECHECK** | Report flags repetition. | — | — |
-| C39-X | Does it still work combined with the other capabilities? | Concurrent failures. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C39-P | Can Brain perform it correctly? | Model failure → retry; research fault → requeue; parse fail → salvage. | Yes. | **FAIL** | Empty → weaker fallback; parse loss. | UNPROVEN | — | RC1 |
+| C39-R | Does the result reach every component that needs it? | Failure recorded where the next faculty reads it. | Yes. | **PASS** | Route events record why an ask failed (NO_ANSWER reasons in trace route_asks). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C39-I | Does the result change later decisions correctly? | Recovery restores the plan. | Yes. | **UNKNOWN** | — | UNPROVEN | — | RC1 |
+| C39-F | Does Brain recognise and recover when it fails? | Repeated failure escalates. | Yes. | **RECHECK** | Report flags repetition. | UNPROVEN | — | — |
+| C39-X | Does it still work combined with the other capabilities? | Concurrent failures. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C40 Own the next step of every goal (no unowned step)
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C40-P | Can Brain perform it correctly? | Every live goal names an owner for its next step. | Yes. | **FAIL** | 4/6 "[NOBODY]". | goal tick | RC7 |
-| C40-R | Does the result reach every component that needs it? | Owner acts. | Yes. | **FAIL** | Integration diagnosis: 4 of 6 live goals "[NOBODY] Brain judges each idea on its next pass". | — | RC7 |
-| C40-I | Does the result change later decisions correctly? | Action changes the plan. | Yes. | **UNKNOWN** | — | — | — |
-| C40-F | Does Brain recognise and recover when it fails? | Idle goal detected. | Yes. | **NEEDS RECHECK** | Watchdog exists. | — | — |
-| C40-X | Does it still work combined with the other capabilities? | Orchestration + capacity. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C40-P | Can Brain perform it correctly? | Every live goal names an owner for its next step. | Yes. | **FAIL** | 4/6 "[NOBODY]". | UNPROVEN | goal tick | RC7 |
+| C40-R | Does the result reach every component that needs it? | Owner acts. | Yes. | **FAIL** | Integration diagnosis: 4 of 6 live goals "[NOBODY] Brain judges each idea on its next pass". | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC7 |
+| C40-I | Does the result change later decisions correctly? | Action changes the plan. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C40-F | Does Brain recognise and recover when it fails? | Idle goal detected. | Yes. | **RECHECK** | Watchdog exists. | UNPROVEN | — | — |
+| C40-X | Does it still work combined with the other capabilities? | Orchestration + capacity. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C41 Choose models by their measured results on this work
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C41-P | Can Brain perform it correctly? | Model fitness measured on route outcomes. | Yes. | **FAIL** | Report judges by tool-call success (operationsReport.ts:327). | operationsReport | RC1 |
-| C41-R | Does the result reach every component that needs it? | Fitness changes routing. | Yes. | **FAIL** | Code: operationsReport.ts:327 judges model adequacy by tool-call success; no route-outcome measure changes routing. | — | RC1,RC14 |
-| C41-I | Does the result change later decisions correctly? | Better model used when measured better. | Yes. | **FAIL** | Strong model inert (no key). | strongRouteModels | RC1 |
-| C41-F | Does Brain recognise and recover when it fails? | A failing model is benched. | Yes. | **FAIL** | Code: the fallback (1/30 on the model exam) is never benched; challengerModels order is fixed. | — | RC1,RC14 |
-| C41-X | Does it still work combined with the other capabilities? | Model choice across faculties. | Yes. | **UNKNOWN** | — | — | — |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C41-P | Can Brain perform it correctly? | Model fitness measured on route outcomes. | Yes. | **FAIL** | Report judges by tool-call success (operationsReport.ts:327). | UNPROVEN | operationsReport | RC1 |
+| C41-R | Does the result reach every component that needs it? | Fitness changes routing. | Yes. | **FAIL** | Code: operationsReport.ts:327 judges model adequacy by tool-call success; no route-outcome measure changes routing. | UNPROVEN | — | RC1,RC14 |
+| C41-I | Does the result change later decisions correctly? | Better model used when measured better. | Yes. | **FAIL** | Strong model inert (no key). | UNPROVEN | strongRouteModels | RC1 |
+| C41-F | Does Brain recognise and recover when it fails? | A failing model is benched. | Yes. | **FAIL** | Code: the fallback (1/30 on the model exam) is never benched; challengerModels order is fixed. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC1,RC14 |
+| C41-X | Does it still work combined with the other capabilities? | Model choice across faculties. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 
 ### C42 Present a usable plan to the owner
 
-| id | dimension | test | expected (pass condition) | status | evidence | component | root cause |
-|---|---|---|---|---|---|---|---|
-| C42-P | Can Brain perform it correctly? | Owner view shows chosen plan, economics, steps, risks. | Yes. | **FAIL** | fm1126a f01: chosen null; steps are research on generic arrangements. | — | RC13 |
-| C42-R | Does the result reach every component that needs it? | Plan reaches owner surface. | Yes. | **PASS** | fm1126a f01: the reading reaches the owner surface (read output). | — | — |
-| C42-I | Does the result change later decisions correctly? | Owner decisions reach the work. | Yes. | **UNKNOWN** | — | — | — |
-| C42-F | Does Brain recognise and recover when it fails? | No plan: says why and what next. | Yes. | **NEEDS RECHECK** | NOT_VIABLE/NEEDS_EVIDENCE readings. | — | — |
-| C42-X | Does it still work combined with the other capabilities? | Output consistent with plan reading. | Yes. | **FAIL** | Four best answers. | — | RC11 |
+| id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
+|---|---|---|---|---|---|---|---|---|
+| C42-P | Can Brain perform it correctly? | Owner view shows chosen plan, economics, steps, risks. | Yes. | **FAIL** | fm1126a f01: chosen null; steps are research on generic arrangements. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC13 |
+| C42-R | Does the result reach every component that needs it? | Plan reaches owner surface. | Yes. | **PASS** | fm1126a f01: the reading reaches the owner surface (read output). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
+| C42-I | Does the result change later decisions correctly? | Owner decisions reach the work. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
+| C42-F | Does Brain recognise and recover when it fails? | No plan: says why and what next. | Yes. | **RECHECK** | NOT_VIABLE/NEEDS_EVIDENCE readings. | UNPROVEN | — | — |
+| C42-X | Does it still work combined with the other capabilities? | Output consistent with plan reading. | Yes. | **FAIL** | Four best answers. | UNPROVEN | — | RC11 |
 
 ## D. Root causes and the failures they explain
 

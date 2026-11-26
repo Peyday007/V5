@@ -572,7 +572,8 @@
    "status": "PASS",
    "evidence": "fm1126b on a8c46995: 30 of 30 fresh goals read and created (fm1126a on the earlier reader: 26, with 3+ misread). Amount, window, capital and hours match a human reading on all 30 (local read of the batch).",
    "component": "industry/construction/intent.ts readObjective",
-   "rc": "RC15"
+   "rc": "RC15",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"\"N hours a week at most\" read as a total of N\" \u2192 tests/objectiveFreshPhrasings.test.ts failed naming RC15; unmutated code accepted; re-introduced \"a monthly figure with a start month refused for want of a deadline\" \u2192 tests/objectiveFreshPhrasings.test.ts failed naming RC15; unmutated code accepted"
   },
   {
    "id": "C01-R",
@@ -586,7 +587,8 @@
    "status": "PASS",
    "evidence": "30Q probe objective lines; plan readings use target.",
    "component": "goals/target.ts",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C01-I",
@@ -597,10 +599,11 @@
    "dim": "I",
    "test": "Change hours from 15 to 0 mid-course.",
    "expected": "Next ask drops owner-performed routes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Same path as C38-R; not exercised on production.",
    "component": "planningEval update path",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C01-F",
@@ -614,7 +617,8 @@
    "status": "PASS",
    "evidence": "fm1126a create log: unread phrases are named and the goal is refused rather than guessed (\"nothing was created. Unread: \u2026\").",
    "component": "readObjective unread[]",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C01-X",
@@ -625,10 +629,11 @@
    "dim": "X",
    "test": "Objective reading + operating rule + labour offer on the same goal.",
    "expected": "No contradiction between limits and owner offer in the prompt.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "p10 \"zero hours\" fixed d5beaf6; not re-run on fresh goals.",
    "component": "routeProposal limitLines",
-   "rc": "RC3"
+   "rc": "RC3",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C02-P",
@@ -642,7 +647,8 @@
    "status": "FAIL",
    "evidence": "4/4 fallback replies invented refusals; p02 run-1 \"no physical work\".",
    "component": "route prompt STEP 1",
-   "rc": "RC3"
+   "rc": "RC3",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C02-R",
@@ -656,7 +662,8 @@
    "status": "FAIL",
    "evidence": "Integration diag: profile kept only in event detail, re-derived each ask.",
    "component": "routeProposal record",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C02-I",
@@ -670,7 +677,8 @@
    "status": "PASS",
    "evidence": "p02: every output led with Part 107 aerial work.",
    "component": "ROUTE_RULES.OWNER_FIT",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C02-F",
@@ -684,7 +692,8 @@
    "status": "FAIL",
    "evidence": "No check exists (code).",
    "component": "ownerProfileOf",
-   "rc": "RC3"
+   "rc": "RC3",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C02-X",
@@ -698,7 +707,8 @@
    "status": "FAIL",
    "evidence": "p06: no output proposed the owner's own paid work.",
    "component": "directionPrompt",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C02-M",
@@ -712,7 +722,8 @@
    "status": "PASS",
    "evidence": "Model exam: given complete facts, Claude Opus reads constraints with 3 violations in 30; gpt-oss 8, fallback 22. The 4/4 invented refusals were the fallback's.",
    "component": "model",
-   "rc": "RC14"
+   "rc": "RC14",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C03-P",
@@ -726,7 +737,8 @@
    "status": "FAIL",
    "evidence": "Route prompt fixed (d5beaf6); discovery still appends REMOTE_AI_FOCUS (discovery.ts:1304).",
    "component": "domain/operatingModel.ts",
-   "rc": "RC3"
+   "rc": "RC3",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C03-R",
@@ -740,7 +752,8 @@
    "status": "FAIL",
    "evidence": "Integration diag: regex re-implemented in goalScenario, worthResearching, answers.",
    "component": "operatingModel",
-   "rc": "RC3"
+   "rc": "RC3",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C03-I",
@@ -754,7 +767,8 @@
    "status": "FAIL",
    "evidence": "Code: REMOTE_AI_FOCUS unconditional.",
    "component": "discovery.ts",
-   "rc": "RC3"
+   "rc": "RC3",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"discovery online-only for an owner who offered work\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC3; unmutated code accepted"
   },
   {
    "id": "C03-F",
@@ -765,10 +779,11 @@
    "dim": "F",
    "test": "Regex misses an offer (\"I can fly 20 h a week\").",
    "expected": "A model-read offer or an explicit question; not silent refusal.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "p02 \"fly about 20 hours\" read as labour after ad40c37; unverified on fresh goals.",
    "component": "ownerLabourOffer",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C03-X",
@@ -782,7 +797,8 @@
    "status": "FAIL",
    "evidence": "p06 final: no owner-performed route proposed.",
    "component": "route prompt",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C04-P",
@@ -796,7 +812,8 @@
    "status": "FAIL",
    "evidence": "wst_db2e: four \"best\" answers, three binding diagnoses.",
    "component": "readGoalPlan",
-   "rc": "RC11"
+   "rc": "RC11",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C04-R",
@@ -810,7 +827,8 @@
    "status": "FAIL",
    "evidence": "Integration diag (code).",
    "component": "routeContext",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C04-I",
@@ -821,10 +839,11 @@
    "dim": "I",
    "test": "A refuted direction: is it proposed again?",
    "expected": "Never in another wording.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Last ask's CRITIQUE drops fed back (routeProposal ~1836); multi-ask effect unmeasured.",
    "component": "routeContext refuted",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C04-F",
@@ -838,7 +857,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C04-X",
@@ -852,7 +872,8 @@
    "status": "FAIL",
    "evidence": "fm1126a f01: the plan reading is built from constructed arrangements while the route proposer's owner-read directions are not yet openings; two generators, no arbiter.",
    "component": "plan set",
-   "rc": "RC11,RC13"
+   "rc": "RC11,RC13",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C05-P",
@@ -866,7 +887,8 @@
    "status": "FAIL",
    "evidence": "30Q: both misread by the critic.",
    "component": "critic",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C05-R",
@@ -880,7 +902,8 @@
    "status": "PASS",
    "evidence": "a1eba64 (windowEnd) present in final prompts.",
    "component": "limitLines",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C05-I",
@@ -894,7 +917,8 @@
    "status": "FAIL",
    "evidence": "No computed check (code).",
    "component": "applyCritique",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C05-F",
@@ -908,7 +932,8 @@
    "status": "FAIL",
    "evidence": "None (code).",
    "component": "applyCritique",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C05-X",
@@ -922,7 +947,8 @@
    "status": "FAIL",
    "evidence": "p02/p10 critic errors.",
    "component": "critic",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C05-M",
@@ -936,7 +962,8 @@
    "status": "FAIL",
    "evidence": "Model exam: gpt-oss 8 and the fallback 22 constraint violations in 30, Claude 3; date and window arithmetic errors concentrate in the open models.",
    "component": "model",
-   "rc": "RC14"
+   "rc": "RC14",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C06-P",
@@ -947,10 +974,11 @@
    "dim": "P",
    "test": "Plan cites local, dated market facts.",
    "expected": "Demand facts are local and current.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "With supplied research yes (p02 listings, ARMLS); production research 0 facts.",
    "component": "research\u2192findings",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C06-R",
@@ -964,7 +992,8 @@
    "status": "FAIL",
    "evidence": "40 cap.",
    "component": "findingsOf",
-   "rc": "RC4"
+   "rc": "RC4",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C06-I",
@@ -975,10 +1004,11 @@
    "dim": "I",
    "test": "Off-season facts drop seasonal routes?",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "p02 December listings drop found by follow-ups, not reflected in plans.",
    "component": "proposer",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C06-F",
@@ -989,10 +1019,11 @@
    "dim": "F",
    "test": "No local facts: does Brain ask for them?",
    "expected": "Research asks local demand first.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Questions did ask (p02 Q1, Q27); production does not execute.",
    "component": "questions",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C06-X",
@@ -1006,7 +1037,8 @@
    "status": "FAIL",
    "evidence": "p06/p10 local options absent.",
    "component": "proposer",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C07-P",
@@ -1020,7 +1052,8 @@
    "status": "FAIL",
    "evidence": "30Q: strongest path named in 1/3 goals (p02); none p06.",
    "component": "directionPrompt/proposer",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C07-R",
@@ -1034,7 +1067,8 @@
    "status": "FAIL",
    "evidence": "Dives starved (RC6).",
    "component": "validation dives",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C07-I",
@@ -1045,10 +1079,11 @@
    "dim": "I",
    "test": "Research refutes a direction: replaced?",
    "expected": "Replacement direction differs structurally.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Scout\u2192refuted loop exists; starved.",
    "component": "scout loop",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C07-F",
@@ -1062,7 +1097,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C07-X",
@@ -1076,7 +1112,8 @@
    "status": "FAIL",
    "evidence": "discovery REMOTE_AI_FOCUS.",
    "component": "discovery",
-   "rc": "RC3"
+   "rc": "RC3",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C07-M",
@@ -1090,7 +1127,8 @@
    "status": "FAIL",
    "evidence": "Model exam commercial planning: Claude 10/11, gpt-oss 4/11, Qwen 1/11, fallback 0/11. 30Q control (Claude Sonnet, Brain's prompt) also missed p06's strongest path, so the prompt shares the failure (RC5).",
    "component": "prompt",
-   "rc": "RC14,RC5"
+   "rc": "RC14,RC5",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C08-P",
@@ -1101,10 +1139,11 @@
    "dim": "P",
    "test": "Routes in one ask: distinct mechanisms/buyers.",
    "expected": ">=2 structurally different where evidence allows.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "p02 final cap: 6 routes, 4 mechanisms; others 1 route.",
    "component": "proposer",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C08-R",
@@ -1118,7 +1157,8 @@
    "status": "FAIL",
    "evidence": "Critic dropped most.",
    "component": "critic",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C08-I",
@@ -1132,7 +1172,8 @@
    "status": "FAIL",
    "evidence": "No computed economics.",
    "component": "parseRoutes",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C08-F",
@@ -1143,10 +1184,11 @@
    "dim": "F",
    "test": "Only one route proposed: asked for more?",
    "expected": "Replacement ask with different mechanism.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Replacement ask exists; effect not visible in probes.",
    "component": "critiqueAndRevise",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C08-X",
@@ -1160,7 +1202,8 @@
    "status": "FAIL",
    "evidence": "Outputs mostly single routes.",
    "component": "proposer",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C09-P",
@@ -1171,10 +1214,11 @@
    "dim": "P",
    "test": "Routes breaching capital/hours/window rejected by code.",
    "expected": "Correctly rejected, no false rejects.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Hours/margin rejections correct (30Q); capital/window not computed.",
    "component": "parseRoutes",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C09-R",
@@ -1188,7 +1232,8 @@
    "status": "PASS",
    "evidence": "replacementPrompt names failures; refuted list.",
    "component": "routeProposal",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C09-I",
@@ -1199,10 +1244,11 @@
    "dim": "I",
    "test": "Next ask avoids the breach.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Rejections and critique drops are fed to the next ask (code); multi-ask effect unmeasured.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C09-F",
@@ -1216,7 +1262,8 @@
    "status": "FAIL",
    "evidence": "OWNER_FIT missing-field drop.",
    "component": "parseRoutes",
-   "rc": "RC9"
+   "rc": "RC9",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C09-X",
@@ -1230,7 +1277,8 @@
    "status": "FAIL",
    "evidence": "Critic contradicts code-passed routes on false grounds.",
    "component": "critic",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C10-P",
@@ -1244,7 +1292,8 @@
    "status": "PASS",
    "evidence": "Directions carry decisiveUnknown (production SCOUT asks).",
    "component": "directionPrompt",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C10-R",
@@ -1255,10 +1304,11 @@
    "dim": "R",
    "test": "Unknown becomes the first research question.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "routeValidationQuestion exists; execution starved.",
    "component": "validation.ts",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C10-I",
@@ -1269,10 +1319,11 @@
    "dim": "I",
    "test": "Answer to unknown keeps/kills the direction.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Loop starved.",
    "component": "scout loop",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C10-F",
@@ -1286,7 +1337,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C10-X",
@@ -1300,7 +1352,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C11-P",
@@ -1314,7 +1367,8 @@
    "status": "FAIL",
    "evidence": "30Q: p06/p10 anchored on brokerage/dropshipping; p02 good.",
    "component": "directionPrompt framing",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C11-R",
@@ -1328,7 +1382,8 @@
    "status": "FAIL",
    "evidence": "Production executes ~6%.",
    "component": "research queue",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C11-I",
@@ -1342,7 +1397,8 @@
    "status": "PASS",
    "evidence": "30Q: facts killed Upwork/Fiverr/dropship routes.",
    "component": "proposer",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C11-F",
@@ -1353,10 +1409,11 @@
    "dim": "F",
    "test": "Model fails to answer (timeout/unparsed).",
    "expected": "Retried, salvaged.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Questions command salvages; production route path unchanged.",
    "component": "ask",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C11-X",
@@ -1370,7 +1427,8 @@
    "status": "FAIL",
    "evidence": "p06.",
    "component": "directionPrompt",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"the owner's direct paid work never considered first\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC5; unmutated code accepted"
   },
   {
    "id": "C11-M",
@@ -1381,10 +1439,11 @@
    "dim": "M",
    "test": "Control model on the question prompt.",
    "expected": "Less anchored.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Not run on the question prompt; the model exam's evidence-interpretation errors (gpt-oss 61, Claude 1) predict the gap.",
    "component": "model",
-   "rc": "RC14"
+   "rc": "RC14",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C12-P",
@@ -1398,7 +1457,8 @@
    "status": "FAIL",
    "evidence": "30Q: 35/90 follow-ups already answered or no decision value; narrow.",
    "component": "questions follow-up",
-   "rc": "RC5"
+   "rc": "RC5",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C12-R",
@@ -1412,7 +1472,8 @@
    "status": "FAIL",
    "evidence": "Newest-first cap displaced key older facts (p10).",
    "component": "findingsOf",
-   "rc": "RC4"
+   "rc": "RC4",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"newest-first fill crowding out other lanes\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted"
   },
   {
    "id": "C12-I",
@@ -1426,7 +1487,8 @@
    "status": "FAIL",
    "evidence": "Final grades no better than round 1.",
    "component": "proposer",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C12-F",
@@ -1440,7 +1502,8 @@
    "status": "PASS",
    "evidence": "Workers recorded UNANSWERED honestly.",
    "component": "workers",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C12-X",
@@ -1451,10 +1514,11 @@
    "dim": "X",
    "test": "Follow-ups + selection.",
    "expected": "Questions target the chosen strategy's weakest leg.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Partly (p02 insurance, seasonality).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C13-P",
@@ -1468,7 +1532,8 @@
    "status": "FAIL",
    "evidence": "785/1142 refused; Firecrawl 7/day; no keyed search.",
    "component": "sources/*",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C13-R",
@@ -1482,7 +1547,8 @@
    "status": "PASS",
    "evidence": "p06 trace: searches answered (6) reached the free-lane worker and pages were read (3).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C13-I",
@@ -1496,7 +1562,8 @@
    "status": "FAIL",
    "evidence": "stall 2026-11-26: every queued research fragment sits at priority 9 (eval) or 8/6 by purpose, never by the decision its answer changes; 1,167 waiting.",
    "component": "",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C13-F",
@@ -1507,10 +1574,11 @@
    "dim": "F",
    "test": "Provider refuses: falls back.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "DDG lite/html fallback; still 69% refused.",
    "component": "sources",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C13-X",
@@ -1521,10 +1589,11 @@
    "dim": "X",
    "test": "Capacity under 18+ goals.",
    "expected": "Shared fairly.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "585d3fb shares capacity; unmeasured.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C14-P",
@@ -1538,7 +1607,8 @@
    "status": "FAIL",
    "evidence": "1/18 (30Q traces).",
    "component": "research coordinator",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C14-R",
@@ -1552,7 +1622,8 @@
    "status": "PASS",
    "evidence": "p06 3 claims filed.",
    "component": "gate",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C14-I",
@@ -1566,7 +1637,8 @@
    "status": "FAIL",
    "evidence": "stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value.",
    "component": "",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C14-F",
@@ -1577,10 +1649,11 @@
    "dim": "F",
    "test": "Fragment faults: retried elsewhere.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "#1018 class fixes; unmeasured here.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C14-X",
@@ -1594,7 +1667,8 @@
    "status": "FAIL",
    "evidence": "2,063 waiting beside 278 free slots.",
    "component": "",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C15-P",
@@ -1608,7 +1682,8 @@
    "status": "FAIL",
    "evidence": "Production 21%; session workers 70-80%.",
    "component": "sources reader",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C15-R",
@@ -1622,7 +1697,8 @@
    "status": "PASS",
    "evidence": "p06 trace: pages read \u2192 3 claims extracted.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C15-I",
@@ -1636,7 +1712,8 @@
    "status": "PASS",
    "evidence": "Retrieval state contract.",
    "component": "gate",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C15-F",
@@ -1647,10 +1724,11 @@
    "dim": "F",
    "test": "Blocked site: alternative source.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Workers did; production unknown.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C15-X",
@@ -1664,7 +1742,8 @@
    "status": "FAIL",
    "evidence": "Firecrawl 15/day.",
    "component": "",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C16-P",
@@ -1678,7 +1757,8 @@
    "status": "PASS",
    "evidence": "30Q: 100% of facts had URL+quote.",
    "component": "workers/gate",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C16-R",
@@ -1692,7 +1772,8 @@
    "status": "PASS",
    "evidence": "p06 trace: accepted claims appear in findings_now and were shown to a route ask (findingsShown 1).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C16-I",
@@ -1706,7 +1787,8 @@
    "status": "PASS",
    "evidence": "GROUND_LANES (9fb993c).",
    "component": "groundsOf",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C16-F",
@@ -1720,7 +1802,8 @@
    "status": "PASS",
    "evidence": "Gate contract.",
    "component": "gate",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C16-X",
@@ -1734,7 +1817,8 @@
    "status": "PASS",
    "evidence": "stall rejections: extraction then verification (\"source does not directly support\" 12 rejected).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C17-P",
@@ -1748,7 +1832,8 @@
    "status": "PASS",
    "evidence": "30Q: 329/428 verified (77%); remainder held back, none delivered.",
    "component": "tools/verify.py (eval) / gate",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C17-R",
@@ -1759,10 +1844,11 @@
    "dim": "R",
    "test": "Only verified claims delivered.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "True in eval; production gate checks source, not quote presence.",
    "component": "gate",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C17-I",
@@ -1776,7 +1862,8 @@
    "status": "PASS",
    "evidence": "groundsOf cites only shown findings of a fitting lane (tests); production gate rejects unsupported claims before they become findings.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C17-F",
@@ -1790,7 +1877,8 @@
    "status": "PASS",
    "evidence": "Verifier caught 32 NOT_FOUND.",
    "component": "verify",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C17-X",
@@ -1804,7 +1892,8 @@
    "status": "PASS",
    "evidence": "Re-read cache.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C18-P",
@@ -1815,10 +1904,11 @@
    "dim": "P",
    "test": "Lanes assigned correctly.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Workers assigned lanes; not audited.",
    "component": "workers",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C18-R",
@@ -1832,7 +1922,8 @@
    "status": "PASS",
    "evidence": "9fb993c.",
    "component": "groundsOf",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C18-I",
@@ -1846,7 +1937,8 @@
    "status": "PASS",
    "evidence": "GROUND_LANES test.",
    "component": "groundsOf",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C18-F",
@@ -1860,7 +1952,8 @@
    "status": "FAIL",
    "evidence": "p10 grader: consumer fact cited for B2B channel.",
    "component": "groundsOf",
-   "rc": ""
+   "rc": "",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C18-X",
@@ -1874,7 +1967,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C19-P",
@@ -1885,10 +1979,11 @@
    "dim": "P",
    "test": "Route contradicted by a shown fact is dropped.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Upwork/Fiverr payout facts killed brokerage (correct); p10 CPA facts ignored by proposer.",
    "component": "critic/proposer",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C19-R",
@@ -1902,7 +1997,8 @@
    "status": "FAIL",
    "evidence": "Display only (integration diag).",
    "component": "knowledge",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C19-I",
@@ -1916,7 +2012,8 @@
    "status": "FAIL",
    "evidence": "projectEvidenceClaims ignores contradiction_state (code).",
    "component": "repos/research.ts",
-   "rc": "RC4"
+   "rc": "RC4",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"a refuted claim shown as a finding\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted"
   },
   {
    "id": "C19-F",
@@ -1930,7 +2027,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C19-X",
@@ -1944,7 +2042,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C20-P",
@@ -1958,7 +2057,8 @@
    "status": "FAIL",
    "evidence": "Integration diag.",
    "component": "knowledge/apply.ts",
-   "rc": "RC10"
+   "rc": "RC10",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C20-R",
@@ -1972,7 +2072,8 @@
    "status": "PASS",
    "evidence": "Integration diagnosis: 80 buyers linked to Census counts reach arrangement buyer counts.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C20-I",
@@ -1986,7 +2087,8 @@
    "status": "FAIL",
    "evidence": "Integration diagnosis: a wrong link reads \"buyers established \u2026 the next research round asks for conversion\".",
    "component": "",
-   "rc": "RC10"
+   "rc": "RC10",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C20-F",
@@ -2000,7 +2102,8 @@
    "status": "FAIL",
    "evidence": "None.",
    "component": "",
-   "rc": "RC10"
+   "rc": "RC10",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C20-X",
@@ -2014,7 +2117,8 @@
    "status": "FAIL",
    "evidence": "Integration diagnosis: the knowledge library feeds arrangements only; route asks never read it.",
    "component": "",
-   "rc": "RC10"
+   "rc": "RC10",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C21-P",
@@ -2028,7 +2132,8 @@
    "status": "FAIL",
    "evidence": "40/111, 40/111, 40/135.",
    "component": "findingsOf",
-   "rc": "RC4"
+   "rc": "RC4",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"the old 40-finding cap\" \u2192 tests/researchInformedRoutes.test.ts tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted"
   },
   {
    "id": "C21-R",
@@ -2042,7 +2147,8 @@
    "status": "PASS",
    "evidence": "critiquePrompt includes findings.",
    "component": "critiquePrompt",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C21-I",
@@ -2056,7 +2162,8 @@
    "status": "FAIL",
    "evidence": "8/12 D.",
    "component": "proposer",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C21-F",
@@ -2067,10 +2174,11 @@
    "dim": "F",
    "test": "Prompt too long / truncated.",
    "expected": "Budgeted, not silently cut.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Prompts 35 KB ok.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C21-X",
@@ -2084,7 +2192,8 @@
    "status": "FAIL",
    "evidence": "160-char dedupe dropped 6/9.",
    "component": "findingsOf",
-   "rc": "RC4"
+   "rc": "RC4",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"near-duplicates judged on the first 160 characters\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC4; unmutated code accepted"
   },
   {
    "id": "C22-P",
@@ -2098,7 +2207,8 @@
    "status": "FAIL",
    "evidence": "11-17 F2 (code).",
    "component": "goalScenario",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C22-R",
@@ -2112,7 +2222,8 @@
    "status": "FAIL",
    "evidence": "answeredBy [] (production).",
    "component": "committee",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C22-I",
@@ -2126,7 +2237,8 @@
    "status": "FAIL",
    "evidence": "heldTitles only.",
    "component": "plan.ts:5877",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C22-F",
@@ -2140,7 +2252,8 @@
    "status": "FAIL",
    "evidence": "Report sees repetition; operator does not act.",
    "component": "",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C22-X",
@@ -2154,7 +2267,8 @@
    "status": "FAIL",
    "evidence": "Integration diagnosis \u00a74.1: no shared per-goal working state.",
    "component": "",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C23-P",
@@ -2168,7 +2282,8 @@
    "status": "FAIL",
    "evidence": "gpt-oss 6/12 empty.",
    "component": "ask/operatorChats",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"a non-streamed turn cut by the 100 s proxy idle\" \u2192 tests/chatStreaming.test.ts failed naming RC1; unmutated code accepted"
   },
   {
    "id": "C23-R",
@@ -2182,7 +2297,8 @@
    "status": "FAIL",
    "evidence": "Falls to weaker model.",
    "component": "ask",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C23-I",
@@ -2196,7 +2312,8 @@
    "status": "FAIL",
    "evidence": "Fallback invented refusals.",
    "component": "",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C23-F",
@@ -2210,7 +2327,8 @@
    "status": "FAIL",
    "evidence": "Code: error null on empty.",
    "component": "ask",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"an empty reply not retried with a larger budget\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC1; unmutated code accepted"
   },
   {
    "id": "C23-X",
@@ -2221,10 +2339,11 @@
    "dim": "X",
    "test": "Model answers under concurrent load.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Capacity 2026-11-26: GPU 8/16 slots with \"errors acceptable\"; route-ask behaviour under that load unmeasured.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C23-M",
@@ -2238,7 +2357,8 @@
    "status": "PASS",
    "evidence": "Model exam: re-asked with streaming, gpt-oss served 30/30; the empty replies are the proxy idle cut, not the model (repaired W1j).",
    "component": "model",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C24-P",
@@ -2252,7 +2372,8 @@
    "status": "FAIL",
    "evidence": "Mis-citations (p10 F2 for price; consumer fact for B2B).",
    "component": "proposer",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C24-R",
@@ -2266,7 +2387,8 @@
    "status": "PASS",
    "evidence": "30Q probes: every parsed route was critiqued (critique records per route).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C24-I",
@@ -2277,10 +2399,11 @@
    "dim": "I",
    "test": "Evidence changes route choice.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Partly (p02 prices; p06 escrow).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C24-F",
@@ -2294,7 +2417,8 @@
    "status": "PASS",
    "evidence": "30Q p06 R1all: Upwork route contradicted by payout-hold facts dropped by the critic, correctly (grader).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C24-X",
@@ -2308,7 +2432,8 @@
    "status": "FAIL",
    "evidence": "p06 invented subcontractor.",
    "component": "proposer",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C24-M",
@@ -2322,7 +2447,8 @@
    "status": "FAIL",
    "evidence": "Model exam evidence interpretation: gpt-oss 1.00/2, Claude 1.93/2; 30Q control 0/3 usable but best evidence hygiene.",
    "component": "model",
-   "rc": "RC14"
+   "rc": "RC14",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C25-P",
@@ -2336,7 +2462,8 @@
    "status": "FAIL",
    "evidence": "445 sales from $3k at $39 CPA.",
    "component": "parseRoutes",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"a route whose buyers cost more than a sale earns accepted\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC8; unmutated code accepted"
   },
   {
    "id": "C25-R",
@@ -2350,7 +2477,8 @@
    "status": "FAIL",
    "evidence": "Only hours computed.",
    "component": "",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"the critic not told the computed first-cash date\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC8; unmutated code accepted"
   },
   {
    "id": "C25-I",
@@ -2361,10 +2489,11 @@
    "dim": "I",
    "test": "Under-reaching route flagged/fixed.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "W1c: economics line + ACQUISITION refusal (tests); production pending.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C25-F",
@@ -2378,7 +2507,8 @@
    "status": "FAIL",
    "evidence": "None.",
    "component": "",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C25-X",
@@ -2392,7 +2522,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C25-M",
@@ -2406,7 +2537,8 @@
    "status": "FAIL",
    "evidence": "Model exam reasoning correctness: gpt-oss 1.13/2, fallback 0.23, Claude 1.97; mechanical key numbers gpt-oss 7/9.",
    "component": "model",
-   "rc": "RC14"
+   "rc": "RC14",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C26-P",
@@ -2420,7 +2552,8 @@
    "status": "FAIL",
    "evidence": "p06 routes ignored 10/14-day holds; critic misread net-30.",
    "component": "proposer/critic",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C26-R",
@@ -2431,10 +2564,11 @@
    "dim": "R",
    "test": "Payout facts shown.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "30Q all-findings arm: payout facts shown; under the old 40 cap they were cut. Cap raised (W1e); production recheck pending.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C26-I",
@@ -2445,10 +2579,11 @@
    "dim": "I",
    "test": "Settlement fact rules routes in/out.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Correct kills on p06.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C26-F",
@@ -2459,10 +2594,11 @@
    "dim": "F",
    "test": "Misread timing corrected.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "W1b: a disputed timing is a repair the code re-checks (tests); production pending.",
    "component": "",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"a disputed timing dropped instead of re-checked as a repair\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC2; unmutated code accepted"
   },
   {
    "id": "C26-X",
@@ -2476,7 +2612,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C27-P",
@@ -2490,7 +2627,8 @@
    "status": "FAIL",
    "evidence": "Passive channels (ARMLS listing), cold email at 0.45% for 6 buyers in 7 days.",
    "component": "proposer",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C27-R",
@@ -2504,7 +2642,8 @@
    "status": "FAIL",
    "evidence": "Cut by cap (p02 FB CPL, p10 cold-email cost).",
    "component": "findingsOf",
-   "rc": "RC4"
+   "rc": "RC4",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C27-I",
@@ -2518,7 +2657,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C27-F",
@@ -2532,7 +2672,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C27-X",
@@ -2546,7 +2687,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C28-P",
@@ -2560,7 +2702,8 @@
    "status": "FAIL",
    "evidence": "Invented $10/h VA; unnamed subcontractor.",
    "component": "proposer",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C28-R",
@@ -2571,10 +2714,11 @@
    "dim": "R",
    "test": "Fulfiller facts shown.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "As C26-R, for fulfiller facts.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C28-I",
@@ -2588,7 +2732,8 @@
    "status": "PASS",
    "evidence": "MARGIN rule worked (p06).",
    "component": "parseRoutes",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C28-F",
@@ -2602,7 +2747,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C28-X",
@@ -2616,7 +2762,8 @@
    "status": "FAIL",
    "evidence": "p10 nobody takes sales calls.",
    "component": "proposer",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C29-P",
@@ -2630,7 +2777,8 @@
    "status": "PASS",
    "evidence": "p02 survey law flagged; Marketplace services ban found.",
    "component": "critic",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C29-R",
@@ -2644,7 +2792,8 @@
    "status": "PASS",
    "evidence": "30Q: the critic cited A.R.S. 32-101 survey law from the findings.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C29-I",
@@ -2658,7 +2807,8 @@
    "status": "PASS",
    "evidence": "Construction surveying dropped.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C29-F",
@@ -2672,7 +2822,8 @@
    "status": "FAIL",
    "evidence": "p06 $73 licence used to drop.",
    "component": "critic",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C29-X",
@@ -2686,7 +2837,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C30-P",
@@ -2697,10 +2849,11 @@
    "dim": "P",
    "test": "Rejections correct.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Hours/margin correct; OWNER_FIT missing-field incorrect.",
    "component": "parseRoutes",
-   "rc": "RC9"
+   "rc": "RC9",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C30-R",
@@ -2714,7 +2867,8 @@
    "status": "PASS",
    "evidence": "Route events record rejectedByRule; probe parsed.rejected lists rule and reason.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C30-I",
@@ -2728,7 +2882,8 @@
    "status": "FAIL",
    "evidence": "No repair.",
    "component": "",
-   "rc": "RC9"
+   "rc": "RC9",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C30-F",
@@ -2742,7 +2897,8 @@
    "status": "FAIL",
    "evidence": "p10 R1 all.",
    "component": "",
-   "rc": "RC9"
+   "rc": "RC9",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"a missing owner-fit sentence loses the route\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC9; unmutated code accepted"
   },
   {
    "id": "C30-X",
@@ -2756,7 +2912,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C31-P",
@@ -2770,7 +2927,8 @@
    "status": "FAIL",
    "evidence": ">=4 false drops; 14/18 dropped.",
    "component": "critic",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C31-R",
@@ -2784,7 +2942,8 @@
    "status": "FAIL",
    "evidence": "No computed figures.",
    "component": "",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C31-I",
@@ -2798,7 +2957,8 @@
    "status": "FAIL",
    "evidence": "Outputs end with nothing.",
    "component": "",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C31-F",
@@ -2812,7 +2972,8 @@
    "status": "FAIL",
    "evidence": "None.",
    "component": "",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"a WINDOW-only drop removes the route (the net-30 misreading)\" \u2192 tests/planningFailureMapWave1.test.ts failed naming RC2; unmutated code accepted"
   },
   {
    "id": "C31-X",
@@ -2826,7 +2987,8 @@
    "status": "FAIL",
    "evidence": "9/12 outputs no plan.",
    "component": "",
-   "rc": "RC2"
+   "rc": "RC2",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C31-M",
@@ -2837,10 +2999,11 @@
    "dim": "M",
    "test": "Control model as critic on the same routes.",
    "expected": "Fewer false drops.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Not run as critic; exam constraint and evidence errors predict false drops from open models.",
    "component": "model",
-   "rc": "RC14"
+   "rc": "RC14",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C32-P",
@@ -2851,10 +3014,11 @@
    "dim": "P",
    "test": "Replacement ask runs when nothing survives.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Code: critiqueAndRevise asks replacements when fewer than ROUTES_MIN_SURVIVING survive; not exercised by the eval probe, production effect unmeasured.",
    "component": "critiqueAndRevise",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C32-R",
@@ -2865,10 +3029,11 @@
    "dim": "R",
    "test": "Replacements critiqued.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Code: replacements are parsed and ranked after kept routes, not critiqued again.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C32-I",
@@ -2882,7 +3047,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C32-F",
@@ -2896,7 +3062,8 @@
    "status": "PASS",
    "evidence": "Code + event detail: replacement failures are named in critique.reason.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C32-X",
@@ -2910,7 +3077,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C33-P",
@@ -2924,7 +3092,8 @@
    "status": "FAIL",
    "evidence": "Critic scores; no economics.",
    "component": "applyCritique",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C33-R",
@@ -2938,7 +3107,8 @@
    "status": "FAIL",
    "evidence": "Integration diagnosis: four different \"best\" strategies in one production reading.",
    "component": "",
-   "rc": "RC11,RC13"
+   "rc": "RC11,RC13",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C33-I",
@@ -2952,7 +3122,8 @@
    "status": "FAIL",
    "evidence": "Same: the chosen route does not decide the plan reading (fm1126a f01 plan built from constructed arrangements).",
    "component": "",
-   "rc": "RC11,RC13"
+   "rc": "RC11,RC13",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C33-F",
@@ -2966,7 +3137,8 @@
    "status": "PASS",
    "evidence": "fm1126a f01 read: \"NOT ACCEPTED: no candidate plan yet\" \u2014 says so.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C33-X",
@@ -2980,7 +3152,8 @@
    "status": "FAIL",
    "evidence": "RC11/RC13: generators are not arbitrated.",
    "component": "",
-   "rc": "RC11,RC13"
+   "rc": "RC11,RC13",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C34-P",
@@ -2994,7 +3167,8 @@
    "status": "PASS",
    "evidence": "routes carry assumptions.",
    "component": "proposer",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C34-R",
@@ -3005,10 +3179,11 @@
    "dim": "R",
    "test": "Assumptions become research.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "searches field exists; execution starved.",
    "component": "",
-   "rc": "RC6"
+   "rc": "RC6",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C34-I",
@@ -3022,7 +3197,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C34-F",
@@ -3036,7 +3212,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C34-X",
@@ -3050,7 +3227,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": "RC8"
+   "rc": "RC8",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C35-P",
@@ -3064,7 +3242,8 @@
    "status": "FAIL",
    "evidence": "Acceptance unattainable by research (11-17 F1).",
    "component": "judgeAcceptance",
-   "rc": "RC12"
+   "rc": "RC12",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C35-R",
@@ -3078,7 +3257,8 @@
    "status": "PASS",
    "evidence": "fm1126a f01 read: report lines and acceptance sentence shown.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C35-I",
@@ -3089,10 +3269,11 @@
    "dim": "I",
    "test": "Not-ready names the next research.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Plan \"missing\" lists exist.",
    "component": "plan.ts",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C35-F",
@@ -3106,7 +3287,8 @@
    "status": "FAIL",
    "evidence": "Report sees 12-hour repetition; nothing acts.",
    "component": "",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C35-X",
@@ -3120,7 +3302,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C36-P",
@@ -3134,7 +3317,8 @@
    "status": "FAIL",
    "evidence": "Model exam: complete executable plan Claude 4/4, gpt-oss 0/4, Qwen 0/4. Production fm1126a f01: the owner's plan is research steps on generic constructed arrangements.",
    "component": "goals/plan.ts steps; route\u2192plan",
-   "rc": "RC14,RC13"
+   "rc": "RC14,RC13",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C36-R",
@@ -3148,7 +3332,8 @@
    "status": "PASS",
    "evidence": "fm1126a f01 read: steps reach the owner view (their content fails C36-P).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C36-I",
@@ -3162,7 +3347,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C36-F",
@@ -3176,7 +3362,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C36-X",
@@ -3190,7 +3377,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C37-P",
@@ -3204,7 +3392,8 @@
    "status": "PASS",
    "evidence": "operator_learnings rows.",
    "component": "routeProposal:1911",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C37-R",
@@ -3218,7 +3407,8 @@
    "status": "FAIL",
    "evidence": "No reader.",
    "component": "routeContext",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C37-I",
@@ -3229,10 +3419,11 @@
    "dim": "I",
    "test": "A lesson changes the next ask.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "W1h: rethinks of earlier asks are now read (code); production effect pending.",
    "component": "",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C37-F",
@@ -3246,7 +3437,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C37-X",
@@ -3260,7 +3452,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C38-P",
@@ -3274,7 +3467,8 @@
    "status": "PASS",
    "evidence": "NEW_FINDINGS_FOR_REASK.",
    "component": "routeAskDue",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C38-R",
@@ -3285,10 +3479,11 @@
    "dim": "R",
    "test": "Owner change reaches prompts.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "planningEval update writes the owner's change into target resources read by routeContext (code); not exercised.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C38-I",
@@ -3302,7 +3497,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C38-F",
@@ -3316,7 +3512,8 @@
    "status": "PASS",
    "evidence": "ROUTE_RETRY_AFTER_FAILURE_MS 30 min.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C38-X",
@@ -3330,7 +3527,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C39-P",
@@ -3344,7 +3542,8 @@
    "status": "FAIL",
    "evidence": "Empty \u2192 weaker fallback; parse loss.",
    "component": "",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C39-R",
@@ -3358,7 +3557,8 @@
    "status": "PASS",
    "evidence": "Route events record why an ask failed (NO_ANSWER reasons in trace route_asks).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C39-I",
@@ -3372,7 +3572,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C39-F",
@@ -3383,10 +3584,11 @@
    "dim": "F",
    "test": "Repeated failure escalates.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Report flags repetition.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C39-X",
@@ -3400,7 +3602,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C40-P",
@@ -3414,7 +3617,8 @@
    "status": "FAIL",
    "evidence": "4/6 \"[NOBODY]\".",
    "component": "goal tick",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C40-R",
@@ -3428,7 +3632,8 @@
    "status": "FAIL",
    "evidence": "Integration diagnosis: 4 of 6 live goals \"[NOBODY] Brain judges each idea on its next pass\".",
    "component": "",
-   "rc": "RC7"
+   "rc": "RC7",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C40-I",
@@ -3442,7 +3647,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C40-F",
@@ -3453,10 +3659,11 @@
    "dim": "F",
    "test": "Idle goal detected.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "Watchdog exists.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C40-X",
@@ -3470,7 +3677,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C41-P",
@@ -3484,7 +3692,8 @@
    "status": "FAIL",
    "evidence": "Report judges by tool-call success (operationsReport.ts:327).",
    "component": "operationsReport",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C41-R",
@@ -3498,7 +3707,8 @@
    "status": "FAIL",
    "evidence": "Code: operationsReport.ts:327 judges model adequacy by tool-call success; no route-outcome measure changes routing.",
    "component": "",
-   "rc": "RC1,RC14"
+   "rc": "RC1,RC14",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C41-I",
@@ -3512,7 +3722,8 @@
    "status": "FAIL",
    "evidence": "Strong model inert (no key).",
    "component": "strongRouteModels",
-   "rc": "RC1"
+   "rc": "RC1",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C41-F",
@@ -3526,7 +3737,8 @@
    "status": "FAIL",
    "evidence": "Code: the fallback (1/30 on the model exam) is never benched; challengerModels order is fixed.",
    "component": "",
-   "rc": "RC1,RC14"
+   "rc": "RC1,RC14",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C41-X",
@@ -3540,7 +3752,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C42-P",
@@ -3554,7 +3767,8 @@
    "status": "FAIL",
    "evidence": "fm1126a f01: chosen null; steps are research on generic arrangements.",
    "component": "",
-   "rc": "RC13"
+   "rc": "RC13",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C42-R",
@@ -3568,7 +3782,8 @@
    "status": "PASS",
    "evidence": "fm1126a f01: the reading reaches the owner surface (read output).",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet"
   },
   {
    "id": "C42-I",
@@ -3582,7 +3797,8 @@
    "status": "UNKNOWN",
    "evidence": "",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C42-F",
@@ -3593,10 +3809,11 @@
    "dim": "F",
    "test": "No plan: says why and what next.",
    "expected": "Yes.",
-   "status": "NEEDS RECHECK",
+   "status": "RECHECK",
    "evidence": "NOT_VIABLE/NEEDS_EVIDENCE readings.",
    "component": "",
-   "rc": ""
+   "rc": "",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C42-X",
@@ -3610,7 +3827,8 @@
    "status": "FAIL",
    "evidence": "Four best answers.",
    "component": "",
-   "rc": "RC11"
+   "rc": "RC11",
+   "proof": "UNPROVEN"
   }
  ]
 }

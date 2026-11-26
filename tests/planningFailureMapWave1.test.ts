@@ -56,9 +56,16 @@ const route = (over: Record<string, unknown> = {}) => ({
 
 describe('RC4: every distinct verified finding can reach the planner', () => {
   it('keeps two facts that share their first 160 characters and drop a refuted one', () => {
-    const head = 'PropPhoto lists real estate drone video in Mesa, Arizona as typically $129 to $300 per shoot, and the same page lists add-on pricing for twilight aerials and ';
+    // The shared opening is longer than 160 characters, so a comparison of openings alone would merge the two (sensitivity run, 2026-11-26).
+    const head = 'PropPhoto lists real estate drone video in Mesa, Arizona as typically $129 to $300 per shoot, and the same page lists its add-on pricing for twilight aerials, interior walkthroughs and ';
+    expect(head.length).toBeGreaterThan(165);
     const found = findingsOf([claim(`${head}a $100 rush fee.`), claim(`${head}a 30-second edited reel at $75.`), claim('A refuted figure that research later overturned completely.', { contradictionState: 'REFUTED' } as Partial<ResearchClaim>)]);
     expect(found.map((one) => one.text)).toEqual([`${head}a $100 rush fee.`, `${head}a 30-second edited reel at $75.`]);
+  });
+
+  it('by default shows every one of 135 distinct verified findings (the intelligence test held 111, 111 and 135)', () => {
+    const many = Array.from({ length: 135 }, (_, i) => claim(`Distinct verified fact number ${i} about prices, channels and payout timing for this goal.`, { evidenceLane: i % 2 ? 'price_evidence' : 'timing' }));
+    expect(findingsOf(many).length).toBeGreaterThanOrEqual(120);
   });
 
   it('past its budget takes every lane in turn, so the newest round cannot crowd the rest out', () => {

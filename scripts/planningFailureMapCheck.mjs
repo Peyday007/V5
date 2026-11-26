@@ -15,7 +15,7 @@ const data = JSON.parse(readFileSync('docs/planning-failure-map/map.json', 'utf8
 const md = readFileSync('docs/PLANNING-FAILURE-MAP.md', 'utf8');
 const failures = [];
 const ok = (cond, what) => { if (!cond) failures.push(what); };
-const STATUSES = ['PASS', 'FAIL', 'UNKNOWN', 'NEEDS RECHECK'];
+const STATUSES = ['PASS', 'FAIL', 'UNKNOWN', 'RECHECK'];
 
 if (which === 'structure' || which === 'all') {
   ok(data.capabilities.length >= 40, 'at least 40 capabilities are mapped');
@@ -24,7 +24,8 @@ if (which === 'structure' || which === 'all') {
   for (const cap of data.capabilities) for (const dim of ['P', 'R', 'I', 'F', 'X']) ok(ids.has(`${cap.id}-${dim}`), `${cap.id} is examined on ${dim}`);
   for (const q of data.questions) {
     ok(q.test && q.expected && q.why && q.cap, `${q.id} states its test, expected behaviour, capability and why`);
-    ok(STATUSES.includes(q.status), `${q.id} has a status of PASS, FAIL, UNKNOWN or NEEDS RECHECK`);
+    ok(STATUSES.includes(q.status), `${q.id} has a status of PASS, FAIL, UNKNOWN or RECHECK`);
+    ok(typeof q.proof === 'string' && q.proof.length > 0, `${q.id} records whether its test is proven to detect its failure`);
     ok(q.status === 'UNKNOWN' || q.evidence, `${q.id}: a status other than UNKNOWN names its evidence`);
     for (const rc of (q.rc || '').split(',').filter(Boolean)) ok(rc in data.rootCauses, `${q.id} names root cause ${rc}, which is recorded`);
   }
@@ -35,6 +36,10 @@ if (which === 'structure' || which === 'all') {
 if (which === 'repairs' || which === 'all') {
   for (const r of data.repairs) ok(r.owner && r.what && r.state, `repair ${r.id} names what, owner and state`);
   for (const rc of Object.keys(data.rootCauses)) ok(data.repairs.some((r) => r.rc === rc), `root cause ${rc} has a repair`);
+}
+if (which === 'validity') {
+  const unproven = data.questions.filter((q) => !/^(CONTROLLED_FAILURE:|HISTORICAL_FAILURE_DETECTED)/.test(q.proof));
+  ok(unproven.length === 0, `every diagnostic is proven able to detect its failure (${unproven.length} not yet: ${unproven.slice(0, 10).map((q) => q.id).join(', ')}${unproven.length > 10 ? ', …' : ''})`);
 }
 if (which === 'coverage') {
   const open = data.questions.filter((q) => q.status === 'UNKNOWN');
