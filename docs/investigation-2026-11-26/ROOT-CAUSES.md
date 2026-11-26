@@ -77,3 +77,15 @@ Independent of these classes: CR-08 (research supply, an infrastructure/allocati
 ## E. Remaining uncertainty attached to causes
 
 See `UNCERTAINTY.md`.
+
+## F. Additions from Gate A (independent coverage review, reviews/GATE-A.md). Status pending Map A's response.
+
+| new / extended | Gate A finding | effect on register |
+|---|---|---|
+| CR-08 gains a **competing explanation** | GA-02: the Russell judgment between a goal round and its launch can end the round as `answeredByArchive`, or refuse it at `compileMission` (russell/loop.ts:1965-1986; planning.ts:404-470). | Research starvation may be partly *research never launched*, not only *launched and unexecuted*. A distinguishing observation is needed: per-goal judgment outcomes (U-13). |
+| CR-05 extended | GA-18: arrangements are screened without the owner-labour argument (goalScenario.ts:1883; construct.ts:1346, 1746). Only openings honour the offer. | One more place where the standing rule overrides the owner's offer (M2). |
+| CR-13 extended | GA-19: any existing `cash_modes` row, including WINDING_DOWN or ARCHIVED, blocks reactivation (goalSprint.ts:104-107), and the launch gate then refuses discovery. | A second path to a goal never being searched. |
+| CR-09 extended | GA-13: owner-recorded construction facts carry `workstream_id`, and `construct.ts` reads only `workstream_id IS NULL`. | The owner's own evidence never reaches the cash plan (M2/M3). |
+| CR-10 extended | GA-09: `buildPlanSet` is a second "best" ranking persisted in the forecast. GA-01: a model challenge inside `optimizePortfolio` can replace `portfolio.best` and withdraw the 90% claim on every read. | There are at least two more selectors, one of them model-driven. CR-01/CR-02 apply to this call site too. |
+| CR-16 extended | GA-24: a reply whose routes all failed the rules (routes=0, rejected>0) ends the model fallback chain (routeProposal.ts:2095-2110). | One weak model's rule-rejected reply ends the ask. |
+| new CR-17 (SUPPORTED, code) | GA-03/GA-29: `changeObjective` keeps the old links and does not make routes due (up to 6 h). `planInputsFingerprint` ignores knowledge and world-model facts, library verdicts and person facts, so a goal held NOT_SUPPORTED stays stuck through those changes. | Change propagation (Map C Q-R009) fails. The owner's goal changes are not acted on promptly, and the plan does not re-read when relevant evidence changes. |
