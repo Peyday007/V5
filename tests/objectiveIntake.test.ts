@@ -26,7 +26,7 @@ describe('readObjective', () => {
   it('places "<number> dollars" after a third-person verb and before "customer payments" (production, 2026-11-19)', () => {
     // Verbatim from `goals create` on production, which read it as OTHER with "50000 dollars" unplaced.
     const prod = readObjective('Build a business that collects 50000 dollars of customer payments within 6 months using up to 25000 dollars of capital', NOW);
-    expect(prod).toMatchObject({ kind: 'CASH', metric: 'SETTLED_CASH', amount: 50_000, currency: 'USD', capitalCeiling: 25_000 });
+    expect(prod).toMatchObject({ kind: 'CASH', metric: 'COLLECTED_CASH', amount: 50_000, currency: 'USD', capitalCeiling: 25_000 });
     expect(prod.deadline).toBe('2027-05-14T12:00:00.000Z');
     expect(prod.unread).toEqual([]);
     for (const text of [

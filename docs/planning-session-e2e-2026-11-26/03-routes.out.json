@@ -1,0 +1,19 @@
+{
+  "filed": [
+    {
+      "key": "b25fb3a47de4936c",
+      "id": "cop_6dbb5a72734642998d34",
+      "title": "E-2 treaty-investor business plans for immigration attorneys' clients",
+      "directCostKnown": true,
+      "existing": false
+    },
+    {
+      "key": "946fad586cef43cc",
+      "id": "cop_4dfe020162ef4aa89f41",
+      "title": "SBA loan business plans for start-up borrowers referred by SBA lenders",
+      "directCostKnown": false,
+      "existing": false
+    }
+  ],
+  "refused": []
+}

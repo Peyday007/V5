@@ -1,0 +1,374 @@
+{
+ "contractDigest": "26b673f3e3109d5f95622c67",
+ "parentRevisionId": "rev_b1c1433059c1_c57661",
+ "stance": "CONDITIONAL",
+ "strategy": {
+  "title": "E-2 business plans sold through immigration attorneys; first case paid after attorney approval, bounded",
+  "opportunityIds": [
+   "cop_6dbb5a72734642998d34"
+  ],
+  "why": "Only route inside the caps with a published price band, a required document and AI-producible fulfilment; Brain's planner reads it NOT_VIABLE on evidence until price, demand and fulfiller are measured, which is what this validation stage measures"
+ },
+ "alternatives": [
+  {
+   "title": "SBA loan business plans via lenders",
+   "why": "price unsourced, direct cost unknown"
+  },
+  {
+   "title": "Co-op postcard",
+   "why": "vendor drop ~$2,309 breaks the $2,000 total cap"
+  },
+  {
+   "title": "Upwork proposals",
+   "why": "owner rejected freelance work 2026-10-20 (\u00a776)"
+  }
+ ],
+ "steps": [
+  {
+   "id": "s0",
+   "kind": "OTHER",
+   "label": "Obtain a written reviewer quote <= $80 per plan including 2 re-checks within 30 days, 24h turnaround, capacity 2/day (requires supplier-contact authorization); no outreach before it",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 0,
+   "dependsOn": null,
+   "evidence": [
+    "q_review"
+   ]
+  },
+  {
+   "id": "s0b",
+   "kind": "OTHER",
+   "label": "Register the brand domain for reply-to and the sample link",
+   "performer": "BRAIN",
+   "costCents": 1200,
+   "day": 0,
+   "dependsOn": "s0",
+   "evidence": [
+    "src_domain"
+   ]
+  },
+  {
+   "id": "s1",
+   "kind": "RESEARCH",
+   "label": "Buy ~5,000 Maps records (500 free + 4,500 at $3/1k); keep firms with an E-2 page and a published address (up to 800)",
+   "performer": "BRAIN",
+   "costCents": 1500,
+   "day": 0,
+   "dependsOn": "s0",
+   "evidence": [
+    "src_outscraper"
+   ]
+  },
+  {
+   "id": "s2",
+   "kind": "REACH",
+   "label": "Email up to 800 qualified firms at <= 200/day, days 1-4, through Brain's integrated sending infrastructure (the Instantly integration the owner allowed as Brain infrastructure; none of its campaign history is used as evidence)",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 1,
+   "dependsOn": "s1",
+   "evidence": [
+    "q_price"
+   ]
+  },
+  {
+   "id": "s3",
+   "kind": "SELL",
+   "label": "Intake; only 2 orders are accepted before proof, later intakes are waitlisted until proof; terms: 2 revision rounds in 30 days (both re-runs reserved at intake), written approval or rejection within 5 business days, rejection = no charge",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 3,
+   "dependsOn": "s2",
+   "evidence": [
+    "q_price"
+   ]
+  },
+  {
+   "id": "s4",
+   "kind": "DELIVER",
+   "label": "Draft on the API, reviewer checks before delivery (two proof orders)",
+   "performer": "Contracted E-2 plan reviewer (quote required by s0)",
+   "costCents": 3000,
+   "day": 8,
+   "dependsOn": "s3",
+   "evidence": [
+    "q_review"
+   ]
+  },
+  {
+   "id": "s4b",
+   "kind": "ORDER",
+   "label": "Pay the reviewer per plan on completion",
+   "performer": "BRAIN",
+   "costCents": 16000,
+   "day": 9,
+   "dependsOn": "s4",
+   "evidence": [
+    "q_review"
+   ]
+  },
+  {
+   "id": "s5",
+   "kind": "COLLECT",
+   "label": "Client pays on approval by Stripe ACH; counted when the debit clears (+4 business days); payout reaches the bank later",
+   "performer": "BRAIN",
+   "costCents": 1000,
+   "day": 13,
+   "dependsOn": "s4",
+   "evidence": [
+    "q_price"
+   ]
+  }
+ ],
+ "cash": [
+  {
+   "day": 0,
+   "kind": "SPEND",
+   "amountCents": 1200,
+   "label": "domain"
+  },
+  {
+   "day": 0,
+   "kind": "SPEND",
+   "amountCents": 1500,
+   "label": "firm data (~5,000 records)"
+  },
+  {
+   "day": 4,
+   "kind": "COMMIT",
+   "amountCents": 9500,
+   "label": "order 1 fulfilment committed at intake (API 15 + review 80)"
+  },
+  {
+   "day": 4,
+   "kind": "COMMIT",
+   "amountCents": 3000,
+   "label": "order 1 revision rounds 1-2: two API re-runs at $15 (re-checks inside the reviewer fee)"
+  },
+  {
+   "day": 5,
+   "kind": "COMMIT",
+   "amountCents": 9500,
+   "label": "order 2 fulfilment committed at intake"
+  },
+  {
+   "day": 5,
+   "kind": "COMMIT",
+   "amountCents": 3000,
+   "label": "order 2 revision rounds 1-2: two API re-runs"
+  },
+  {
+   "day": 8,
+   "kind": "RELEASE",
+   "amountCents": 9500,
+   "label": "order 1 fulfilment commitment spent"
+  },
+  {
+   "day": 8,
+   "kind": "SPEND",
+   "amountCents": 9500,
+   "label": "order 1 fulfilment"
+  },
+  {
+   "day": 9,
+   "kind": "RELEASE",
+   "amountCents": 9500,
+   "label": "order 2 fulfilment commitment spent"
+  },
+  {
+   "day": 9,
+   "kind": "SPEND",
+   "amountCents": 9500,
+   "label": "order 2 fulfilment"
+  },
+  {
+   "day": 15,
+   "kind": "RECEIPT",
+   "amountCents": 125000,
+   "label": "order 1 paid on approval (latest day 15); ACH clears ~day 19",
+   "settlesDay": 29
+  },
+  {
+   "day": 15,
+   "kind": "FEE",
+   "amountCents": 500,
+   "label": "ACH fee order 1"
+  },
+  {
+   "day": 16,
+   "kind": "RECEIPT",
+   "amountCents": 125000,
+   "label": "order 2 paid on approval (latest day 16); ACH clears ~day 20",
+   "settlesDay": 30
+  },
+  {
+   "day": 16,
+   "kind": "FEE",
+   "amountCents": 500,
+   "label": "ACH fee order 2"
+  }
+ ],
+ "proofDay": 22,
+ "quantities": [
+  {
+   "name": "price per plan",
+   "status": "ESTIMATE",
+   "value": 1250,
+   "unit": "USD",
+   "sources": [
+    "src_avvale",
+    "src_mikel"
+   ],
+   "needs": null
+  },
+  {
+   "name": "API cost per draft or re-run",
+   "status": "ESTIMATE",
+   "value": 15,
+   "unit": "USD",
+   "sources": [
+    "src_anthropic_pricing"
+   ],
+   "needs": "measure on the sample regeneration"
+  },
+  {
+   "name": "attorney referral demand per firm contacted",
+   "status": "UNKNOWN",
+   "value": null,
+   "unit": "paid orders per firm",
+   "sources": [],
+   "needs": "the live test: 800 firms contacted days 1-4, cleared payments counted by day 18"
+  },
+  {
+   "name": "attorney approval time",
+   "status": "UNKNOWN",
+   "value": null,
+   "unit": "business days",
+   "sources": [],
+   "needs": "stated in the engagement terms (<= 5) and measured on the proof orders"
+  },
+  {
+   "name": "historical investor adjudications FY2014-17 (context, not a current ceiling)",
+   "status": "ESTIMATE",
+   "value": 6000,
+   "unit": "applications a year",
+   "sources": [
+    "src_gao"
+   ],
+   "needs": null
+  },
+  {
+   "name": "reviewer fee per plan incl. 2 re-checks",
+   "status": "UNKNOWN",
+   "value": null,
+   "unit": "USD",
+   "sources": [],
+   "needs": "a provider's written quote <= $80 (step s0); published writer rates $25-$79/hr are context only"
+  },
+  {
+   "name": "qualified firms per 5,000 Maps records",
+   "status": "UNKNOWN",
+   "value": null,
+   "unit": "firms",
+   "sources": [],
+   "needs": "counted when the list is built on day 0"
+  }
+ ],
+ "sources": [
+  {
+   "id": "src_avvale",
+   "url": "https://avvale.co.uk/pages/e2-visa-business-plan",
+   "dated": "2026-09-04",
+   "claim": "E-2 plans $1,900-$3,200",
+   "population": "E-2 plan buyers",
+   "matchesBuyer": true
+  },
+  {
+   "id": "src_mikel",
+   "url": "https://swan-reed-g9fp.squarespace.com/us/e2-visa-business-plan",
+   "dated": "2026-11-26",
+   "claim": "E-2 plans from $1,200 (Mikel Consulting; weak source: generic site host)",
+   "population": "E-2 plan buyers",
+   "matchesBuyer": true
+  },
+  {
+   "id": "src_anthropic_pricing",
+   "url": "https://www.anthropic.com/pricing",
+   "dated": "2026-11-03",
+   "claim": "Opus 5.5 $4/$20 per million tokens",
+   "population": "supplier cost",
+   "matchesBuyer": false
+  },
+  {
+   "id": "src_outscraper",
+   "url": "https://scrap.io/outscraper-pricing",
+   "dated": "2026-11-26",
+   "claim": "$3 per 1,000 Maps records",
+   "population": "supplier cost",
+   "matchesBuyer": false
+  },
+  {
+   "id": "src_domain",
+   "url": "https://www.cloudflare.com/products/registrar/",
+   "dated": "2026-11-26",
+   "claim": "domain registration at cost, ~$10-12/yr",
+   "population": "supplier cost",
+   "matchesBuyer": false
+  },
+  {
+   "id": "src_gao",
+   "url": "https://www.gao.gov/assets/gao-19-547.pdf",
+   "dated": "2019-08-01",
+   "claim": "investor E-2 adjudications 5,294-6,755 a year FY2014-17",
+   "population": "E-2 visa applicants",
+   "matchesBuyer": false
+  }
+ ],
+ "validation": {
+  "proof": "by day 22: >= 2 ACH-cleared payments >= $1,250 from 2 distinct payers, and the first plan approved in writing by its attorney",
+  "stop": [
+   "day 0: no reviewer quote <= $80 incl. 2 re-checks -> no outreach (NO_PLAN for fulfilment); $0 spent",
+   "day 22: fewer than 2 cleared payments (pending included) -> stop new intake; open orders are completed and their reserved revision rounds honoured; at most $287 spent ($227 paid out, $60 of revision re-runs reserved); no further spending"
+  ],
+  "continue": [
+   "day 22 proof met -> release up to $1,713 ($2,000 - $287) for waitlisted orders at <= $130 each (API $15, review $80, two re-runs $30, ACH fee $5); only prepaying clients can clear by day 30, so $10,000 in this window needs >= 6 waitlisted clients to prepay by ~day 26 \u2014 stated as unlikely on this cycle, not as supported"
+  ]
+ },
+ "noPlan": null,
+ "reach": {
+  "value": 0.17,
+  "calibrated": false,
+  "presentedAs": "COVERAGE"
+ },
+ "answers": [
+  {
+   "finding": "round-2 reserve",
+   "resolution": "both revision re-runs reserved at intake; data cut to ~5,000 records and reviewer ceiling to $80, so pre-proof is $287 of $300"
+  },
+  {
+   "finding": "revise branch unfundable",
+   "resolution": "removed; the day-22 outcome is proof (continue) or stop"
+  },
+  {
+   "finding": "cleared vs settled",
+   "resolution": "labels state paid day, ACH clear day and payout day separately; proof counts cleared payments"
+  },
+  {
+   "finding": "proof timing and pending",
+   "resolution": "proof day moved to 22 to cover approval (<= 5 business days) and ACH clearing; pending at day 22 counts as not cleared -> stop; open obligations after a stop are stated"
+  },
+  {
+   "finding": "8-order path",
+   "resolution": "continue states that $10,000 in this window needs >= 6 prepaid waitlisted clients by ~day 26 and is unlikely; not presented as supported"
+  },
+  {
+   "finding": "sending infrastructure",
+   "resolution": "named as the Instantly integration the owner allowed as Brain infrastructure; its campaign history is not used as evidence"
+  },
+  {
+   "finding": "text vs checked figures",
+   "resolution": "stop/continue figures restated from the checked trace ($287 pre-proof, $130 per order)"
+  }
+ ]
+}

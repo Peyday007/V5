@@ -54,6 +54,7 @@ import { BIN_TOOLS } from './binTools.ts';
 import { ENGINEERING_TOOLS } from './engineeringTools.ts';
 import { DEADLINE_TOOLS } from './deadlineTools.ts';
 import { OPERATOR_TOOLS } from './operatorTools.ts';
+import { PLANNING_TOOLS } from './planningTools.ts';
 import { OWNER_NOTICE_TOOLS } from './ownerNoticeTools.ts';
 import { fetchSourceTool } from './sourceTools.ts';
 import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
@@ -1030,6 +1031,9 @@ export const TOOLS: readonly McpTool[] = [
   // §106 — the operator directs every goal through these. Same array, same
   // reason: who may *succeed* with them is `operator:act`, decided at execution.
   ...OPERATOR_TOOLS,
+  // The app-session planning adapter (sessionPlanning.ts): the owner's Claude app session plans a
+  // goal through Brain's machinery. Same authorization: READ to read, operator:act to write.
+  ...PLANNING_TOOLS,
   // The owner's own Claude Code conversation reads the notices Brain records for it (owner,
   // 2026-11-13). Same array, same reason: project:read to read, checkpoints:write to mark delivered.
   ...OWNER_NOTICE_TOOLS,

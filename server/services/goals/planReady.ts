@@ -87,7 +87,7 @@ async function adoption(goalId: string): Promise<PlanReadyFacts['hermes']> {
           }
         : null,
       answeredChallenge: typeof input['answeredChallenge'] === 'string' ? (input['answeredChallenge'] as string) : null,
-      prediction: { outcome: String(prediction['outcome'] ?? ''), probability: Number(prediction['probability'] ?? 0), horizonDays: Number(prediction['horizonDays'] ?? 0) },
+      prediction: { outcome: String(prediction['outcome'] ?? ''), probability: typeof prediction['probability'] === 'number' && Number.isFinite(prediction['probability']) ? (prediction['probability'] as number) : null, horizonDays: Number(prediction['horizonDays'] ?? 0) },
     };
   }
   return null;
@@ -150,6 +150,8 @@ export async function planReadyFacts(goalId: string, reading: PlanReading): Prom
     members,
     steps,
     hermes: await adoption(goalId),
+    // An app-session plan's independent review, bound to the revision digest (sessionPlanning.ts).
+    ...(await (await import('../planning/sessionPlanning.ts')).sessionReviewFor(goalId)),
     acceptedSince: accepted ? await acceptedSince(goalId, accepted.opportunityIds) : null,
     capitalCeiling: reading.target.capitalCeilingCents !== null ? reading.target.capitalCeilingCents / 100 : null,
     integrity: reading.integrity ?? [],

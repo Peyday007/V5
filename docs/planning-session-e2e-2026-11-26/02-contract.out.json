@@ -1,0 +1,34 @@
+{
+  "contract": {
+    "goalId": "wst_41630d3c657640bc828f",
+    "words": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days, subject to: Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement; no required physical work by the owner.",
+    "source": {
+      "kind": "OWNER_MESSAGE",
+      "ref": "owner message 2026-11-26T08:52:26Z (with the 2026-11-26T16:06Z correction)",
+      "at": "2026-11-26T08:52:26.946Z"
+    },
+    "terms": {
+      "targetCents": 1000000,
+      "currency": "USD",
+      "metric": "COLLECTED_CASH",
+      "windowDays": 30,
+      "totalSpendCapCents": 200000,
+      "preProofSpendCapCents": 30000,
+      "exposureCapCents": 200000,
+      "proofCondition": "A customer-validation condition the plan states explicitly before spending past the pre-proof allowance: actual payment, a paid pilot or a meaningful deposit at workable economics (owner 2026-11-26). Not merely a first payment.",
+      "ownerHoursPerWeek": null,
+      "ownerPhysicalWork": "FORBIDDEN",
+      "exclusions": [
+        "the owner's existing offers, prospects, audiences and business assets as defaults (owner 2026-11-26T16:06Z)"
+      ],
+      "evidenceExclusions": [
+        "the owner's Instantly campaign history as evidence of demand, response, close rate or revenue ceiling (owner 2026-11-26T16:06Z)"
+      ]
+    },
+    "explanations": {},
+    "version": 1,
+    "digest": "26b673f3e3109d5f95622c67"
+  },
+  "changed": true,
+  "invalidated": []
+}

@@ -10,7 +10,9 @@
  * worth recording:
  *
  *   - more than one meaningfully different alternative (a choice of one is not a decision);
- *   - each alternative's probability is a probability, and its value is stated or explicitly unknown;
+ *   - each alternative's probability, value and cost are stated or explicitly unknown (null) — an
+ *     unknown is never filled with 0, 0.5 or 1, and an option whose expected value needs an unknown
+ *     stays unranked (its expected value is null, never computed as if the unknown were zero);
  *   - the assumptions are named, so a miss can be traced to the one that broke;
  *   - the chosen alternative is the best by expected value, OR the operator says why
  *     not — typically that the information it buys is worth more (an experiment);
@@ -43,8 +45,8 @@ export const HIGH_IMPACT_USD = 1000;
 
 export interface DecisionOption {
   action: string;
-  /** Probability the option achieves its stated value, 0..1. */
-  probability: number;
+  /** Probability the option achieves its stated value, 0..1; null when nobody can state it (never read as any number). */
+  probability: number | null;
   /** Value in dollars if it works; null when nobody can state it (never read as zero). */
   valueUsd: number | null;
   /** What it costs to try, in dollars (money and priced capacity); null when unknown. */
@@ -62,7 +64,8 @@ export interface DecisionInput {
   assumptions: string[];
   /** Why the chosen option is not the best by expected value, when it is not. */
   whyNotHighestEv: string | null;
-  prediction: { outcome: string; probability: number; horizonDays: number };
+  /** probability null: the forecast is stated as unknown; it is recorded, never scored for calibration. */
+  prediction: { outcome: string; probability: number | null; horizonDays: number };
   irreversible: boolean;
 }
 
@@ -97,14 +100,17 @@ export function reviewDecision(input: DecisionInput): DecisionReview {
     problems.push('consider at least two meaningfully different alternatives (doing nothing counts as one)');
   }
   const options: ReviewedOption[] = input.options.map((o, i) => {
-    if (!isProbability(o.probability)) problems.push(`option ${i}: probability must be between 0 and 1`);
+    if (o.probability !== null && !isProbability(o.probability)) problems.push(`option ${i}: probability must be between 0 and 1, or null when unknown`);
     if (o.valueUsd !== null && !Number.isFinite(o.valueUsd)) problems.push(`option ${i}: valueUsd must be a number or null`);
-    const ev = o.valueUsd === null || !isProbability(o.probability) ? null : o.probability * o.valueUsd - (o.costUsd ?? 0);
+    if (o.costUsd !== null && !Number.isFinite(o.costUsd)) problems.push(`option ${i}: costUsd must be a number or null`);
+    // Expected value needs all three: an unknown cost is unknown, never zero (an explicit 0 is a stated cost).
+    const known = o.probability !== null && isProbability(o.probability) && o.valueUsd !== null && Number.isFinite(o.valueUsd) && o.costUsd !== null && Number.isFinite(o.costUsd);
+    const ev = known ? o.probability! * o.valueUsd! - o.costUsd! : null;
     return { ...o, expectedValueUsd: ev === null ? null : Math.round(ev * 100) / 100 };
   });
   if (!Number.isInteger(input.chosen) || input.chosen < 0 || input.chosen >= input.options.length) problems.push('chosen must index one of the options');
   if (input.assumptions.filter((a) => a.trim()).length === 0) problems.push('name the assumptions the choice rests on, so a miss can be traced to the one that broke');
-  if (!isProbability(input.prediction.probability)) problems.push('the prediction needs a probability between 0 and 1');
+  if (input.prediction.probability !== null && !isProbability(input.prediction.probability)) problems.push('the prediction probability must be between 0 and 1, or null when unknown');
   if (!input.prediction.outcome.trim()) problems.push('the prediction needs an observable outcome');
   if (!(input.prediction.horizonDays > 0 && input.prediction.horizonDays <= 365)) problems.push('the prediction needs a horizon of 1 to 365 days');
   let bestByEv: number | null = null;

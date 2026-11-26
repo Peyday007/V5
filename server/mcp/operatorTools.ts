@@ -857,7 +857,7 @@ const decideTool: McpTool = {
           type: 'object',
           properties: {
             action: { type: 'string' },
-            probability: { type: 'number' },
+            probability: { type: ['number', 'null'], description: '0..1, or null when nobody can state it (never guess 0, 0.5 or 1).' },
             value_usd: { type: ['number', 'null'] },
             cost_usd: { type: ['number', 'null'] },
             evidence: { type: 'array', items: { type: 'string' } },
@@ -869,7 +869,7 @@ const decideTool: McpTool = {
       assumptions: { type: 'array', items: { type: 'string' } },
       why_not_highest_ev: { type: 'string' },
       prediction_outcome: { type: 'string', description: 'What will be observably true if the choice works.' },
-      prediction_probability: { type: 'number' },
+      prediction_probability: { type: ['number', 'null'], description: '0..1, or null when unknown; an unknown forecast is recorded and never scored.' },
       horizon_days: { type: 'number' },
       irreversible: { type: 'boolean' },
       answered_challenge: { type: 'string' },
@@ -882,7 +882,9 @@ const decideTool: McpTool = {
     const projects = await requireOperator(principal);
     const rawOptions = Array.isArray(args['options']) ? (args['options'] as Record<string, unknown>[]) : [];
     const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
-    const nullableNumber = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+    // Absent or null is an explicit unknown; anything else is read as written, so a non-finite value
+    // reaches the reviewer and is refused there instead of silently becoming "unknown".
+    const nullableNumber = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v));
     const { decide } = await import('../services/operator/decisions.ts');
     const { modelsFor } = await import('../services/operator/run.ts');
     const models = await modelsFor();
@@ -893,7 +895,7 @@ const decideTool: McpTool = {
         question: requiredString(args, 'question'),
         options: rawOptions.map((o) => ({
           action: String(o['action'] ?? ''),
-          probability: Number(o['probability']),
+          probability: nullableNumber(o['probability']),
           valueUsd: nullableNumber(o['value_usd']),
           costUsd: nullableNumber(o['cost_usd']),
           evidence: strings(o['evidence']),
@@ -903,7 +905,7 @@ const decideTool: McpTool = {
         whyNotHighestEv: optionalString(args, 'why_not_highest_ev'),
         prediction: {
           outcome: requiredString(args, 'prediction_outcome'),
-          probability: numberArg(args, 'prediction_probability', -1) ?? -1,
+          probability: nullableNumber(args['prediction_probability']),
           horizonDays: numberArg(args, 'horizon_days', 0) ?? 0,
         },
         irreversible: args['irreversible'] === true,

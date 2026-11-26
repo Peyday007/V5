@@ -22,7 +22,7 @@
  * stands unchanged.
  */
 import type { ChatFn, Message } from '../cheap/modelBench.ts';
-import { assumedLittleCapital, statedFigures, statesMonthlyRate, type ObjectiveReading } from '../industry/construction/intent.ts';
+import { assumedLittleCapital, cashMetricOf, statedFigures, statesMonthlyRate, type ObjectiveReading } from '../industry/construction/intent.ts';
 
 /** A model to ask, as the operator's chain names it. */
 export interface ObjectiveInterpreter {
@@ -101,7 +101,7 @@ export function applyAssist(reading: ObjectiveReading, proposal: Record<string, 
     if (timesStated(amount) > 0 && !usedAsCapital) {
       out.amount = amount;
       out.kind = 'CASH';
-      out.metric = /\b(?:profit|net|netting|contribution)\b/i.test(text) ? 'CONTRIBUTION' : 'SETTLED_CASH';
+      out.metric = cashMetricOf(text);
       placed.push(amount);
       fields.push('amount');
       if (proposal['monthly'] === true) {

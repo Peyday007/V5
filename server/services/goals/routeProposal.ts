@@ -155,6 +155,12 @@ export interface ProposedRoute {
   /** The proved deliverable Brain would produce, when Brain performs it. */
   brainDeliverable: string | null;
   directCost: number;
+  /**
+   * False when the reply stated no direct cost: `directCost` is then 0 only so the route's
+   * arithmetic runs, and the opening is filed WITHOUT a direct-cost fact, so the planner reads the
+   * cost as unknown — never as zero. Absent reads as stated (routes built by hand).
+   */
+  directCostKnown?: boolean;
   capital: number;
   ownerHoursPerDeal: number;
   /** What winning one paying buyer costs in money (ads, leads, listing or platform fees, outreach tools), null when the reply gave none. */
@@ -248,6 +254,14 @@ export interface RouteContext {
   daysLeft: number;
   /** Most that may be tied up before money comes back; null when nobody set a limit. */
   capitalLimit: number | null;
+  /**
+   * The goal's distinct money limits, kept apart (major units; null = none set). `capitalLimit`
+   * above is the single figure the route prompt states; admission checks each of these.
+   *   totalSpend — all spending in the window, receipts included (the goal's capital ceiling);
+   *   preProof   — spending before proof of demand (the goal's before-proof figure);
+   *   proven     — whether the goal's own proof condition is met; until then preProof binds.
+   */
+  budgets?: { totalSpend: number | null; preProof: number | null; proven: boolean };
   /** The owner's hours for the whole window; null when nobody set a limit. */
   hoursLimit: number | null;
   /**
@@ -926,7 +940,8 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
     const performerRaw = str(r['performer'], 20)?.toUpperCase();
     const performer: Performer = (PERFORMERS as readonly string[]).includes(performerRaw ?? '') ? (performerRaw as Performer) : 'SUBCONTRACTOR';
     const monthly = isMonthly(r['monthly'], r['price']);
-    const directCost = Math.max(0, amount(r['directCost']) ?? 0);
+    const directCostStated = amount(r['directCost']);
+    const directCost = Math.max(0, directCostStated ?? 0);
     const capital = Math.max(0, amount(r['capital']) ?? 0);
     const ownerHoursPerDeal = Math.max(0, amount(r['ownerHoursPerDeal']) ?? (performer === 'OWNER' ? 1 : 0));
     const days = amount(r['daysToFirstCash']);
@@ -1036,6 +1051,7 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       fulfiller,
       brainDeliverable,
       directCost,
+      directCostKnown: directCostStated !== null,
       capital,
       ownerHoursPerDeal,
       acquisitionCostPerSale,
@@ -1661,6 +1677,11 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
       remaining: target.remainingCents / 100,
       daysLeft: target.daysLeft,
       capitalLimit: capitalCents === null ? null : capitalCents / 100,
+      budgets: {
+        totalSpend: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
+        preProof: target.capitalBeforeProofCents === null ? null : target.capitalBeforeProofCents / 100,
+        proven: target.proven,
+      },
       hoursLimit: target.hoursCeiling,
       hoursPerWeek: target.scope?.hoursPerWeek ?? null,
       resources: target.resources,
@@ -1677,8 +1698,14 @@ export async function routeContext(goal: Workstream, target: TargetReading, held
   };
 }
 
-/** One route, filed as one goal-scoped opening with RECOMMENDATION facts only. Returns its id. */
-async function fileRoute(
+/**
+ * One route, filed as one goal-scoped opening with RECOMMENDATION facts only. Returns its id.
+ * Exported so a route an app-hosted planning session proposes (sessionPlanning.ts) enters the
+ * same goal, evidence and opportunity machinery as one the route proposer's models wrote: a
+ * hypothesis until research establishes or refutes it, never a verified fact. `model` names the
+ * executor that proposed it.
+ */
+export async function fileRoute(
   goal: Workstream,
   target: TargetReading,
   cashModeId: string,
@@ -1725,7 +1752,8 @@ async function fileRoute(
     ['access', route.channel],
     ['price', `${money(route.price, c)}${per}`],
     ['revenueRange', `${money(route.price, c)}${per}`],
-    ['directCosts', `${money(route.directCost, c)}`],
+    // An unstated cost is filed as nothing, so the planner reads it as unknown (never as $0).
+    ...(route.directCostKnown === false ? [] : [['directCosts', `${money(route.directCost, c)}`] as [string, string]]),
     ['exposure', `${money(route.capital, c)}`],
     ['timeToFirstCash', `${route.daysToFirstCash} days`],
     ['hours', `${route.ownerHoursPerDeal} owner hours per sale`],

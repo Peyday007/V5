@@ -1,0 +1,21 @@
+{
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 10000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+    "cop_6dbb5a72734642998d34",
+    "cop_4dfe020162ef4aa89f41"
+  ],
+  "integrity": [],
+  "steps": [
+    {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+    }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 10000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "at": "2026-11-26T22:03:13.738Z"
+}

@@ -88,6 +88,19 @@ function amount(raw: string, suffix: string | undefined): number {
 const MONEY = String.raw`\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m|mm|thousand|million)?\b`;
 
 /** Every amount of money the words name, ranges kept together. */
+/**
+ * Which ledger figure a cash objective counts, from its own words: money kept (profit, net,
+ * contribution); settled cash when the words say settled; collected customer payments when they say
+ * collected or customer payments/revenue ("$10,000 means customer payments actually collected",
+ * owner 2026-11-26); settled cash otherwise, as before.
+ */
+export function cashMetricOf(text: string): 'SETTLED_CASH' | 'COLLECTED_CASH' | 'CONTRIBUTION' {
+  if (/\b(?:profit|net|netting|contribution)\b/i.test(text)) return 'CONTRIBUTION';
+  if (/\bsettled\b/i.test(text)) return 'SETTLED_CASH';
+  if (/\b(?:collect(?:ed|ing|s)?\b[^.;]{0,40}\b(?:revenue|payments?|cash|sales)|customer\s+(?:payments?|revenue))\b/i.test(text)) return 'COLLECTED_CASH';
+  return 'SETTLED_CASH';
+}
+
 export function readCapital(text: string): { low: number; high: number } | null {
   const range = new RegExp(`${MONEY}\\s*(?:-|–|—|to|and)\\s*${MONEY}(?:\\s*(?:dollars|usd))?`, 'i');
   const r = range.exec(text);
@@ -169,7 +182,7 @@ export interface ObjectiveReading {
   /** CASH when the words name an amount of money to bring in; everything else is OTHER. */
   kind: 'CASH' | 'OTHER';
   /** The figure a cash objective is measured by: settled cash, or contribution when the words say profit. */
-  metric: 'SETTLED_CASH' | 'CONTRIBUTION' | null;
+  metric: 'SETTLED_CASH' | 'COLLECTED_CASH' | 'CONTRIBUTION' | null;
   /** Major units (dollars), or null. */
   amount: number | null;
   currency: string | null;
@@ -723,6 +736,10 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   const spend = String.raw`(?:spend|spending|invest|investing|risk|risking|tie up|tying up|commit|committing|put in|putting in)`;
   const moneyPhrases: { role: TokenRole; re: RegExp }[] = [
     { role: 'BEFORE_PROOF', re: new RegExp(String.raw`(?:\b(?:${spend}|using|use|with)\s+)?(?:${LIMIT}\s+)?${MP}\s+(?:(?:of\s+)?(?:capital|cash|money)\s+)?before\s+(?:the\s+)?(?:first|any|a)\s+(?:sale|payment|customer|dollar|revenue|proof|order)s?\b`, 'gi') },
+    // "Maximum cumulative spending before proof of demand: $300" — a labelled limit, the figure after the label (owner, 2026-11-26).
+    { role: 'BEFORE_PROOF', re: new RegExp(String.raw`\b(?:${LIMIT}\s+)?(?:(?:cumulative|total)\s+)?(?:spending|spend|capital|cash|money)\s+before\s+(?:the\s+)?proof(?:\s+of\s+demand)?\s*(?::|-|–|is|of)?\s*(?:${LIMIT}\s+)?${MP}`, 'gi') },
+    // "Maximum total spending: $2,000" — the overall ceiling written as a labelled limit.
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:${LIMIT}\s+)?(?:(?:total|overall|cumulative)\s+)?(?:spending|spend)(?:\s+(?:cap|ceiling|limit))?\s*(?::|-|–|is|of)\s*(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'PER_WEEK', re: new RegExp(String.raw`\b${spend}\s+(?:${LIMIT}\s+)?${MP}\s+(?:(?:of\s+)?(?:capital|cash|money)\s+)?(?:per|a|each|every)\s+week\b`, 'gi') },
     { role: 'PER_WEEK', re: new RegExp(String.raw`(?:${LIMIT}\s+)?${MP}\s+(?:of\s+)?(?:capital|budget)\s+(?:per|a|each|every)\s+week\b`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`(?:\b(?:using|use|with|${spend}|on|from)\s+)?(?:${LIMIT}\s+)?(?:an?\s+)?${MP}\s+(?:(?:of|in|as|for)\s+)?(?:(?:my|our|own|the|total|starting|start-up|startup|seed|initial|upfront|up-front|working)\s+)*(?:capital|budget|investment|funding|funds|cash to (?:invest|spend)|money to (?:invest|spend))\b`, 'gi') },
@@ -899,7 +916,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     reading: {
       text,
       kind,
-      metric: kind === 'CASH' ? (/\b(?:profit|net|netting|contribution)\b/i.test(text) ? 'CONTRIBUTION' : 'SETTLED_CASH') : null,
+      metric: kind === 'CASH' ? cashMetricOf(text) : null,
       amount: amountToken?.value ?? null,
       currency,
       deadline: at ? at.toISOString() : null,
