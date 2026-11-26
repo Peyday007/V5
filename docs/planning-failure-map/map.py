@@ -460,3 +460,59 @@ REPAIRS += [
  dict(id='W3a', rc='RC13', what='The owner\'s plan must not be built from constructed arrangements that read nothing of the owner: route the owner\'s words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.', owner='cash/construct.ts; goals/plan.ts', depends='', state='OPEN', evidence=''),
  dict(id='W3b', rc='RC14', what='A route and critique model that passes the commercial-planning exam: BRAIN_ROUTE_MODEL with an Anthropic key (owner), or the owner lifting the §84 reservation so Claude routines may plan goals.', owner='owner decision; routeProposal strongRouteModels', depends='owner', state='BLOCKED_MISSING_AUTHORITY', evidence='model exam'),
 ]
+
+# ---- UNKNOWN questions answered from evidence already held (no test repeated) ----
+_E = {
+ 'C01-F': ('PASS', 'fm1126a create log: unread phrases are named and the goal is refused rather than guessed ("nothing was created. Unread: …").'),
+ 'C13-R': ('PASS', 'p06 trace: searches answered (6) reached the free-lane worker and pages were read (3).'),
+ 'C13-I': ('FAIL', 'stall 2026-11-26: every queued research fragment sits at priority 9 (eval) or 8/6 by purpose, never by the decision its answer changes; 1,167 waiting.'),
+ 'C14-I': ('FAIL', 'stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value.'),
+ 'C15-R': ('PASS', 'p06 trace: pages read → 3 claims extracted.'),
+ 'C16-R': ('PASS', 'p06 trace: accepted claims appear in findings_now and were shown to a route ask (findingsShown 1).'),
+ 'C16-X': ('PASS', 'stall rejections: extraction then verification ("source does not directly support" 12 rejected).'),
+ 'C17-I': ('PASS', 'groundsOf cites only shown findings of a fitting lane (tests); production gate rejects unsupported claims before they become findings.'),
+ 'C20-R': ('PASS', 'Integration diagnosis: 80 buyers linked to Census counts reach arrangement buyer counts.'),
+ 'C20-I': ('FAIL', 'Integration diagnosis: a wrong link reads "buyers established … the next research round asks for conversion".'),
+ 'C20-X': ('FAIL', 'Integration diagnosis: the knowledge library feeds arrangements only; route asks never read it.'),
+ 'C22-X': ('FAIL', 'Integration diagnosis §4.1: no shared per-goal working state.'),
+ 'C24-R': ('PASS', '30Q probes: every parsed route was critiqued (critique records per route).'),
+ 'C24-F': ('PASS', '30Q p06 R1all: Upwork route contradicted by payout-hold facts dropped by the critic, correctly (grader).'),
+ 'C26-R': ('NEEDS RECHECK', '30Q all-findings arm: payout facts shown; under the old 40 cap they were cut. Cap raised (W1e); production recheck pending.'),
+ 'C26-F': ('NEEDS RECHECK', 'W1b: a disputed timing is a repair the code re-checks (tests); production pending.'),
+ 'C28-R': ('NEEDS RECHECK', 'As C26-R, for fulfiller facts.'),
+ 'C29-R': ('PASS', '30Q: the critic cited A.R.S. 32-101 survey law from the findings.'),
+ 'C30-R': ('PASS', 'Route events record rejectedByRule; probe parsed.rejected lists rule and reason.'),
+ 'C32-P': ('NEEDS RECHECK', 'Code: critiqueAndRevise asks replacements when fewer than ROUTES_MIN_SURVIVING survive; not exercised by the eval probe, production effect unmeasured.'),
+ 'C32-R': ('NEEDS RECHECK', 'Code: replacements are parsed and ranked after kept routes, not critiqued again.'),
+ 'C32-F': ('PASS', 'Code + event detail: replacement failures are named in critique.reason.'),
+ 'C33-R': ('FAIL', 'Integration diagnosis: four different "best" strategies in one production reading.'),
+ 'C33-I': ('FAIL', 'Same: the chosen route does not decide the plan reading (fm1126a f01 plan built from constructed arrangements).'),
+ 'C33-F': ('PASS', 'fm1126a f01 read: "NOT ACCEPTED: no candidate plan yet" — says so.'),
+ 'C33-X': ('FAIL', 'RC11/RC13: generators are not arbitrated.'),
+ 'C35-R': ('PASS', 'fm1126a f01 read: report lines and acceptance sentence shown.'),
+ 'C36-R': ('PASS', 'fm1126a f01 read: steps reach the owner view (their content fails C36-P).'),
+ 'C37-I': ('NEEDS RECHECK', 'W1h: rethinks of earlier asks are now read (code); production effect pending.'),
+ 'C38-R': ('NEEDS RECHECK', 'planningEval update writes the owner\'s change into target resources read by routeContext (code); not exercised.'),
+ 'C01-I': ('NEEDS RECHECK', 'Same path as C38-R; not exercised on production.'),
+ 'C04-F': ('UNKNOWN', ''),
+ 'C39-R': ('PASS', 'Route events record why an ask failed (NO_ANSWER reasons in trace route_asks).'),
+ 'C40-R': ('FAIL', 'Integration diagnosis: 4 of 6 live goals "[NOBODY] Brain judges each idea on its next pass".'),
+ 'C41-R': ('FAIL', 'Code: operationsReport.ts:327 judges model adequacy by tool-call success; no route-outcome measure changes routing.'),
+ 'C41-F': ('FAIL', 'Code: the fallback (1/30 on the model exam) is never benched; challengerModels order is fixed.'),
+ 'C42-P': ('FAIL', 'fm1126a f01: chosen null; steps are research on generic arrangements.'),
+ 'C42-R': ('PASS', 'fm1126a f01: the reading reaches the owner surface (read output).'),
+ 'C25-I': ('NEEDS RECHECK', 'W1c: economics line + ACQUISITION refusal (tests); production pending.'),
+ 'C09-I': ('NEEDS RECHECK', 'Rejections and critique drops are fed to the next ask (code); multi-ask effect unmeasured.'),
+ 'C23-X': ('NEEDS RECHECK', 'Capacity 2026-11-26: GPU 8/16 slots with "errors acceptable"; route-ask behaviour under that load unmeasured.'),
+}
+for qid,(st,ev) in _E.items():
+    cid,dim=qid.split('-')
+    for c in CAPS:
+        if c[0]==cid:
+            c[4][dim]['status']=st; c[4][dim]['evidence']=ev
+            if qid in ('C13-I','C14-I'): c[4][dim]['rc']='RC6'
+            if qid in ('C20-I','C20-X'): c[4][dim]['rc']='RC10'
+            if qid in ('C22-X','C40-R'): c[4][dim]['rc']='RC7'
+            if qid in ('C33-R','C33-I','C33-X'): c[4][dim]['rc']='RC11,RC13'
+            if qid in ('C41-R','C41-F'): c[4][dim]['rc']='RC1,RC14'
+            if qid=='C42-P': c[4][dim]['rc']='RC13'

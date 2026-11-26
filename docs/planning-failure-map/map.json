@@ -591,8 +591,8 @@
    "dim": "I",
    "test": "Change hours from 15 to 0 mid-course.",
    "expected": "Next ask drops owner-performed routes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "Same path as C38-R; not exercised on production.",
    "component": "planningEval update path",
    "rc": ""
   },
@@ -605,8 +605,8 @@
    "dim": "F",
    "test": "Ambiguous request (\"some money soon\").",
    "expected": "Goal flags the unread field as a question to the owner, plans nothing on a guess.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "fm1126a create log: unread phrases are named and the goal is refused rather than guessed (\"nothing was created. Unread: \u2026\").",
    "component": "readObjective unread[]",
    "rc": ""
   },
@@ -1193,8 +1193,8 @@
    "dim": "I",
    "test": "Next ask avoids the breach.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "Rejections and critique drops are fed to the next ask (code); multi-ask effect unmeasured.",
    "component": "",
    "rc": ""
   },
@@ -1473,8 +1473,8 @@
    "dim": "R",
    "test": "Results reach workers.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "p06 trace: searches answered (6) reached the free-lane worker and pages were read (3).",
    "component": "",
    "rc": ""
   },
@@ -1487,10 +1487,10 @@
    "dim": "I",
    "test": "Capacity allocated by decision value.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "stall 2026-11-26: every queued research fragment sits at priority 9 (eval) or 8/6 by purpose, never by the decision its answer changes; 1,167 waiting.",
    "component": "",
-   "rc": ""
+   "rc": "RC6"
   },
   {
    "id": "C13-F",
@@ -1557,10 +1557,10 @@
    "dim": "I",
    "test": "Queue ordered by decision value.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value.",
    "component": "",
-   "rc": ""
+   "rc": "RC6"
   },
   {
    "id": "C14-F",
@@ -1613,8 +1613,8 @@
    "dim": "R",
    "test": "Read text reaches extraction.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "p06 trace: pages read \u2192 3 claims extracted.",
    "component": "",
    "rc": ""
   },
@@ -1683,8 +1683,8 @@
    "dim": "R",
    "test": "Claims reach findings.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "p06 trace: accepted claims appear in findings_now and were shown to a route ask (findingsShown 1).",
    "component": "",
    "rc": ""
   },
@@ -1725,8 +1725,8 @@
    "dim": "X",
    "test": "Extraction + verification.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "stall rejections: extraction then verification (\"source does not directly support\" 12 rejected).",
    "component": "",
    "rc": ""
   },
@@ -1767,8 +1767,8 @@
    "dim": "I",
    "test": "Unverified claim cannot ground a figure.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "groundsOf cites only shown findings of a fitting lane (tests); production gate rejects unsupported claims before they become findings.",
    "component": "",
    "rc": ""
   },
@@ -1963,8 +1963,8 @@
    "dim": "R",
    "test": "Counts reach arrangements.",
    "expected": "Only real segments.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "Integration diagnosis: 80 buyers linked to Census counts reach arrangement buyer counts.",
    "component": "",
    "rc": ""
   },
@@ -1977,10 +1977,10 @@
    "dim": "I",
    "test": "A false count redirects research.",
    "expected": "No.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Integration diagnosis: a wrong link reads \"buyers established \u2026 the next research round asks for conversion\".",
    "component": "",
-   "rc": ""
+   "rc": "RC10"
   },
   {
    "id": "C20-F",
@@ -2005,10 +2005,10 @@
    "dim": "X",
    "test": "Library + route proposer.",
    "expected": "Library facts available to routes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Integration diagnosis: the knowledge library feeds arrangements only; route asks never read it.",
    "component": "",
-   "rc": ""
+   "rc": "RC10"
   },
   {
    "id": "C21-P",
@@ -2145,8 +2145,8 @@
    "dim": "X",
    "test": "All faculties on one record.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Integration diagnosis \u00a74.1: no shared per-goal working state.",
    "component": "",
    "rc": "RC7"
   },
@@ -2215,8 +2215,8 @@
    "dim": "X",
    "test": "Model answers under concurrent load.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "Capacity 2026-11-26: GPU 8/16 slots with \"errors acceptable\"; route-ask behaviour under that load unmeasured.",
    "component": "",
    "rc": ""
   },
@@ -2257,8 +2257,8 @@
    "dim": "R",
    "test": "Proposed routes reach critic and plan.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "30Q probes: every parsed route was critiqued (critique records per route).",
    "component": "",
    "rc": ""
   },
@@ -2285,8 +2285,8 @@
    "dim": "F",
    "test": "Route contradicted by a fact: dropped by code or critic.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "30Q p06 R1all: Upwork route contradicted by payout-hold facts dropped by the critic, correctly (grader).",
    "component": "",
    "rc": ""
   },
@@ -2355,8 +2355,8 @@
    "dim": "I",
    "test": "Under-reaching route flagged/fixed.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "W1c: economics line + ACQUISITION refusal (tests); production pending.",
    "component": "",
    "rc": ""
   },
@@ -2425,8 +2425,8 @@
    "dim": "R",
    "test": "Payout facts shown.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "30Q all-findings arm: payout facts shown; under the old 40 cap they were cut. Cap raised (W1e); production recheck pending.",
    "component": "",
    "rc": ""
   },
@@ -2453,8 +2453,8 @@
    "dim": "F",
    "test": "Misread timing corrected.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "W1b: a disputed timing is a repair the code re-checks (tests); production pending.",
    "component": "",
    "rc": "RC2"
   },
@@ -2565,8 +2565,8 @@
    "dim": "R",
    "test": "Fulfiller facts shown.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "As C26-R, for fulfiller facts.",
    "component": "",
    "rc": ""
   },
@@ -2635,8 +2635,8 @@
    "dim": "R",
    "test": "Legal facts reach critic.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "30Q: the critic cited A.R.S. 32-101 survey law from the findings.",
    "component": "",
    "rc": ""
   },
@@ -2705,8 +2705,8 @@
    "dim": "R",
    "test": "Rejections recorded.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "Route events record rejectedByRule; probe parsed.rejected lists rule and reason.",
    "component": "",
    "rc": ""
   },
@@ -2845,8 +2845,8 @@
    "dim": "P",
    "test": "Replacement ask runs when nothing survives.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "Not visible in probe.",
+   "status": "NEEDS RECHECK",
+   "evidence": "Code: critiqueAndRevise asks replacements when fewer than ROUTES_MIN_SURVIVING survive; not exercised by the eval probe, production effect unmeasured.",
    "component": "critiqueAndRevise",
    "rc": ""
   },
@@ -2859,8 +2859,8 @@
    "dim": "R",
    "test": "Replacements critiqued.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "Code: replacements are parsed and ranked after kept routes, not critiqued again.",
    "component": "",
    "rc": ""
   },
@@ -2887,8 +2887,8 @@
    "dim": "F",
    "test": "Replacement fails: recorded.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "Code + event detail: replacement failures are named in critique.reason.",
    "component": "",
    "rc": ""
   },
@@ -2929,10 +2929,10 @@
    "dim": "R",
    "test": "Chosen strategy read by planner/committee/report.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Integration diagnosis: four different \"best\" strategies in one production reading.",
    "component": "",
-   "rc": "RC11"
+   "rc": "RC11,RC13"
   },
   {
    "id": "C33-I",
@@ -2943,10 +2943,10 @@
    "dim": "I",
    "test": "Selection changes plan reading.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Same: the chosen route does not decide the plan reading (fm1126a f01 plan built from constructed arrangements).",
    "component": "",
-   "rc": "RC11"
+   "rc": "RC11,RC13"
   },
   {
    "id": "C33-F",
@@ -2957,8 +2957,8 @@
    "dim": "F",
    "test": "Tie or none: says so.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "fm1126a f01 read: \"NOT ACCEPTED: no candidate plan yet\" \u2014 says so.",
    "component": "",
    "rc": ""
   },
@@ -2971,10 +2971,10 @@
    "dim": "X",
    "test": "Selection across generators.",
    "expected": "One arbiter.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "RC11/RC13: generators are not arbitrated.",
    "component": "",
-   "rc": "RC11"
+   "rc": "RC11,RC13"
   },
   {
    "id": "C34-P",
@@ -3069,8 +3069,8 @@
    "dim": "R",
    "test": "Readiness shown to owner.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "fm1126a f01 read: report lines and acceptance sentence shown.",
    "component": "",
    "rc": ""
   },
@@ -3139,8 +3139,8 @@
    "dim": "R",
    "test": "Steps reach the owner view.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "fm1126a f01 read: steps reach the owner view (their content fails C36-P).",
    "component": "",
    "rc": ""
   },
@@ -3223,8 +3223,8 @@
    "dim": "I",
    "test": "A lesson changes the next ask.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "W1h: rethinks of earlier asks are now read (code); production effect pending.",
    "component": "",
    "rc": "RC7"
   },
@@ -3279,8 +3279,8 @@
    "dim": "R",
    "test": "Owner change reaches prompts.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "NEEDS RECHECK",
+   "evidence": "planningEval update writes the owner's change into target resources read by routeContext (code); not exercised.",
    "component": "",
    "rc": ""
   },
@@ -3349,8 +3349,8 @@
    "dim": "R",
    "test": "Failure recorded where the next faculty reads it.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "Route events record why an ask failed (NO_ANSWER reasons in trace route_asks).",
    "component": "",
    "rc": ""
   },
@@ -3419,8 +3419,8 @@
    "dim": "R",
    "test": "Owner acts.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Integration diagnosis: 4 of 6 live goals \"[NOBODY] Brain judges each idea on its next pass\".",
    "component": "",
    "rc": "RC7"
   },
@@ -3489,10 +3489,10 @@
    "dim": "R",
    "test": "Fitness changes routing.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Code: operationsReport.ts:327 judges model adequacy by tool-call success; no route-outcome measure changes routing.",
    "component": "",
-   "rc": "RC1"
+   "rc": "RC1,RC14"
   },
   {
    "id": "C41-I",
@@ -3517,10 +3517,10 @@
    "dim": "F",
    "test": "A failing model is benched.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "Code: the fallback (1/30 on the model exam) is never benched; challengerModels order is fixed.",
    "component": "",
-   "rc": ""
+   "rc": "RC1,RC14"
   },
   {
    "id": "C41-X",
@@ -3545,10 +3545,10 @@
    "dim": "P",
    "test": "Owner view shows chosen plan, economics, steps, risks.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "FAIL",
+   "evidence": "fm1126a f01: chosen null; steps are research on generic arrangements.",
    "component": "",
-   "rc": ""
+   "rc": "RC13"
   },
   {
    "id": "C42-R",
@@ -3559,8 +3559,8 @@
    "dim": "R",
    "test": "Plan reaches owner surface.",
    "expected": "Yes.",
-   "status": "UNKNOWN",
-   "evidence": "",
+   "status": "PASS",
+   "evidence": "fm1126a f01: the reading reaches the owner surface (read output).",
    "component": "",
    "rc": ""
   },
