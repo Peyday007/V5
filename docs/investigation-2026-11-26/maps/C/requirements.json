@@ -1,0 +1,2962 @@
+{
+  "map": "C",
+  "investigation": "2026-11-26",
+  "derived_from": "outcome definition only (no Brain code or docs read)",
+  "brain_implements_note": "every requirement's brain_implements is TO BE RECONCILED by the code investigator",
+  "usable_plan_definition": {
+    "elements": [
+      {
+        "id": "U01",
+        "name": "Objective fidelity",
+        "definition": "Restates the objective exactly: metric (collected, settled cash unless the owner said otherwise), amount, window with real dates, capital, owner-involvement limit and every owner-stated constraint; adds no restriction the owner did not state (any system policy that limits the plan is disclosed as such); discloses interpretations of ambiguities."
+      },
+      {
+        "id": "U02",
+        "name": "One selected strategy, fully specified",
+        "definition": "What is sold, to which real buyer segment, at what price, through which acquisition channel, fulfilled how and by whom, paid by which mechanism on which terms."
+      },
+      {
+        "id": "U03",
+        "name": "Arithmetic that reaches the target",
+        "definition": "Unit economics with all material costs (fees, COGS, shipping, taxes, refunds, acquisition), a volume/funnel model from daily actions to collected cash with capacity limits, reaching the target in the expected case with a stated, derived confidence; every number internally consistent and recomputable."
+      },
+      {
+        "id": "U04",
+        "name": "Cash feasibility",
+        "definition": "A dated cash-flow schedule in which the balance never drops below zero given the stated capital, including prepayments, holds, reserves and settlement lags; peak capital need stated."
+      },
+      {
+        "id": "U05",
+        "name": "Time feasibility",
+        "definition": "A critical path with real dates covering every prerequisite (accounts, approvals, warm-up, supplier lead time, buyer cycle, delivery, settlement) such that enough cash is collected before the window ends, with slack stated."
+      },
+      {
+        "id": "U06",
+        "name": "Owner feasibility",
+        "definition": "Owner hours per week within the stated limit; every capability, licence, account or credential required is either held by the owner (per a record) or acquired by a planned step within budget and window."
+      },
+      {
+        "id": "U07",
+        "name": "Lawful and terms-compliant",
+        "definition": "No step breaks law in the relevant jurisdictions or a platform's terms (outreach, consumer protection, licensing, tax, data protection, marketplace and ad rules)."
+      },
+      {
+        "id": "U08",
+        "name": "Evidence and assumptions",
+        "definition": "Every material figure traces to cited, applicable evidence, an owner input, or an explicit assumption; decisive assumptions are named with ranges and each has an early test."
+      },
+      {
+        "id": "U09",
+        "name": "Executable steps and a named first action",
+        "definition": "Ordered steps with actor, inputs, duration, dependencies, cost and done criteria; a first action that can start immediately with no unmet prerequisites."
+      },
+      {
+        "id": "U10",
+        "name": "Checkpoints, kill criteria and fallback",
+        "definition": "Dated leading indicators with thresholds and the response if missed, protecting remaining capital; a fallback where one is feasible."
+      },
+      {
+        "id": "U11",
+        "name": "Money commitments and approval",
+        "definition": "Each spend listed with amount, timing, reversibility and the approval it needs; total and peak within capital; no spend executes without owner approval."
+      },
+      {
+        "id": "U12",
+        "name": "Alternatives and honest confidence",
+        "definition": "Briefly states the strategies considered and why they lost; states confidence and open unknowns without overclaiming."
+      }
+    ],
+    "rule": "USABLE = U01..U12 all satisfied AND zero critical mistakes (Q-CM01..Q-CM20). A plan with any critical mistake is not USABLE regardless of quality elsewhere."
+  },
+  "stages": [
+    {
+      "id": "S01",
+      "name": "Intake and interpretation"
+    },
+    {
+      "id": "S02",
+      "name": "Shared per-goal understanding"
+    },
+    {
+      "id": "S03",
+      "name": "Economic environment"
+    },
+    {
+      "id": "S04",
+      "name": "Opportunity discovery"
+    },
+    {
+      "id": "S05",
+      "name": "Strategy generation"
+    },
+    {
+      "id": "S06",
+      "name": "Decisive unknowns and research planning"
+    },
+    {
+      "id": "S07",
+      "name": "Research execution and evidence"
+    },
+    {
+      "id": "S08",
+      "name": "Market actors (buyers, suppliers, competitors, channels, fulfilment)"
+    },
+    {
+      "id": "S09",
+      "name": "Economic feasibility and capital"
+    },
+    {
+      "id": "S10",
+      "name": "Acquisition, payment, timing, operational and legal constraints"
+    },
+    {
+      "id": "S11",
+      "name": "Critique, contradiction and validation"
+    },
+    {
+      "id": "S12",
+      "name": "Revision and repair"
+    },
+    {
+      "id": "S13",
+      "name": "Comparison and selection"
+    },
+    {
+      "id": "S14",
+      "name": "Plan conversion"
+    },
+    {
+      "id": "S15",
+      "name": "Readiness and commitment gates"
+    },
+    {
+      "id": "S16",
+      "name": "Execution feedback and learning"
+    },
+    {
+      "id": "S17",
+      "name": "Infrastructure reliability"
+    },
+    {
+      "id": "S18",
+      "name": "Acceptance evaluation"
+    }
+  ],
+  "count": 89,
+  "requirements": [
+    {
+      "id": "Q-R001",
+      "stage": "S01",
+      "stage_name": "Intake and interpretation",
+      "title": "Structured objective specification",
+      "accomplish": "Turn the owner's free-text objective into a structured, versioned specification: target metric, amount, currency, window (start event, end date, timezone), capital available, owner-involvement limit, and every other stated condition, keeping the verbatim source span for each field.",
+      "inputs": [
+        "owner objective text",
+        "current date"
+      ],
+      "outputs": [
+        "objective spec (fields + verbatim spans + confidence)"
+      ],
+      "correct_behaviour": "Every field cites a span of the owner's text or is marked UNSTATED; no field holds a value the text does not support; re-parsing the same text yields the same spec; a grader comparing spec to text finds no added or dropped condition.",
+      "depends_on": [],
+      "required_by": [
+        "Q-R002",
+        "Q-R003",
+        "Q-R004",
+        "Q-R005",
+        "Q-R006",
+        "Q-R008",
+        "Q-R013",
+        "Q-R014",
+        "Q-R048",
+        "Q-R055"
+      ],
+      "failure_modes": [
+        "model paraphrases '$10k revenue' as profit or bookings",
+        "window start assumed instead of read (creation vs approval)",
+        "capital read as spendable budget when owner meant total exposure",
+        "empty/garbled parse accepted (see Q-R056)",
+        "silent default fills an UNSTATED field"
+      ],
+      "recovery": "Re-parse with a validator that diffs fields against spans; unresolved fields become explicit interpretation decisions (Q-R002/Q-R005), never silent defaults.",
+      "criticality": "CRITICAL",
+      "observability": "Replay objective texts through intake; diff spec fields against verbatim spans; count fields with no span.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R002",
+      "stage": "S01",
+      "stage_name": "Intake and interpretation",
+      "title": "Target-metric semantics",
+      "accomplish": "Decide precisely what counts toward the target: collected (settled, available) cash versus invoiced, booked, GMV, or profit; gross versus net of refunds; whether pass-through money (resold goods at cost) counts; whether returning the capital matters.",
+      "inputs": [
+        "objective spec"
+      ],
+      "outputs": [
+        "metric definition with recognition rule and the alternative interpretations rejected"
+      ],
+      "correct_behaviour": "A written recognition rule exists (e.g. 'counts when funds are in the owner's account and not reversible within normal chargeback risk'), is applied identically by economics, timeline and plan, and any reading other than the literal one is shown to the owner in the plan.",
+      "depends_on": [
+        "Q-R001"
+      ],
+      "required_by": [
+        "Q-R021",
+        "Q-R041",
+        "Q-R055"
+      ],
+      "failure_modes": [
+        "'collected revenue' treated as orders placed",
+        "marketplace payout lag ignored",
+        "revenue counted gross of refunds",
+        "different faculties use different metric definitions"
+      ],
+      "recovery": "Recompute economics and timeline against the single recognition rule; flag plan sections using another definition.",
+      "criticality": "CRITICAL",
+      "observability": "Inspect metric definition record; check each plan figure labelled toward target uses its recognition rule.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R003",
+      "stage": "S01",
+      "stage_name": "Intake and interpretation",
+      "title": "Owner capability and asset profile",
+      "accomplish": "Capture what the owner has and can do: skills, licences, legal entity, jurisdiction, payment/merchant accounts, audiences, domains, inventory, tools, network, hours available, risk tolerance \u2014 each as known, unknown, or absent.",
+      "inputs": [
+        "objective text",
+        "prior owner records",
+        "owner answers"
+      ],
+      "outputs": [
+        "owner profile with per-item status and source"
+      ],
+      "correct_behaviour": "Every capability a plan later relies on has status KNOWN-HELD with a source (owner statement or verified record); unknowns stay UNKNOWN and are never read as held.",
+      "depends_on": [
+        "Q-R001"
+      ],
+      "required_by": [
+        "Q-R005",
+        "Q-R006",
+        "Q-R007",
+        "Q-R015",
+        "Q-R017",
+        "Q-R046",
+        "Q-R049"
+      ],
+      "failure_modes": [
+        "assuming the owner has a Stripe account, an LLC, a sales skill or an audience",
+        "profile copied from another goal/owner",
+        "stale profile after owner's situation changed"
+      ],
+      "recovery": "Treat unknown as absent for planning, or add an acquisition step, or ask (if decisive, Q-R005).",
+      "criticality": "CRITICAL",
+      "observability": "For each plan step, list required capabilities and check each against profile status and source.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R004",
+      "stage": "S01",
+      "stage_name": "Intake and interpretation",
+      "title": "Constraint provenance: owner constraint vs system policy",
+      "accomplish": "Tag every constraint with its origin: OWNER-STATED, LEGAL/PLATFORM-RULE, SYSTEM-POLICY (e.g. a default exclusion or a cost cap), or SYSTEM-ASSUMPTION. Only owner-stated and legal constraints may narrow the strategy space for this goal; system policies may limit how the system works but must not appear as the owner's restriction and must not silently exclude strategies.",
+      "inputs": [
+        "objective spec",
+        "system configuration",
+        "legal findings"
+      ],
+      "outputs": [
+        "constraint register with provenance and scope (this goal only / global)"
+      ],
+      "correct_behaviour": "No strategy is excluded by a constraint whose provenance is not owner or law unless the exclusion is disclosed in the plan; a constraint from a previous goal does not bind this one; the plan's constraint list equals the owner-stated set plus disclosed legal ones.",
+      "depends_on": [
+        "Q-R001"
+      ],
+      "required_by": [
+        "Q-R016",
+        "Q-R017",
+        "Q-R055"
+      ],
+      "failure_modes": [
+        "system default ('no physical products', 'no industry X', 'email only') presented as owner restriction",
+        "a previous goal's constraint leaks",
+        "owner's stated constraint dropped because a policy contradicts it"
+      ],
+      "recovery": "Re-run screening with only legitimate constraints; disclose any policy that still limits the plan.",
+      "criticality": "CRITICAL",
+      "observability": "List screened-out strategies with reasons; check each reason's constraint provenance.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R005",
+      "stage": "S01",
+      "stage_name": "Intake and interpretation",
+      "title": "Ambiguity resolution with minimal owner involvement",
+      "accomplish": "For each ambiguity decide whether it is decisive (changes strategy feasibility or selection). Non-decisive: adopt the conservative reading and record it. Decisive and unresolvable from records: ask the owner one batched, precise question, while continuing other work.",
+      "inputs": [
+        "objective spec",
+        "owner profile",
+        "decision-value estimates"
+      ],
+      "outputs": [
+        "interpretation decisions; at most a small batched owner question set"
+      ],
+      "correct_behaviour": "Owner questions are only about decisive items unanswerable from records; each recorded interpretation is visible in the plan; work on non-dependent branches is not blocked by a pending question.",
+      "depends_on": [
+        "Q-R001",
+        "Q-R003",
+        "Q-R023"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "asking many trivial questions (violates minimal involvement)",
+        "guessing a decisive fact favourably",
+        "stalling all work on one question"
+      ],
+      "recovery": "Fall back to conservative interpretation and a plan variant per answer if the owner does not reply within a bound.",
+      "criticality": "MAJOR",
+      "observability": "Count owner questions per goal and classify each as decisive or not; check plan discloses interpretations.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R006",
+      "stage": "S01",
+      "stage_name": "Intake and interpretation",
+      "title": "Objective feasibility pre-screen and honest infeasibility",
+      "accomplish": "Estimate early, from order-of-magnitude reasoning, whether the objective is plausibly reachable, and at the end report infeasible (with the closest achievable variant) rather than fabricate a plan.",
+      "inputs": [
+        "objective spec",
+        "owner profile",
+        "environment model"
+      ],
+      "outputs": [
+        "feasibility prior; final feasibility verdict"
+      ],
+      "correct_behaviour": "On infeasible control objectives the system reports infeasibility with reasons; on feasible ones the prior does not prematurely stop search.",
+      "depends_on": [
+        "Q-R001",
+        "Q-R003",
+        "Q-R013"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "forced plan for an impossible target",
+        "premature 'infeasible' that ends search",
+        "verdict based on one weak strategy"
+      ],
+      "recovery": "Continue discovery while the prior is uncertain; final verdict only after selection (Q-R062).",
+      "criticality": "MAJOR",
+      "observability": "Include infeasible controls in evaluation; inspect verdicts and reasons.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R007",
+      "stage": "S01",
+      "stage_name": "Intake and interpretation",
+      "title": "Jurisdiction and location determination",
+      "accomplish": "Establish the owner's legal jurisdiction, tax residence and operating location (and buyers' locations) because law, payment rails, licences and tax depend on it; unknown is an answer that forces conservative choices.",
+      "inputs": [
+        "owner profile",
+        "objective text"
+      ],
+      "outputs": [
+        "jurisdiction record with source or UNKNOWN"
+      ],
+      "correct_behaviour": "Every legal, tax, payment or licence conclusion names the jurisdiction it assumed, and that jurisdiction comes from a record; none is assumed by default.",
+      "depends_on": [
+        "Q-R003"
+      ],
+      "required_by": [
+        "Q-R013",
+        "Q-R046",
+        "Q-R049",
+        "Q-R050"
+      ],
+      "failure_modes": [
+        "US law assumed for a non-US owner",
+        "buyer jurisdiction ignored (GDPR for EU recipients)"
+      ],
+      "recovery": "Ask if decisive; else restrict to strategies lawful in all plausible jurisdictions.",
+      "criticality": "CRITICAL",
+      "observability": "Check each legal/payment finding for a jurisdiction field and its provenance.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R008",
+      "stage": "S02",
+      "stage_name": "Shared per-goal understanding",
+      "title": "One shared per-goal understanding",
+      "accomplish": "Maintain a single authoritative, versioned goal model (objective spec, metric rule, owner profile, constraint register, environment facts, opportunity set, strategies, assumptions, evidence links, economics, critique findings, current selection) that every faculty reads from and writes to; no faculty reasons from a private copy or from conversational memory.",
+      "inputs": [
+        "outputs of all faculties"
+      ],
+      "outputs": [
+        "versioned goal model"
+      ],
+      "correct_behaviour": "Every faculty output records the goal-model version it read; at selection time all inputs to the decision reference the same version or a compatible later one; two faculties never hold conflicting values for the same fact without a conflict record.",
+      "depends_on": [
+        "Q-R001"
+      ],
+      "required_by": [
+        "Q-R009",
+        "Q-R010",
+        "Q-R011",
+        "Q-R012",
+        "Q-R016",
+        "Q-R020",
+        "Q-R032",
+        "Q-R045",
+        "Q-R052",
+        "Q-R053",
+        "Q-R082",
+        "Q-R084"
+      ],
+      "failure_modes": [
+        "faculties pass prose between each other and lose structure",
+        "economics uses a price the actor analysis revised",
+        "multiple 'current' strategies",
+        "state only in a chat transcript"
+      ],
+      "recovery": "Rebuild derived views from the goal model; reject writes that bypass it.",
+      "criticality": "CRITICAL",
+      "observability": "For a goal, collect every faculty output and compare the version and values of shared facts.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R009",
+      "stage": "S02",
+      "stage_name": "Shared per-goal understanding",
+      "title": "Change propagation and staleness",
+      "accomplish": "When any fact, evidence item or assumption changes, mark every dependent computation (economics, rankings, plan sections) stale and recompute it before it is used.",
+      "inputs": [
+        "goal-model change events",
+        "dependency links"
+      ],
+      "outputs": [
+        "stale flags; recomputed dependents"
+      ],
+      "correct_behaviour": "No released plan contains a value derived from a superseded input; the dependency closure of a change is recomputed within the run.",
+      "depends_on": [
+        "Q-R008",
+        "Q-R045"
+      ],
+      "required_by": [
+        "Q-R058",
+        "Q-R061"
+      ],
+      "failure_modes": [
+        "plan keeps an old conversion rate after research refuted it",
+        "recompute skipped after worker crash",
+        "dependency links missing so staleness not detected"
+      ],
+      "recovery": "Full recompute of the goal's derived state from inputs before release.",
+      "criticality": "CRITICAL",
+      "observability": "Mutate one input in a replay; check that every derived figure using it changes or is flagged.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R010",
+      "stage": "S02",
+      "stage_name": "Shared per-goal understanding",
+      "title": "Goal isolation and scoped knowledge reuse",
+      "accomplish": "Keep each goal's owner-specific facts, constraints and evidence applicability separate; reuse only general market knowledge, explicitly scoped and re-checked for applicability.",
+      "inputs": [
+        "goal models",
+        "shared knowledge base"
+      ],
+      "outputs": [
+        "scoped reads"
+      ],
+      "correct_behaviour": "No fact, constraint or figure in goal A's plan originates from goal B unless it is general knowledge marked as reused and applicability-checked; a plan always answers its own objective.",
+      "depends_on": [
+        "Q-R008"
+      ],
+      "required_by": [
+        "Q-R076"
+      ],
+      "failure_modes": [
+        "plan for the wrong objective after a worker picked up a mismatched item",
+        "another owner's assets assumed",
+        "cross-goal cache returns wrong-region figures"
+      ],
+      "recovery": "Invalidate contaminated items and recompute.",
+      "criticality": "CRITICAL",
+      "observability": "Trace each plan fact's origin goal id.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R011",
+      "stage": "S02",
+      "stage_name": "Shared per-goal understanding",
+      "title": "Assumption register",
+      "accomplish": "Every non-evidenced belief used in reasoning is an explicit assumption with value/range, basis, sensitivity, status (untested/supported/refuted) and the decisions it affects.",
+      "inputs": [
+        "strategy specs",
+        "economics"
+      ],
+      "outputs": [
+        "assumption records"
+      ],
+      "correct_behaviour": "Every plan figure not tied to evidence or owner input ties to an assumption record; refuted assumptions are not used.",
+      "depends_on": [
+        "Q-R008"
+      ],
+      "required_by": [
+        "Q-R023",
+        "Q-R026",
+        "Q-R045",
+        "Q-R075"
+      ],
+      "failure_modes": [
+        "assumptions embedded silently in prose",
+        "refuted assumption still feeding economics"
+      ],
+      "recovery": "Extract implicit assumptions from plan text in critique (Q-R054) and register them.",
+      "criticality": "CRITICAL",
+      "observability": "Count plan figures without evidence/owner/assumption linkage.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R012",
+      "stage": "S02",
+      "stage_name": "Shared per-goal understanding",
+      "title": "Durable, resumable reasoning state",
+      "accomplish": "Persist every intermediate step so a crash, restart or worker loss resumes from the last checkpoint without losing completed work or duplicating effects.",
+      "inputs": [
+        "all step outputs"
+      ],
+      "outputs": [
+        "checkpoints"
+      ],
+      "correct_behaviour": "Killing any worker mid-run and restarting yields the same final plan class (modulo model nondeterminism) with no duplicated research effects and no lost evidence.",
+      "depends_on": [
+        "Q-R008"
+      ],
+      "required_by": [
+        "Q-R078",
+        "Q-R079",
+        "Q-R081",
+        "Q-R082"
+      ],
+      "failure_modes": [
+        "in-memory state lost on restart",
+        "resume re-runs completed research and doubles cost",
+        "partial writes leave inconsistent model"
+      ],
+      "recovery": "Transactional checkpoints; idempotent step keys; restart from last committed step.",
+      "criticality": "MAJOR",
+      "observability": "Fault-injection replay: kill workers at random steps and compare outcomes.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R013",
+      "stage": "S03",
+      "stage_name": "Economic environment",
+      "title": "Economic environment model",
+      "accomplish": "Build a dated model of the relevant environment: markets and demand the owner can reach, seasonality and events inside the window, platform and channel landscape, available payment rails, prevailing prices and costs, and regulatory regime for the jurisdiction.",
+      "inputs": [
+        "objective spec",
+        "jurisdiction",
+        "research results"
+      ],
+      "outputs": [
+        "environment facts with evidence links and dates"
+      ],
+      "correct_behaviour": "Environment facts used in reasoning are evidenced and dated within a freshness bound appropriate to the fact; seasonality inside the window is considered.",
+      "depends_on": [
+        "Q-R001",
+        "Q-R007"
+      ],
+      "required_by": [
+        "Q-R006",
+        "Q-R015",
+        "Q-R016"
+      ],
+      "failure_modes": [
+        "model's training-era knowledge treated as current",
+        "holiday or seasonal effects inside window ignored",
+        "platform rules out of date"
+      ],
+      "recovery": "Refresh stale facts via research queue when they are decisive.",
+      "criticality": "MAJOR",
+      "observability": "Inspect environment facts for evidence and dates; check window calendar effects are listed.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R014",
+      "stage": "S03",
+      "stage_name": "Economic environment",
+      "title": "Calendar and time arithmetic",
+      "accomplish": "Compute against the real calendar: today's date, window end, business days, holidays, weekends, payout schedules, shipping days and lead times.",
+      "inputs": [
+        "current date",
+        "window",
+        "jurisdiction"
+      ],
+      "outputs": [
+        "calendar model used by timeline and cash-flow"
+      ],
+      "correct_behaviour": "All dates in the plan are real calendar dates consistent with the window; durations computed in business days where the counterparty works business days.",
+      "depends_on": [
+        "Q-R001"
+      ],
+      "required_by": [
+        "Q-R021",
+        "Q-R041",
+        "Q-R042",
+        "Q-R047"
+      ],
+      "failure_modes": [
+        "model's notion of 'today' wrong",
+        "30 calendar days treated as 30 business days",
+        "payout on a bank holiday"
+      ],
+      "recovery": "Deterministic date computation; never model-generated dates.",
+      "criticality": "CRITICAL",
+      "observability": "Recompute every plan date deterministically and diff.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R015",
+      "stage": "S03",
+      "stage_name": "Economic environment",
+      "title": "Owner-advantage mapping",
+      "accomplish": "Identify what the owner's assets, skills, relationships and location make unusually cheap or fast, to steer discovery toward strategies the owner can execute quickly.",
+      "inputs": [
+        "owner profile",
+        "environment model"
+      ],
+      "outputs": [
+        "advantage list"
+      ],
+      "correct_behaviour": "Discovery candidates include ones exploiting listed advantages; advantages are only those with KNOWN-HELD status.",
+      "depends_on": [
+        "Q-R003",
+        "Q-R013"
+      ],
+      "required_by": [
+        "Q-R016"
+      ],
+      "failure_modes": [
+        "imagined advantages",
+        "advantages ignored, yielding generic strategies"
+      ],
+      "recovery": "Re-seed discovery from advantages.",
+      "criticality": "MINOR",
+      "observability": "Compare advantage list to candidate set.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R016",
+      "stage": "S04",
+      "stage_name": "Opportunity discovery",
+      "title": "Broad opportunity discovery without a fixed catalog",
+      "accomplish": "Generate candidate opportunities across business-model classes (services, productized services, resale/arbitrage, brokering, digital products, local services, B2B, events, rentals, etc.) and industries, seeded by owner advantages and the environment, never limited to a predefined list.",
+      "inputs": [
+        "goal model",
+        "advantage list",
+        "environment model",
+        "learned priors"
+      ],
+      "outputs": [
+        "opportunity candidate set with class labels and rationale"
+      ],
+      "correct_behaviour": "The candidate set spans several distinct business-model classes and industries; no industry or class is absent because of a system list; candidates for an objective unlike any seen before are still produced.",
+      "depends_on": [
+        "Q-R008",
+        "Q-R013",
+        "Q-R015",
+        "Q-R004"
+      ],
+      "required_by": [
+        "Q-R017",
+        "Q-R018"
+      ],
+      "failure_modes": [
+        "template overfit: same three strategies for every objective",
+        "catalog limited to what the system already 'knows how to do'",
+        "model mode collapse"
+      ],
+      "recovery": "Diversity prompts across classes; add candidates from different reasoning directions (backward from target, from owner assets, from buyer pain, from arbitrage gaps).",
+      "criticality": "CRITICAL",
+      "observability": "Measure class/industry diversity of candidates per goal; compare across unfamiliar objectives.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R017",
+      "stage": "S04",
+      "stage_name": "Opportunity discovery",
+      "title": "Conservative, revisitable hard-constraint screening",
+      "accomplish": "Screen candidates against hard constraints (capital, window, involvement, capability, legality) with cheap estimates, recording a reason per rejection; rejected candidates are kept and revisited if evidence changes.",
+      "inputs": [
+        "candidate set",
+        "constraint register",
+        "owner profile"
+      ],
+      "outputs": [
+        "screened set; rejection records"
+      ],
+      "correct_behaviour": "Each rejection cites a constraint with legitimate provenance and an estimate; rejections based on an unknown are 'deferred', not 'rejected'; nothing is deleted.",
+      "depends_on": [
+        "Q-R016",
+        "Q-R004",
+        "Q-R003"
+      ],
+      "required_by": [
+        "Q-R019"
+      ],
+      "failure_modes": [
+        "good candidate rejected on a favourable-or-unfavourable guess",
+        "rejection reason is a system policy",
+        "candidates deleted so revision cannot recover them"
+      ],
+      "recovery": "Re-screen deferred candidates when unknowns resolve.",
+      "criticality": "MAJOR",
+      "observability": "Sample rejected candidates; check reason, constraint provenance, estimate.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R018",
+      "stage": "S04",
+      "stage_name": "Opportunity discovery",
+      "title": "Generalization to unfamiliar objectives",
+      "accomplish": "Discovery, strategy and research must not depend on objective-specific templates; they work for objective types (amounts, windows, capitals, constraints, industries) absent from development data.",
+      "inputs": [
+        "objective spec"
+      ],
+      "outputs": [
+        "candidate sets for novel objectives"
+      ],
+      "correct_behaviour": "Performance on held-out objectives is not materially worse than on development objectives.",
+      "depends_on": [
+        "Q-R016"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "hard-coded strategy library",
+        "prompts tuned on the development set"
+      ],
+      "recovery": "Expand the reasoning procedure, not the template list.",
+      "criticality": "CRITICAL",
+      "observability": "Compare usable rate on held-out vs development objectives.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R019",
+      "stage": "S05",
+      "stage_name": "Strategy generation",
+      "title": "Genuinely different strategies",
+      "accomplish": "Develop at least three surviving strategies that differ in buyer, offer, channel, or monetization mechanism, not paraphrases of one idea.",
+      "inputs": [
+        "screened opportunity set"
+      ],
+      "outputs": [
+        "strategy set"
+      ],
+      "correct_behaviour": "Pairwise, strategies differ in at least one of buyer segment, offer, acquisition channel, or payment mechanism; a diversity metric is recorded.",
+      "depends_on": [
+        "Q-R017"
+      ],
+      "required_by": [
+        "Q-R020"
+      ],
+      "failure_modes": [
+        "three phrasings of 'cold-email agency services'",
+        "single strategy carried to selection"
+      ],
+      "recovery": "Regenerate with explicit exclusion of existing strategies' defining attributes.",
+      "criticality": "MAJOR",
+      "observability": "Compute strategy-attribute overlap per goal.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R020",
+      "stage": "S05",
+      "stage_name": "Strategy generation",
+      "title": "Complete strategy specification",
+      "accomplish": "Specify each strategy fully: offer, buyer segment, acquisition channel, price, fulfilment (who/how), payment mechanism and terms, cash timing, capital uses, owner tasks, required capabilities, key assumptions.",
+      "inputs": [
+        "strategy hypothesis"
+      ],
+      "outputs": [
+        "strategy spec"
+      ],
+      "correct_behaviour": "All schema fields populated or explicitly UNKNOWN (which spawns an unknown, Q-R023); no strategy reaches economics with an empty leg.",
+      "depends_on": [
+        "Q-R019",
+        "Q-R008"
+      ],
+      "required_by": [
+        "Q-R021",
+        "Q-R022",
+        "Q-R023",
+        "Q-R035",
+        "Q-R036",
+        "Q-R037",
+        "Q-R038",
+        "Q-R039",
+        "Q-R040",
+        "Q-R046",
+        "Q-R048",
+        "Q-R049",
+        "Q-R050"
+      ],
+      "failure_modes": [
+        "no acquisition channel defined",
+        "fulfilment assumed to happen magically",
+        "payment mechanism missing"
+      ],
+      "recovery": "Complete the leg (Q-R022) or mark the strategy incomplete.",
+      "criticality": "CRITICAL",
+      "observability": "Schema-validate strategy specs; count missing legs reaching economics.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R021",
+      "stage": "S05",
+      "stage_name": "Strategy generation",
+      "title": "Backward decomposition from the target",
+      "accomplish": "For each strategy, reason backward: target collected revenue -> required transactions at price -> required conversions -> required leads/contacts -> required daily actions and capacity, inside the window and the settlement lag.",
+      "inputs": [
+        "strategy spec",
+        "metric rule",
+        "calendar"
+      ],
+      "outputs": [
+        "target decomposition"
+      ],
+      "correct_behaviour": "Decomposition arithmetic is deterministic and consistent with Q-R041; it states required daily volume and compares it to stated capacity.",
+      "depends_on": [
+        "Q-R020",
+        "Q-R002",
+        "Q-R014"
+      ],
+      "required_by": [
+        "Q-R023",
+        "Q-R041"
+      ],
+      "failure_modes": [
+        "forward-only storytelling with no volume math",
+        "ignores that last-week sales won't settle"
+      ],
+      "recovery": "Recompute in code; flag strategies whose required volume exceeds capacity.",
+      "criticality": "CRITICAL",
+      "observability": "Replay decomposition numerically.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R022",
+      "stage": "S05",
+      "stage_name": "Strategy generation",
+      "title": "Completion of partial strategies",
+      "accomplish": "A strategy with a missing or weak leg (e.g. no supplier, no channel) is completed by targeted search or combination with another strategy's leg, rather than silently passed or discarded.",
+      "inputs": [
+        "incomplete strategy specs"
+      ],
+      "outputs": [
+        "completed specs or explicit abandonment with reason"
+      ],
+      "correct_behaviour": "Every incomplete strategy ends as completed, or abandoned with a recorded reason; none passes to selection incomplete.",
+      "depends_on": [
+        "Q-R020"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "good strategy dropped for a fixable gap",
+        "incomplete strategy selected"
+      ],
+      "recovery": "Spawn research for the missing leg.",
+      "criticality": "MAJOR",
+      "observability": "List strategies that changed completeness status and why.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R023",
+      "stage": "S06",
+      "stage_name": "Decisive unknowns and research planning",
+      "title": "Decisive-unknown identification",
+      "accomplish": "For each strategy, determine which assumptions, across their plausible range, flip feasibility or ranking (sensitivity analysis), and mark them decisive.",
+      "inputs": [
+        "strategy specs",
+        "assumption register",
+        "economics model"
+      ],
+      "outputs": [
+        "decisive unknowns with the decision they affect"
+      ],
+      "correct_behaviour": "Each decisive unknown has a documented range and shows that the decision differs at range ends; non-decisive unknowns are not researched heavily.",
+      "depends_on": [
+        "Q-R011",
+        "Q-R020",
+        "Q-R021"
+      ],
+      "required_by": [
+        "Q-R005",
+        "Q-R024",
+        "Q-R025",
+        "Q-R026",
+        "Q-R044"
+      ],
+      "failure_modes": [
+        "researching trivia while the conversion rate is guessed",
+        "decisive unknown never identified"
+      ],
+      "recovery": "Run sensitivity in code over every assumption.",
+      "criticality": "CRITICAL",
+      "observability": "Re-run sensitivity analysis; compare against the system's decisive list.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R024",
+      "stage": "S06",
+      "stage_name": "Decisive unknowns and research planning",
+      "title": "Research bounded by decision value",
+      "accomplish": "Prioritize research questions by expected change in the decision per unit cost/time, allocate a per-goal research budget, and stop researching a question when its answer can no longer change the decision.",
+      "inputs": [
+        "decisive unknowns",
+        "budget",
+        "existing evidence"
+      ],
+      "outputs": [
+        "prioritized research queue entries with decision link and stop rule"
+      ],
+      "correct_behaviour": "Every research task names the decision it consumes and its expected value; research spend correlates with decision value; no task runs after its decision is settled.",
+      "depends_on": [
+        "Q-R023",
+        "Q-R032",
+        "Q-R083"
+      ],
+      "required_by": [
+        "Q-R060"
+      ],
+      "failure_modes": [
+        "unbounded research that never converges",
+        "fixed fragment counts regardless of gaps",
+        "budget spent on low-value questions",
+        "decisive question starved"
+      ],
+      "recovery": "Re-prioritize after each answer; cancel moot tasks.",
+      "criticality": "MAJOR",
+      "observability": "Inspect research tasks: decision link, value estimate, cancelled-after-moot count.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R025",
+      "stage": "S06",
+      "stage_name": "Decisive unknowns and research planning",
+      "title": "Answerable research questions",
+      "accomplish": "Formulate each question specifically: the quantity, population, geography, time, acceptable source types and what answer would change the decision; examples in the question are not treated as boundaries.",
+      "inputs": [
+        "decisive unknown"
+      ],
+      "outputs": [
+        "research brief"
+      ],
+      "correct_behaviour": "A brief states quantity, unit, scope and acceptance criteria; an independent reader could tell whether an answer satisfies it.",
+      "depends_on": [
+        "Q-R023"
+      ],
+      "required_by": [
+        "Q-R027"
+      ],
+      "failure_modes": [
+        "vague briefs return vague answers",
+        "brief over-narrowed to the example given"
+      ],
+      "recovery": "Rewrite brief after an unproductive round (Q-R033).",
+      "criticality": "MAJOR",
+      "observability": "Audit briefs against the schema.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R026",
+      "stage": "S06",
+      "stage_name": "Decisive unknowns and research planning",
+      "title": "Unknowns never resolved favourably by default",
+      "accomplish": "An unanswered fact stays UNKNOWN; it cannot make a strategy feasible or rank it higher. Unresolvable decisive unknowns become early, cheap tests (experiments) in the plan with thresholds.",
+      "inputs": [
+        "research outcomes",
+        "assumption register"
+      ],
+      "outputs": [
+        "unknown status; plan test steps"
+      ],
+      "correct_behaviour": "No ranking or feasibility verdict uses an optimistic value for an unknown without a disclosed assumption and a test step; the plan contains a test for each unresolved decisive unknown.",
+      "depends_on": [
+        "Q-R023",
+        "Q-R011"
+      ],
+      "required_by": [
+        "Q-R068",
+        "Q-R073",
+        "Q-R080"
+      ],
+      "failure_modes": [
+        "timeout on research read as 'no problem'",
+        "missing price data replaced with optimistic guess",
+        "an untested decisive assumption presented as fact"
+      ],
+      "recovery": "Use pessimistic bound in ranking; add test-and-checkpoint steps.",
+      "criticality": "CRITICAL",
+      "observability": "For each decisive unknown, check its status, the value used in ranking, and the plan's test step.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R027",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Research queue execution",
+      "accomplish": "Dispatch web search and page-reading tasks to asynchronous workers with leases, timeouts, retries, deduplication and result recording; failures are recorded as failures.",
+      "inputs": [
+        "research briefs"
+      ],
+      "outputs": [
+        "research results or failure records"
+      ],
+      "correct_behaviour": "Every queued task reaches a terminal state (answered, unanswerable, failed, cancelled) within a bound; no task is held by two workers; no failure is recorded as an empty success.",
+      "depends_on": [
+        "Q-R025",
+        "Q-R081"
+      ],
+      "required_by": [
+        "Q-R028",
+        "Q-R033",
+        "Q-R080"
+      ],
+      "failure_modes": [
+        "task stuck forever",
+        "duplicate tasks",
+        "worker returns empty result marked complete",
+        "queue idle while tasks wait"
+      ],
+      "recovery": "Lease expiry and reassign; mark unanswerable after bounded attempts.",
+      "criticality": "MAJOR",
+      "observability": "Queue audit: task ages, terminal states, empty-success count.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R028",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Source capture with provenance",
+      "accomplish": "For each source: URL, retrieval time, retrieval state (read, paywalled, blocked, JS-only), content snapshot or hash, publisher and publication date.",
+      "inputs": [
+        "fetched pages"
+      ],
+      "outputs": [
+        "source records"
+      ],
+      "correct_behaviour": "Every evidence claim links to a source record whose snapshot contains the cited passage; unreadable sources are recorded as unresolved, not inferred.",
+      "depends_on": [
+        "Q-R027"
+      ],
+      "required_by": [
+        "Q-R029"
+      ],
+      "failure_modes": [
+        "claim attributed to a page never read",
+        "snippet-only evidence",
+        "page content changed after capture with no snapshot"
+      ],
+      "recovery": "Refetch or try official alternative sources.",
+      "criticality": "CRITICAL",
+      "observability": "Sample claims; verify passage is present in stored snapshot.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R029",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Faithful evidence extraction",
+      "accomplish": "Extract claims with quote, figure, unit, date, geography, segment and context from captured content; the extractor may not introduce numbers absent from the source.",
+      "inputs": [
+        "source records",
+        "research brief"
+      ],
+      "outputs": [
+        "evidence claims"
+      ],
+      "correct_behaviour": "Every extracted number appears in (or is a documented transformation of) the cited passage; context fields populated.",
+      "depends_on": [
+        "Q-R028",
+        "Q-R056"
+      ],
+      "required_by": [
+        "Q-R030"
+      ],
+      "failure_modes": [
+        "hallucinated figures with real URLs",
+        "unit confusion (monthly vs annual)",
+        "US figure applied to UK"
+      ],
+      "recovery": "Re-extract with entailment check; reject unsupported claims.",
+      "criticality": "CRITICAL",
+      "observability": "Automated passage-number match and entailment check over claims.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R030",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Evidence verification and quality grading",
+      "accomplish": "Grade each claim for entailment, source type (primary/secondary/anecdotal), credibility, recency and applicability to the strategy's buyer, geography and time; require independent corroboration for decisive figures.",
+      "inputs": [
+        "evidence claims"
+      ],
+      "outputs": [
+        "graded evidence"
+      ],
+      "correct_behaviour": "Decisive figures used in selection have at least the required quality grade or are labelled assumptions; applicability mismatch is flagged.",
+      "depends_on": [
+        "Q-R029"
+      ],
+      "required_by": [
+        "Q-R031",
+        "Q-R034",
+        "Q-R035",
+        "Q-R036",
+        "Q-R037",
+        "Q-R039",
+        "Q-R046"
+      ],
+      "failure_modes": [
+        "marketing page claims taken as market data",
+        "a single anecdote drives selection",
+        "outdated figure"
+      ],
+      "recovery": "Seek corroboration; downgrade to assumption.",
+      "criticality": "CRITICAL",
+      "observability": "For each decisive figure, inspect grade and corroboration count.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R031",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Evidence conflict handling without overwrite",
+      "accomplish": "When evidence conflicts, keep all items, record the conflict, and reconcile by applicability and quality with reasoning; new evidence never silently replaces old.",
+      "inputs": [
+        "graded evidence"
+      ],
+      "outputs": [
+        "conflict records; reconciled value with range"
+      ],
+      "correct_behaviour": "Every conflict has a record and a resolution rationale; the value used is the reconciled one, with range reflected in uncertainty.",
+      "depends_on": [
+        "Q-R030"
+      ],
+      "required_by": [
+        "Q-R058"
+      ],
+      "failure_modes": [
+        "latest-write-wins",
+        "cherry-picking the favourable figure"
+      ],
+      "recovery": "Reopen reconciliation when new evidence arrives.",
+      "criticality": "MAJOR",
+      "observability": "List conflicts and their resolutions; check figures used match resolution.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R032",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Reuse of existing evidence before new research",
+      "accomplish": "Before dispatching research, query existing evidence and knowledge for applicable, fresh answers.",
+      "inputs": [
+        "research brief",
+        "evidence store"
+      ],
+      "outputs": [
+        "reuse decision"
+      ],
+      "correct_behaviour": "A brief whose answer exists at sufficient quality and freshness is not re-researched; reuse records applicability check.",
+      "depends_on": [
+        "Q-R008"
+      ],
+      "required_by": [
+        "Q-R024"
+      ],
+      "failure_modes": [
+        "paying twice for the same answer",
+        "reusing inapplicable evidence"
+      ],
+      "recovery": "Applicability check on reuse.",
+      "criticality": "MINOR",
+      "observability": "Count duplicate research of answered questions.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R033",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Adaptive search strategy",
+      "accomplish": "When searches return nothing usable, reformulate (synonyms, source types such as forums, marketplaces, government data, price lists, proxy measures) and record dead ends; never repeat an identical failing approach.",
+      "inputs": [
+        "failed research results"
+      ],
+      "outputs": [
+        "revised briefs; dead-end records"
+      ],
+      "correct_behaviour": "Consecutive attempts on one question differ in method; dead ends are recorded and consulted.",
+      "depends_on": [
+        "Q-R027"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "same query looped",
+        "giving up after one search",
+        "dead end read as negative answer"
+      ],
+      "recovery": "Escalate to reconstruction (Q-R034) or an in-plan test (Q-R026).",
+      "criticality": "MAJOR",
+      "observability": "Inspect attempt sequences per question.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R034",
+      "stage": "S07",
+      "stage_name": "Research execution and evidence",
+      "title": "Reconstruction of unpublished figures",
+      "accomplish": "Where no source publishes a figure (e.g. a niche conversion rate), estimate it from mechanism and component evidence, labelled as an estimate with derivation chain and uncertainty.",
+      "inputs": [
+        "component evidence"
+      ],
+      "outputs": [
+        "reconstructed estimates"
+      ],
+      "correct_behaviour": "Each reconstruction lists components, their sources, the formula, and a range; it is never presented as a published figure.",
+      "depends_on": [
+        "Q-R030"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "reconstruction presented as fact",
+        "implausible mechanism"
+      ],
+      "recovery": "Critique checks derivation; widen range.",
+      "criticality": "MAJOR",
+      "observability": "Audit reconstructed figures' derivation chains.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R035",
+      "stage": "S08",
+      "stage_name": "Market actors (buyers, suppliers, competitors, channels, fulfilment)",
+      "title": "Buyer existence, reachability and willingness to pay",
+      "accomplish": "Establish that the buyer segment exists in sufficient number, can be reached through the chosen channel, pays the assumed price (evidence of comparable prices paid), and that its purchase cycle fits the window.",
+      "inputs": [
+        "strategy spec",
+        "evidence"
+      ],
+      "outputs": [
+        "buyer analysis"
+      ],
+      "correct_behaviour": "Buyer count, reachability path, price evidence and cycle length are each evidenced or labelled assumption; named buyers or examples are real and verifiable; cycle length + settlement fits the window.",
+      "depends_on": [
+        "Q-R020",
+        "Q-R030"
+      ],
+      "required_by": [
+        "Q-R040",
+        "Q-R047"
+      ],
+      "failure_modes": [
+        "fabricated companies or contacts",
+        "enterprise buyer with 90-day procurement in a 30-day window",
+        "price evidence from a different segment"
+      ],
+      "recovery": "Re-target segment or downgrade strategy.",
+      "criticality": "CRITICAL",
+      "observability": "Verify sampled named buyers exist; check cycle length vs window.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R036",
+      "stage": "S08",
+      "stage_name": "Market actors (buyers, suppliers, competitors, channels, fulfilment)",
+      "title": "Supplier and seller analysis",
+      "accomplish": "For goods or subcontracted services: supplier exists, unit cost, MOQ, lead time, capacity, payment terms (prepay?), reliability, and whether the owner can open an account.",
+      "inputs": [
+        "strategy spec",
+        "evidence"
+      ],
+      "outputs": [
+        "supplier analysis"
+      ],
+      "correct_behaviour": "Each supply input has an evidenced supplier with cost, MOQ, lead time and terms; MOQ x cost fits capital; lead time fits critical path.",
+      "depends_on": [
+        "Q-R020",
+        "Q-R030"
+      ],
+      "required_by": [
+        "Q-R038",
+        "Q-R040",
+        "Q-R047"
+      ],
+      "failure_modes": [
+        "supplier invented",
+        "MOQ exceeds capital",
+        "wholesale account requires a resale certificate the owner lacks"
+      ],
+      "recovery": "Alternate supplier search; strategy downgrade.",
+      "criticality": "CRITICAL",
+      "observability": "Check supplier records for evidence and terms.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R037",
+      "stage": "S08",
+      "stage_name": "Market actors (buyers, suppliers, competitors, channels, fulfilment)",
+      "title": "Competitor and alternative analysis",
+      "accomplish": "Identify what buyers currently use instead, competitor prices and saturation, and why a buyer would choose this offer now.",
+      "inputs": [
+        "strategy spec",
+        "evidence"
+      ],
+      "outputs": [
+        "competitive analysis"
+      ],
+      "correct_behaviour": "Price assumption is positioned against evidenced competitor prices; a differentiation or channel reason exists.",
+      "depends_on": [
+        "Q-R020",
+        "Q-R030"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "price above market with no reason",
+        "saturated marketplace ignored"
+      ],
+      "recovery": "Adjust price/positioning; re-run economics.",
+      "criticality": "MAJOR",
+      "observability": "Compare plan price to competitor evidence.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R038",
+      "stage": "S08",
+      "stage_name": "Market actors (buyers, suppliers, competitors, channels, fulfilment)",
+      "title": "Fulfilment analysis",
+      "accomplish": "Determine how each unit is delivered, by whom, with what capacity per day, quality risk, refund/return exposure and owner hours.",
+      "inputs": [
+        "strategy spec",
+        "owner profile",
+        "supplier analysis"
+      ],
+      "outputs": [
+        "fulfilment model"
+      ],
+      "correct_behaviour": "Fulfilment capacity >= required volume from Q-R041; fulfilment cost included in unit economics; owner hours included in Q-R048.",
+      "depends_on": [
+        "Q-R020",
+        "Q-R036"
+      ],
+      "required_by": [
+        "Q-R040",
+        "Q-R041",
+        "Q-R048"
+      ],
+      "failure_modes": [
+        "selling more than can be delivered",
+        "fulfilment by the owner exceeds involvement limit",
+        "AI-delivered service of unproven quality"
+      ],
+      "recovery": "Add capacity (contractor) with cost, or reduce volume.",
+      "criticality": "CRITICAL",
+      "observability": "Compare fulfilment capacity to required volume.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R039",
+      "stage": "S08",
+      "stage_name": "Market actors (buyers, suppliers, competitors, channels, fulfilment)",
+      "title": "Acquisition channel access and performance",
+      "accomplish": "For the chosen channel: access prerequisites (accounts, approvals, domain warm-up, ad review, marketplace seller verification), time to usable, cost per lead/contact, conversion evidence and channel rules.",
+      "inputs": [
+        "strategy spec",
+        "evidence",
+        "owner profile"
+      ],
+      "outputs": [
+        "channel model"
+      ],
+      "correct_behaviour": "Channel prerequisites appear on the critical path with durations; cost and conversion are evidenced or assumptions with tests; channel rules feed Q-R050.",
+      "depends_on": [
+        "Q-R020",
+        "Q-R030"
+      ],
+      "required_by": [
+        "Q-R040",
+        "Q-R041",
+        "Q-R047",
+        "Q-R050"
+      ],
+      "failure_modes": [
+        "cold email at volume from a new domain on day 1",
+        "ad account approval delay ignored",
+        "marketplace new-seller limits ignored"
+      ],
+      "recovery": "Add warm-up/prereq steps or switch channel.",
+      "criticality": "CRITICAL",
+      "observability": "Check channel prerequisites and their durations in the timeline.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R040",
+      "stage": "S09",
+      "stage_name": "Economic feasibility and capital",
+      "title": "Unit economics with all material costs",
+      "accomplish": "Compute contribution per unit: price minus COGS, payment processing, platform/marketplace fees, shipping, taxes/VAT where applicable, refunds/chargebacks, acquisition cost, fulfilment cost.",
+      "inputs": [
+        "strategy spec",
+        "actor analyses",
+        "evidence"
+      ],
+      "outputs": [
+        "unit economics"
+      ],
+      "correct_behaviour": "Every cost category is present or explicitly zero with reason; each figure links to evidence/assumption; computed in code.",
+      "depends_on": [
+        "Q-R020",
+        "Q-R035",
+        "Q-R036",
+        "Q-R038",
+        "Q-R039",
+        "Q-R045"
+      ],
+      "required_by": [
+        "Q-R041",
+        "Q-R042",
+        "Q-R043",
+        "Q-R052"
+      ],
+      "failure_modes": [
+        "omitted fees flip margin negative",
+        "sales tax treated as revenue",
+        "acquisition cost ignored"
+      ],
+      "recovery": "Add missing categories; recompute.",
+      "criticality": "CRITICAL",
+      "observability": "Check presence of each cost category; recompute.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R041",
+      "stage": "S09",
+      "stage_name": "Economic feasibility and capital",
+      "title": "Volume and funnel model to collected revenue",
+      "accomplish": "Model the funnel from daily actions to collected cash with capacity limits at each stage, producing the distribution of collected revenue inside the window.",
+      "inputs": [
+        "target decomposition",
+        "unit economics",
+        "channel model",
+        "fulfilment model",
+        "calendar",
+        "metric rule"
+      ],
+      "outputs": [
+        "collected-revenue forecast (range)"
+      ],
+      "correct_behaviour": "Forecast counts only revenue meeting the recognition rule by window end; capacity constraints bind; computed deterministically.",
+      "depends_on": [
+        "Q-R021",
+        "Q-R040",
+        "Q-R039",
+        "Q-R038",
+        "Q-R014",
+        "Q-R002"
+      ],
+      "required_by": [
+        "Q-R042",
+        "Q-R043",
+        "Q-R044",
+        "Q-R068"
+      ],
+      "failure_modes": [
+        "sales in the last week counted though payout lands after window",
+        "stage capacity ignored"
+      ],
+      "recovery": "Recompute with settlement cutoff.",
+      "criticality": "CRITICAL",
+      "observability": "Recompute forecast; check last settlement date per sale cohort.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R042",
+      "stage": "S09",
+      "stage_name": "Economic feasibility and capital",
+      "title": "Cash-flow timeline and peak capital requirement",
+      "accomplish": "Produce a dated cash in/out schedule including prepayments, fees, ad spend, inventory, reserves and settlement lags; compute peak capital need and minimum balance.",
+      "inputs": [
+        "unit economics",
+        "funnel model",
+        "supplier terms",
+        "payment constraints",
+        "calendar"
+      ],
+      "outputs": [
+        "cash-flow schedule; peak capital"
+      ],
+      "correct_behaviour": "Balance never goes below zero with available capital; peak need <= stated capital (with a stated buffer); money committed before revenue arrives is accounted.",
+      "depends_on": [
+        "Q-R040",
+        "Q-R041",
+        "Q-R046",
+        "Q-R014"
+      ],
+      "required_by": [
+        "Q-R043",
+        "Q-R052",
+        "Q-R069"
+      ],
+      "failure_modes": [
+        "capital assumed recycled before payout arrives",
+        "working capital ignored",
+        "reserve held by processor not modelled"
+      ],
+      "recovery": "Reduce scale, change terms, or reject strategy.",
+      "criticality": "CRITICAL",
+      "observability": "Recompute daily balance series; find minimum.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R043",
+      "stage": "S09",
+      "stage_name": "Economic feasibility and capital",
+      "title": "Deterministic arithmetic verification",
+      "accomplish": "All plan numbers are computed or re-computed by deterministic code from the structured model; model-written arithmetic is never trusted; mismatches block release.",
+      "inputs": [
+        "structured economics",
+        "plan text"
+      ],
+      "outputs": [
+        "verification report"
+      ],
+      "correct_behaviour": "Every number in the plan equals the code-computed value (within rounding); any mismatch blocks release.",
+      "depends_on": [
+        "Q-R040",
+        "Q-R041",
+        "Q-R042"
+      ],
+      "required_by": [
+        "Q-R070"
+      ],
+      "failure_modes": [
+        "LLM multiplication error",
+        "plan prose retypes a number differently"
+      ],
+      "recovery": "Regenerate plan figures from the structured model.",
+      "criticality": "CRITICAL",
+      "observability": "Extract all numbers from the plan and diff against computed values.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R044",
+      "stage": "S09",
+      "stage_name": "Economic feasibility and capital",
+      "title": "Uncertainty and probability of reaching target",
+      "accomplish": "Propagate ranges of decisive inputs to a distribution of collected revenue; report probability or confidence of reaching target, break-even volume, and most-sensitive inputs. Coverage of scenarios is not reported as probability.",
+      "inputs": [
+        "funnel model",
+        "assumption ranges",
+        "evidence grades"
+      ],
+      "outputs": [
+        "uncertainty summary"
+      ],
+      "correct_behaviour": "Confidence is derived from stated ranges by a reproducible method; a point estimate is not presented as certainty; the most sensitive input matches sensitivity analysis.",
+      "depends_on": [
+        "Q-R041",
+        "Q-R023"
+      ],
+      "required_by": [
+        "Q-R061",
+        "Q-R073"
+      ],
+      "failure_modes": [
+        "point estimate passed as 'will achieve'",
+        "false precision",
+        "correlated assumptions treated as independent"
+      ],
+      "recovery": "Widen ranges; report lower confidence.",
+      "criticality": "MAJOR",
+      "observability": "Re-run uncertainty propagation; compare stated confidence.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R045",
+      "stage": "S09",
+      "stage_name": "Economic feasibility and capital",
+      "title": "Provenance for every plan figure",
+      "accomplish": "Every number in the plan links to an evidence claim, an owner input, an assumption record, or a computation over these.",
+      "inputs": [
+        "plan figures",
+        "goal model"
+      ],
+      "outputs": [
+        "provenance graph"
+      ],
+      "correct_behaviour": "100% of plan figures resolve to a provenance node; no orphan numbers.",
+      "depends_on": [
+        "Q-R008",
+        "Q-R011"
+      ],
+      "required_by": [
+        "Q-R009",
+        "Q-R040",
+        "Q-R054",
+        "Q-R063"
+      ],
+      "failure_modes": [
+        "model-invented numbers in prose",
+        "provenance lost across handoffs"
+      ],
+      "recovery": "Block release; resolve or label as assumption.",
+      "criticality": "CRITICAL",
+      "observability": "Automated walk from plan numbers to provenance nodes; count orphans.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R046",
+      "stage": "S10",
+      "stage_name": "Acquisition, payment, timing, operational and legal constraints",
+      "title": "Payment acceptance and settlement feasibility",
+      "accomplish": "Determine which payment methods the owner can actually use (by jurisdiction, entity, account status), account approval time, new-account holds and rolling reserves, payout schedule, invoice terms and chargeback windows, so that 'collected' cash lands inside the window.",
+      "inputs": [
+        "owner profile",
+        "jurisdiction",
+        "strategy spec",
+        "evidence"
+      ],
+      "outputs": [
+        "payment model"
+      ],
+      "correct_behaviour": "For each strategy, the time from sale to available funds is evidenced and included in Q-R041/Q-R042; strategies relying on net-30+ terms or marketplace payout delays beyond the window are corrected or rejected.",
+      "depends_on": [
+        "Q-R003",
+        "Q-R007",
+        "Q-R020",
+        "Q-R030"
+      ],
+      "required_by": [
+        "Q-R042",
+        "Q-R047"
+      ],
+      "failure_modes": [
+        "assumes instant payout",
+        "new merchant account 7-14 day hold ignored",
+        "B2B invoices net-30 counted as collected",
+        "marketplace holds funds until delivery confirmation"
+      ],
+      "recovery": "Choose upfront payment / deposits / different rail; adjust forecast.",
+      "criticality": "CRITICAL",
+      "observability": "For each strategy check sale->available-funds lag and its evidence.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R047",
+      "stage": "S10",
+      "stage_name": "Acquisition, payment, timing, operational and legal constraints",
+      "title": "Critical-path timing feasibility",
+      "accomplish": "Build the critical path of all prerequisites (entity/account setup, supplier lead time, channel warm-up, content/product creation, shipping, buyer cycle, settlement) and check it fits the window with margin.",
+      "inputs": [
+        "actor analyses",
+        "payment model",
+        "calendar"
+      ],
+      "outputs": [
+        "critical path with slack"
+      ],
+      "correct_behaviour": "Earliest first-collected-cash date and the date by which enough volume settles are both before window end; slack is stated.",
+      "depends_on": [
+        "Q-R014",
+        "Q-R035",
+        "Q-R036",
+        "Q-R039",
+        "Q-R046"
+      ],
+      "required_by": [
+        "Q-R061",
+        "Q-R066"
+      ],
+      "failure_modes": [
+        "prerequisites in parallel that are actually sequential",
+        "lead times omitted"
+      ],
+      "recovery": "Reorder, choose faster alternatives, or reject.",
+      "criticality": "CRITICAL",
+      "observability": "Recompute critical path from step durations.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R048",
+      "stage": "S10",
+      "stage_name": "Acquisition, payment, timing, operational and legal constraints",
+      "title": "Owner-involvement budget",
+      "accomplish": "Sum owner hours per week across all steps (including identity verification, signatures, calls, approvals, fulfilment) and keep within the stated limit; minimize owner-only tasks.",
+      "inputs": [
+        "plan steps",
+        "owner profile",
+        "objective spec"
+      ],
+      "outputs": [
+        "owner-hours schedule"
+      ],
+      "correct_behaviour": "Owner hours in every week <= limit; every owner task is necessary (cannot be done by system or contractor) and named.",
+      "depends_on": [
+        "Q-R001",
+        "Q-R020",
+        "Q-R038"
+      ],
+      "required_by": [
+        "Q-R061"
+      ],
+      "failure_modes": [
+        "sales calls by owner every day under 'minimal involvement'",
+        "hidden owner tasks (KYC, approvals)"
+      ],
+      "recovery": "Delegate to system/contractor or reject strategy.",
+      "criticality": "CRITICAL",
+      "observability": "Sum owner-assigned step hours by week.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R049",
+      "stage": "S10",
+      "stage_name": "Acquisition, payment, timing, operational and legal constraints",
+      "title": "Capability, licence and credential requirements",
+      "accomplish": "List every capability, licence, permit, certification, account and credential each strategy needs; check each against the owner profile; either plan acquisition (with cost and time on the critical path) or reject.",
+      "inputs": [
+        "strategy spec",
+        "owner profile",
+        "jurisdiction",
+        "evidence"
+      ],
+      "outputs": [
+        "requirements check"
+      ],
+      "correct_behaviour": "No plan step requires something whose owner-profile status is not KNOWN-HELD unless an acquisition step precedes it and fits budget and window.",
+      "depends_on": [
+        "Q-R003",
+        "Q-R007",
+        "Q-R020"
+      ],
+      "required_by": [
+        "Q-R061"
+      ],
+      "failure_modes": [
+        "licensed activity (real estate, insurance, contracting, food) without licence",
+        "assumes owner has a business entity or bank account",
+        "needs a skill the owner lacks"
+      ],
+      "recovery": "Insert acquisition steps or reject.",
+      "criticality": "CRITICAL",
+      "observability": "Cross-check required capabilities per step against owner profile.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R050",
+      "stage": "S10",
+      "stage_name": "Acquisition, payment, timing, operational and legal constraints",
+      "title": "Legal, regulatory and terms-of-service compliance",
+      "accomplish": "Check every action against law in the relevant jurisdictions (outreach: CAN-SPAM, GDPR/PECR, TCPA; consumer protection; licensing; tax registration/collection; IP; data protection) and platform terms (marketplaces, ad platforms, email providers, scraping).",
+      "inputs": [
+        "plan steps",
+        "channel model",
+        "jurisdiction",
+        "evidence"
+      ],
+      "outputs": [
+        "compliance findings"
+      ],
+      "correct_behaviour": "No step is unlawful or breaches a platform's terms; borderline steps are rewritten to a compliant form; findings cite the rule.",
+      "depends_on": [
+        "Q-R007",
+        "Q-R039",
+        "Q-R020"
+      ],
+      "required_by": [
+        "Q-R052",
+        "Q-R061"
+      ],
+      "failure_modes": [
+        "purchased lists spammed",
+        "scraping prohibited by ToS",
+        "off-platform fee circumvention",
+        "fake reviews/testimonials",
+        "unregistered sales tax collection"
+      ],
+      "recovery": "Rewrite step or reject strategy.",
+      "criticality": "CRITICAL",
+      "observability": "Run each step through a compliance checklist; independent legal-style review on samples.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R051",
+      "stage": "S10",
+      "stage_name": "Acquisition, payment, timing, operational and legal constraints",
+      "title": "System's own executional capacity",
+      "accomplish": "Determine which steps the system can actually perform (integrations, accounts, tools) vs which require the owner or a contractor, so plan assignment is real.",
+      "inputs": [
+        "integration inventory",
+        "plan steps"
+      ],
+      "outputs": [
+        "actor assignment validity"
+      ],
+      "correct_behaviour": "Every step assigned to 'the system' maps to a capability the system has; otherwise it is reassigned.",
+      "depends_on": [
+        "Q-R066"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "plan says 'Brain will send 500 emails' with no sending integration"
+      ],
+      "recovery": "Reassign to owner (then check Q-R048) or contractor.",
+      "criticality": "MAJOR",
+      "observability": "Map system-assigned steps to integration inventory.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R052",
+      "stage": "S11",
+      "stage_name": "Critique, contradiction and validation",
+      "title": "Independent adversarial critique",
+      "accomplish": "Each finalist strategy and the draft plan are reviewed by a role or model that did not produce them, against the usable-plan definition and the critical-mistake taxonomy, producing structured findings with severity.",
+      "inputs": [
+        "strategy specs",
+        "economics",
+        "draft plan",
+        "taxonomy"
+      ],
+      "outputs": [
+        "structured findings"
+      ],
+      "correct_behaviour": "Every critical-mistake category is checked explicitly; findings are structured (category, location, evidence); seeded-error plans are caught at a measured rate.",
+      "depends_on": [
+        "Q-R008",
+        "Q-R040",
+        "Q-R042",
+        "Q-R050"
+      ],
+      "required_by": [
+        "Q-R054",
+        "Q-R057",
+        "Q-R058",
+        "Q-R059",
+        "Q-R062",
+        "Q-R077"
+      ],
+      "failure_modes": [
+        "self-review rubber-stamps",
+        "critique stored only as prose",
+        "correlated models share blind spots"
+      ],
+      "recovery": "Route to a different model family or stronger model; repair via Q-R059.",
+      "criticality": "CRITICAL",
+      "observability": "Inject known mistakes; measure catch rate; inspect finding records.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R053",
+      "stage": "S11",
+      "stage_name": "Critique, contradiction and validation",
+      "title": "Internal contradiction detection",
+      "accomplish": "Check consistency across plan sections, between plan and goal model, and between narrative and economics (same price, volume, dates, buyer everywhere; strategy described equals strategy computed).",
+      "inputs": [
+        "draft plan",
+        "goal model"
+      ],
+      "outputs": [
+        "contradiction records"
+      ],
+      "correct_behaviour": "Zero unresolved contradictions at release; check is mechanical where values are structured.",
+      "depends_on": [
+        "Q-R008",
+        "Q-R070"
+      ],
+      "required_by": [
+        "Q-R071"
+      ],
+      "failure_modes": [
+        "price $500 in one section, $300 in another",
+        "plan mixes two strategies"
+      ],
+      "recovery": "Regenerate sections from structured model.",
+      "criticality": "CRITICAL",
+      "observability": "Automated cross-section value comparison.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R054",
+      "stage": "S11",
+      "stage_name": "Critique, contradiction and validation",
+      "title": "Unsupported-assumption detection",
+      "accomplish": "Find claims in plan text and reasoning that rest on neither evidence nor a registered assumption, and register or remove them.",
+      "inputs": [
+        "draft plan",
+        "provenance graph"
+      ],
+      "outputs": [
+        "unsupported-claim list"
+      ],
+      "correct_behaviour": "Every factual claim in the plan resolves to evidence or an assumption record.",
+      "depends_on": [
+        "Q-R045",
+        "Q-R052"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "persuasive unsupported market claims"
+      ],
+      "recovery": "Register as assumption with test step, or delete.",
+      "criticality": "CRITICAL",
+      "observability": "Claim extraction over plan text and linkage check.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R055",
+      "stage": "S11",
+      "stage_name": "Critique, contradiction and validation",
+      "title": "Objective and constraint conformance check",
+      "accomplish": "Check the plan against the objective spec: right metric, amount, window, capital, involvement limit, every owner constraint satisfied, and no restriction the owner never stated.",
+      "inputs": [
+        "draft plan",
+        "objective spec",
+        "constraint register"
+      ],
+      "outputs": [
+        "conformance report"
+      ],
+      "correct_behaviour": "Each spec field satisfied; plan's stated constraints == owner-stated + disclosed legal/policy.",
+      "depends_on": [
+        "Q-R001",
+        "Q-R002",
+        "Q-R004",
+        "Q-R066"
+      ],
+      "required_by": [
+        "Q-R071"
+      ],
+      "failure_modes": [
+        "plan optimizes profit instead of collected revenue",
+        "adds 'no paid ads' restriction never stated"
+      ],
+      "recovery": "Repair or reselect.",
+      "criticality": "CRITICAL",
+      "observability": "Diff plan constraints with spec.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R056",
+      "stage": "S11",
+      "stage_name": "Critique, contradiction and validation",
+      "title": "Model-output validation",
+      "accomplish": "Every model answer is validated before it becomes state: non-empty, schema-valid, not truncated, not a refusal, references real ids, answers this goal's question, numbers parseable; invalid outputs are recorded as failures and retried or escalated, never stored as results.",
+      "inputs": [
+        "raw model outputs"
+      ],
+      "outputs": [
+        "accepted outputs or failure records"
+      ],
+      "correct_behaviour": "No empty, truncated, schema-invalid, or off-goal output appears in the goal model; failure rate per model is recorded.",
+      "depends_on": [],
+      "required_by": [
+        "Q-R029",
+        "Q-R064",
+        "Q-R079"
+      ],
+      "failure_modes": [
+        "empty JSON accepted as 'no candidates'",
+        "truncated list treated as complete",
+        "refusal text parsed as a strategy",
+        "hallucinated evidence id"
+      ],
+      "recovery": "Retry with repair prompt, then another model, then mark the step failed and visible.",
+      "criticality": "CRITICAL",
+      "observability": "Inject empty/truncated/invalid responses; verify none enters state.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R057",
+      "stage": "S11",
+      "stage_name": "Critique, contradiction and validation",
+      "title": "Critic calibration",
+      "accomplish": "Measure the critic's false-negative and false-positive rates on plans with seeded critical mistakes and on known-good plans; adjust or escalate where it misses categories.",
+      "inputs": [
+        "seeded plans"
+      ],
+      "outputs": [
+        "critic calibration metrics per category"
+      ],
+      "correct_behaviour": "Per-category recall is measured and meets a set threshold on the frozen revision.",
+      "depends_on": [
+        "Q-R052"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "critic never tested so misses are invisible"
+      ],
+      "recovery": "Add category-specific checks; escalate model.",
+      "criticality": "MAJOR",
+      "observability": "Inspect calibration results.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R058",
+      "stage": "S12",
+      "stage_name": "Revision and repair",
+      "title": "Evidence-triggered revision",
+      "accomplish": "When evidence or critique refutes or changes an assumption, recompute the affected strategy, economics and ranking; the selection may change; revision recorded with cause.",
+      "inputs": [
+        "new evidence",
+        "critique findings",
+        "dependency links"
+      ],
+      "outputs": [
+        "revised goal model; revision log"
+      ],
+      "correct_behaviour": "After a refuting input, every affected decision is re-evaluated and the log shows before/after; the system will change its selected strategy when warranted.",
+      "depends_on": [
+        "Q-R009",
+        "Q-R052",
+        "Q-R031"
+      ],
+      "required_by": [
+        "Q-R059"
+      ],
+      "failure_modes": [
+        "anchoring: selection never changes",
+        "new evidence attached but not used"
+      ],
+      "recovery": "Force re-evaluation of dependents.",
+      "criticality": "CRITICAL",
+      "observability": "Inject a refuting evidence item in replay; check selection/economics respond.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R059",
+      "stage": "S12",
+      "stage_name": "Revision and repair",
+      "title": "Planned repair, not blind retry",
+      "accomplish": "A failed check produces a targeted repair that addresses its cause and differs from previous attempts; attempts are bounded; after the bound, abandon the strategy or report blocked.",
+      "inputs": [
+        "findings",
+        "attempt history"
+      ],
+      "outputs": [
+        "repair attempts with strategy"
+      ],
+      "correct_behaviour": "Consecutive repairs differ in method; attempt count bounded; failures preserved in history.",
+      "depends_on": [
+        "Q-R052",
+        "Q-R058"
+      ],
+      "required_by": [
+        "Q-R060"
+      ],
+      "failure_modes": [
+        "same prompt retried",
+        "infinite repair loop",
+        "failure history overwritten"
+      ],
+      "recovery": "Escalate model; abandon strategy; choose runner-up.",
+      "criticality": "MAJOR",
+      "observability": "Inspect attempt sequences for difference and bound.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R060",
+      "stage": "S12",
+      "stage_name": "Revision and repair",
+      "title": "Convergence and termination",
+      "accomplish": "The goal reasoning loop terminates with a selected plan, an infeasible verdict, or a named blocker within time and cost budgets; stalls are detected.",
+      "inputs": [
+        "loop state",
+        "budgets"
+      ],
+      "outputs": [
+        "terminal outcome"
+      ],
+      "correct_behaviour": "Every goal reaches a terminal outcome within its budget; stall detector fires on no-progress intervals.",
+      "depends_on": [
+        "Q-R024",
+        "Q-R059",
+        "Q-R083"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "oscillation between two strategies",
+        "waiting forever on one research task"
+      ],
+      "recovery": "Decide with current evidence and disclose unknowns.",
+      "criticality": "CRITICAL",
+      "observability": "Measure time-to-terminal and stall events per goal.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R061",
+      "stage": "S13",
+      "stage_name": "Comparison and selection",
+      "title": "Comparison on a common basis",
+      "accomplish": "Compare strategies on the same criteria computed the same way from the same goal-model version: probability of reaching target in window, capital at risk, owner hours, evidence strength, downside, time to first cash.",
+      "inputs": [
+        "strategy economics",
+        "uncertainty",
+        "constraint checks"
+      ],
+      "outputs": [
+        "comparison table"
+      ],
+      "correct_behaviour": "All strategies scored with identical criteria and evidence vintage; scores reproducible from inputs.",
+      "depends_on": [
+        "Q-R044",
+        "Q-R047",
+        "Q-R048",
+        "Q-R049",
+        "Q-R050",
+        "Q-R009"
+      ],
+      "required_by": [
+        "Q-R062",
+        "Q-R065"
+      ],
+      "failure_modes": [
+        "strategy A scored with old evidence, B with new",
+        "different optimism levels"
+      ],
+      "recovery": "Recompute all scores together.",
+      "criticality": "MAJOR",
+      "observability": "Recompute comparison; check versions.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R062",
+      "stage": "S13",
+      "stage_name": "Comparison and selection",
+      "title": "Single arbiter for competing proposals",
+      "accomplish": "One decision authority resolves competing proposals from faculties, models and critics into one selected strategy, recording alternatives, reasons and dissent.",
+      "inputs": [
+        "comparison table",
+        "critique findings",
+        "proposals"
+      ],
+      "outputs": [
+        "selection decision"
+      ],
+      "correct_behaviour": "Exactly one selected strategy per goal version; decision record lists alternatives and why rejected; no faculty overrides it outside the arbiter.",
+      "depends_on": [
+        "Q-R061",
+        "Q-R052"
+      ],
+      "required_by": [
+        "Q-R063",
+        "Q-R066"
+      ],
+      "failure_modes": [
+        "two faculties each 'select' a strategy",
+        "last writer wins",
+        "critic findings ignored"
+      ],
+      "recovery": "Re-run arbitration on current version.",
+      "criticality": "CRITICAL",
+      "observability": "Count selection records per goal version; inspect rationale.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R063",
+      "stage": "S13",
+      "stage_name": "Comparison and selection",
+      "title": "Defensible selection rationale",
+      "accomplish": "The selected strategy's rationale cites evidence and computed figures, survives critique, and explains why runners-up lost.",
+      "inputs": [
+        "selection decision",
+        "evidence"
+      ],
+      "outputs": [
+        "rationale"
+      ],
+      "correct_behaviour": "Rationale claims all resolve to provenance; no unresolved critical finding against the selection.",
+      "depends_on": [
+        "Q-R062",
+        "Q-R045"
+      ],
+      "required_by": [
+        "Q-R070"
+      ],
+      "failure_modes": [
+        "rationale is narrative only"
+      ],
+      "recovery": "Regenerate rationale from structured comparison.",
+      "criticality": "MAJOR",
+      "observability": "Check rationale provenance.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R064",
+      "stage": "S13",
+      "stage_name": "Comparison and selection",
+      "title": "Model routing, escalation and independence",
+      "accomplish": "Use cheap models by default and escalate to stronger models on low confidence, disagreement, decisive steps, or repeated validation failure; agreement among correlated models is not treated as independent evidence.",
+      "inputs": [
+        "step type",
+        "confidence signals",
+        "validation failures"
+      ],
+      "outputs": [
+        "model assignments; escalation records"
+      ],
+      "correct_behaviour": "Decisive judgements (selection, critique of finalist, legal check) are made or confirmed by a model of sufficient measured quality; escalation events recorded.",
+      "depends_on": [
+        "Q-R056",
+        "Q-R083"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "cheap model makes the final decision unchecked",
+        "ensemble of identical models counted as consensus"
+      ],
+      "recovery": "Escalate; use different model family for critique.",
+      "criticality": "MAJOR",
+      "observability": "Inspect model used per decisive step and measured quality.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R065",
+      "stage": "S13",
+      "stage_name": "Comparison and selection",
+      "title": "Fallback strategy",
+      "accomplish": "Retain a runner-up strategy compatible with remaining capital and time, triggered at a checkpoint if leading indicators fail.",
+      "inputs": [
+        "comparison table",
+        "checkpoints"
+      ],
+      "outputs": [
+        "fallback definition"
+      ],
+      "correct_behaviour": "Fallback has its own feasibility from the trigger date with remaining capital.",
+      "depends_on": [
+        "Q-R061",
+        "Q-R068"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "fallback infeasible after primary spends capital"
+      ],
+      "recovery": "Recompute fallback from trigger state.",
+      "criticality": "MINOR",
+      "observability": "Check fallback economics from trigger date.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R066",
+      "stage": "S14",
+      "stage_name": "Plan conversion",
+      "title": "Executable step plan",
+      "accomplish": "Convert the selected strategy into ordered steps, each with actor (system/owner/contractor), inputs, outputs, duration, dependencies, cost, and done criteria.",
+      "inputs": [
+        "selection",
+        "critical path",
+        "economics"
+      ],
+      "outputs": [
+        "step plan"
+      ],
+      "correct_behaviour": "Every step has all fields; dependencies acyclic; steps cover every leg of the strategy; sequencing matches critical path.",
+      "depends_on": [
+        "Q-R062",
+        "Q-R047"
+      ],
+      "required_by": [
+        "Q-R051",
+        "Q-R055",
+        "Q-R067",
+        "Q-R069",
+        "Q-R070"
+      ],
+      "failure_modes": [
+        "vague steps ('market the product')",
+        "missing steps for prerequisites"
+      ],
+      "recovery": "Regenerate steps from structured strategy and critical path.",
+      "criticality": "CRITICAL",
+      "observability": "Schema and coverage check on steps.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R067",
+      "stage": "S14",
+      "stage_name": "Plan conversion",
+      "title": "Named first action",
+      "accomplish": "Name the first concrete action, its actor, and how to do it, executable immediately with no unmet prerequisites and no money commitment that lacks approval.",
+      "inputs": [
+        "step plan"
+      ],
+      "outputs": [
+        "first action"
+      ],
+      "correct_behaviour": "First action has no unmet dependencies, is specific (what, where, who), and can start today.",
+      "depends_on": [
+        "Q-R066"
+      ],
+      "required_by": [
+        "Q-R070"
+      ],
+      "failure_modes": [
+        "first action is 'research more'",
+        "first action depends on an account not yet opened"
+      ],
+      "recovery": "Select earliest dependency-free step; split it if vague.",
+      "criticality": "CRITICAL",
+      "observability": "Check first action's dependencies and specificity.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R068",
+      "stage": "S14",
+      "stage_name": "Plan conversion",
+      "title": "Checkpoints and kill criteria",
+      "accomplish": "Define dated leading indicators (replies, conversions, first payment settled) with thresholds and the response if missed (pivot, fallback, stop) to protect capital.",
+      "inputs": [
+        "funnel model",
+        "decisive unknowns"
+      ],
+      "outputs": [
+        "checkpoints"
+      ],
+      "correct_behaviour": "Each decisive unknown has a checkpoint testing it early; thresholds derive from the funnel model.",
+      "depends_on": [
+        "Q-R041",
+        "Q-R026"
+      ],
+      "required_by": [
+        "Q-R065",
+        "Q-R070",
+        "Q-R074"
+      ],
+      "failure_modes": [
+        "no early test; failure discovered at day 30"
+      ],
+      "recovery": "Add checkpoint per decisive unknown.",
+      "criticality": "MAJOR",
+      "observability": "Map decisive unknowns to checkpoints.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R069",
+      "stage": "S14",
+      "stage_name": "Plan conversion",
+      "title": "Money-commitment schedule",
+      "accomplish": "List each spend with amount, date, reversibility and approval requirement; total and peak within capital.",
+      "inputs": [
+        "cash-flow schedule",
+        "step plan"
+      ],
+      "outputs": [
+        "commitment schedule"
+      ],
+      "correct_behaviour": "Sum and peak <= capital; each irreversible spend flagged for approval.",
+      "depends_on": [
+        "Q-R042",
+        "Q-R066"
+      ],
+      "required_by": [
+        "Q-R070",
+        "Q-R072"
+      ],
+      "failure_modes": [
+        "spend hidden in steps",
+        "exceeds capital"
+      ],
+      "recovery": "Recompute from cash-flow.",
+      "criticality": "CRITICAL",
+      "observability": "Sum commitments; compare with capital.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R070",
+      "stage": "S14",
+      "stage_name": "Plan conversion",
+      "title": "Plan rendering from the structured model",
+      "accomplish": "Render the human-readable plan from the structured goal model (numbers, dates, names injected, not retyped by a model), covering every usable-plan element, including alternatives considered, risks, assumptions and confidence.",
+      "inputs": [
+        "goal model",
+        "step plan"
+      ],
+      "outputs": [
+        "plan document"
+      ],
+      "correct_behaviour": "Every number and date in the document is injected from structured fields; all usable-plan sections present.",
+      "depends_on": [
+        "Q-R066",
+        "Q-R067",
+        "Q-R068",
+        "Q-R069",
+        "Q-R043",
+        "Q-R063"
+      ],
+      "required_by": [
+        "Q-R053",
+        "Q-R071"
+      ],
+      "failure_modes": [
+        "model rewrites figures",
+        "sections omitted",
+        "truncated document"
+      ],
+      "recovery": "Re-render; validate (Q-R071).",
+      "criticality": "CRITICAL",
+      "observability": "Diff rendered values with structured model.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R071",
+      "stage": "S14",
+      "stage_name": "Plan conversion",
+      "title": "Deterministic usable-plan completeness validator",
+      "accomplish": "Before release, a deterministic validator checks presence and internal validity of every usable-plan element and blocks release on failure.",
+      "inputs": [
+        "plan document",
+        "goal model"
+      ],
+      "outputs": [
+        "validation verdict"
+      ],
+      "correct_behaviour": "No released plan lacks a usable-plan element; failing plans are repaired or the goal reports blocked.",
+      "depends_on": [
+        "Q-R070",
+        "Q-R053",
+        "Q-R055"
+      ],
+      "required_by": [
+        "Q-R072",
+        "Q-R073"
+      ],
+      "failure_modes": [
+        "validator absent so incomplete plans ship"
+      ],
+      "recovery": "Repair loop.",
+      "criticality": "CRITICAL",
+      "observability": "Run validator over released plans.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R072",
+      "stage": "S15",
+      "stage_name": "Readiness and commitment gates",
+      "title": "Plan readiness separate from money-commitment approval",
+      "accomplish": "A plan can be READY for grading/owner review without any money committed; executing any spend requires an owner-set ceiling and explicit approval; approval is never released by a clock or inferred from silence; retries do not double-count commitments.",
+      "inputs": [
+        "validated plan",
+        "owner approvals"
+      ],
+      "outputs": [
+        "readiness state; approval state"
+      ],
+      "correct_behaviour": "Readiness and approval are distinct states; no spend occurs without approval within ceiling; readiness does not wait on approval.",
+      "depends_on": [
+        "Q-R071",
+        "Q-R069"
+      ],
+      "required_by": [
+        "Q-R078"
+      ],
+      "failure_modes": [
+        "plan blocked waiting for spend approval so no plan exists",
+        "spend auto-approved after timeout",
+        "double spend on retry"
+      ],
+      "recovery": "Hold spend; keep plan ready.",
+      "criticality": "CRITICAL",
+      "observability": "Inspect state machine transitions; attempt spend without approval in a test.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R073",
+      "stage": "S15",
+      "stage_name": "Readiness and commitment gates",
+      "title": "Honest status and confidence disclosure",
+      "accomplish": "The plan and the goal status state confidence, open decisive unknowns and interpretations; a goal with no plan meeting the bar reports infeasible/blocked with reason instead of presenting a weak plan as ready.",
+      "inputs": [
+        "uncertainty",
+        "unknowns",
+        "validator result"
+      ],
+      "outputs": [
+        "status"
+      ],
+      "correct_behaviour": "Stated confidence equals computed confidence; open unknowns listed; no 'ready' status on a plan with unresolved critical findings.",
+      "depends_on": [
+        "Q-R044",
+        "Q-R026",
+        "Q-R071"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "overclaiming",
+        "silent omission of known weaknesses"
+      ],
+      "recovery": "Downgrade status.",
+      "criticality": "CRITICAL",
+      "observability": "Compare status to findings and computed confidence.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R074",
+      "stage": "S16",
+      "stage_name": "Execution feedback and learning",
+      "title": "Execution result capture",
+      "accomplish": "Record actual outcomes (actions taken, leads, replies, sales, cash settled, costs, dates) against each plan step and checkpoint.",
+      "inputs": [
+        "execution events",
+        "integrations",
+        "owner reports"
+      ],
+      "outputs": [
+        "actuals"
+      ],
+      "correct_behaviour": "Each checkpoint has an actual value or an explicit 'not measured'; actuals are attributed to the step that produced them.",
+      "depends_on": [
+        "Q-R068"
+      ],
+      "required_by": [
+        "Q-R075"
+      ],
+      "failure_modes": [
+        "results not recorded",
+        "results from integrations misattributed"
+      ],
+      "recovery": "Reconcile from source systems.",
+      "criticality": "MAJOR",
+      "observability": "Compare checkpoint table to actuals.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R075",
+      "stage": "S16",
+      "stage_name": "Execution feedback and learning",
+      "title": "Prediction-vs-outcome attribution",
+      "accomplish": "Compare predictions with actuals, identify which assumptions or evidence were wrong, and update their status.",
+      "inputs": [
+        "predictions",
+        "actuals",
+        "assumption register"
+      ],
+      "outputs": [
+        "attribution records"
+      ],
+      "correct_behaviour": "Each significant miss is attributed to specific assumptions; those assumptions' status changes.",
+      "depends_on": [
+        "Q-R074",
+        "Q-R011"
+      ],
+      "required_by": [
+        "Q-R076"
+      ],
+      "failure_modes": [
+        "miss blamed vaguely",
+        "assumption unchanged after refutation"
+      ],
+      "recovery": "Re-run attribution.",
+      "criticality": "MAJOR",
+      "observability": "Inspect attribution records.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R076",
+      "stage": "S16",
+      "stage_name": "Execution feedback and learning",
+      "title": "Learning that changes later decisions",
+      "accomplish": "Store learned priors (conversion rates, lead times, payout delays, strategy-class success, research methods that worked, model quality per task) with scope, and make later discovery, economics, research and routing read them; measure that decisions changed.",
+      "inputs": [
+        "attribution records",
+        "grader verdicts",
+        "research outcomes"
+      ],
+      "outputs": [
+        "scoped priors"
+      ],
+      "correct_behaviour": "A later goal's relevant computation reads the updated prior (visible in provenance) and its output differs accordingly; stale or over-broad priors are scoped.",
+      "depends_on": [
+        "Q-R075",
+        "Q-R010"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "lessons written but never read",
+        "overfitting from one case",
+        "prior from one geography applied everywhere"
+      ],
+      "recovery": "Scope and decay priors; require evidence counts.",
+      "criticality": "MAJOR",
+      "observability": "Trace later goals' reads of priors; A/B on replay.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R077",
+      "stage": "S16",
+      "stage_name": "Execution feedback and learning",
+      "title": "Learning from reasoning failures without test-set overfit",
+      "accomplish": "Classify each failed or rejected plan into the critical-mistake taxonomy, trace to requirement, and improve procedure; keep evaluation objectives out of the training/tuning loop.",
+      "inputs": [
+        "grader verdicts",
+        "critique findings"
+      ],
+      "outputs": [
+        "improvement records"
+      ],
+      "correct_behaviour": "Each improvement targets a classified failure; acceptance objectives are never used for tuning.",
+      "depends_on": [
+        "Q-R087",
+        "Q-R052"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "tuning on evaluation set",
+        "fixing symptoms per case"
+      ],
+      "recovery": "Hold-out discipline; re-measure on fresh objectives.",
+      "criticality": "MAJOR",
+      "observability": "Audit tuning data against evaluation set.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R078",
+      "stage": "S16",
+      "stage_name": "Execution feedback and learning",
+      "title": "Safe execution of external effects",
+      "accomplish": "External effects (emails, payments, orders, posts) are performed exactly once per logical intent; an unknown outcome (timeout) is recorded as unknown and not auto-retried.",
+      "inputs": [
+        "approved steps"
+      ],
+      "outputs": [
+        "effect records"
+      ],
+      "correct_behaviour": "No duplicated effects under retry/crash; unknown outcomes surfaced.",
+      "depends_on": [
+        "Q-R072",
+        "Q-R012"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "double charge",
+        "duplicate outreach violating rules"
+      ],
+      "recovery": "Reconcile with provider before retry.",
+      "criticality": "MAJOR",
+      "observability": "Fault-inject during effects; count duplicates.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R079",
+      "stage": "S17",
+      "stage_name": "Infrastructure reliability",
+      "title": "Model provider failure resilience",
+      "accomplish": "Handle timeouts, rate limits, outages and degraded models with bounded retry, backoff and fallback providers without losing progress or accepting degraded output.",
+      "inputs": [
+        "model calls"
+      ],
+      "outputs": [
+        "results or recorded failures"
+      ],
+      "correct_behaviour": "Provider outage delays but does not corrupt or silently truncate a goal; fallback outputs pass Q-R056.",
+      "depends_on": [
+        "Q-R056",
+        "Q-R012"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "outage produces empty outputs that pass as results",
+        "whole goal fails on one timeout"
+      ],
+      "recovery": "Retry, fallback, resume.",
+      "criticality": "MAJOR",
+      "observability": "Fault injection on model calls.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R080",
+      "stage": "S17",
+      "stage_name": "Infrastructure reliability",
+      "title": "Research infrastructure failure handling",
+      "accomplish": "When search or page fetch fails (API down, blocked, CAPTCHAs), mark the question unanswered/unresolved, try alternatives, and never record absence of results as a negative finding.",
+      "inputs": [
+        "research tasks"
+      ],
+      "outputs": [
+        "failure states"
+      ],
+      "correct_behaviour": "Infrastructure failures appear as failure states, not as 'no evidence exists'; decisions depending on them use Q-R026 rules.",
+      "depends_on": [
+        "Q-R027",
+        "Q-R026"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "search outage read as 'no competitors'",
+        "blocked page inferred"
+      ],
+      "recovery": "Retry later; alternative sources; in-plan test.",
+      "criticality": "CRITICAL",
+      "observability": "Simulate search outage; inspect conclusions.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R081",
+      "stage": "S17",
+      "stage_name": "Infrastructure reliability",
+      "title": "Work queue and worker reliability",
+      "accomplish": "Asynchronous workers claim work with exclusive leases, heartbeat, release or fail it; stuck items are recovered; no item is dropped; idle capacity is used while work waits.",
+      "inputs": [
+        "work items"
+      ],
+      "outputs": [
+        "processed items"
+      ],
+      "correct_behaviour": "Every item terminal within bound; no double ownership; idle workers beside ready work is detected and corrected.",
+      "depends_on": [
+        "Q-R012"
+      ],
+      "required_by": [
+        "Q-R027"
+      ],
+      "failure_modes": [
+        "lost item after crash",
+        "two workers produce conflicting results",
+        "starvation"
+      ],
+      "recovery": "Lease expiry; reassignment; watchdog.",
+      "criticality": "MAJOR",
+      "observability": "Queue metrics: age, double-lease count, idle-with-backlog time.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R082",
+      "stage": "S17",
+      "stage_name": "Infrastructure reliability",
+      "title": "Database integrity and recovery",
+      "accomplish": "State writes are transactional; a database failure leaves no partial state; recovery restores consistency; the system detects and refuses to proceed on inconsistent state.",
+      "inputs": [
+        "writes"
+      ],
+      "outputs": [
+        "consistent state"
+      ],
+      "correct_behaviour": "After an injected DB failure, goal model is either pre- or post-transaction, never between; derived state recomputes cleanly.",
+      "depends_on": [
+        "Q-R008",
+        "Q-R012"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "partial writes produce half-updated economics",
+        "connection loss treated as empty data"
+      ],
+      "recovery": "Rollback; recompute derived state.",
+      "criticality": "MAJOR",
+      "observability": "Fault injection on DB writes; consistency checker.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R083",
+      "stage": "S17",
+      "stage_name": "Infrastructure reliability",
+      "title": "Per-goal compute and research budget",
+      "accomplish": "Bound model tokens, strong-model calls, research calls and wall time per goal, allocating by decision value; exhaustion forces a decision with disclosed uncertainty rather than an abort or silent truncation.",
+      "inputs": [
+        "budgets",
+        "task costs"
+      ],
+      "outputs": [
+        "budget ledger"
+      ],
+      "correct_behaviour": "Spend per goal within budget; budget exhaustion produces a terminal outcome with disclosed gaps.",
+      "depends_on": [],
+      "required_by": [
+        "Q-R024",
+        "Q-R060",
+        "Q-R064"
+      ],
+      "failure_modes": [
+        "runaway cost",
+        "budget cut mid-step truncates outputs silently"
+      ],
+      "recovery": "Reallocate; decide with current evidence.",
+      "criticality": "MAJOR",
+      "observability": "Budget ledger per goal.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R084",
+      "stage": "S17",
+      "stage_name": "Infrastructure reliability",
+      "title": "End-to-end trace for diagnosis",
+      "accomplish": "Record, per goal, every faculty call: inputs (goal-model version), model and prompt, raw output, validation result, accepted output, decisions, and links between them, so any plan can be replayed and each mistake traced to its origin step.",
+      "inputs": [
+        "all calls"
+      ],
+      "outputs": [
+        "trace"
+      ],
+      "correct_behaviour": "For any plan figure or decision, the trace reaches the model call and evidence that produced it.",
+      "depends_on": [
+        "Q-R008"
+      ],
+      "required_by": [
+        "Q-R085",
+        "Q-R089"
+      ],
+      "failure_modes": [
+        "prose-only logs",
+        "missing prompts",
+        "trace not linked to versions"
+      ],
+      "recovery": "Instrument missing steps.",
+      "criticality": "MAJOR",
+      "observability": "Pick random plan facts; follow trace to origin.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R085",
+      "stage": "S17",
+      "stage_name": "Infrastructure reliability",
+      "title": "Frozen, identifiable revision and reproducibility",
+      "accomplish": "The code, prompts, model versions, configuration and knowledge snapshot used for acceptance are frozen under one identifier, and the whole run is attributable to it.",
+      "inputs": [
+        "deployment"
+      ],
+      "outputs": [
+        "revision id on every goal and plan"
+      ],
+      "correct_behaviour": "All 30 acceptance plans carry the same revision id; no config or prompt changed during the run.",
+      "depends_on": [
+        "Q-R084"
+      ],
+      "required_by": [
+        "Q-R088"
+      ],
+      "failure_modes": [
+        "hot-fix mid-evaluation",
+        "model provider silently changes model version"
+      ],
+      "recovery": "Restart evaluation on a new frozen revision.",
+      "criticality": "CRITICAL",
+      "observability": "Check revision ids on all evaluated plans; diff config across run.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R086",
+      "stage": "S18",
+      "stage_name": "Acceptance evaluation",
+      "title": "Unfamiliar, feasible objective suite",
+      "accomplish": "Maintain a suite of 30 diverse objectives (amounts, windows, capitals, involvement levels, owner profiles, jurisdictions, industries) never used in development, each with independently established feasibility, plus infeasible controls outside the 30.",
+      "inputs": [
+        "objective authoring",
+        "feasibility evidence"
+      ],
+      "outputs": [
+        "evaluation suite"
+      ],
+      "correct_behaviour": "No suite objective (or near-duplicate) appears in development data; each has a feasibility argument by someone other than the system.",
+      "depends_on": [],
+      "required_by": [
+        "Q-R087"
+      ],
+      "failure_modes": [
+        "suite leaks into tuning",
+        "suite skewed to easy objectives",
+        "infeasible items counted"
+      ],
+      "recovery": "Replace leaked items.",
+      "criticality": "CRITICAL",
+      "observability": "Leakage check vs development data; diversity stats.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R087",
+      "stage": "S18",
+      "stage_name": "Acceptance evaluation",
+      "title": "Independent grading against the usable-plan rubric",
+      "accomplish": "Grade each plan by a grader independent of the system (different people or model family, no access to system prompts), using the usable-plan definition and critical-mistake taxonomy, with verification of factual claims (buyers exist, fees, settlement times) and inter-grader agreement measured.",
+      "inputs": [
+        "plans",
+        "rubric",
+        "taxonomy"
+      ],
+      "outputs": [
+        "grades with per-element findings"
+      ],
+      "correct_behaviour": "Each grade lists element verdicts and any critical mistakes with evidence; agreement between graders measured and adequate.",
+      "depends_on": [
+        "Q-R086"
+      ],
+      "required_by": [
+        "Q-R077",
+        "Q-R088",
+        "Q-R089"
+      ],
+      "failure_modes": [
+        "grader shares the system's blind spots",
+        "grading on prose quality",
+        "grader cannot verify facts"
+      ],
+      "recovery": "Add graders; adjudicate disagreements.",
+      "criticality": "CRITICAL",
+      "observability": "Inter-rater agreement; spot-audit grades.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R088",
+      "stage": "S18",
+      "stage_name": "Acceptance evaluation",
+      "title": "Acceptance computation",
+      "accomplish": "Compute the acceptance result: at least 27 of 30 plans USABLE with zero critical mistakes, all from one frozen revision, one run per objective (no best-of-n selection unless the system itself does it within budget).",
+      "inputs": [
+        "grades",
+        "revision ids"
+      ],
+      "outputs": [
+        "acceptance verdict"
+      ],
+      "correct_behaviour": "Verdict reproducible from grade records; no cherry-picked reruns; revision single.",
+      "depends_on": [
+        "Q-R087",
+        "Q-R085"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "rerunning failures until they pass",
+        "mixing revisions"
+      ],
+      "recovery": "Re-run whole suite on a new revision.",
+      "criticality": "CRITICAL",
+      "observability": "Audit run log and grade records.",
+      "brain_implements": "TO BE RECONCILED"
+    },
+    {
+      "id": "Q-R089",
+      "stage": "S18",
+      "stage_name": "Acceptance evaluation",
+      "title": "Failure classification to requirements",
+      "accomplish": "Map every failed plan to critical-mistake categories and to the requirement(s) whose failure caused it, using the trace.",
+      "inputs": [
+        "failed grades",
+        "trace"
+      ],
+      "outputs": [
+        "failure-to-requirement map"
+      ],
+      "correct_behaviour": "Every failure has at least one mapped requirement with trace evidence.",
+      "depends_on": [
+        "Q-R087",
+        "Q-R084"
+      ],
+      "required_by": [],
+      "failure_modes": [
+        "failures explained by narrative only"
+      ],
+      "recovery": "Improve trace.",
+      "criticality": "MAJOR",
+      "observability": "Inspect mapping records.",
+      "brain_implements": "TO BE RECONCILED"
+    }
+  ]
+}
