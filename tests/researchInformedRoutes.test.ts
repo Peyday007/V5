@@ -49,6 +49,7 @@ import {
   ROUTE_RETRY_AFTER_FAILURE_MS,
   routeAskDue,
   routePrompt,
+  critiquePrompt,
   settleRouteAsks,
   type RouteContext,
   type RouteDeps,
@@ -108,6 +109,10 @@ describe('scouting: directions before anything is priced', () => {
     expect(offered).toMatch(/I can put in 15 hours/);
     expect(offered).toMatch(/work that needs no particular skill/);
     expect(offered).toMatch(/deliveries, shifts, gigs and services included/);
+  });
+
+  it('tells the critic the plan adds routes up, so a route that collects part of the money is not dropped for that alone', () => {
+    expect(critiquePrompt(ctx(), [], null)).toMatch(/never drop a route only because it alone collects part of the money still needed/);
   });
 
   it('keeps a whole direction and refuses one without a decisive unknown', () => {

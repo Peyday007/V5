@@ -1078,6 +1078,13 @@ export function critiqueJson(text: string, routeCount: number): RouteCritique | 
 }
 
 /** The critic's prompt: the owner's words, their profile, the limits and rules, and the routes, numbered. Pure. */
+/*
+ * The critic is told the plan adds routes up (dec1125c p06, 2026-11-26): with
+ * the facts supplied it dropped two plasma donations "far below the required
+ * $500" although the proposer had combined them with a labour shift and
+ * deliveries inside the owner's 15 hours — the same one-route-is-the-plan
+ * reading the hours rule had (`parseRoutes`).
+ */
 export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute[], owner: OwnerProfile | null): string {
   const refOf = new Map((ctx.findings ?? []).map((one) => [one.claimId, one.ref] as const));
   const listed = routes.map((route, i) => {
@@ -1094,7 +1101,7 @@ export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `RULES (score each route 0–5 on each; ${CRITIQUE_FAIL_SCORE} or less is a failure):\n${RULE_KEYS.map((rule) => `- ${rule}: ${ROUTE_RULES[rule]}`).join('\n')}`,
     `ROUTES PROPOSED:\n${listed.join('\n')}`,
-    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first, and between two close ones, the one more of whose figures rest on findings.",
+    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. The plan combines the routes you keep and holds their hours, capital and money together, so never drop a route only because it alone collects part of the money still needed; judge whether it pays inside the window. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first, and between two close ones, the one more of whose figures rest on findings.",
     'Reply with exactly one JSON object and nothing else:',
     `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"reviews":[{"index":1,"verdict":"KEEP"|"REPAIR"|"DROP","scores":{${RULE_KEYS.map((rule) => `"${rule}":0-5`).join(',')}},"failed":["rule names it fails"],"why":"one sentence","repair":{"field":"new value"}|null}],"ranking":[indices of kept or repaired routes, best first]}`,
   ]
