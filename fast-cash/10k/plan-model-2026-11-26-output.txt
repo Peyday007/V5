@@ -1,0 +1,3 @@
+gross p10 0 p50 2935 p90 13568 | >=10k 16.7% | >=5k 41.9%
+net (after print/post, solo COGS, $1.5k caller+tools) p10 -1500 p50 -890 p90 2286; worst -1500
+line A mean 1565, line B mean 3733
