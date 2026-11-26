@@ -10,7 +10,10 @@
   "called_by": "MCP tool registry (server/mcp/tools.ts); Hermes operator runs (services/operator/run.ts:385 lists it)",
   "condition": "requireOperator(principal) (operatorTools.ts:58) must return projects; project must be in list",
   "reachable": "YES: operatorTools.ts:1023-1025 -> decide.ts:93",
-  "filters_caps_vetoes": "userId:null => workstream.createdByUserId null; see A-M activateGoalSprints (sprintCandidate requires createdByUserId) and plan.ts:2606 owner required for persisted scenario run"
+  "filters_caps_vetoes": "userId:null => workstream.createdByUserId null; see A-M activateGoalSprints (sprintCandidate requires createdByUserId) and plan.ts:2606 owner required for persisted scenario run GA-28: PATCH /goals/:id/terms (routes/goals.ts:173-195) can later set ownerUserId, which enables a persisted scenario run (plan.ts:2626-2627); createdByUserId is never set, so sprintCandidate (goalSprint.ts:68) still refuses.",
+  "gate_a": [
+   "GA-28"
+  ]
  },
  {
   "id": "A-M002",
@@ -177,9 +180,12 @@
   "consumes": "TickReport; throttleUnderPressure(goal-plans) (db/pressure.ts:234)",
   "produces": "background goal-plans pass: advanceGoalPlans then advanceObjectivePlans",
   "called_by": "loop.ts:1676",
-  "condition": "not inside GOAL_PLANS_BOOT_GRACE_MS (default 10 min, env BRAIN_GOAL_PLANS_BOOT_GRACE_MS, loop.ts:4035); not while previous pass in flight; DEFERRED under pressure; THROTTLED => maxReads:1 and objective plans skipped (loop.ts:4099)",
+  "condition": "not inside GOAL_PLANS_BOOT_GRACE_MS (default 10 min, loop.ts:4035); not while previous pass in flight; throttleUnderPressure: DEFERRED skips the WHOLE pass (outcomes, retry-only route arming included) (loop.ts:4114-4117); THROTTLED => maxReads:1 and objective plans skipped (loop.ts:4118, 4099)",
   "reachable": "YES",
-  "filters_caps_vetoes": "pass time limit max(passLimitMs, GOAL_PLANS_PASS_LIMIT_MS=30min) (loop.ts:4031,4126)"
+  "filters_caps_vetoes": "pass time limit max(passLimitMs, GOAL_PLANS_PASS_LIMIT_MS=30min) (loop.ts:4031,4126)",
+  "gate_a": [
+   "GA-25"
+  ]
  },
  {
   "id": "A-M015",
@@ -190,9 +196,13 @@
   "consumes": "workstreams WHERE target_metric IS NOT NULL AND not archived/cancelled, ordered by last goal_plan_readings.created_at; scenario_runs; in-process maps lastReadings/lastReadAt/lastInputs/repairedGoals/floorRequests",
   "produces": "per goal: recordGoalOutcome, armRouteProposal(retryOnly), readGoalPlan(persist:true), notifyPlanReady, sendPortfolioNeeds, sendPlanQuestions, sendCommitteeNeeds, widenGoalSearch",
   "called_by": "loop.ts:4096 via startGoalPlans",
-  "condition": "paused goals skipped after outcome (plan.ts:6534); due = planDue FIRST/REFRESH(30 min)/EVIDENCE(fingerprint changed, >=2 min) or REPAIRED/FLOOR; NOT_SUPPORTED with unchanged fingerprint not re-read (plan.ts:6570)",
+  "condition": "paused goals skipped after outcome (plan.ts:6534); due = planDue FIRST/REFRESH(30 min)/EVIDENCE(fingerprint changed, >=2 min) or REPAIRED/FLOOR; NOT_SUPPORTED with unchanged fingerprint not re-read (plan.ts:6570) REPAIRED is set only by requestGoalPlanPass (plan.ts:5805; producers in A-M153); FLOOR only by requestFloorResearch (plan.ts:5819; producer goals/tick.ts:222-226). EVIDENCE uses planInputsFingerprint (A-M170), which does not cover knowledge/world-model facts, unfiled claims, library verdicts or goal-scoped person facts (plan.ts:5722-5737).",
   "reachable": "YES",
-  "filters_caps_vetoes": "ScenarioBusyError => busy=true, remaining goals not read this pass (plan.ts:6603-6607); maxReads cap under pressure; PLAN_REFRESH_MS=30min (5673), PLAN_EVIDENCE_FLOOR_MS=2min (5701), GOAL_TOP_UP_MS=5min (5690)"
+  "filters_caps_vetoes": "ScenarioBusyError => busy=true, remaining goals not read this pass (plan.ts:6603-6607); maxReads cap under pressure; PLAN_REFRESH_MS=30min (5673), PLAN_EVIDENCE_FLOOR_MS=2min (5701), GOAL_TOP_UP_MS=5min (5690)",
+  "gate_a": [
+   "GA-07",
+   "GA-29"
+  ]
  },
  {
   "id": "A-M016",
@@ -218,7 +228,10 @@
   "called_by": "advanceGoalPlans plan.ts:6582 (persist:true); planReady.ts:171, planningEval.ts:178/421/634, goalsCli.ts:739/827/870, runpod-report.ts:221, factory probes (persist:false)",
   "condition": "goal exists and readTarget non-null",
   "reachable": "YES",
-  "filters_caps_vetoes": "two branches: model.refusal branch (plan.ts:2500-2609) and main branch (2611-3218)"
+  "filters_caps_vetoes": "two branches: model.refusal branch (plan.ts:2500-2609) and main branch (2611-3218) Line anchors (corrected, GA-27): refusal branch 2505; capabilities 2651; strategy loop 2684; routeRanks 2903; ordering 2920; chosen 2929; marketTests 2939; readPathways 2952; judgeAcceptance 2971; demotion 2972; reconstruction 2987; adoptReconstruction 2995; infeasible 3003; sales 3026; lead 3040; steps 3041; lateCash 3049; openingsVerdict 3052; summaryHead 3069; nextTest 3086; continuation 3114; committeeContext 3194; gateIntegrity 3196; persistReading 3208.",
+  "gate_a": [
+   "GA-27"
+  ]
  },
  {
   "id": "A-M018",
@@ -244,7 +257,11 @@
   "called_by": "goalArrangements plan.ts:6177; inventedDesigner path",
   "condition": "always when called; memo key by day+inputs CONSTRUCTION_MEMO_MS=30min (construct.ts:2365)",
   "reachable": "YES",
-  "filters_caps_vetoes": "CAPS: MAX_CANDIDATES=50000 (1727), MAX_CONSTRUCTIONS=400 (402), MAX_REVERSE=4 (415), SIGNAL_PARTS_PER_SECTOR=12 (652), ROTATION_SLOTS=64 (1819); FILTER: node names failing namesABuyerPopulation/namesAMarketPart dropped (construct.ts:798-800); owner exclusions; cut reported via constructionReports (970-981)"
+  "filters_caps_vetoes": "CAPS: MAX_CANDIDATES=50000 (1727), MAX_CONSTRUCTIONS=400 (402), MAX_REVERSE=4 (415), SIGNAL_PARTS_PER_SECTOR=12 (652), ROTATION_SLOTS=64 (1819); FILTER: node names failing namesABuyerPopulation/namesAMarketPart dropped (construct.ts:798-800); owner exclusions; cut reported via constructionReports (970-981) VETO (GA-18): physical-need designs refused without the labour argument (construct.ts:1346, 1746). FILTER (GA-13): construction facts read only WHERE workstream_id IS NULL (repos/construction.ts:224-227 via construct.ts:1076), so facts a person records against the goal never reach construction. Node producers: A-M164, A-M165.",
+  "gate_a": [
+   "GA-13",
+   "GA-18"
+  ]
  },
  {
   "id": "A-M020",
@@ -322,7 +339,12 @@
   "called_by": "plan.ts:2498",
   "condition": "always; refusal when daysLeft null/<=0 or achieved (goalScenario.ts:2993-2995); refusal when included.length===0 (3269-3282)",
   "reachable": "YES",
-  "filters_caps_vetoes": "FILTERS per opening (goalScenario.ts:3070-3132): out of goal scope; owner exclusion; arrangementExclusion (not a sale); breaksOperatingModel (owner physical work); tier SIGNAL => \"evidence only: nobody has shown who would pay us\"; expired; modelOpportunity refusal; signal older than demandFreshDays=30. CAP: MAX_MODEL_OPPORTUNITIES=floor((80-4)/9)=8 (goalScenario.ts:99, domain/scenario.ts:213) -> rest excluded \"the engine fits 8 openings\" (3262-3266). Strategy cap SCENARIO_LIMITS.maxStrategies=8 (3385). No filter by goal on project openings (no routeGoalOf/link check in goalScenario.ts)"
+  "filters_caps_vetoes": "FILTERS per opening (goalScenario.ts:3070-3132): out of goal scope; owner exclusion; arrangementExclusion (not a sale); breaksOperatingModel (owner physical work); tier SIGNAL => \"evidence only: nobody has shown who would pay us\"; expired; modelOpportunity refusal; signal older than demandFreshDays=30. CAP: MAX_MODEL_OPPORTUNITIES=floor((80-4)/9)=8 (goalScenario.ts:99, domain/scenario.ts:213) -> rest excluded \"the engine fits 8 openings\" (3262-3266). Strategy cap SCENARIO_LIMITS.maxStrategies=8 (3385). No filter by goal on project openings (no routeGoalOf/link check in goalScenario.ts) CORRECTIONS: LIVE excludes COLLECTED and STOPPED is only ARCHIVED/DECLINED (goalScenario.ts:121-124; domain/types.ts:7141-7150), so a COLLECTED opening is dropped silently, neither modelled nor excluded with a reason (GA-22). Owner-labour lift applies to openings only (goalScenario.ts:3086); arrangements are screened without it (goalScenario.ts:1883; construct.ts:1346, 1746) (GA-18). Corrected anchors (GA-27): listOpportunities 3009, frontierTiers 3006, cashOutcomeLessons 3038, loadCashKnowledge 3043, per-opening loop 3062-3128, inScope 3143, selectEstimatedArrangements 3149, heldEvaluation 3240, cap 3268, refusal 3274, hours sweep 3298, combine 3398, basket_all 3428, only_oN 3438.",
+  "gate_a": [
+   "GA-18",
+   "GA-22",
+   "GA-27"
+  ]
  },
  {
   "id": "A-M026",
@@ -361,7 +383,10 @@
   "called_by": "composeGoalModel goalScenario.ts:3159",
   "condition": "inScope.length>0",
   "reachable": "YES",
-  "filters_caps_vetoes": "CAPS: MAX_ESTIMATED_ARRANGEMENTS=12 (290), RESERVE_ARRANGEMENTS=6 (1439), LEADER_SLOTS=4, UPSIDE_SLOTS=2, DESIGNS_PER_POPULATION=3, CUT_RECORDED=40 (1433-1441); arrangementOutOfScope prefilter (goalScenario.ts:3156)"
+  "filters_caps_vetoes": "CAPS: MAX_ESTIMATED_ARRANGEMENTS=12 (290), RESERVE_ARRANGEMENTS=6 (1439), LEADER_SLOTS=4, UPSIDE_SLOTS=2, DESIGNS_PER_POPULATION=3, CUT_RECORDED=40 (1433-1441); arrangementOutOfScope prefilter (goalScenario.ts:3156) VETO (GA-18): breaksOperatingModel(operatingFit({title, offerScope})) without the owner-labour argument refuses \"it breaks the operating model\" (goalScenario.ts:1883) even when the goal words offer labour.",
+  "gate_a": [
+   "GA-18"
+  ]
  },
  {
   "id": "A-M029",
@@ -396,11 +421,14 @@
   "symbol": "optimizePortfolio",
   "line": 1133,
   "consumes": "PortfolioProblem activities",
-  "produces": "best combination (greedy + exhaustive under EXHAUSTIVE_LIMIT=12), bestEligible (priced), ranked, singles, refused",
+  "produces": "best combination (greedy + exhaustive under EXHAUSTIVE_LIMIT=12), bestEligible, ranked, singles, refused; THEN bindChallenge (portfolio.ts:1215-1221, 1254) may replace best via adoptionFrom and withdraw the 90% claim via applyChallengeToAssurance (A-M144, A-M145)",
   "called_by": "evaluateGoalPortfolio",
-  "condition": "activities>0; throws if a resource failure probability missing (1137-1138)",
+  "condition": "activities>0; throws if a resource failure probability missing (1137-1138); challenge runs when best && result.assurance && problem.challenge !== false (portfolio.ts:1215) \u2014 the goal path never passes challenge:false (grep goals/, cash/: no match)",
   "reachable": "YES",
-  "filters_caps_vetoes": "CLAIM_THRESHOLD=0.9, CLAIM_PERCENTILE=0.05, MIN_EVIDENCE_SAMPLE=20 (405-412)"
+  "filters_caps_vetoes": "CLAIM_THRESHOLD=0.9, CLAIM_PERCENTILE=0.05, MIN_EVIDENCE_SAMPLE=20 (405-412)",
+  "gate_a": [
+   "GA-01"
+  ]
  },
  {
   "id": "A-M032",
@@ -424,9 +452,13 @@
   "consumes": "model.definition, options {seed from goal id, evaluations defaultEvaluations}",
   "produces": "scenario_models, scenario_runs rows; ScenarioResult (sweeps)",
   "called_by": "plan.ts:2606-2626",
-  "condition": "persisted run only when input.persist AND owner = goal.ownerUserId ?? createdByUserId non-null (plan.ts:2605-2606); else isolated",
+  "condition": "persisted run only when input.persist AND owner = goal.ownerUserId ?? createdByUserId non-null (plan.ts:2626-2627); else runIsolated",
   "reachable": "YES",
-  "filters_caps_vetoes": "maxRunMs=20000 wall clock (domain/scenario.ts:224); ScenarioRunError => result null (plan.ts:2619-2625); ScenarioBusyError propagates to advanceGoalPlans"
+  "filters_caps_vetoes": "maxRunMs=20000 wall clock (domain/scenario.ts:224); ScenarioRunError => result null (plan.ts:2619-2625); ScenarioBusyError propagates to advanceGoalPlans",
+  "gate_a": [
+   "GA-27",
+   "GA-28"
+  ]
  },
  {
   "id": "A-M034",
@@ -472,13 +504,16 @@
   "kind": "selector",
   "file": "server/services/goals/plan.ts",
   "symbol": "strategy ordering -> chosen",
-  "line": 2903,
+  "line": 2920,
   "consumes": "StrategyReading[]: rank by verdict, byRouteRank (ROUTE_RANK_FIELD card fact), conservativeSettled, awards, missing links, sweep share",
   "produces": "chosen = ordered[0]",
   "called_by": "readGoalPlanUnscoped",
   "condition": "always",
   "reachable": "YES",
-  "filters_caps_vetoes": "route-rank tiebreak only between strategies whose every member awaits research (plan.ts:2882-2900)"
+  "filters_caps_vetoes": "route-rank tiebreak only between strategies whose every member awaits research (plan.ts:2882-2900) chosen = ordered[0] at plan.ts:2929 (GA-27).",
+  "gate_a": [
+   "GA-27"
+  ]
  },
  {
   "id": "A-M038",
@@ -488,10 +523,13 @@
   "line": 1648,
   "consumes": "chosen strategy, portfolio, measuredChance, considered, pathways, objective.requiredConfidence",
   "produces": "PlanAcceptance {status ACCEPTED|CANDIDATE_ONLY|NO_CANDIDATE|NOT_SUPPORTED, candidate, probability, shortfalls, sentence}",
-  "called_by": "plan.ts:2503, 2962",
+  "called_by": "plan.ts:2513 (refusal branch), plan.ts:2971 (main)",
   "condition": "always",
   "reachable": "YES",
-  "filters_caps_vetoes": "required = RECOMMENDATION_POLICY.requiredProbability=0.9 (plan.ts:167) at lower bound; ACCEPTED needs portfolio.basis PROBABILITY, no unpriced member, no missing links, assurance.claimsAtLeast90, bounds.low>=required (plan.ts:1773-1830) or measured record lower bound>=required with >= minPlanOutcomes=10 (158)"
+  "filters_caps_vetoes": "required = RECOMMENDATION_POLICY.requiredProbability=0.9 (plan.ts:167) at lower bound; ACCEPTED needs portfolio.basis PROBABILITY, no unpriced member, no missing links, assurance.claimsAtLeast90, bounds.low>=required (plan.ts:1773-1830) or measured record lower bound>=required with >= minPlanOutcomes=10 (158)",
+  "gate_a": [
+   "GA-27"
+  ]
  },
  {
   "id": "A-M039",
@@ -946,7 +984,10 @@
   "called_by": "proposeGoalRoutes 2016",
   "condition": "models available",
   "reachable": "YES",
-  "filters_caps_vetoes": "strong model only when ANTHROPIC_API_KEY AND BRAIN_ROUTE_MODEL set (1419-1425; ROUTE_STRONG_MODEL constant claude-sonnet-5-5 is documentation, not default); proposer maxTokens 3500 (scout) / 4000 (route); critic 2500/3000; first model with parseable output wins, others not asked"
+  "filters_caps_vetoes": "strong model only when ANTHROPIC_API_KEY AND BRAIN_ROUTE_MODEL set (1419-1425; ROUTE_STRONG_MODEL constant claude-sonnet-5-5 is documentation, not default); proposer maxTokens 3500 (scout) / 4000 (route); critic 2500/3000; first model with parseable output wins, others not asked GA-24: a reply whose routes all fail the rule checks (routes=0, rejected>0) is accepted as the answer and ends the fallback chain; only \"no routes AND no rejected\" tries the next model (routeProposal.ts:2104-2108); recovery then rests on critiqueAndRevise replacements (only when ranked < 1).",
+  "gate_a": [
+   "GA-24"
+  ]
  },
  {
   "id": "A-M074",
@@ -959,7 +1000,10 @@
   "called_by": "proposeGoalRoutes 2083",
   "condition": "per answer",
   "reachable": "YES",
-  "filters_caps_vetoes": "rejection rules ROUTE_REJECTION_RULES (749-766): INCOMPLETE, MECHANISM, PRICE, BRAIN_DELIVERABLE, DAYS, DEADLINE, CAPITAL, NOT_MONTHLY, MARGIN, ACQUISITION, HOURS, PHYSICAL, EXCLUDED, OWNER_FIT, DUPLICATE, CRITIQUE"
+  "filters_caps_vetoes": "rejection rules ROUTE_REJECTION_RULES (749-766): INCOMPLETE, MECHANISM, PRICE, BRAIN_DELIVERABLE, DAYS, DEADLINE, CAPITAL, NOT_MONTHLY, MARGIN, ACQUISITION, HOURS, PHYSICAL, EXCLUDED, OWNER_FIT, DUPLICATE, CRITIQUE See GA-24: rejected-only output stops the model chain (routeProposal.ts:2104-2108).",
+  "gate_a": [
+   "GA-24"
+  ]
  },
  {
   "id": "A-M075",
@@ -1266,12 +1310,15 @@
   "file": "server/services/russell/loop.ts",
   "symbol": "launch pass (nextLaunchable -> launch)",
   "line": 2801,
-  "consumes": "russell candidates (incl goal discovery rounds and need ideas), reservations",
+  "consumes": "candidates whose judgment carries a missionSpec (nextLaunchable reads judgment.missionSpec, loop.ts:3143-3250); a discovery round creates its candidate WITHOUT a judgment (discovery.ts:655-661) so it must first pass A-M146",
   "produces": "missions, research orchestrations, bins",
   "called_by": "tickOnce",
-  "condition": "renew-reservations and park-stopped passes succeeded",
+  "condition": "renew-reservations and park-stopped passes succeeded GA-02: unjudged candidates are not launchable.",
   "reachable": "YES",
-  "filters_caps_vetoes": "SLOT_FILL_PER_TICK / SLOT_FILL_MAX_PER_TICK, LAUNCH_FILL_BUDGET_MS; ALREADY_RESEARCHED parks; INSUFFICIENT_* and NO_HEALTHY_EXECUTION_SURFACE park"
+  "filters_caps_vetoes": "SLOT_FILL_PER_TICK / SLOT_FILL_MAX_PER_TICK, LAUNCH_FILL_BUDGET_MS; ALREADY_RESEARCHED parks; INSUFFICIENT_* and NO_HEALTHY_EXECUTION_SURFACE park",
+  "gate_a": [
+   "GA-02"
+  ]
  },
  {
   "id": "A-M099",
@@ -1542,9 +1589,12 @@
   "consumes": "goal_id; operatorSnapshot summaries",
   "produces": "readGoalPlanSummary value",
   "called_by": "Hermes operator; Command Center GET /command/read/brain_operator_goal_plan (routes/command.ts)",
-  "condition": "project:read on goal project",
+  "condition": "project:read on goal project AND goal present in the (possibly 25-min-old) operator snapshot",
   "reachable": "YES",
-  "filters_caps_vetoes": ""
+  "filters_caps_vetoes": "GA-10: the goal is looked up only in operatorSnapshot summaries (operatorTools.ts:179), a whole-Brain cache with SNAPSHOT_TTL_MS=25 min (snapshot.ts:37, 60) and no invalidation on goal creation (no reset found in snapshot.ts/decide.ts); a goal absent from the cached snapshot throws notFound \u2014 also in the Command Center. director.goalProject falls back to the register (director.ts:449-460); planTool does not.",
+  "gate_a": [
+   "GA-10"
+  ]
  },
  {
   "id": "A-M120",
@@ -1607,9 +1657,12 @@
   "consumes": "reading (ACCEPTED), operator ADOPT_PLAN decision, planReady conditions",
   "produces": "owner notice (ownerNotices.ts) plan-ready.<goal>.<hash>",
   "called_by": "advanceGoalPlans 6614",
-  "condition": "acceptance ACCEPTED and accepted non-null and planReady judged ready",
-  "reachable": "YES (fires only on ACCEPTED)",
-  "filters_caps_vetoes": "returns NOT_READY for every non-ACCEPTED reading (planReady.ts:179-181)"
+  "condition": "acceptance ACCEPTED AND planReady conditions incl. CHALLENGED_BY_HERMES: a committed Hermes brain_operator_decide ADOPT_PLAN with a challenger answer, not predating acceptance (domain/planReady.ts:169-178)",
+  "reachable": "YES only when ACCEPTED and a Hermes run adopted the plan; Hermes runs need BRAIN_OPERATOR_URL/_KEY and a model (operator/run.ts:217-221), so without the operator an ACCEPTED plan never produces the notice",
+  "filters_caps_vetoes": "returns NOT_READY for every non-ACCEPTED reading (planReady.ts:179-181)",
+  "gate_a": [
+   "GA-20"
+  ]
  },
  {
   "id": "A-M125",
@@ -1685,9 +1738,13 @@
   "consumes": "workstreams; createdByUserId; personMayActivate (ADMIN on project)",
   "produces": "Cash Mode activation (cash_modes ACTIVE) + GOAL_RESEARCH_SPRINT_ACTIVATED",
   "called_by": "loop.ts:1630 goal-sprints pass",
-  "condition": "sprintCandidate: live, target on own project, createdByUserId non-null, dueAt not past (goalSprint.ts:58-65)",
+  "condition": "sprintCandidate: live, target on own project, createdByUserId non-null, dueAt not past (goalSprint.ts:64-70); and the project has NO cash_modes row in any state (goalSprint.ts:104-107): WINDING_DOWN or ARCHIVED projects are never reactivated",
   "reachable": "YES for person-created goals; NO for operator-created goals (createGoal userId:null => createdByUserId null)",
-  "filters_caps_vetoes": "VETO: no sprint => discoveryAllowed false => proposeGoalRoutes NOT_DUE and openGoalDiscovery null unless the project already has an ACTIVE Cash Mode"
+  "filters_caps_vetoes": "VETO: no sprint => discoveryAllowed false => proposeGoalRoutes NOT_DUE and openGoalDiscovery null unless the project already has an ACTIVE Cash Mode GA-19: an existing non-ACTIVE mode keeps discoveryAllowed false (lifecycle.ts:531-539) and launchableUnderCashMode false (lifecycle.ts:417-421). GA-04: a register PATCH moving projectId breaks target.projectId === projectId.",
+  "gate_a": [
+   "GA-19",
+   "GA-04"
+  ]
  },
  {
   "id": "A-M131",
@@ -1700,7 +1757,10 @@
   "called_by": "proposeGoalRoutes 1981, openGoalDiscovery 1150",
   "condition": "always",
   "reachable": "YES",
-  "filters_caps_vetoes": "VETO when no Cash Mode or not ACTIVE"
+  "filters_caps_vetoes": "VETO when no Cash Mode or not ACTIVE cash_modes states: ACTIVE / WINDING_DOWN / ARCHIVED (domain/types.ts:7102); written only by lifecycle transitions (lifecycle.ts:283-338) from person routes and activateGoalSprints.",
+  "gate_a": [
+   "GA-23"
+  ]
  },
  {
   "id": "A-M132",
@@ -1722,11 +1782,14 @@
   "symbol": "advanceGoals",
   "line": 345,
   "consumes": "goals snapshot, bins",
-  "produces": "holds, priority allocation, snapshots; memory passes (decisions, calibration, reconsider, capability promotion, register)",
+  "produces": "holds and releases bins (GOAL_WORK_HELD/RELEASED, tick.ts:416, 432), re-ranks bin priority (GOAL_CAPACITY_ALLOCATED, tick.ts:517), resumes machine-paused targeted goals via repos/goals.resumeGoal bypassing decide.ts (tick.ts:313-343, 346), starts execution windows (tick.ts:348 -> A-M149), applies research remedies (GOAL_RESEARCH_REMEDY_APPLIED, tick.ts:1227), runs memory passes decisions/calibration/reconsider (tick.ts:139-143), floor openers (A-M154)",
   "called_by": "loop.ts:1635",
   "condition": "every tick",
-  "reachable": "YES",
-  "filters_caps_vetoes": "does not plan"
+  "reachable": "YES \u2014 it does not compose a plan, but it writes goal lifecycle and execution-window state the plan reads",
+  "filters_caps_vetoes": "does not plan",
+  "gate_a": [
+   "GA-06"
+  ]
  },
  {
   "id": "A-M134",
@@ -1746,13 +1809,17 @@
   "kind": "learning",
   "file": "server/services/goals/reconsider.ts",
   "symbol": "reconcileFactChangesIfDue",
-  "line": null,
-  "consumes": "fact changes",
-  "produces": "workstream_events reconsideration",
+  "line": 430,
+  "consumes": "decision records (A-M157), governing owner policy (A-M158, reconsider.ts:239)",
+  "produces": "reconsideration workstream_events (reconsider.ts:382, 408) and requestGoalPlanPass on a changed fact or owner-policy version (reconsider.ts:287-294) => REPAIRED re-read",
   "called_by": "tick.ts:142; cash/operate.ts",
   "condition": "due",
   "reachable": "YES",
-  "filters_caps_vetoes": ""
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-08",
+   "GA-07"
+  ]
  },
  {
   "id": "A-M136",
@@ -1778,7 +1845,11 @@
   "called_by": "composeGoalModel 3056",
   "condition": "errors => null",
   "reachable": "YES",
-  "filters_caps_vetoes": ""
+  "filters_caps_vetoes": "GA-15: not a pure reader. On each cache refresh (KNOWLEDGE_TTL_MS=5 min, knowledge.ts:121, 199-200) it runs keepCashLedger (cash forecast ledger writes, quant/ledger.ts:441), assessProjectIndependence, watchFallbacks, assessProjectFallbackPlan, and reads readSwitchDecision (knowledge.ts:208-241; see A-M169, A-M156).",
+  "gate_a": [
+   "GA-15",
+   "GA-16"
+  ]
  },
  {
   "id": "A-M138",
@@ -1804,7 +1875,10 @@
   "called_by": "composeGoalModel 3103-3106; construct.ts; routeProposal; discoveryFocusFor",
   "condition": "always",
   "reachable": "YES",
-  "filters_caps_vetoes": "VETO: openings needing owner physical work excluded unless goal words offer labour"
+  "filters_caps_vetoes": "VETO: owner physical work. The owner-labour lift (goalOwnerLabour / ownerLabourOffer) is passed ONLY for found openings (goalScenario.ts:3086). Constructed arrangements are screened with breaksOperatingModel WITHOUT the labour argument (goalScenario.ts:1883; construct.ts:1346, 1746), so an owner who offers their own work still loses every arrangement that needs it (corrected per GA-18).",
+  "gate_a": [
+   "GA-18"
+  ]
  },
  {
   "id": "A-M140",
@@ -1822,15 +1896,19 @@
  {
   "id": "A-M141",
   "kind": "handoff",
-  "file": "server/services/operator/director.ts",
-  "symbol": "operator director (Hermes runs) and requestGoalPlanPass",
-  "line": 408,
+  "file": "server/services/operator/run.ts",
+  "symbol": "directorTick (directorPass, standingCommission) + requestGoalPlanPass",
+  "line": 210,
   "consumes": "latest readings, deficiencies",
   "produces": "operator decisions (ADOPT_PLAN etc), requestGoalPlanPass",
-  "called_by": "Russell operator pass operatorTickIfDue (run.ts:218)",
-  "condition": "BRAIN_OPERATOR_URL/_KEY and a model configured",
-  "reachable": "UNKNOWN (deployment-dependent)",
-  "filters_caps_vetoes": ""
+  "called_by": "Russell operator pass operatorTickIfDue (run.ts:218) director.ts:442 calls requestGoalPlanPass",
+  "condition": "directorTick runs every DIRECTOR_EVERY_MS=5 min after the operator boot grace WHETHER OR NOT the operator app is configured (run.ts:202-216); only the Hermes run itself needs operatorConfig (BRAIN_OPERATOR_URL/_KEY) and a model (run.ts:218-221); standingCommission needs STANDING_AFTER_RUNS=2 prior runs (director.ts:1850)",
+  "reachable": "YES (director); Hermes run UNKNOWN (deployment-dependent)",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-21",
+   "GA-07"
+  ]
  },
  {
   "id": "A-M142",
@@ -1841,9 +1919,12 @@
   "consumes": "public datasets (Census etc.)",
   "produces": "world model facts, buyer counts filed where construction reads them",
   "called_by": "index.ts boot afterBootGrace",
-  "condition": "not shedding; every 60s",
+  "condition": "ticks every 60 s but starts a pass at most every PASS_EVERY_MS=15 min, never while shedding (pipeline.ts:265, 309-316)",
   "reachable": "YES (indirect via construction facts)",
-  "filters_caps_vetoes": ""
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-26"
+  ]
  },
  {
   "id": "A-M143",
@@ -1857,5 +1938,518 @@
   "condition": "per process",
   "reachable": "YES",
   "filters_caps_vetoes": "lost on restart: armRouteProposal retryOnly compensates (plan.ts:6536-6545)"
+ },
+ {
+  "id": "A-M144",
+  "kind": "model_call",
+  "file": "server/services/quant/modelChallenge.ts",
+  "symbol": "modelChallengeFor / startAsk / operatorAsker -> askPlanChallenger -> challengeDecision",
+  "line": 267,
+  "consumes": "portfolio problem + result + challenge summary, as a DecisionInput (planDecision)",
+  "produces": "ModelChallenge answer (cached by planChallengeKey) bound on a later evaluation",
+  "called_by": "bindChallenge (quant/portfolio.ts:1254) during every optimizePortfolio with assurance",
+  "condition": "summary.modelChallenge.due && result.best; models = modelsFor() (modelChallenge.ts:174-182); no model => no answer, never a pass",
+  "reachable": "YES (background on main thread; worker threads forward)",
+  "filters_caps_vetoes": "MODEL_CHALLENGE_MAX_IN_FLIGHT=2, MODEL_CHALLENGE_RETRY_MS=30 min, MEMO_LIMIT=256 (modelChallenge.ts:166-170); answer not yet given leaves challenge due, which holds the 90% claim",
+  "gate_a": [
+   "GA-01"
+  ]
+ },
+ {
+  "id": "A-M145",
+  "kind": "selector",
+  "file": "server/services/quant/portfolio.ts",
+  "symbol": "bindChallenge / adoptionFrom / applyChallengeToAssurance",
+  "line": 1254,
+  "consumes": "challengePlan summary (quant/challenge.ts), model answer",
+  "produces": "result.adoption (a repair replacing portfolio.best), assurance.challenge; can withdraw claimsAtLeast90",
+  "called_by": "optimizePortfolio portfolio.ts:1215-1221",
+  "condition": "best && assurance && challenge !== false",
+  "reachable": "YES",
+  "filters_caps_vetoes": "a challenge can only take a claim away (portfolio.ts:~1327)",
+  "gate_a": [
+   "GA-01"
+  ]
+ },
+ {
+  "id": "A-M146",
+  "kind": "queue_scheduler",
+  "file": "server/services/russell/loop.ts",
+  "symbol": "judge-unjudged pass -> judgeCandidate -> askArchive -> compileMission",
+  "line": 1965,
+  "consumes": "unjudgedGoalIdeas (goal ideas first) + ordinary unjudged candidates",
+  "produces": "candidate judgment with missionSpec, or answeredByArchive (no research), or compiler refusal recorded",
+  "called_by": "tickOnce",
+  "condition": "GOAL_JUDGMENTS_PER_TICK=5 under shedding, else GOAL_JUDGMENTS_MAX_PER_TICK=40 (loop.ts:3941-3943)",
+  "reachable": "YES",
+  "filters_caps_vetoes": "VETO: archive answer ends a goal round with no research; compileMission refusal (planning.ts:404-470, askArchive ~471, compileMission ~504)",
+  "gate_a": [
+   "GA-02"
+  ]
+ },
+ {
+  "id": "A-M147",
+  "kind": "entry",
+  "file": "server/services/goals/decide.ts",
+  "symbol": "changeObjective (POST /goals/:goalId/objective; goalsCli)",
+  "line": 378,
+  "consumes": "new intent/outcome",
+  "produces": "updateWorkstream intent; readObjective-only re-read (no assistObjective); setTarget; GOAL_OBJECTIVE_CHANGED event",
+  "called_by": "routes/goals.ts:200-211; goalsCli.ts:307",
+  "condition": "WRITE on goal",
+  "reachable": "YES",
+  "filters_caps_vetoes": "keeps every PURSUES link from the old objective (decide.ts:447-466); routeAskDue does not read GOAL_OBJECTIVE_CHANGED, so new routes wait ROUTE_PROPOSAL_EVERY_MS=6 h while old route openings stay project openings read by composeGoalModel",
+  "gate_a": [
+   "GA-03"
+  ]
+ },
+ {
+  "id": "A-M148",
+  "kind": "entry",
+  "file": "server/routes/register.ts",
+  "symbol": "PATCH /register/workstreams/:workstreamId",
+  "line": 225,
+  "consumes": "title, intent, purpose, projectId",
+  "produces": "updateWorkstream (target untouched); WORKSTREAM_AMENDED event",
+  "called_by": "HTTP",
+  "condition": "person, write on old and new project",
+  "reachable": "YES",
+  "filters_caps_vetoes": "intent feeds goalExclusions, ownerLabourOffer and route owner words; a moved projectId breaks sprintCandidate target.projectId === projectId (goalSprint.ts:69)",
+  "gate_a": [
+   "GA-04"
+  ]
+ },
+ {
+  "id": "A-M149",
+  "kind": "state_transition",
+  "file": "server/services/goals/executionStart.ts",
+  "symbol": "startExecutionWindows -> repos/goals.startGoalExecution",
+  "line": 19,
+  "consumes": "unstarted goals with execution_window_days; live cash authority whose allowedActions start execution",
+  "produces": "workstreams.execution_started_at and due_at (anchoredDueAt); GOAL_EXECUTION_STARTED event",
+  "called_by": "goals/tick.ts:348; routes/cash.ts:697",
+  "condition": "grant live and startsExecution(allowedActions)",
+  "reachable": "YES",
+  "filters_caps_vetoes": "before this runs, daysLeftOf returns the full window (A-M150)",
+  "gate_a": [
+   "GA-05"
+  ]
+ },
+ {
+  "id": "A-M150",
+  "kind": "component",
+  "file": "server/domain/executionWindow.ts",
+  "symbol": "daysLeftOf / effectiveDueAt",
+  "line": 59,
+  "consumes": "executionWindowDays, executionStartedAt, dueAt",
+  "produces": "days left",
+  "called_by": "readTarget target.ts:224-226; advanceGoalPlans effectiveDueAtOfRow",
+  "condition": "always",
+  "reachable": "YES",
+  "filters_caps_vetoes": "\"within 30 days\" stores executionWindowDays and no due date (decide.ts:187-189): days left stays 30 until execution starts; every days_left, SQUEEZE policy and deadline check depends on A-M149",
+  "gate_a": [
+   "GA-05"
+  ]
+ },
+ {
+  "id": "A-M151",
+  "kind": "state_transition",
+  "file": "server/services/goals/tick.ts",
+  "symbol": "resumeMachinePausedTargetedGoals",
+  "line": 313,
+  "consumes": "targeted goals paused by a non-person actor",
+  "produces": "paused_at cleared via repos/goals.resumeGoal (bypasses decide.ts)",
+  "called_by": "advanceGoals tick.ts:346",
+  "condition": "last pause actor is not a person",
+  "reachable": "YES",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-06"
+  ]
+ },
+ {
+  "id": "A-M152",
+  "kind": "state_transition",
+  "file": "server/services/goals/tick.ts",
+  "symbol": "goal holds and capacity allocation",
+  "line": 432,
+  "consumes": "goal ranking (priority.ts), live bins",
+  "produces": "bin holds/releases, bin priority (repos/goals.ts:175, 252); GOAL_WORK_HELD/RELEASED, GOAL_CAPACITY_ALLOCATED events",
+  "called_by": "advanceGoals",
+  "condition": "every tick",
+  "reachable": "YES",
+  "filters_caps_vetoes": "decides order in which goal research is dispatched",
+  "gate_a": [
+   "GA-06"
+  ]
+ },
+ {
+  "id": "A-M153",
+  "kind": "recovery",
+  "file": "server/services/goals/plan.ts",
+  "symbol": "requestGoalPlanPass / requestFloorResearch",
+  "line": 5805,
+  "consumes": "goalId, why",
+  "produces": "in-process repairedGoals / floorRequests maps => REPAIRED / FLOOR due in advanceGoalPlans",
+  "called_by": "requestGoalPlanPass: reconsider.ts:287-294, operator/director.ts:442, improvement/loop.ts:1718, quant/fallbackWatch.ts:374, quant/knowledge.ts:823. requestFloorResearch: goals/tick.ts:222-226 (productionFloorOpeners)",
+  "condition": "always",
+  "reachable": "YES",
+  "filters_caps_vetoes": "process memory only; lost on restart",
+  "gate_a": [
+   "GA-07"
+  ]
+ },
+ {
+  "id": "A-M154",
+  "kind": "recovery",
+  "file": "server/services/goals/tick.ts",
+  "symbol": "productionFloorOpeners (widenGoalSearch -> requestFloorResearch; openSystemHealth -> improvementTick)",
+  "line": 221,
+  "consumes": "protected research floor decisions",
+  "produces": "floor requests; improvement loop run",
+  "called_by": "advanceGoals research floor",
+  "condition": "a floor nothing serves",
+  "reachable": "YES",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-07",
+   "GA-17"
+  ]
+ },
+ {
+  "id": "A-M155",
+  "kind": "recovery",
+  "file": "server/services/improvement/loop.ts",
+  "symbol": "improvementTick objective check -> selfmodel/objectives.assessLiveObjectives -> requestGoalPlanPass",
+  "line": 1710,
+  "consumes": "live objectives and gaps",
+  "produces": "REPAIRED re-read for goals whose gaps were cleared",
+  "called_by": "Russell improvement-loop pass (loop.ts:1694); productionFloorOpeners",
+  "condition": "checked.recorded && cleared.length>0 (loop.ts:1718)",
+  "reachable": "YES",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-17"
+  ]
+ },
+ {
+  "id": "A-M156",
+  "kind": "evidence_reader",
+  "file": "server/services/quant/fallbackApply.ts",
+  "symbol": "readSwitchDecision -> switchedPathObservations; fallbackWatch",
+  "line": 280,
+  "consumes": "fallback switch decisions per project",
+  "produces": "respond observations injected into inference (knowledge.ts:1078-1092, 1222); fallbackWatch forces REPAIRED re-reads (fallbackWatch.ts:372-374)",
+  "called_by": "loadCashKnowledge knowledge.ts:236-239 (on the plan path via composeGoalModel goalScenario.ts:3043)",
+  "condition": "a SWITCHED decision exists",
+  "reachable": "YES",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-16"
+  ]
+ },
+ {
+  "id": "A-M157",
+  "kind": "learning",
+  "file": "server/services/goals/decisionRecord.ts",
+  "symbol": "recordDecisionsIfDue",
+  "line": 490,
+  "consumes": "goal_plan_readings, governing owner policy, world facts",
+  "produces": "GOAL_DECISION_RECORDED workstream_events (decisionRecord.ts:40, 473-479), status IN_FORCE / SUPERSEDED_BY_POLICY / POLICY_UNKNOWN (335)",
+  "called_by": "advanceGoals memory pass tick.ts:140",
+  "condition": "due",
+  "reachable": "YES",
+  "filters_caps_vetoes": "read by reconsider (A-M135)",
+  "gate_a": [
+   "GA-08"
+  ]
+ },
+ {
+  "id": "A-M158",
+  "kind": "evidence_reader",
+  "file": "server/services/goals/ownerPolicy.ts",
+  "symbol": "governingPolicy / staleAgainstPolicy",
+  "line": 125,
+  "consumes": "owner policy events (POLICY_EVENT_READ_LIMIT)",
+  "produces": "governing policy version; CURRENT/STALE verdict",
+  "called_by": "decisionRecord.ts:335, reconsider.ts:239",
+  "condition": "always",
+  "reachable": "YES",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-08"
+  ]
+ },
+ {
+  "id": "A-M159",
+  "kind": "selector",
+  "file": "server/services/goals/planSet.ts",
+  "symbol": "buildPlanSet / rebuildAfter",
+  "line": 649,
+  "consumes": "plan candidates from strategies, arrangements, pathways (candidateFromStrategy/Arrangement/Pathway)",
+  "produces": "PlanSet plans[] ordered by richness (established fields x1e9 + modelled p50; planSet.ts:643-646), paraphrases/shared customers collapsed, rebuilds after a failed channel or supplier",
+  "called_by": "composeGoalReadings plan.ts:2355, 2368",
+  "condition": "always",
+  "reachable": "YES \u2014 persisted in forecast via readingsSummary (plan.ts:2383-2440) and read by the owner through forecast",
+  "filters_caps_vetoes": "its plans[0] lead can differ from chosen_strategy and from the acceptance candidate",
+  "gate_a": [
+   "GA-09"
+  ]
+ },
+ {
+  "id": "A-M160",
+  "kind": "evidence_reader",
+  "file": "server/services/operator/snapshot.ts",
+  "symbol": "operatorSnapshot",
+  "line": 44,
+  "consumes": "whole-Brain goals derivation (LIGHT then FULL bounded 150 s)",
+  "produces": "cached snapshot with summaries",
+  "called_by": "every operator read tool incl. brain_operator_goal_plan",
+  "condition": "cache reused for SNAPSHOT_TTL_MS=25 min unless fresh",
+  "reachable": "YES",
+  "filters_caps_vetoes": "gate on A-M119 (GA-10)",
+  "gate_a": [
+   "GA-10"
+  ]
+ },
+ {
+  "id": "A-M161",
+  "kind": "selector",
+  "file": "server/services/quant/deadline.ts",
+  "symbol": "decideResearch",
+  "line": 56,
+  "consumes": "each unknown + calendar (days left, turnaround)",
+  "produces": "research now vs learn in execution verdict",
+  "called_by": "planResearchPriority plan.ts:4804; researchPriority plan.ts:5244",
+  "condition": "always",
+  "reachable": "YES",
+  "filters_caps_vetoes": "decides which unknowns become researchPriority, which sendPlanQuestions sends",
+  "gate_a": [
+   "GA-11"
+  ]
+ },
+ {
+  "id": "A-M162",
+  "kind": "selector",
+  "file": "server/domain/goalPolicy.ts",
+  "symbol": "goalExecutionPolicy",
+  "line": 31,
+  "consumes": "target daysLeft, remainingCents",
+  "produces": "SQUEEZE whenever daysLeft known and money remains, else EVIDENCE_FIRST",
+  "called_by": "plan.ts (marketTests skip, sales, nextTest), tier",
+  "condition": "always",
+  "reachable": "YES",
+  "filters_caps_vetoes": "SQUEEZE suppresses market tests (plan.ts:2940-2941)",
+  "gate_a": [
+   "GA-11"
+  ]
+ },
+ {
+  "id": "A-M163",
+  "kind": "validator",
+  "file": "server/services/goals/plan.ts",
+  "symbol": "missingForSale / planAuthority / missingPermissions / readCapabilities",
+  "line": 5094,
+  "consumes": "cash authority grants (checkCommercialAuthority), capability state SEND_A_MESSAGE etc.",
+  "produces": "sale blockers, permissionsMissing in steps",
+  "called_by": "salesFor, planSteps inputs (plan.ts:2058-2060, 2651)",
+  "condition": "always",
+  "reachable": "YES",
+  "filters_caps_vetoes": "PLAN_AUTHORITY_MEMO_MS=10 s (plan.ts:57)",
+  "gate_a": [
+   "GA-11"
+  ]
+ },
+ {
+  "id": "A-M164",
+  "kind": "research_generator",
+  "file": "server/services/industry/kernel.ts",
+  "symbol": "runIndustryKernel",
+  "line": 232,
+  "consumes": "project mode, kernel authority",
+  "produces": "industry_nodes via industry/expand.ts createNode (expand.ts:727, 2196-2269)",
+  "called_by": "per-project discovery-and-kernels walk loop.ts:2226",
+  "condition": "kernelSkips null; kernel authority",
+  "reachable": "YES",
+  "filters_caps_vetoes": "producer of the nodes construct.ts reads",
+  "gate_a": [
+   "GA-12"
+  ]
+ },
+ {
+  "id": "A-M165",
+  "kind": "state_transition",
+  "file": "server/services/industry/construction/service.ts",
+  "symbol": "seedGoalIndustry (POST /goals/:id/construction seed=true)",
+  "line": 300,
+  "consumes": "goal, industry from construction intent",
+  "produces": "industry node (seed.ts:69) + INDUSTRY_SEEDED event",
+  "called_by": "routes/goals.ts:291-306",
+  "condition": "seed=true and an industry read",
+  "reachable": "YES (person action)",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-12"
+  ]
+ },
+ {
+  "id": "A-M166",
+  "kind": "entry",
+  "file": "server/routes/goals.ts",
+  "symbol": "POST /goals/:goalId/construction/facts",
+  "line": 312,
+  "consumes": "person-stated operating facts",
+  "produces": "construction_facts with workstream_id = goal; CONSTRUCTION_FACT_RECORDED",
+  "called_by": "HTTP",
+  "condition": "WRITE",
+  "reachable": "NO effect on the cash plan",
+  "filters_caps_vetoes": "construct.ts reads only workstream_id IS NULL facts (repos/construction.ts:224-227); fingerprint counts only facts with source_claim_id (plan.ts:5731-5732)",
+  "gate_a": [
+   "GA-13"
+  ]
+ },
+ {
+  "id": "A-M167",
+  "kind": "state_transition",
+  "file": "server/services/cash/operate.ts",
+  "symbol": "operate -> markReady",
+  "line": 948,
+  "consumes": "project openings under the sprint",
+  "produces": "cash_opportunities.state READY",
+  "called_by": "per-project walk loop.ts:2509",
+  "condition": "per pass",
+  "reachable": "YES",
+  "filters_caps_vetoes": "composeGoalModel orders openings by state; missingForSale needs READY",
+  "gate_a": [
+   "GA-14"
+  ]
+ },
+ {
+  "id": "A-M168",
+  "kind": "state_transition",
+  "file": "server/services/cash/retireListings.ts",
+  "symbol": "retireMarketplaceListings",
+  "line": 129,
+  "consumes": "uncommitted openings that are marketplace listings",
+  "produces": "openings ARCHIVED (LISTING_ARCHIVE_REASON), their research cancelled",
+  "called_by": "per-project walk loop.ts:2559",
+  "condition": "isListing",
+  "reachable": "YES",
+  "filters_caps_vetoes": "archived openings leave the model (listed as STOPPED only if updated after goal creation)",
+  "gate_a": [
+   "GA-14"
+  ]
+ },
+ {
+  "id": "A-M169",
+  "kind": "state_transition",
+  "file": "server/services/quant/knowledge.ts",
+  "symbol": "keepCashLedger / assessProjectIndependence / watchFallbacks / assessProjectFallbackPlan",
+  "line": 208,
+  "consumes": "project opportunities, card facts, lessons",
+  "produces": "cash forecast ledger records (quant/ledger.ts:441), independence and fallback records",
+  "called_by": "loadCashKnowledge on cache refresh (every 5 min per project) from composeGoalModel",
+  "condition": "cache miss",
+  "reachable": "YES",
+  "filters_caps_vetoes": "errors swallowed",
+  "gate_a": [
+   "GA-15"
+  ]
+ },
+ {
+  "id": "A-M170",
+  "kind": "validator",
+  "file": "server/services/goals/plan.ts",
+  "symbol": "planInputsFingerprint",
+  "line": 5722,
+  "consumes": "counts/max timestamps of cash_opportunities, cash_value_layers, cash_money_entries, workstream updated_at, claim-sourced construction_facts, cash_card_facts",
+  "produces": "fingerprint string",
+  "called_by": "advanceGoalPlans plan.ts:6551, 6570",
+  "condition": "within the 2 min..30 min window",
+  "reachable": "YES",
+  "filters_caps_vetoes": "does NOT cover knowledge/world-model facts, research claims that became neither facts nor openings, arrangement library verdicts, goal-scoped person facts; a NOT_SUPPORTED goal ignores those changes (plan.ts:6570)",
+  "gate_a": [
+   "GA-29"
+  ]
+ },
+ {
+  "id": "A-M171",
+  "kind": "entry",
+  "file": "scripts/step12b-acceptance.ts",
+  "symbol": "acceptance script createGoal",
+  "line": 1550,
+  "consumes": "scripted objective",
+  "produces": "goal",
+  "called_by": "terminal",
+  "condition": "manual",
+  "reachable": "YES (script)",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-30"
+  ]
+ },
+ {
+  "id": "A-M172",
+  "kind": "output",
+  "file": "scripts/runpod-report.ts",
+  "symbol": "readGoalPlan persist:false + planProgress",
+  "line": 221,
+  "consumes": "goal",
+  "produces": "report",
+  "called_by": "terminal",
+  "condition": "manual",
+  "reachable": "YES (script)",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-30"
+  ]
+ },
+ {
+  "id": "A-M173",
+  "kind": "output",
+  "file": "server/services/goals/status.ts",
+  "symbol": "cashGoalStatuses",
+  "line": 29,
+  "consumes": "latestReading verdict",
+  "produces": "status rows",
+  "called_by": "scripts/factory.ts:1888",
+  "condition": "manual",
+  "reachable": "YES (script)",
+  "filters_caps_vetoes": "",
+  "gate_a": [
+   "GA-30"
+  ]
+ },
+ {
+  "id": "A-M174",
+  "kind": "state_transition",
+  "file": "server/routes/goals.ts",
+  "symbol": "PATCH /goals/:goalId/terms (setTerms incl. ownerUserId)",
+  "line": 173,
+  "consumes": "ownerUserId (member of project), due, outcome",
+  "produces": "workstreams.owner_user_id etc.",
+  "called_by": "HTTP",
+  "condition": "WRITE; owner must be a project member",
+  "reachable": "YES",
+  "filters_caps_vetoes": "enables persisted scenario runs for operator-created goals; does not set createdByUserId",
+  "gate_a": [
+   "GA-28"
+  ]
+ },
+ {
+  "id": "A-M175",
+  "kind": "validator",
+  "file": "server/domain/planReady.ts",
+  "symbol": "planReady conditions (incl. CHALLENGED_BY_HERMES, DEFENSIBLE_UNCERTAINTY)",
+  "line": 169,
+  "consumes": "PlanReadyFacts (acceptance, Hermes ADOPT_PLAN decision with challenge)",
+  "produces": "ready / per-condition reasons",
+  "called_by": "goals/planReady.ts:186-190",
+  "condition": "ACCEPTED readings only",
+  "reachable": "YES",
+  "filters_caps_vetoes": "requires a committed Hermes ADOPT_PLAN with a challenger answer",
+  "gate_a": [
+   "GA-20"
+  ]
  }
 ]

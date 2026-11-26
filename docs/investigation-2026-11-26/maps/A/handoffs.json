@@ -32,7 +32,7 @@
   "consumer": "activateGoalSprints (A-M130)",
   "contract": "workstreams.created_by_user_id",
   "transformation": "userId:null passed",
-  "failure_behaviour": "sprintCandidate false -> no Cash Mode activated by this goal",
+  "failure_behaviour": "sprintCandidate false -> no Cash Mode activated by this goal Later PATCH /goals/:id/terms can set ownerUserId (persisted runs) but never createdByUserId (GA-28).",
   "evidence": "operatorTools.ts:1025; goalSprint.ts:62"
  },
  {
@@ -41,7 +41,7 @@
   "consumer": "discoveryAllowed (A-M131)",
   "contract": "cash_modes.state ACTIVE for project",
   "transformation": "-",
-  "failure_behaviour": "no ACTIVE mode -> proposeGoalRoutes NOT_DUE, openGoalDiscovery null",
+  "failure_behaviour": "no ACTIVE mode -> proposeGoalRoutes NOT_DUE, openGoalDiscovery null A project with an existing WINDING_DOWN/ARCHIVED cash_modes row is never reactivated (goalSprint.ts:104-107) (GA-19).",
   "evidence": "lifecycle.ts:520-540; routeProposal.ts:1981-1982; discovery.ts:1150-1151"
  },
  {
@@ -230,7 +230,7 @@
   "consumer": "Command Center / Hermes (A-M119, A-M121)",
   "contract": "JSON value",
   "transformation": "-",
-  "failure_behaviour": "refusal -> 422 in Command Center",
+  "failure_behaviour": "refusal -> 422 in Command Center The goal must also be in the 25-min operator snapshot or the tool throws notFound (operatorTools.ts:179; snapshot.ts:37) (GA-10).",
   "evidence": "command.ts:65-100; operatorTools.ts:164-183"
  },
  {
@@ -248,7 +248,7 @@
   "consumer": "notifyPlanReady (A-M124)",
   "contract": "PlanReading + operator ADOPT_PLAN decision",
   "transformation": "planReady conditions",
-  "failure_behaviour": "non-ACCEPTED -> NOT_READY; no owner notice",
+  "failure_behaviour": "non-ACCEPTED -> NOT_READY; ACCEPTED without a Hermes ADOPT_PLAN with a challenger answer -> not ready (domain/planReady.ts:169-178) (GA-20)",
   "evidence": "plan.ts:6612-6615; planReady.ts:179-181"
  },
  {
@@ -293,7 +293,7 @@
   "consumer": "parseRoutes (A-M074)",
   "contract": "JSON routes",
   "transformation": "rule checks -> RejectedRoute rule codes",
-  "failure_behaviour": "no parseable routes -> next model",
+  "failure_behaviour": "no parseable routes -> next model A reply with routes=0 and rejected>0 is accepted and ends the chain (routeProposal.ts:2104-2108) (GA-24).",
   "evidence": "routeProposal.ts:2083-2087"
  },
  {
@@ -363,10 +363,10 @@
   "id": "A-H41",
   "producer": "openBucketRound (A-M087)",
   "consumer": "launch pass (A-M098)",
-  "contract": "russell candidate row (statement)",
+  "contract": "russell candidate row WITHOUT judgment; needs judge-unjudged pass (judgeCandidate -> askArchive -> compileMission) to gain missionSpec before nextLaunchable (GA-02)",
   "transformation": "nextLaunchable ranking",
   "failure_behaviour": "parked on capacity/authority",
-  "evidence": "discovery.ts:655-662; loop.ts:2801-2848"
+  "evidence": "discovery.ts:655-662; loop.ts:2801-2848; loop.ts:1965-1986, 3143-3250; planning.ts:404-470"
  },
  {
   "id": "A-H42",
@@ -448,5 +448,152 @@
   "transformation": "-",
   "failure_behaviour": "null -> invent off, objective planner skipped, no free lane",
   "evidence": "invent.ts:98-108; objectivePlan.ts:447-452"
+ },
+ {
+  "id": "A-H51",
+  "producer": "optimizePortfolio result",
+  "consumer": "modelChallengeFor (operator models)",
+  "contract": "DecisionInput (planDecision)",
+  "transformation": "background ask, answer cached by key",
+  "failure_behaviour": "no model / not yet answered -> challenge stays due, 90% claim held; answer may replace best (adoptionFrom)",
+  "evidence": "quant/portfolio.ts:1215-1221, 1254-1300; quant/modelChallenge.ts:174-182, 267-290",
+  "gate_a": [
+   "GA-01"
+  ]
+ },
+ {
+  "id": "A-H52",
+  "producer": "judgeCandidate/compileMission",
+  "consumer": "nextLaunchable/launch",
+  "contract": "candidate.judgment.missionSpec",
+  "transformation": "archive answer may end the idea",
+  "failure_behaviour": "compiler refusal recorded; no mission",
+  "evidence": "russell/planning.ts:404-470; loop.ts:3143-3250",
+  "gate_a": [
+   "GA-02"
+  ]
+ },
+ {
+  "id": "A-H53",
+  "producer": "changeObjective",
+  "consumer": "routeAskDue / composeGoalModel",
+  "contract": "workstreams.intent + target; GOAL_OBJECTIVE_CHANGED",
+  "transformation": "readObjective only",
+  "failure_behaviour": "old PURSUES links and old route openings persist; routeAskDue ignores the event (6 h wait)",
+  "evidence": "decide.ts:378-466; routeProposal.ts:1364-1402",
+  "gate_a": [
+   "GA-03"
+  ]
+ },
+ {
+  "id": "A-H54",
+  "producer": "PATCH /register/workstreams",
+  "consumer": "goalExclusions / ownerLabourOffer / route owner words / sprintCandidate",
+  "contract": "workstreams.intent, title, projectId",
+  "transformation": "none",
+  "failure_behaviour": "target untouched; moved project breaks sprint",
+  "evidence": "routes/register.ts:225-258; goalSprint.ts:69",
+  "gate_a": [
+   "GA-04"
+  ]
+ },
+ {
+  "id": "A-H55",
+  "producer": "startExecutionWindows",
+  "consumer": "daysLeftOf -> readTarget",
+  "contract": "execution_started_at, due_at",
+  "transformation": "anchoredDueAt(startedAt, windowDays)",
+  "failure_behaviour": "never started -> full window forever (days left constant)",
+  "evidence": "executionStart.ts:19-37; executionWindow.ts:59-64",
+  "gate_a": [
+   "GA-05"
+  ]
+ },
+ {
+  "id": "A-H56",
+  "producer": "reconsider / director / improvement loop / fallbackWatch / knowledge / tick floor",
+  "consumer": "advanceGoalPlans due REPAIRED / FLOOR",
+  "contract": "in-process repairedGoals / floorRequests maps",
+  "transformation": "none",
+  "failure_behaviour": "lost on restart",
+  "evidence": "plan.ts:5805-5821, 6559-6567",
+  "gate_a": [
+   "GA-07",
+   "GA-17"
+  ]
+ },
+ {
+  "id": "A-H57",
+  "producer": "recordDecisionsIfDue",
+  "consumer": "reconcileFactChangesIfDue",
+  "contract": "GOAL_DECISION_RECORDED events + governing policy",
+  "transformation": "staleAgainstPolicy",
+  "failure_behaviour": "stale/changed -> requestGoalPlanPass",
+  "evidence": "decisionRecord.ts:473-490; reconsider.ts:239, 287-294",
+  "gate_a": [
+   "GA-08"
+  ]
+ },
+ {
+  "id": "A-H58",
+  "producer": "composeGoalReadings/buildPlanSet",
+  "consumer": "persistReading forecast (readingsSummary) -> owner",
+  "contract": "planSet.plans[] (lead plans[0])",
+  "transformation": "richness order, collapse, rebuildAfter",
+  "failure_behaviour": "lead may differ from chosen_strategy and candidate",
+  "evidence": "plan.ts:2355-2368, 2383-2440; planSet.ts:643-700",
+  "gate_a": [
+   "GA-09"
+  ]
+ },
+ {
+  "id": "A-H59",
+  "producer": "runIndustryKernel / seedGoalIndustry",
+  "consumer": "constructArrangements",
+  "contract": "industry_nodes",
+  "transformation": "none",
+  "failure_behaviour": "too few BUYER_TYPE nodes -> Brain map read (construct.ts:787)",
+  "evidence": "loop.ts:2226; industry/expand.ts:727; construction/service.ts:300; construct.ts:44",
+  "gate_a": [
+   "GA-12"
+  ]
+ },
+ {
+  "id": "A-H60",
+  "producer": "POST /goals/:id/construction/facts",
+  "consumer": "constructArrangements / planInputsFingerprint",
+  "contract": "construction_facts with workstream_id",
+  "transformation": "none",
+  "failure_behaviour": "never read by construction (workstream_id IS NULL filter); never moves the fingerprint (source_claim_id IS NOT NULL)",
+  "evidence": "routes/goals.ts:312-341; repos/construction.ts:224-227; plan.ts:5731-5732",
+  "gate_a": [
+   "GA-13"
+  ]
+ },
+ {
+  "id": "A-H61",
+  "producer": "operate.markReady / retireMarketplaceListings",
+  "consumer": "composeGoalModel",
+  "contract": "cash_opportunities.state",
+  "transformation": "state ordering / ARCHIVED exclusion",
+  "failure_behaviour": "archived listings drop out; COLLECTED drops silently",
+  "evidence": "operate.ts:948, 1393; retireListings.ts:129-140; goalScenario.ts:121-124",
+  "gate_a": [
+   "GA-14",
+   "GA-22"
+  ]
+ },
+ {
+  "id": "A-H62",
+  "producer": "loadCashKnowledge (plan path)",
+  "consumer": "cash forecast ledger / fallback records; inference",
+  "contract": "ledger rows; switch decisions -> respond observations",
+  "transformation": "keepCashLedger, readSwitchDecision",
+  "failure_behaviour": "errors swallowed",
+  "evidence": "quant/knowledge.ts:198-241, 1078-1092",
+  "gate_a": [
+   "GA-15",
+   "GA-16"
+  ]
  }
 ]
