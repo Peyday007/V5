@@ -420,8 +420,8 @@
    "what": "The owner profile holds only skills and assets the owner's own words support (ownerProfileOf with the words; groundedInWords), so a skill or asset the model invents never reaches the route ask, the critic or discovery.",
    "owner": "goals/routeProposal.ts",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "tests/planningFailureMapWave2 'C02-F: the owner profile holds only what the owner said' fails without the grounding, passes with it; test:impacted 200 passed"
+   "state": "DEPLOYED",
+   "evidence": "tests/planningFailureMapWave2 'C02-F: the owner profile holds only what the owner said' fails without the grounding, passes with it; test:impacted 200 passed; Deploy 45815287394 (59ddcc8) success. Production effect to be read on the next route asks."
   }
  ],
  "progress": [
