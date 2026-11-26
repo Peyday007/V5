@@ -320,6 +320,7 @@ export function resetInfraCounters(): void {
   recent.length = 0;
   recentDatabaseFailures.length = 0;
   recentStatements.length = 0;
+  timedCheckouts.length = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -509,6 +510,26 @@ export function noteCheckout(pool: WorkloadClass, ms: number): void {
   samples.push(ms);
   if (samples.length > LATENCY_SAMPLES) samples.splice(0, samples.length - LATENCY_SAMPLES);
   checkouts.set(pool, samples);
+  timedCheckouts.push({ at: Date.now(), pool, ms });
+  if (timedCheckouts.length > TIMED_CHECKOUTS) timedCheckouts.splice(0, timedCheckouts.length - TIMED_CHECKOUTS);
+}
+
+/** The same waits with when they ended, so a controller can read one window rather than the last 500. */
+const timedCheckouts: { at: number; pool: WorkloadClass; ms: number }[] = [];
+const TIMED_CHECKOUTS = 5000;
+
+/**
+ * The longest wait for a pooled client per pool since a moment (ms), 0 for a
+ * pool nobody checked out of. What the free lane's controller reads to tell a
+ * queue that cost something from a momentary one (`freeLane/capacity.ts`).
+ */
+export function longestCheckoutSince(sinceMs: number): Partial<Record<WorkloadClass, number>> {
+  const out: Partial<Record<WorkloadClass, number>> = {};
+  for (let i = timedCheckouts.length - 1; i >= 0 && timedCheckouts[i]!.at >= sinceMs; i--) {
+    const one = timedCheckouts[i]!;
+    out[one.pool] = Math.max(out[one.pool] ?? 0, one.ms);
+  }
+  return out;
 }
 
 function summarise(samples: number[]): LatencySummary {

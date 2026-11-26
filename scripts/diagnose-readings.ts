@@ -207,6 +207,63 @@ async function freeLaneYield(): Promise<void> {
 }
 
 /**
+ * Why the free lane's slot targets moved over the last 24 h (read-only): every
+ * `FREE_LANE_CAPACITY` change per hour and model, its reason reduced to the
+ * controller's own cause (the text before any detail), and what tripped a
+ * database shrink (`measures.db` with the pool reading beside it); then the
+ * items the lane accepted per hour, so a shrink can be read against what it cost.
+ */
+async function laneCapacity(): Promise<void> {
+  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+  const rows = await getDb().all<{ at: string; workload_class: string | null; outcome: string | null; reason: string | null }>(
+    `SELECT at, workload_class, outcome, reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND at >= ? ORDER BY at LIMIT 20000`,
+    [since],
+  );
+  const cause = (reason: string | null): string =>
+    (reason ?? '')
+      .replace(/^\d+ -> \d+: /, '')
+      .replace(/\d+(\.\d+)?/g, '#')
+      .split(/[;(]/)[0]!
+      .trim()
+      .slice(0, 70);
+  const byCause = new Map<string, number>();
+  const byHour = new Map<string, number>();
+  for (const row of rows) {
+    const key = `${(row.workload_class ?? '-').slice(0, 28).padEnd(28)} ${(row.outcome ?? '-').padEnd(6)} ${cause(row.reason)}`;
+    byCause.set(key, (byCause.get(key) ?? 0) + 1);
+    if (row.outcome === 'SHRINK') {
+      const hour = `${row.at.slice(0, 13)} ${cause(row.reason)}`;
+      byHour.set(hour, (byHour.get(hour) ?? 0) + 1);
+    }
+  }
+  console.log(`DIAGNOSE: lane-capacity since ${since} (${rows.length} target changes)`);
+  for (const [key, n] of [...byCause].sort((x, y) => y[1] - x[1])) console.log(`  ${String(n).padStart(5)}x ${key}`);
+  console.log('DIAGNOSE: lane-capacity shrinks per hour');
+  for (const [key, n] of [...byHour].sort((x, y) => x[0].localeCompare(y[0]))) console.log(`  ${String(n).padStart(5)}x ${key}`);
+  const accepted = await getDb().all<{ hour: string; outcome: string | null; n: number | string }>(
+    `SELECT SUBSTR(at, 1, 13) AS hour, outcome, COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? GROUP BY SUBSTR(at, 1, 13), outcome ORDER BY hour`,
+    [since],
+  );
+  console.log('DIAGNOSE: lane-capacity items per hour by outcome');
+  for (const row of accepted) console.log(`  ${row.hour} ${String(row.outcome ?? '-').padEnd(12)} ${Number(row.n)}`);
+  const restarts = await getDb().all<{ ended_at: string }>(
+    "SELECT ended_at FROM infra_incidents WHERE kind = 'PROCESS_RESTART' AND ended_at >= ? ORDER BY ended_at",
+    [since],
+  );
+  console.log(`DIAGNOSE: lane-capacity process restarts ${restarts.length}: ${restarts.map((r) => r.ended_at.slice(11, 16)).join(' ')}`);
+  // The lane's "database saturated" reads any infrastructure failure felt in the last minute,
+  // whatever its surface: these are the minutes and the surfaces that could have tripped it.
+  const incidents = await getDb().all<{ kind: string; surface: string; minutes: number | string; occurrences: number | string }>(
+    `SELECT kind, surface, COUNT(*) AS minutes, SUM(occurrences) AS occurrences FROM infra_incidents
+      WHERE started_at >= ? AND kind <> 'PROCESS_RESTART' GROUP BY kind, surface ORDER BY COUNT(*) DESC LIMIT 40`,
+    [since],
+  );
+  console.log('DIAGNOSE: lane-capacity infra incidents (minutes with one, occurrences) by kind and surface');
+  for (const row of incidents) console.log(`  ${String(Number(row.minutes)).padStart(5)} min ${String(Number(row.occurrences)).padStart(6)}x ${row.kind} ${row.surface}`);
+}
+
+/**
  * Who answered the GPU slot, per UTC day over the last 16 days: `FREE_LANE_ITEM`
  * rows on a `runpod/` slot split by whether `measures.servedBy` was recorded and
  * what it names, beside the pod's own `RUNPOD_POD` samples (running, and whether
@@ -421,7 +478,7 @@ async function liveness(): Promise<void> {
     } catch {
       console.log('    readings unreadable');
     }
-    for (const key of ['memory', 'pools', 'eventLoop', 'stalls', 'pressure', 'statements', 'holds']) {
+    for (const key of ['memory', 'pools', 'checkouts', 'infraFailures', 'databaseFailures', 'eventLoop', 'stalls', 'pressure', 'statements', 'holds']) {
       if (readings[key] !== undefined) console.log(`    ${key}: ${JSON.stringify(readings[key]).slice(0, 1500)}`);
     }
   }
@@ -675,6 +732,7 @@ async function main(): Promise<void> {
     else if (command === 'fragment-failures') await fragmentFailures();
     else if (command === 'operator-runs') await operatorRuns();
     else if (command === 'free-lane-yield') await freeLaneYield();
+    else if (command === 'lane-capacity') await laneCapacity();
     else if (command === 'gpu-answers') await gpuAnswers();
     else if (command === 'heap-sources') await heapSources();
     else if (command === 'heap-profile') await heapProfile();
