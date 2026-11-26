@@ -842,6 +842,24 @@ async function questions(): Promise<void> {
   fail('no model answered with questions');
 }
 
+/** Read-only: why a goal's queued research is or is not claimable by the free lane — its bins, items and the lane's memberships. */
+async function items(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const kase = safeId(flag('case'), '--case');
+  const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
+  if (!project) fail(`no project for ${run} ${kase}`);
+  const out = (label: string, value: unknown) => console.log(`ITEMS ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[]): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  const now = new Date().toISOString();
+  out('project', project.id);
+  out('bins', await q(`SELECT id, purpose, state, orchestration_id, created_at FROM bins WHERE project_id = ? ORDER BY created_at`, [project.id]));
+  out('orchestrations', await q(`SELECT id, status, created_at FROM research_orchestrations WHERE project_id = ? ORDER BY created_at`, [project.id]));
+  out('work_items', await q(`SELECT id, work_type, state, priority, available_at, attempt_count, max_attempts, orchestration_id, bin_id, target_worker_id, required_scopes, created_at FROM work_items WHERE project_id = ? AND state IN ('QUEUED', 'LEASED') ORDER BY created_at LIMIT 20`, [project.id]));
+  out('lane_memberships', await q(`SELECT k.name, m.revoked_at, m.granted_at FROM workers k LEFT JOIN project_memberships m ON m.principal_type = 'WORKER' AND m.principal_id = k.id AND m.project_id = ? WHERE k.name IN ('free-lane-a', 'free-lane-b')`, [project.id]));
+  out('claimable_ahead', await q(`SELECT priority, COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM work_items WHERE state = 'QUEUED' AND available_at <= ? AND attempt_count < max_attempts AND work_type = 'RESEARCH_FRAGMENT' GROUP BY priority ORDER BY priority DESC`, [now]));
+  out('fragment_starts_6h', await q(`SELECT COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at > ? AND reason LIKE '%RESEARCH_FRAGMENT%'`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]));
+}
+
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
@@ -852,6 +870,7 @@ try {
   else if (command === 'retire') await retire();
   else if (command === 'trace') await trace();
   else if (command === 'probe') await probe();
+  else if (command === 'items') await items();
   else if (command === 'questions') await questions();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
