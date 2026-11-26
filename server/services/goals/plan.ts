@@ -2982,12 +2982,15 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
     /*
-     * A goal whose model priced or considered nothing still reads its constructed designs as
-     * marked pathways, never as none (S-0061, production r01.opp-04 2026-11-26). A goal that
-     * already has modelled pathways reads exactly what it read before: its plan, plan set and
-     * committee rest on them, and its unpriced designs are asked through `unpriced` already.
+     * Every in-scope constructed design the model neither priced nor considered is read as a
+     * marked PARTIAL pathway, exactly as the refused path reads them — whether or not the model
+     * priced something else (S-0061: an unknown is "not a reason to abandon a partial
+     * arrangement"). One modelled opening no longer drops a goal's other designs. A partial
+     * pathway contributes nothing and can never lead, so the portfolio, plan set and committee
+     * over the modelled pathways are unchanged; its origin keeps it apart from the priced
+     * CONSTRUCTED estimates the plan compares.
      */
-    partial: model.considered.length + (model.estimates?.length ?? 0) === 0 ? inGoalScope(arrangements, model) : [],
+    partial: inGoalScope(arrangements, model),
   });
   trace('pathways');
   /*
