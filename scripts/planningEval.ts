@@ -970,8 +970,6 @@ async function capacity(): Promise<void> {
   out('eval_fragments_by_run', await q(`SELECT SUBSTR(p.name, 1, 40) AS run, f.status, COUNT(*) AS n FROM research_fragments f JOIN projects p ON p.id = f.project_id WHERE p.name LIKE 'Planning evaluation %' GROUP BY 1, 2 ORDER BY 1, 2`));
   out('eval_queue_by_run', await q(`SELECT SUBSTR(p.name, 21, 9) AS run, CASE WHEN w.cancelled_at IS NOT NULL THEN 'cancelled' WHEN w.paused_at IS NOT NULL THEN 'paused' WHEN w.id IS NULL THEN 'no goal' ELSE 'live' END AS goal, b.state AS bin, wi.state, COUNT(*) AS n, MIN(wi.created_at) AS oldest FROM work_items wi JOIN projects p ON p.id = wi.project_id LEFT JOIN workstreams w ON w.project_id = p.id AND w.archived_at IS NULL LEFT JOIN bins b ON b.id = wi.bin_id WHERE p.name LIKE 'Planning evaluation %' AND wi.state IN ('QUEUED', 'LEASED') GROUP BY 1, 2, 3, 4 ORDER BY 1, 2`));
   out('fragments_done_24h', await q(`SELECT status, COUNT(*) AS n FROM research_fragments WHERE updated_at > ? AND status IN ('ACCEPTED', 'BLOCKED', 'REJECTED', 'NOTHING_SURVIVED') GROUP BY 1`, [day]));
-  // The exact ask, so a control can put the identical prompt to another model.
-  out('prompt', prompt);
 }
 
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
