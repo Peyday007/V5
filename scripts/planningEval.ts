@@ -84,7 +84,7 @@ function clip(value: unknown, depth = 0): unknown {
 
 async function create(): Promise<void> {
   const run = safeId(flag('run'), '--run');
-  const batch = flag('batch-b64');
+  const batch = batchB64();
   if (batch) {
     // Several requests at once: base64 of a JSON list of {case, text}.
     const items = JSON.parse(Buffer.from(batch, 'base64').toString('utf8')) as { case: string; text: string }[];
