@@ -68,7 +68,7 @@
  * rather than being asserted away by whoever created it.
  */
 import { joinRouteEvidence } from './routeEvidence.ts';
-import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
+import { OPERATING_MODEL_SENTENCE, ownerLabourOffer } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
 import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
@@ -988,6 +988,23 @@ export const REMOTE_AI_FOCUS =
   'For each opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how many such buyers there are and how often each buys, who performs or produces the work and how it is delivered, what it costs to get each customer, the cost per sale, and how quickly the money is collected.';
 
 /**
+ * The focus a goal's discovery question carries. The online-only focus is the
+ * standing rule; an owner who offers their own work in the goal's words has
+ * lifted it for that goal (`operatingModelSentenceFor`), and their own paid work
+ * is searched for first, beside the remote kinds (integration diagnosis,
+ * 2026-11-26: a licensed drone pilot and an owner offering 15 hours were both
+ * searched for "work this operation can run entirely online"). Pure.
+ */
+export function discoveryFocusFor(objective: string | null | undefined): string {
+  const labour = ownerLabourOffer(objective);
+  if (!labour.offered) return REMOTE_AI_FOCUS;
+  return (
+    `The owner offered their own work for this goal ("${labour.evidence}"), so look first for work buyers book and pay the owner for directly, in person included, using what their words say they have — then for work independent contractors or suppliers perform while this operation sells, books, refers or subcontracts it, and for work fulfilled with AI-produced digital output. ` +
+    REMOTE_AI_FOCUS.slice(REMOTE_AI_FOCUS.indexOf('For each opening give:'))
+  );
+}
+
+/**
  * How a goal lens's answer becomes an opening, said in the question.
  *
  * The harvest files only a claim whose reader set `opportunity_signal`
@@ -1301,7 +1318,7 @@ export async function openGoalDiscovery(input: {
       `Report ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly. A small price is not a reason to leave a way out: a $50–$300 service or sale that many households or businesses buy again and again counts by its total, so give how many buyers there are and how often each buys. Leave out only one-off contests, bounties and submissions that pay a few hundred at most. ` +
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?' +
-      ` ${REMOTE_AI_FOCUS}` +
+      ` ${discoveryFocusFor(goalRow?.intent ?? input.goal.title)}` +
       ` ${GOAL_OPENING_SENTENCE}` +
       (input.diagnosis ? ` ${input.diagnosis}` : '') +
       (learned ? ` ${learned}` : '') +
