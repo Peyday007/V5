@@ -517,20 +517,22 @@
   {
    "id": "C49-P",
    "rc": "none",
-   "why": "controlled: server/services/goals/plan.ts:judgeAcceptance: The 90% bar is lowered to 81%: a plan at 85% defensible lower bound is ACCEPTED. Existing tests still pass under this mutation: no test pins this behaviour.",
-   "test": "tests/goalAcceptance.test.ts, tests/planningConfidence.test.ts, tests/program-ea512f54-goals-d0-p0-acceptance.test.ts, tests/buyerValidatedOpeningA10K.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "why": "controlled: server/services/goals/plan.ts:judgeAcceptance: The 90% bar is lowered to 81%: a plan at 85% defensible lower bound is ACCEPTED. | new test detects it (replayed independently 2026-11-26).",
+   "test": "tests/goalAcceptance.test.ts",
+   "title": "the acceptance rule > C49: holds the evidenced lower bound to the goal's own required confidence, not to a fraction of it",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "the acceptance rule > C49: holds the evidenced lower bound to the goal's own required confidence, not to a fraction of it"
+   ],
    "mutation": {
     "file": "server/services/goals/plan.ts",
     "find": "} else if (bounds.low < required) {",
     "replace": "} else if (bounds.low < required * 0.9) {"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {
@@ -560,20 +562,22 @@
   {
    "id": "C51-P",
    "rc": "none",
-   "why": "controlled: server/services/goals/reasoning/directions.ts:scoreOf: Directions resting on assumptions credited their full reach (challenged vs bare gap removed). Existing tests still pass under this mutation: no test pins this behaviour.",
-   "test": "tests/multidirectionalReasoning.test.ts, tests/surgeBInventedDesign.test.ts, tests/surgeBAdaptiveSearch.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "why": "controlled: server/services/goals/reasoning/directions.ts:scoreOf: Directions resting on assumptions credited their full reach (challenged vs bare gap removed). | new test detects it (replayed independently 2026-11-26).",
+   "test": "tests/assumedLeverIsNotEvidence.test.ts",
+   "title": "an assumption-dependent reach never ranks a direction above one resting on fewer assumptions > scores a direction by what it holds without its assumed moves",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "an assumption-dependent reach never ranks a direction above one resting on fewer assumptions > scores a direction by what it holds without its assumed moves"
+   ],
    "mutation": {
     "file": "server/services/goals/reasoning/directions.ts",
     "find": "const established = assumed === 0 ? reading.reach : bare?.feasible ? Math.min(reading.reach, bare.reach) : 0;",
     "replace": "const established = reading.reach;"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {
@@ -600,20 +604,22 @@
   {
    "id": "C53-P",
    "rc": "none",
-   "why": "controlled: server/services/goals/reasoning/directions.ts:parseInvented: Invented methods missing stance/thinking are adopted instead of refused. Existing tests still pass under this mutation: no test pins this behaviour.",
-   "test": "tests/inventedMethodContract.test.ts, tests/multidirectionalReasoning.test.ts, tests/surgeBInventedDesign.test.ts, tests/arrangementSelection.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "why": "controlled: server/services/goals/reasoning/directions.ts:parseInvented: Invented methods missing stance/thinking are adopted instead of refused. | new test detects it (replayed independently 2026-11-26).",
+   "test": "tests/inventedMethodContract.test.ts",
+   "title": "the method contract between prompt and parser > C53: refuses a method that names no stance or no thinking, however valid its program, and says which is missing",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "the method contract between prompt and parser > C53: refuses a method that names no stance or no thinking, however valid its program, and says which is missing"
+   ],
    "mutation": {
     "file": "server/services/goals/reasoning/directions.ts",
     "find": "if (!name || !stance || !thinking) {",
     "replace": "if (!name) {"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {
@@ -707,20 +713,22 @@
   {
    "id": "C58-P",
    "rc": "none",
-   "why": "controlled: server/services/goals/committee.ts:evidencedReach: QUANT role recompute counts repeat deals from one payer (\u00a7116), so the committee does not block on it. Existing tests still pass under this mutation: no test pins this behaviour.",
-   "test": "tests/investmentCommittee.test.ts, tests/committeeResearch.test.ts, tests/investmentCommitteeWorld.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "why": "controlled: server/services/goals/committee.ts:evidencedReach: QUANT role recompute counts repeat deals from one payer (\u00a7116), so the committee does not block on it. | new test detects it (replayed independently 2026-11-26).",
+   "test": "tests/investmentCommittee.test.ts",
+   "title": "each role on its own > C58: QUANT rebuilds one deal, not the proven volume, from a leg whose repeats all come from one payer (\u00a7116)",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "each role on its own > C58: QUANT rebuilds one deal, not the proven volume, from a leg whose repeats all come from one payer (\u00a7116)"
+   ],
    "mutation": {
     "file": "server/services/goals/committee.ts",
     "find": "EVIDENCED(p.volume) && !has(leg, 'ONE_PAYER_REPEATS') ?",
     "replace": "EVIDENCED(p.volume) ?"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {
@@ -747,20 +755,22 @@
   {
    "id": "C60-P",
    "rc": "none",
-   "why": "controlled: server/services/goals/plan.ts:gateIntegrity: Integrity violations no longer refuse an ACCEPTED reading. Existing tests still pass under this mutation: no test pins this behaviour.",
-   "test": "tests/planIntegrityRegressions.test.ts, tests/planExecutability.test.ts, tests/investmentCommitteeWorld.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "why": "controlled: server/services/goals/plan.ts:gateIntegrity: Integrity violations no longer refuse an ACCEPTED reading. | new test detects it (replayed independently 2026-11-26).",
+   "test": "tests/investmentCommitteeWorld.test.ts",
+   "title": "the investment committee on the real planner > C60: refuses an acceptance the committee passes when the plan breaks an integrity rule",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "the investment committee on the real planner > C60: refuses an acceptance the committee passes when the plan breaks an integrity rule"
+   ],
    "mutation": {
     "file": "server/services/goals/plan.ts",
     "find": "if (reading.acceptance.status !== 'ACCEPTED' || (violations.length === 0 && !committeeRefuses)) return",
     "replace": "if (reading.acceptance.status !== 'ACCEPTED' || (!committeeRefuses)) return"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {
@@ -859,20 +869,22 @@
   {
    "id": "C65-P",
    "rc": "none",
-   "why": "controlled: server/services/goals/calibration.ts:methodCorrections: A single miss becomes a method correction. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "why": "controlled: server/services/goals/calibration.ts:methodCorrections: A single miss becomes a method correction. | new test detects it (replayed independently 2026-11-26).",
    "test": "tests/program-ea512f54-memory-d1-calibration.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "title": "one unlucky result is not a rule > C65: a cause behind fewer than the minimum systematic misses is not generalized, beside one that is",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "one unlucky result is not a rule > C65: a cause behind fewer than the minimum systematic misses is not generalized, beside one that is"
+   ],
    "mutation": {
     "file": "server/services/goals/calibration.ts",
     "find": "if (correction.misses < MIN_CORRECTION_MISSES) continue;",
     "replace": "if (correction.misses < 1) continue;"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {
@@ -983,20 +995,22 @@
   {
    "id": "C71-P",
    "rc": "none",
-   "why": "controlled: server/services/goals/routeProposal.ts:applyDirectionCritique: A direction the review says fails a rule is kept because its verdict says KEEP. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "why": "controlled: server/services/goals/routeProposal.ts:applyDirectionCritique: A direction the review says fails a rule is kept because its verdict says KEEP. | new test detects it (replayed independently 2026-11-26).",
    "test": "tests/researchInformedRoutes.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "title": "a review before research is spent on directions > C71: drops a direction the review marks KEEP but scores as failing a rule, even when it ranks it first",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "a review before research is spent on directions > C71: drops a direction the review marks KEEP but scores as failing a rule, even when it ranks it first"
+   ],
    "mutation": {
     "file": "server/services/goals/routeProposal.ts",
     "find": "if (review.verdict === 'DROP' || review.failed.length > 0) {",
     "replace": "if (review.verdict === 'DROP') {"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {
@@ -1045,20 +1059,22 @@
   {
    "id": "C74-P",
    "rc": "none",
-   "why": "controlled: server/services/russell/goalSprint.ts:sprintCandidate: A goal past its deadline still opens a sprint. Existing tests still pass under this mutation: no test pins this behaviour.",
+   "why": "controlled: server/services/russell/goalSprint.ts:sprintCandidate: A goal past its deadline still opens a sprint. | new test detects it (replayed independently 2026-11-26).",
    "test": "tests/goalSprint.test.ts",
-   "title": "",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "title": "a person-set cash goal starts its project's research sprint > C74: never opens a sprint for a goal whose deadline has already passed",
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
+   "verified": true,
+   "failing": [
+    "a person-set cash goal starts its project's research sprint > C74: never opens a sprint for a goal whose deadline has already passed"
+   ],
    "mutation": {
     "file": "server/services/russell/goalSprint.ts",
     "find": "  if (goal.dueAt && Date.parse(goal.dueAt) <= now.getTime()) return false;\n",
     "replace": "\n"
    },
-   "at": "2026-11-26T10:20:00Z",
+   "at": "2026-11-26T10:40:00Z",
    "by": "independent proof agent (worktree)"
   },
   {

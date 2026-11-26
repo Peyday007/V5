@@ -4639,7 +4639,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:judgeAcceptance (1648), measuredPlanChance (1557), planCalibration (2097), candidateSentence (1930), verdictOf (1921)",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/goals/plan.ts:judgeAcceptance: The 90% bar is lowered to 81%: a plan at 85% defensible lower bound is ACCEPTED. Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:judgeAcceptance: The 90% bar is lowered to 81%: a plan at 85% defensible lower bound is ACCEPTED. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/goalAcceptance.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C49-R",
@@ -4789,7 +4789,7 @@
    "evidence": "",
    "component": "server/services/goals/reasoning/directions.ts:exploreDirections (899), stanceQuotas (752), mutate (834), recombine (817), challengeProgram (622), scoreOf (891), diverseLeaders (1136)",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/goals/reasoning/directions.ts:scoreOf: Directions resting on assumptions credited their full reach (challenged vs bare gap removed). Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reasoning/directions.ts:scoreOf: Directions resting on assumptions credited their full reach (challenged vs bare gap removed). | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/assumedLeverIsNotEvidence.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C51-R",
@@ -4939,7 +4939,7 @@
    "evidence": "",
    "component": "server/services/goals/reasoning/invent.ts:inventDirections (102), inventEnabled (98); server/services/goals/reasoning/directions.ts:parseInvented, composeInventedDesigns; server/services/goals/plan.ts:inventDue (3259); server/services/cash/goalScenario.ts:inventedFromArrangement (1185)",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/goals/reasoning/directions.ts:parseInvented: Invented methods missing stance/thinking are adopted instead of refused. Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/reasoning/directions.ts:parseInvented: Invented methods missing stance/thinking are adopted instead of refused. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/inventedMethodContract.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C53-R",
@@ -5314,7 +5314,7 @@
    "evidence": "",
    "component": "server/services/goals/committee.ts:reviewPlan (669), reviewRole (653), evidencedReach (556), settleByAnswers (373), committeeTier (779); server/services/goals/plan.ts:refuseForCommittee (5451)",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/goals/committee.ts:evidencedReach: QUANT role recompute counts repeat deals from one payer (\u00a7116), so the committee does not block on it. Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/committee.ts:evidencedReach: QUANT role recompute counts repeat deals from one payer (\u00a7116), so the committee does not block on it. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/investmentCommittee.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C58-R",
@@ -5464,7 +5464,7 @@
    "evidence": "",
    "component": "server/services/goals/plan.ts:gateIntegrity (5473), refuseForIntegrity (5431); server/services/goals/planIntegrityInput.ts:integrityInput, leadPrice",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/goals/plan.ts:gateIntegrity: Integrity violations no longer refuse an ACCEPTED reading. Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/plan.ts:gateIntegrity: Integrity violations no longer refuse an ACCEPTED reading. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/investmentCommitteeWorld.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C60-R",
@@ -5839,7 +5839,7 @@
    "evidence": "",
    "component": "server/services/goals/calibration.ts:reconcileCalibration (404), classifyMiss (129), methodCorrections (174); goals/plan.ts:recordGoalOutcome (5651)",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/goals/calibration.ts:methodCorrections: A single miss becomes a method correction. Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/calibration.ts:methodCorrections: A single miss becomes a method correction. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/program-ea512f54-memory-d1-calibration.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C65-R",
@@ -6289,7 +6289,7 @@
    "evidence": "",
    "component": "server/services/goals/routeProposal.ts:directionCritiquePrompt (611), applyDirectionCritique (633), parseDirections (510), fileDirection",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/goals/routeProposal.ts:applyDirectionCritique: A direction the review says fails a rule is kept because its verdict says KEEP. Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/goals/routeProposal.ts:applyDirectionCritique: A direction the review says fails a rule is kept because its verdict says KEEP. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/researchInformedRoutes.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C71-R",
@@ -6514,7 +6514,7 @@
    "evidence": "",
    "component": "server/services/russell/goalSprint.ts:sprintCandidate (64), activateGoalSprints (95); server/services/russell/loop.ts:runIndustryKernel call (~2226)",
    "rc": "",
-   "proof": "CONTROLLED_FAILURE_NOT_DETECTED: controlled: server/services/russell/goalSprint.ts:sprintCandidate: A goal past its deadline still opens a sprint. Existing tests still pass under this mutation: no test pins this behaviour.: detected=False named=False good=True"
+   "proof": "CONTROLLED_FAILURE: re-introduced \"controlled: server/services/russell/goalSprint.ts:sprintCandidate: A goal past its deadline still opens a sprint. | new test detects it (replayed independently 2026-11-26).\" \u2192 tests/goalSprint.test.ts failed naming none; unmutated code accepted"
   },
   {
    "id": "C74-R",
