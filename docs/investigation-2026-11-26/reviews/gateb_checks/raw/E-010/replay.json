@@ -1,0 +1,818 @@
+[
+ {
+  "case": "final_p02_all",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "empty": true,
+  "ms": 48106,
+  "error": null
+ },
+ {
+  "case": "final_p02_all",
+  "reply": 1,
+  "model": "free:auto/best-coding",
+  "chars": 3237,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 1,
+  "recorded": {
+   "kept": [
+    "ARMLS Preferred Photographer Real Estate Aerials"
+   ],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [
+    "ARMLS Preferred Photographer Real Estate Aerials"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "ARMLS Preferred Photographer Real Estate Aerials",
+     "price": 250,
+     "directCost": 0,
+     "acq": null,
+     "hours": 2,
+     "line": "COMPUTED (exact): each sale earns $250 after its direct cost; alone it needs 18 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 36 owner hour(s); first money by 3 December 2026 (the window ends 25 January 2027)."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "ARMLS Preferred Photographer Real Estate Aerials",
+    "price": 250,
+    "directCost": 0,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 2,
+    "ownerFit": "present",
+    "daysToFirstCash": 7,
+    "capital": 0,
+    "buyerCount": 1800,
+    "performer": "OWNER"
+   }
+  ]
+ },
+ {
+  "case": "final_p02_cap",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "empty": true,
+  "ms": 85394,
+  "error": null
+ },
+ {
+  "case": "final_p02_cap",
+  "reply": 1,
+  "model": "free:auto/best-coding",
+  "chars": 9000,
+  "truncatedAt9000": true,
+  "routesJsonNull": false,
+  "rawRouteObjects": 4,
+  "recorded": {
+   "kept": [
+    "Phoenix Real Estate Aerial Photography",
+    "Construction Site Progress Mapping",
+    "Zeitview Mission Brokerage",
+    "ARMLS Preferred Photographer Program",
+    "Land Survey Data Processing",
+    "Arizona Aerial Stock Footage"
+   ],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [
+    "Phoenix Real Estate Aerial Photography",
+    "Construction Site Progress Mapping",
+    "Zeitview Mission Brokerage",
+    "ARMLS Preferred Photographer Program"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "Phoenix Real Estate Aerial Photography",
+     "price": 199,
+     "directCost": 0,
+     "acq": null,
+     "hours": 2,
+     "line": "COMPUTED (exact): each sale earns $199 after its direct cost; alone it needs 23 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 46 owner hour(s); first money by 3 December 2026 (the window ends 25 January 2027)."
+    },
+    {
+     "title": "Construction Site Progress Mapping",
+     "price": 800,
+     "directCost": 400,
+     "acq": null,
+     "hours": 1,
+     "line": "COMPUTED (exact): each sale earns $400 after its direct cost; alone it needs 12 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 12 owner hour(s); first money by 10 December 2026 (the window ends 25 January 2027)."
+    },
+    {
+     "title": "Zeitview Mission Brokerage",
+     "price": 400,
+     "directCost": 0,
+     "acq": null,
+     "hours": 1.5,
+     "line": "COMPUTED (exact): each sale earns $400 after its direct cost; alone it needs 12 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 18 owner hour(s); first money by 26 December 2026 (the window ends 25 January 2027)."
+    },
+    {
+     "title": "ARMLS Preferred Photographer Program",
+     "price": 175,
+     "directCost": 0,
+     "acq": null,
+     "hours": 2,
+     "line": "COMPUTED (exact): each sale earns $175 after its direct cost; alone it needs 26 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 52 owner hour(s); first money by 17 December 2026 (the window ends 25 January 2027)."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "Phoenix Real Estate Aerial Photography",
+    "price": 199,
+    "directCost": 0,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 2,
+    "ownerFit": "present",
+    "daysToFirstCash": 7,
+    "capital": 0,
+    "buyerCount": 230,
+    "performer": "OWNER"
+   },
+   {
+    "title": "Construction Site Progress Mapping",
+    "price": 800,
+    "directCost": 400,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 1,
+    "ownerFit": "present",
+    "daysToFirstCash": 14,
+    "capital": 0,
+    "buyerCount": 45,
+    "performer": "SUBCONTRACTOR"
+   },
+   {
+    "title": "Zeitview Mission Brokerage",
+    "price": 400,
+    "directCost": 0,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 1.5,
+    "ownerFit": "present",
+    "daysToFirstCash": 30,
+    "capital": 0,
+    "buyerCount": 120,
+    "performer": "OWNER"
+   },
+   {
+    "title": "ARMLS Preferred Photographer Program",
+    "price": 175,
+    "directCost": 0,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 2,
+    "ownerFit": "present",
+    "daysToFirstCash": 21,
+    "capital": 0,
+    "buyerCount": 180,
+    "performer": "OWNER"
+   }
+  ]
+ },
+ {
+  "case": "final_p06_all",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "chars": 4228,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 2,
+  "recorded": {
+   "kept": [
+    "Contra CSV Data Cleanup Brokerage"
+   ],
+   "rejected": [
+    "HOURS: TaskRabbit VA Email Triage Brokerage"
+   ]
+  },
+  "ref": {
+   "kept": [
+    "TaskRabbit VA Email Triage Brokerage",
+    "Contra CSV Data Cleanup Brokerage"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "TaskRabbit VA Email Triage Brokerage",
+     "price": 80,
+     "directCost": 40,
+     "acq": null,
+     "hours": 2,
+     "line": "COMPUTED (exact): each sale earns $40 after its direct cost; alone it needs 13 sale(s) for the $500 still needed; it states no cost to win a buyer; 26 owner hour(s); first money by 26 November 2026 (the window ends 3 December 2026); it counts only 7 such buyers, fewer than it needs alone."
+    },
+    {
+     "title": "Contra CSV Data Cleanup Brokerage",
+     "price": 120,
+     "directCost": 50,
+     "acq": null,
+     "hours": 1,
+     "line": "COMPUTED (exact): each sale earns $70 after its direct cost; alone it needs 8 sale(s) for the $500 still needed; it states no cost to win a buyer; 8 owner hour(s); first money by 26 November 2026 (the window ends 3 December 2026); it counts only 5 such buyers, fewer than it needs alone."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "TaskRabbit VA Email Triage Brokerage",
+    "price": 80,
+    "directCost": 40,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 2,
+    "ownerFit": "present",
+    "daysToFirstCash": 0,
+    "capital": 0,
+    "buyerCount": 7,
+    "performer": "OWNER"
+   },
+   {
+    "title": "Contra CSV Data Cleanup Brokerage",
+    "price": 120,
+    "directCost": 50,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 1,
+    "ownerFit": "present",
+    "daysToFirstCash": 0,
+    "capital": 0,
+    "buyerCount": 5,
+    "performer": "OWNER"
+   }
+  ]
+ },
+ {
+  "case": "final_p06_cap",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "empty": true,
+  "ms": 47241,
+  "error": null
+ },
+ {
+  "case": "final_p06_cap",
+  "reply": 1,
+  "model": "free:auto/best-coding",
+  "chars": 2505,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 1,
+  "recorded": {
+   "kept": [],
+   "rejected": [
+    "MARGIN: TaskRabbit Virtual Assistant Booking"
+   ]
+  },
+  "ref": {
+   "kept": [],
+   "rejected": [
+    "MARGIN: TaskRabbit Virtual Assistant Booking — its direct cost is not below its price"
+   ],
+   "economics": []
+  },
+  "rawFields": [
+   {
+    "title": "TaskRabbit Virtual Assistant Booking",
+    "price": 62,
+    "directCost": 62,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 2,
+    "ownerFit": "present",
+    "daysToFirstCash": 1,
+    "capital": 0,
+    "buyerCount": 50,
+    "performer": "SUBCONTRACTOR"
+   }
+  ]
+ },
+ {
+  "case": "final_p10_all",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "empty": true,
+  "ms": 51584,
+  "error": null
+ },
+ {
+  "case": "final_p10_all",
+  "reply": 1,
+  "model": "free:auto/best-coding",
+  "chars": 2774,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 1,
+  "recorded": {
+   "kept": [
+    "Holiday Beanie Dropshipping Store"
+   ],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [
+    "Holiday Beanie Dropshipping Store"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "Holiday Beanie Dropshipping Store",
+     "price": 45,
+     "directCost": 25.43,
+     "acq": null,
+     "hours": 0,
+     "line": "COMPUTED (exact): each sale earns $20 after its direct cost; alone it needs 1022 sale(s) for the $20,000 still needed; it states no cost to win a buyer; 0 owner hour(s); first money by 6 December 2026 (the window ends 24 February 2027); it counts only 500 such buyers, fewer than it needs alone."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "Holiday Beanie Dropshipping Store",
+    "price": 45,
+    "directCost": 25.43,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0,
+    "ownerFit": "present",
+    "daysToFirstCash": 10,
+    "capital": 1500,
+    "buyerCount": 500,
+    "performer": "SUBCONTRACTOR"
+   }
+  ]
+ },
+ {
+  "case": "final_p10_cap",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "chars": 3997,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 2,
+  "recorded": {
+   "kept": [
+    "Local Retail Meta Ads Management"
+   ],
+   "rejected": [
+    "BRAIN_DELIVERABLE: E‑commerce Meta Campaign Launch"
+   ]
+  },
+  "ref": {
+   "kept": [
+    "Local Retail Meta Ads Management"
+   ],
+   "rejected": [
+    "BRAIN_DELIVERABLE: E‑commerce Meta Campaign Launch — Brain performs it, but it is none of the deliverables Brain has proved"
+   ],
+   "economics": [
+    {
+     "title": "Local Retail Meta Ads Management",
+     "price": 1500,
+     "directCost": 250,
+     "acq": null,
+     "hours": 0,
+     "line": "COMPUTED (exact): each buyer-month earns $1,250 after its direct cost; alone it needs 6 paying buyer(s) for the $20,000 still needed; it states no cost to win a buyer; 0 owner hour(s); first money by 3 December 2026 (the window ends 24 February 2027)."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "Local Retail Meta Ads Management",
+    "price": 1500,
+    "directCost": 250,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0,
+    "ownerFit": "present",
+    "daysToFirstCash": 7,
+    "capital": 0,
+    "buyerCount": 14,
+    "performer": "SUBCONTRACTOR"
+   },
+   {
+    "title": "E‑commerce Meta Campaign Launch",
+    "price": 2500,
+    "directCost": 500,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0,
+    "ownerFit": "present",
+    "daysToFirstCash": 5,
+    "capital": 2000,
+    "buyerCount": 8,
+    "performer": "BRAIN"
+   }
+  ]
+ },
+ {
+  "case": "probe1_p02_all",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "chars": 4972,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 3,
+  "recorded": {
+   "kept": [
+    "ARMLS Real Estate Aerial Photos",
+    "Construction Drone Survey Maps",
+    "Zeitview Real Estate Missions"
+   ],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [
+    "ARMLS Real Estate Aerial Photos",
+    "Construction Drone Survey Maps",
+    "Zeitview Real Estate Missions"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "ARMLS Real Estate Aerial Photos",
+     "price": 200,
+     "directCost": 20,
+     "acq": null,
+     "hours": 1.5,
+     "line": "COMPUTED (exact): each sale earns $180 after its direct cost; alone it needs 25 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 37.5 owner hour(s); first money by 29 November 2026 (the window ends 25 January 2027)."
+    },
+    {
+     "title": "Construction Drone Survey Maps",
+     "price": 800,
+     "directCost": 100,
+     "acq": null,
+     "hours": 5,
+     "line": "COMPUTED (exact): each sale earns $700 after its direct cost; alone it needs 7 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 35 owner hour(s); first money by 3 December 2026 (the window ends 25 January 2027)."
+    },
+    {
+     "title": "Zeitview Real Estate Missions",
+     "price": 175,
+     "directCost": 0,
+     "acq": null,
+     "hours": 0.5,
+     "line": "COMPUTED (exact): each sale earns $175 after its direct cost; alone it needs 26 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 13 owner hour(s); first money by 10 December 2026 (the window ends 25 January 2027)."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "ARMLS Real Estate Aerial Photos",
+    "price": 200,
+    "directCost": 20,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 1.5,
+    "ownerFit": "present",
+    "daysToFirstCash": 3,
+    "capital": 0,
+    "buyerCount": 5000,
+    "performer": "OWNER"
+   },
+   {
+    "title": "Construction Drone Survey Maps",
+    "price": 800,
+    "directCost": 100,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 5,
+    "ownerFit": "present",
+    "daysToFirstCash": 7,
+    "capital": 0,
+    "buyerCount": 200,
+    "performer": "OWNER"
+   },
+   {
+    "title": "Zeitview Real Estate Missions",
+    "price": 175,
+    "directCost": 0,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0.5,
+    "ownerFit": "present",
+    "daysToFirstCash": 14,
+    "capital": 0,
+    "buyerCount": 30,
+    "performer": "OWNER"
+   }
+  ]
+ },
+ {
+  "case": "probe1_p02_cap",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "chars": 3722,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 2,
+  "recorded": {
+   "kept": [
+    "ARMLS Real Estate Aerial Package",
+    "Construction Site Drone Survey"
+   ],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [
+    "ARMLS Real Estate Aerial Package",
+    "Construction Site Drone Survey"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "ARMLS Real Estate Aerial Package",
+     "price": 150,
+     "directCost": 0,
+     "acq": null,
+     "hours": 1.5,
+     "line": "COMPUTED (exact): each sale earns $150 after its direct cost; alone it needs 30 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 45 owner hour(s); first money by 26 November 2026 (the window ends 25 January 2027)."
+    },
+    {
+     "title": "Construction Site Drone Survey",
+     "price": 800,
+     "directCost": 100,
+     "acq": null,
+     "hours": 3,
+     "line": "COMPUTED (exact): each sale earns $700 after its direct cost; alone it needs 7 sale(s) for the $4,500 still needed; it states no cost to win a buyer; 21 owner hour(s); first money by 3 December 2026 (the window ends 25 January 2027); it counts only 6 such buyers, fewer than it needs alone."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "ARMLS Real Estate Aerial Package",
+    "price": 150,
+    "directCost": 0,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 1.5,
+    "ownerFit": "present",
+    "daysToFirstCash": 0,
+    "capital": 0,
+    "buyerCount": 30,
+    "performer": "OWNER"
+   },
+   {
+    "title": "Construction Site Drone Survey",
+    "price": 800,
+    "directCost": 100,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 3,
+    "ownerFit": "present",
+    "daysToFirstCash": 7,
+    "capital": 100,
+    "buyerCount": 6,
+    "performer": "OWNER"
+   }
+  ]
+ },
+ {
+  "case": "probe1_p06_all",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "empty": true,
+  "ms": 55952,
+  "error": null
+ },
+ {
+  "case": "probe1_p06_all",
+  "reply": 1,
+  "model": "free:auto/best-coding",
+  "chars": 2945,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 1,
+  "recorded": {
+   "kept": [
+    "Upwork Virtual Assistant Email Management"
+   ],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [
+    "Upwork Virtual Assistant Email Management"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "Upwork Virtual Assistant Email Management",
+     "price": 150,
+     "directCost": 40,
+     "acq": null,
+     "hours": 2,
+     "line": "COMPUTED (exact): each sale earns $110 after its direct cost; alone it needs 5 sale(s) for the $500 still needed; it states no cost to win a buyer; 10 owner hour(s); first money by 1 December 2026 (the window ends 3 December 2026)."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "Upwork Virtual Assistant Email Management",
+    "price": 150,
+    "directCost": 40,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 2,
+    "ownerFit": "present",
+    "daysToFirstCash": 5,
+    "capital": 0,
+    "buyerCount": 15,
+    "performer": "SUBCONTRACTOR"
+   }
+  ]
+ },
+ {
+  "case": "probe1_p06_cap",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "chars": 4301,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 2,
+  "recorded": {
+   "kept": [
+    "24‑Hour Logo Design Brokerage"
+   ],
+   "rejected": [
+    "HOURS: Fast Email Inbox Triage for Seattle SMBs"
+   ]
+  },
+  "ref": {
+   "kept": [
+    "Fast Email Inbox Triage for Seattle SMBs",
+    "24‑Hour Logo Design Brokerage"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "Fast Email Inbox Triage for Seattle SMBs",
+     "price": 70,
+     "directCost": 40,
+     "acq": null,
+     "hours": 1,
+     "line": "COMPUTED (exact): each sale earns $30 after its direct cost; alone it needs 17 sale(s) for the $500 still needed; it states no cost to win a buyer; 17 owner hour(s); first money by 28 November 2026 (the window ends 3 December 2026)."
+    },
+    {
+     "title": "24‑Hour Logo Design Brokerage",
+     "price": 250,
+     "directCost": 80,
+     "acq": null,
+     "hours": 0.5,
+     "line": "COMPUTED (exact): each sale earns $170 after its direct cost; alone it needs 3 sale(s) for the $500 still needed; it states no cost to win a buyer; 1.5 owner hour(s); first money by 27 November 2026 (the window ends 3 December 2026)."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "Fast Email Inbox Triage for Seattle SMBs",
+    "price": 70,
+    "directCost": 40,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 1,
+    "ownerFit": "present",
+    "daysToFirstCash": 2,
+    "capital": 0,
+    "buyerCount": 25,
+    "performer": "SUBCONTRACTOR"
+   },
+   {
+    "title": "24‑Hour Logo Design Brokerage",
+    "price": 250,
+    "directCost": 80,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0.5,
+    "ownerFit": "present",
+    "daysToFirstCash": 1,
+    "capital": 0,
+    "buyerCount": 4,
+    "performer": "Fiverr Pro designer (verified 24‑hour turnaround) – paid $80 per logo"
+   }
+  ]
+ },
+ {
+  "case": "probe1_p10_all",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "chars": 4393,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 2,
+  "recorded": {
+   "kept": [],
+   "rejected": [
+    "OWNER_FIT: Local Business Facebook Ads Management Resell",
+    "OWNER_FIT: Holiday Dropshipping Store – Winter Accessories"
+   ]
+  },
+  "ref": {
+   "kept": [
+    "Local Business Facebook Ads Management Resell",
+    "Holiday Dropshipping Store – Winter Accessories"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "Local Business Facebook Ads Management Resell",
+     "price": 4500,
+     "directCost": 500,
+     "acq": null,
+     "hours": 0,
+     "line": "COMPUTED (exact): each sale earns $4,000 after its direct cost; alone it needs 5 sale(s) for the $20,000 still needed; it states no cost to win a buyer; 0 owner hour(s); first money by 3 December 2026 (the window ends 24 February 2027)."
+    },
+    {
+     "title": "Holiday Dropshipping Store – Winter Accessories",
+     "price": 500,
+     "directCost": 200,
+     "acq": null,
+     "hours": 0,
+     "line": "COMPUTED (exact): each sale earns $300 after its direct cost; alone it needs 67 sale(s) for the $20,000 still needed; it states no cost to win a buyer; 0 owner hour(s); first money by 28 November 2026 (the window ends 24 February 2027); it counts only 40 such buyers, fewer than it needs alone."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "Local Business Facebook Ads Management Resell",
+    "price": 4500,
+    "directCost": 500,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0,
+    "ownerFit": "present",
+    "daysToFirstCash": 7,
+    "capital": 2500,
+    "buyerCount": 5,
+    "performer": "SUBCONTRACTOR"
+   },
+   {
+    "title": "Holiday Dropshipping Store – Winter Accessories",
+    "price": 500,
+    "directCost": 200,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0,
+    "ownerFit": "present",
+    "daysToFirstCash": 2,
+    "capital": 1560,
+    "buyerCount": 40,
+    "performer": "SUBCONTRACTOR"
+   }
+  ]
+ },
+ {
+  "case": "probe1_p10_cap",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "empty": true,
+  "ms": 53998,
+  "error": null
+ },
+ {
+  "case": "probe1_p10_cap",
+  "reply": 1,
+  "model": "free:auto/best-coding",
+  "chars": 2959,
+  "truncatedAt9000": false,
+  "routesJsonNull": false,
+  "rawRouteObjects": 1,
+  "recorded": {
+   "kept": [
+    "Minnesota Holiday Gift Beanie Dropship"
+   ],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [
+    "Minnesota Holiday Gift Beanie Dropship"
+   ],
+   "rejected": [],
+   "economics": [
+    {
+     "title": "Minnesota Holiday Gift Beanie Dropship",
+     "price": 45,
+     "directCost": 15.43,
+     "acq": null,
+     "hours": 0,
+     "line": "COMPUTED (exact): each sale earns $30 after its direct cost; alone it needs 677 sale(s) for the $20,000 still needed; it states no cost to win a buyer; 0 owner hour(s); first money by 17 December 2026 (the window ends 24 February 2027); it counts only 445 such buyers, fewer than it needs alone."
+    }
+   ]
+  },
+  "rawFields": [
+   {
+    "title": "Minnesota Holiday Gift Beanie Dropship",
+    "price": 45,
+    "directCost": 15.43,
+    "acquisitionCostPerSale": null,
+    "ownerHoursPerDeal": 0,
+    "ownerFit": "present",
+    "daysToFirstCash": 21,
+    "capital": 5000,
+    "buyerCount": 445,
+    "performer": "SUBCONTRACTOR"
+   }
+  ]
+ },
+ {
+  "case": "E-002_eval_p02_cap",
+  "reply": 0,
+  "model": "gpu:openai/gpt-oss-120b",
+  "chars": 2103,
+  "truncatedAt9000": false,
+  "routesJsonNull": true,
+  "rawRouteObjects": 0,
+  "recorded": {
+   "kept": [],
+   "rejected": []
+  },
+  "ref": {
+   "kept": [],
+   "rejected": [],
+   "economics": []
+  },
+  "rawFields": []
+ }
+]
