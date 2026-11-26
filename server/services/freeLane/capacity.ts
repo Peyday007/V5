@@ -27,7 +27,7 @@ import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { databasePoolReadings } from '../../db/database.ts';
-import { recentInfraFailures } from '../../db/infra.ts';
+import { longestCheckoutSince, recentInfraFailures } from '../../db/infra.ts';
 import { httpCompleter, laneConfig, routeLabel, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { isRunpodSlot, runpodCallWindow, runpodLatency, RUNPOD_PREFIX } from '../cheap/runpod.ts';
 import { superviseRunpodPod } from '../cheap/runpodPod.ts';
@@ -76,7 +76,7 @@ export interface Window {
 }
 
 export interface Pressure {
-  /** Saturated: an infrastructure failure in the last minute, or the pools' queues at their size. */
+  /** Saturated: an infrastructure failure in the last minute, or a queue that cost a caller a real wait (`databaseSaturation`). */
   db: boolean;
   /** Contended: callers waited for a connection since the last step. Holds growth; does not shrink. */
   dbContended?: boolean;
@@ -428,12 +428,54 @@ function readPressure(): Pressure {
   } catch {
     failures = 0;
   }
-  const max = pools?.workload.max ?? 0;
-  const db = failures > 0 || peakControlWaiting > 0 || (max > 0 && peakWaiting >= max);
-  const dbContended = peakWaiting > 0;
+  const longest = longestCheckoutSince(lastPressureAt);
+  lastPressureAt = now;
+  const { db, dbContended } = databaseSaturation({
+    failures,
+    peakWaiting,
+    peakControlWaiting,
+    workloadMax: pools?.workload.max ?? 0,
+    longestWorkloadWaitMs: longest.WORKLOAD ?? 0,
+    longestControlWaitMs: longest.CONTROL ?? 0,
+  });
   peakWaiting = 0;
   peakControlWaiting = 0;
   return { db, dbContended, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu, loop: Number.isFinite(loop) ? loop : 0, processCpu: processCoreSeconds / seconds, machine: processCoreSeconds / seconds / CORES };
+}
+let lastPressureAt = Date.now();
+
+/**
+ * How long a caller must have waited for a pooled connection inside one step before a
+ * queue counts as the database being saturated rather than momentarily busy.
+ */
+export const SATURATION_WAIT_MS = 1_000;
+
+/**
+ * Whether the database is saturated (halve the lane) or only contended (hold it). Pure.
+ *
+ * A queue is saturation only when it cost a caller a real wait. Production 2026-11-26:
+ * the lane halved on "Brain database saturated" 253 times in 24 h (about ten an hour, the
+ * largest single cause of its target changes) while every process's workload checkouts
+ * waited 0 ms at p95 (worst 6–28 ms), its control checkouts at most 257 ms, and no
+ * infrastructure failure was felt: the rule read any momentary waiter on the two-connection
+ * control pool, or eight callers queued for a few milliseconds, as overload. Throughput
+ * swung 16–374 items an hour with it. A failure, or a wait at least `SATURATION_WAIT_MS`,
+ * still halves; a queue that cost nothing only holds growth.
+ */
+export function databaseSaturation(input: {
+  failures: number;
+  peakWaiting: number;
+  peakControlWaiting: number;
+  workloadMax: number;
+  longestWorkloadWaitMs: number;
+  longestControlWaitMs: number;
+}): { db: boolean; dbContended: boolean } {
+  const queued = input.peakControlWaiting > 0 || (input.workloadMax > 0 && input.peakWaiting >= input.workloadMax);
+  const costly = Math.max(input.longestWorkloadWaitMs, input.longestControlWaitMs) >= SATURATION_WAIT_MS;
+  return {
+    db: input.failures > 0 || (queued && costly) || input.longestWorkloadWaitMs >= SATURATION_WAIT_MS * 5,
+    dbContended: input.peakWaiting > 0 || input.peakControlWaiting > 0,
+  };
 }
 
 /*
