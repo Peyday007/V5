@@ -901,7 +901,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **What is wrong:** Fragments are not executed, 69% of searches are refused, no keyed search provider is configured, Firecrawl is held to 15 credits/day, and the read-capable routine workers are not members of evaluation projects.
 - **Owner of the correction:** research coordinator/queue; server/services/sources/*; owner items (keyed search key)
 - **How a correction is proved:** A fresh goal's research completes its planned fragments and its plan reads >=20 relevant verified facts within the goal window.
-- **Evidence:** RESEARCH-STARVATION-DIAGNOSIS: 1/16 fragments completed; 30Q traces: 0/1/0 completions after ~6 h; searches 785/1142 refused.
+- **Evidence:** RESEARCH-STARVATION-DIAGNOSIS: 1/16 fragments completed; 30Q traces: 0/1/0 completions after ~6 h; searches 785/1142 refused. Operator capacity 06:20-07:00Z (RC6 owner session_01QF5Tk5NBNTchKMwPJPQFEc): about 20 research fragments SUCCEEDED per hour Brain-wide; the GPU lane is held below its slot target (inFlight 3 of 8) by "database connections contended"; each restart holds the free lane at START_TARGET=2 for 10 min and resumes at half the saved target (16 restarts/24h, about 160 min/day); fragmentSearchRoom is 2 Brain-wide once Firecrawl hits its ceiling (34 CEILING vs 7 ANSWERED/24h; DDG 817 refused vs 416 answered). The free-lane database-saturation brake fired 253 times/24h while checkouts waited 0 ms p95, a false brake, corrected by #1342 (queue session). Projection: 30 goals x about 6 fragments = about 9 h for a first round.
 - **Questions it explains (11):** C06-P, C06-F, C07-R, C10-I, C11-R, C13-P, C13-I, C14-X, C15-P, C15-X, C34-R
 
 ### RC7 No shared per-goal working state (coordination)
