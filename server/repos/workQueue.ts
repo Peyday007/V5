@@ -583,12 +583,29 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
     // below is what makes the claim correct either way, and one code path that
     // is provable on both backends is worth more here than a second one that is
     // faster under a contention level this fleet does not yet have.
+    /*
+     * Within one priority, each project takes its turn before any project's
+     * next (`project_turn`), and only then does age decide. The launch pass
+     * already gives each goal's project its turn (`nextLaunchable`), and this
+     * scan undid it: oldest-first across the Brain meant a project's research
+     * waited behind every older project's whole queue. Production, 2026-11-26
+     * 01:35Z: fragments start only while web search can feed them, 845
+     * evaluation items waited at priority 8–9, and a goal created six hours
+     * earlier (dec1125c p10) had not had one item started — while older goals'
+     * later fragments ran. Fair across projects, a new goal's decisive question
+     * is asked within a turn, and no project's backlog holds another's.
+     */
     const candidates = await db.all<WorkItemRow>(
-      `SELECT * FROM work_items
-        WHERE ${CLAIMABLE_SQL}
-          AND project_id IN (${projectIds.map(() => '?').join(', ')})${typeClause}
-          AND (target_worker_id IS NULL OR target_worker_id = ?)${seenClause}
-        ORDER BY priority DESC, CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END, available_at, created_at, id
+      `SELECT * FROM (
+         SELECT work_items.*,
+                CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END AS claim_tier,
+                ROW_NUMBER() OVER (PARTITION BY project_id, priority ORDER BY available_at, created_at, id) AS project_turn
+           FROM work_items
+          WHERE ${CLAIMABLE_SQL}
+            AND project_id IN (${projectIds.map(() => '?').join(', ')})${typeClause}
+            AND (target_worker_id IS NULL OR target_worker_id = ?)${seenClause}
+       ) turns
+        ORDER BY priority DESC, claim_tier, project_turn, available_at, created_at, id
         LIMIT ${pageLimit}`,
       params,
     );
