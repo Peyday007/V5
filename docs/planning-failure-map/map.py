@@ -417,3 +417,46 @@ PROGRESS = [
  dict(at='2026-11-25', measure='dec1125c 10 goals, production', usable='0/10', note='PLANNING-ROUTE-GENERATION-2026-11-25'),
  dict(at='2026-11-26', measure='30Q test p02/p06/p10, 12 Brain outputs, blind', usable='0/3 goals (0/12 outputs); 3/12 credible-incomplete', note='INTELLIGENCE-TEST-30Q-2026-11-26'),
 ]
+
+# ---- Evidence added after the first build (2026-11-26, later the same day) ----
+ROOT_CAUSES['RC1']['wrong'] += ' Measured cause: the GPU pod proxy closes a connection idle for 100 s; a non-streamed reasoning reply that thinks longer arrives empty or as HTTP 524 (model exam 2026-11-26: every such item served once streamed).'
+ROOT_CAUSES['RC13'] = dict(name='The owner\'s plan is built from generic constructed arrangements that never read the owner', kind='coordination+reasoning',
+   wrong='Until route openings exist, readGoalPlan models the arrangement constructor\'s generic designs (fractional aircraft ownership, HVAC referral brokering) for every goal; the constructor and its research steps never read the owner\'s words, means or place, so the plan the owner is handed fits any request.',
+   owner='cash/construct.ts / goals/plan.ts goalArrangements',
+   proof='A fresh goal\'s plan reading names only strategies whose buyer, offer or means come from the owner\'s words or from the route proposer\'s owner-read routes.',
+   evidence='Production read fm1126a f01 (Tulsa, pickup truck, weekends, $200): plan = 12 constructed estimates incl. "Fractional ownership of aircraft" and HVAC firms; steps = research their buyer counts. Integration diagnosis: owner words do not reach the constructor.')
+ROOT_CAUSES['RC14'] = dict(name='The production reasoning models are below the bar the outcome needs', kind='model',
+   wrong='In isolation, on complete-information commercial questions, gpt-oss-120b answers 14/30 correctly, 4/11 commercial planning, 0/4 complete executable plans, with 61 evidence-interpretation errors; the fallback (laguna-xs-2.1) 1/30; Claude Opus 28/30, 10/11, 4/4. No prompt or software repair raises a model past its own ceiling.',
+   owner='model selection: routeProposal strongRouteModels (BRAIN_ROUTE_MODEL + key), operator models',
+   proof='Route asks served by a model that passes the commercial-planning exam (>=9/11) on the same prompts.',
+   evidence='docs/model-exam-2026-11-26/REPORT.md (blind, 4 models, 30 questions, mechanical cross-check).')
+def setq(cid, dim, status, ev, rc=None, comp=None):
+    for c in CAPS:
+        if c[0]==cid:
+            q=c[4][dim]; q['status']=status; q['evidence']=ev
+            if rc is not None: q['rc']=rc
+            if comp is not None: q['component']=comp
+            return
+    raise KeyError(cid)
+setq('C01','P','FAIL','Fresh batch fm1126a (30 goals, production 4dcef5c-era reader): 4 refused (monthly figure with a start month x2, "spending more than $1,000", "about two weeks"), 1 read as OTHER ("go from nothing to $3,500 a month"), "3 hours a week at most" read as 3 hours total, "zero time" / "not going to do any of the work" read as no limit. Repaired W1i; recheck on the next batch.','RC15')
+ROOT_CAUSES['RC15'] = dict(name='The objective reader misses common phrasings', kind='software',
+   wrong='The regex reader has no reading for several ordinary ways people state a window, a spending cap, an hours rate or no time at all, so a goal is refused or carries a wrong limit into every later step.',
+   owner='industry/construction/intent.ts readObjective',
+   proof='Every goal of a fresh batch is read with the amount, window, capital and hours a person would read.',
+   evidence='fm1126a create log: 4 of 30 refused, 3+ misread (see C01-P).')
+setq('C02','M','PASS','Model exam: given complete facts, Claude Opus reads constraints with 3 violations in 30; gpt-oss 8, fallback 22. The 4/4 invented refusals were the fallback\'s.','RC14')
+setq('C05','M','FAIL','Model exam: gpt-oss 8 and the fallback 22 constraint violations in 30, Claude 3; date and window arithmetic errors concentrate in the open models.','RC14')
+setq('C07','M','FAIL','Model exam commercial planning: Claude 10/11, gpt-oss 4/11, Qwen 1/11, fallback 0/11. 30Q control (Claude Sonnet, Brain\'s prompt) also missed p06\'s strongest path, so the prompt shares the failure (RC5).','RC14,RC5')
+setq('C11','M','NEEDS RECHECK','Not run on the question prompt; the model exam\'s evidence-interpretation errors (gpt-oss 61, Claude 1) predict the gap.','RC14')
+setq('C23','M','PASS','Model exam: re-asked with streaming, gpt-oss served 30/30; the empty replies are the proxy idle cut, not the model (repaired W1j).','RC1')
+setq('C24','M','FAIL','Model exam evidence interpretation: gpt-oss 1.00/2, Claude 1.93/2; 30Q control 0/3 usable but best evidence hygiene.','RC14')
+setq('C25','M','FAIL','Model exam reasoning correctness: gpt-oss 1.13/2, fallback 0.23, Claude 1.97; mechanical key numbers gpt-oss 7/9.','RC14')
+setq('C31','M','NEEDS RECHECK','Not run as critic; exam constraint and evidence errors predict false drops from open models.','RC14')
+setq('C36','P','FAIL','Model exam: complete executable plan Claude 4/4, gpt-oss 0/4, Qwen 0/4. Production fm1126a f01: the owner\'s plan is research steps on generic constructed arrangements.','RC14,RC13','goals/plan.ts steps; route→plan')
+setq('C04','X','FAIL','fm1126a f01: the plan reading is built from constructed arrangements while the route proposer\'s owner-read directions are not yet openings; two generators, no arbiter.','RC11,RC13')
+REPAIRS += [
+ dict(id='W1i', rc='RC15', what='Objective reader: monthly figure with a start month (deadline end of that month), "more than" spending limits, bare spans ("about two weeks"), "N hours a week at most" read as a rate, "zero time"/"not going to do any of the work" as zero hours, "don\'t want to put any money in"/"nothing, no savings" as no capital.', owner='intent.ts', depends='', state='MERGED_PENDING_PRODUCTION', evidence='tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally'),
+ dict(id='W1j', rc='RC1', what='chatFor streams every turn without tools, so reasoning past the 100 s proxy idle cut still answers.', owner='cheap/modelBench.ts', depends='', state='MERGED_PENDING_PRODUCTION', evidence='tests/chatStreaming.test.ts; model exam pass 2'),
+ dict(id='W3a', rc='RC13', what='The owner\'s plan must not be built from constructed arrangements that read nothing of the owner: route the owner\'s words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.', owner='cash/construct.ts; goals/plan.ts', depends='', state='OPEN', evidence=''),
+ dict(id='W3b', rc='RC14', what='A route and critique model that passes the commercial-planning exam: BRAIN_ROUTE_MODEL with an Anthropic key (owner), or the owner lifting the §84 reservation so Claude routines may plan goals.', owner='owner decision; routeProposal strongRouteModels', depends='owner', state='BLOCKED_MISSING_AUTHORITY', evidence='model exam'),
+]

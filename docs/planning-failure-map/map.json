@@ -12,7 +12,7 @@
   "RC1": {
    "name": "Model turn is not checked before it counts",
    "kind": "model+software",
-   "wrong": "An empty reply (content \"\" with no error) or a 524 timeout from the primary model (gpt-oss-120b) is not treated as a failed turn to be retried on the same capable model; the turn falls to a weaker fallback. Reasoning models spend the max-token budget on hidden reasoning and return nothing.",
+   "wrong": "An empty reply (content \"\" with no error) or a 524 timeout from the primary model (gpt-oss-120b) is not treated as a failed turn to be retried on the same capable model; the turn falls to a weaker fallback. Reasoning models spend the max-token budget on hidden reasoning and return nothing. Measured cause: the GPU pod proxy closes a connection idle for 100 s; a non-streamed reasoning reply that thinks longer arrives empty or as HTTP 524 (model exam 2026-11-26: every such item served once streamed).",
    "owner": "server/services/goals/routeProposal.ts (ask/operatorChats), server/services/cheap/modelBench.ts",
    "proof": "Replay: on the same prompts, empty replies retried with a larger budget answer; production route asks record zero empty-reply fall-throughs.",
    "evidence": "30Q test: gpt-oss empty on 6/12 route asks; 524 at ~125 s on 2/3 question asks; integration diagnosis: 4/8 primary failures."
@@ -104,6 +104,30 @@
    "owner": "goals/plan.ts judgeAcceptance",
    "proof": "A plan whose legs are each grounded by verified findings reaches an owner-usable readiness state distinct from the money-commitment gate.",
    "evidence": "BRAIN-FAILURE-DIAGNOSIS-2026-11-17 F1 (code)."
+  },
+  "RC13": {
+   "name": "The owner's plan is built from generic constructed arrangements that never read the owner",
+   "kind": "coordination+reasoning",
+   "wrong": "Until route openings exist, readGoalPlan models the arrangement constructor's generic designs (fractional aircraft ownership, HVAC referral brokering) for every goal; the constructor and its research steps never read the owner's words, means or place, so the plan the owner is handed fits any request.",
+   "owner": "cash/construct.ts / goals/plan.ts goalArrangements",
+   "proof": "A fresh goal's plan reading names only strategies whose buyer, offer or means come from the owner's words or from the route proposer's owner-read routes.",
+   "evidence": "Production read fm1126a f01 (Tulsa, pickup truck, weekends, $200): plan = 12 constructed estimates incl. \"Fractional ownership of aircraft\" and HVAC firms; steps = research their buyer counts. Integration diagnosis: owner words do not reach the constructor."
+  },
+  "RC14": {
+   "name": "The production reasoning models are below the bar the outcome needs",
+   "kind": "model",
+   "wrong": "In isolation, on complete-information commercial questions, gpt-oss-120b answers 14/30 correctly, 4/11 commercial planning, 0/4 complete executable plans, with 61 evidence-interpretation errors; the fallback (laguna-xs-2.1) 1/30; Claude Opus 28/30, 10/11, 4/4. No prompt or software repair raises a model past its own ceiling.",
+   "owner": "model selection: routeProposal strongRouteModels (BRAIN_ROUTE_MODEL + key), operator models",
+   "proof": "Route asks served by a model that passes the commercial-planning exam (>=9/11) on the same prompts.",
+   "evidence": "docs/model-exam-2026-11-26/REPORT.md (blind, 4 models, 30 questions, mechanical cross-check)."
+  },
+  "RC15": {
+   "name": "The objective reader misses common phrasings",
+   "kind": "software",
+   "wrong": "The regex reader has no reading for several ordinary ways people state a window, a spending cap, an hours rate or no time at all, so a goal is refused or carries a wrong limit into every later step.",
+   "owner": "industry/construction/intent.ts readObjective",
+   "proof": "Every goal of a fresh batch is read with the amount, window, capital and hours a person would read.",
+   "evidence": "fm1126a create log: 4 of 30 refused, 3+ misread (see C01-P)."
   }
  },
  "repairs": [
@@ -223,6 +247,42 @@
    "depends": "W2c",
    "state": "OPEN",
    "evidence": ""
+  },
+  {
+   "id": "W1i",
+   "rc": "RC15",
+   "what": "Objective reader: monthly figure with a start month (deadline end of that month), \"more than\" spending limits, bare spans (\"about two weeks\"), \"N hours a week at most\" read as a rate, \"zero time\"/\"not going to do any of the work\" as zero hours, \"don't want to put any money in\"/\"nothing, no savings\" as no capital.",
+   "owner": "intent.ts",
+   "depends": "",
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally"
+  },
+  {
+   "id": "W1j",
+   "rc": "RC1",
+   "what": "chatFor streams every turn without tools, so reasoning past the 100 s proxy idle cut still answers.",
+   "owner": "cheap/modelBench.ts",
+   "depends": "",
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "tests/chatStreaming.test.ts; model exam pass 2"
+  },
+  {
+   "id": "W3a",
+   "rc": "RC13",
+   "what": "The owner's plan must not be built from constructed arrangements that read nothing of the owner: route the owner's words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.",
+   "owner": "cash/construct.ts; goals/plan.ts",
+   "depends": "",
+   "state": "OPEN",
+   "evidence": ""
+  },
+  {
+   "id": "W3b",
+   "rc": "RC14",
+   "what": "A route and critique model that passes the commercial-planning exam: BRAIN_ROUTE_MODEL with an Anthropic key (owner), or the owner lifting the \u00a784 reservation so Claude routines may plan goals.",
+   "owner": "owner decision; routeProposal strongRouteModels",
+   "depends": "owner",
+   "state": "BLOCKED_MISSING_AUTHORITY",
+   "evidence": "model exam"
   }
  ],
  "progress": [
@@ -503,10 +563,10 @@
    "dim": "P",
    "test": "Read 30 varied owner requests incl. \"can't put any hours in\", weekly vs total hours, \"keeps going after\".",
    "expected": "Amount, window, capital and hours match a human reading; unknowns marked unread, never guessed.",
-   "status": "PASS",
-   "evidence": "30Q: p02/p06/p10 readings correct (capital 1500/0/5000; hours 171/15/0 after d5beaf6).",
+   "status": "FAIL",
+   "evidence": "Fresh batch fm1126a (30 goals, production 4dcef5c-era reader): 4 refused (monthly figure with a start month x2, \"spending more than $1,000\", \"about two weeks\"), 1 read as OTHER (\"go from nothing to $3,500 a month\"), \"3 hours a week at most\" read as 3 hours total, \"zero time\" / \"not going to do any of the work\" read as no limit. Repaired W1i; recheck on the next batch.",
    "component": "industry/construction/intent.ts readObjective",
-   "rc": ""
+   "rc": "RC15"
   },
   {
    "id": "C01-R",
@@ -644,9 +704,9 @@
    "test": "Same p06 prompt to the control model.",
    "expected": "Control reads the owner correctly.",
    "status": "PASS",
-   "evidence": "Control p06 owner profile had no invented refusals.",
+   "evidence": "Model exam: given complete facts, Claude Opus reads constraints with 3 violations in 30; gpt-oss 8, fallback 22. The 4/4 invented refusals were the fallback's.",
    "component": "model",
-   "rc": ""
+   "rc": "RC14"
   },
   {
    "id": "C03-P",
@@ -784,9 +844,9 @@
    "test": "Six generators feed one goal.",
    "expected": "One arbitrated set; no contradictory openings.",
    "status": "FAIL",
-   "evidence": "426 candidates \u2192 49 distinct; no arbiter.",
+   "evidence": "fm1126a f01: the plan reading is built from constructed arrangements while the route proposer's owner-read directions are not yet openings; two generators, no arbiter.",
    "component": "plan set",
-   "rc": "RC11"
+   "rc": "RC11,RC13"
   },
   {
    "id": "C05-P",
@@ -867,10 +927,10 @@
    "dim": "M",
    "test": "Same critique prompt to the control model.",
    "expected": "Control does the arithmetic right.",
-   "status": "NEEDS RECHECK",
-   "evidence": "Not run on the critique prompt.",
+   "status": "FAIL",
+   "evidence": "Model exam: gpt-oss 8 and the fallback 22 constraint violations in 30, Claude 3; date and window arithmetic errors concentrate in the open models.",
    "component": "model",
-   "rc": ""
+   "rc": "RC14"
   },
   {
    "id": "C06-P",
@@ -1022,9 +1082,9 @@
    "test": "Control model on the same direction prompt.",
    "expected": "Control names the strongest path.",
    "status": "FAIL",
-   "evidence": "Control p06 also missed the Tasker path; p02 chose wholesale over retail.",
+   "evidence": "Model exam commercial planning: Claude 10/11, gpt-oss 4/11, Qwen 1/11, fallback 0/11. 30Q control (Claude Sonnet, Brain's prompt) also missed p06's strongest path, so the prompt shares the failure (RC5).",
    "component": "prompt",
-   "rc": "RC5"
+   "rc": "RC14,RC5"
   },
   {
    "id": "C08-P",
@@ -1315,10 +1375,10 @@
    "dim": "M",
    "test": "Control model on the question prompt.",
    "expected": "Less anchored.",
-   "status": "UNKNOWN",
-   "evidence": "Not run.",
+   "status": "NEEDS RECHECK",
+   "evidence": "Not run on the question prompt; the model exam's evidence-interpretation errors (gpt-oss 61, Claude 1) predict the gap.",
    "component": "model",
-   "rc": ""
+   "rc": "RC14"
   },
   {
    "id": "C12-P",
@@ -2169,10 +2229,10 @@
    "dim": "M",
    "test": "Same prompt, larger max_tokens.",
    "expected": "Answers.",
-   "status": "UNKNOWN",
-   "evidence": "To test.",
+   "status": "PASS",
+   "evidence": "Model exam: re-asked with streaming, gpt-oss served 30/30; the empty replies are the proxy idle cut, not the model (repaired W1j).",
    "component": "model",
-   "rc": ""
+   "rc": "RC1"
   },
   {
    "id": "C24-P",
@@ -2254,9 +2314,9 @@
    "test": "Control model on identical prompt.",
    "expected": "Better use.",
    "status": "FAIL",
-   "evidence": "Control 0/3 usable; better hygiene.",
+   "evidence": "Model exam evidence interpretation: gpt-oss 1.00/2, Claude 1.93/2; 30Q control 0/3 usable but best evidence hygiene.",
    "component": "model",
-   "rc": ""
+   "rc": "RC14"
   },
   {
    "id": "C25-P",
@@ -2337,10 +2397,10 @@
    "dim": "M",
    "test": "Control on arithmetic.",
    "expected": "Correct.",
-   "status": "NEEDS RECHECK",
-   "evidence": "Control understated channel budget (p10).",
+   "status": "FAIL",
+   "evidence": "Model exam reasoning correctness: gpt-oss 1.13/2, fallback 0.23, Claude 1.97; mechanical key numbers gpt-oss 7/9.",
    "component": "model",
-   "rc": ""
+   "rc": "RC14"
   },
   {
    "id": "C26-P",
@@ -2771,10 +2831,10 @@
    "dim": "M",
    "test": "Control model as critic on the same routes.",
    "expected": "Fewer false drops.",
-   "status": "UNKNOWN",
-   "evidence": "To test.",
+   "status": "NEEDS RECHECK",
+   "evidence": "Not run as critic; exam constraint and evidence errors predict false drops from open models.",
    "component": "model",
-   "rc": ""
+   "rc": "RC14"
   },
   {
    "id": "C32-P",
@@ -3066,9 +3126,9 @@
    "test": "Route \u2192 steps with owners, dates, costs, first action.",
    "expected": "Executable tomorrow.",
    "status": "FAIL",
-   "evidence": "Graders: no output executable; route output has no step plan.",
-   "component": "arrangementSteps/stepExecutor (route path)",
-   "rc": ""
+   "evidence": "Model exam: complete executable plan Claude 4/4, gpt-oss 0/4, Qwen 0/4. Production fm1126a f01: the owner's plan is research steps on generic constructed arrangements.",
+   "component": "goals/plan.ts steps; route\u2192plan",
+   "rc": "RC14,RC13"
   },
   {
    "id": "C36-R",
