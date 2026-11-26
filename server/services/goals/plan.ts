@@ -37,7 +37,8 @@ import { notePlanEffects } from '../knowledge/apply.ts';
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink, workstreamEventsOfKind } from '../../repos/register.ts';
-import { isRouteOpening, ROUTE_RANK_FIELD, routeRankOf } from '../../domain/routeOrigin.ts';
+import { goalRoutePrefix, isRouteOpening, ROUTE_RANK_FIELD, routeRankOf } from '../../domain/routeOrigin.ts';
+import { liveOpeningsWithRecordPrefix, opportunitiesWithRecordPrefix } from '../../repos/cashPortfolio.ts';
 import { cardFact } from '../../repos/cashCardFacts.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { recordPathwayAsk } from '../cash/answers.ts';
@@ -6162,6 +6163,35 @@ export function arrangementsFresh(held: { at: number; composedAt: number }, now:
 /** The goal's constructed arrangements, composed at most once per ten minutes. */
 export async function goalArrangements(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<ConstructedArrangement[]> {
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
+  return ownerFit(goal, target, await composedGoalArrangements(goal, target, now, bestReachCents));
+}
+
+/**
+ * The constructed arrangements that may stand in this owner's plan (RC13).
+ *
+ * The constructor reads the goal's figures and the map, never the owner's
+ * words, means or place, so its designs fit any request. Production
+ * 2026-11-26, dev6 (12 fresh goals): the plan for a pickup-truck owner with no
+ * money near Columbus modelled "Fractional ownership of aircraft" at $30M
+ * toward $2,000, while the route the proposer had read off that owner's words
+ * (towing for local mechanics, $75-150 a tow) sat beside it unmodelled; the
+ * same arrangement ids led goals as unlike as a photographer's and a bare
+ * $12K target. Once the route proposer has filed a route for the goal, that
+ * route is the owner-read search: a constructed design reaches the owner's
+ * reading, its lead and its research asks only when it transfers one of the
+ * goal's own routes. Nothing is discarded — the library still holds every
+ * design (`rememberArrangements`), and a goal with no route yet is planned
+ * over them as before.
+ */
+async function ownerFit(goal: Workstream, target: TargetReading, arrangements: ConstructedArrangement[]): Promise<ConstructedArrangement[]> {
+  if (arrangements.length === 0) return arrangements;
+  const routes = await liveOpeningsWithRecordPrefix(target.projectId, goalRoutePrefix(goal.id)).catch(() => 0);
+  if (routes === 0) return arrangements;
+  const own = new Set((await opportunitiesWithRecordPrefix(target.projectId, goalRoutePrefix(goal.id))).map((one) => one.id));
+  return arrangements.filter((one) => one.precedent !== null && own.has(one.precedent.opportunityId));
+}
+
+async function composedGoalArrangements(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null): Promise<ConstructedArrangement[]> {
   const held = lastArrangements.get(goal.id);
   if (held && arrangementsFresh(held, now)) return held.arrangements;
   /*
