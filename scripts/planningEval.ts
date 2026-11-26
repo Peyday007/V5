@@ -913,6 +913,32 @@ async function judgeOne(): Promise<void> {
 }
 
 /**
+ * judge-pass: one run of the tick's own 'judge-unjudged' goal loop, outside the
+ * tick, timed per idea — the experiment that separates "the pass fails on the
+ * head of its queue" from "the tick never executes the pass".
+ */
+async function judgePass(): Promise<void> {
+  const loop = await import('../server/services/russell/loop.ts');
+  const { judgeCandidate } = await import('../server/services/russell/planning.ts');
+  const { databasePressure } = await import('../server/db/pressure.ts').catch(() => ({ databasePressure: () => ({ state: 'UNKNOWN' }) }));
+  const pressure = (databasePressure as () => { state: string })().state;
+  const goalMax = pressure === 'SHEDDING' ? loop.GOAL_JUDGMENTS_PER_TICK : loop.GOAL_JUDGMENTS_MAX_PER_TICK;
+  let t = Date.now();
+  const ideas = await loop.unjudgedGoalIdeas(goalMax);
+  console.log(`PASS queue ${JSON.stringify({ pressure, goalMax, ideas: ideas.length, ms: Date.now() - t })}`);
+  const started = Date.now();
+  let judged = 0;
+  for (const idea of ideas) {
+    if (judged >= loop.GOAL_JUDGMENTS_PER_TICK && Date.now() - started >= loop.GOAL_JUDGING_BUDGET_MS) break;
+    t = Date.now();
+    const outcome = await judgeCandidate(idea.id).catch((error: unknown) => ({ threw: String((error as Error)?.message ?? error).slice(0, 200) }));
+    console.log(`PASS idea ${JSON.stringify({ id: idea.id, ms: Date.now() - t, outcome })}`);
+    judged += 1;
+  }
+  console.log(`PASS done ${JSON.stringify({ judged, ms: Date.now() - started })}`);
+}
+
+/**
  * focus --run R / unfocus: the owner's priority override (2026-11-26, "PRIORITY
  * OVERRIDE — BRAIN INTELLIGENCE COMPLETION MISSION"): every live goal outside
  * evaluation run R is paused so its bins stop taking research slots and model
@@ -973,6 +999,7 @@ try {
   else if (command === 'focus') await focus();
   else if (command === 'judging') await judging();
   else if (command === 'judge-one') await judgeOne();
+  else if (command === 'judge-pass') await judgePass();
   else if (command === 'unfocus') await unfocus();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
