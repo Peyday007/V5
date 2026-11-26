@@ -650,8 +650,12 @@ async function probe(): Promise<void> {
   const target = await readTarget(goal, new Date());
   if (!target) fail('no target');
   let supplied: unknown[] | null = null;
+  // The batch is a list of facts, or {facts, maxFindings} to measure what the proposer's cap on findings shown (FINDINGS_SHOWN) loses.
+  let maxFindings: number | null = null;
   if (factsB64) {
-    const facts = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    const batch = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as unknown;
+    const facts = (Array.isArray(batch) ? batch : ((batch as { facts: unknown[] }).facts ?? [])) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    if (!Array.isArray(batch) && typeof (batch as { maxFindings?: unknown }).maxFindings === 'number') maxFindings = (batch as { maxFindings: number }).maxFindings;
     supplied = facts.map((one, i) => ({ id: `probe_${i + 1}`, claim: one.claim, sourceUrl: one.sourceUrl, sourceTitle: one.sourceTitle ?? null, sourcePublisher: null, sourceDate: one.sourceDate ?? null, evidenceLane: one.lane ?? null, retrievedAt: new Date().toISOString() }));
   }
   const deps = supplied ? { claims: async () => supplied } : {};
@@ -659,7 +663,9 @@ async function probe(): Promise<void> {
   if (!read) fail('no context');
   const ctx = read.ctx;
   ctx['today'] = new Date().toISOString().slice(0, 10);
+  if (supplied && maxFindings !== null) ctx['findings'] = P['findingsOf']!(supplied, maxFindings);
   const findings = (ctx['findings'] as unknown[] | undefined) ?? [];
+  out('delivery', { supplied: supplied?.length ?? 0, shown: findings.length, cap: maxFindings ?? 'FINDINGS_SHOWN' });
   const scout = findings.length < 3;
   out('objective', { objective: ctx['objective'] ?? null, remaining: ctx['remaining'] ?? null, daysLeft: ctx['daysLeft'] ?? null, capitalLimit: ctx['capitalLimit'] ?? null, hoursLimit: ctx['hoursLimit'] ?? null, resources: ctx['resources'] ?? null });
   out('mode', { supplied: !!supplied, findings: findings.length, stage: scout ? 'SCOUT' : 'ROUTE' });
