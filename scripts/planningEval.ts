@@ -718,8 +718,11 @@ async function questions(): Promise<void> {
   const target = await readTarget(goal, new Date());
   if (!target) fail('no target');
   let supplied: unknown[] = [];
+  let maxFindings: number | null = null;
   if (factsB64) {
-    const facts = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    const batch = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as unknown;
+    const facts = (Array.isArray(batch) ? batch : ((batch as { facts: unknown[] }).facts ?? [])) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    if (!Array.isArray(batch) && typeof (batch as { maxFindings?: unknown }).maxFindings === 'number') maxFindings = (batch as { maxFindings: number }).maxFindings;
     supplied = facts.map((one, i) => ({ id: `probe_${i + 1}`, claim: one.claim, sourceUrl: one.sourceUrl, sourceTitle: one.sourceTitle ?? null, sourcePublisher: null, sourceDate: one.sourceDate ?? null, evidenceLane: one.lane ?? null, retrievedAt: new Date().toISOString() }));
   }
   // Production's findings are deliberately not shown on a first pass: the questions come from the owner's words and limits alone.
@@ -727,6 +730,7 @@ async function questions(): Promise<void> {
   if (!read) fail('no context');
   const ctx = read.ctx;
   ctx['today'] = new Date().toISOString().slice(0, 10);
+  if (supplied.length && maxFindings !== null) ctx['findings'] = P['findingsOf']!(supplied, maxFindings);
   const findings = (ctx['findings'] as unknown[] | undefined) ?? [];
   // The scouting ask's own framing — owner's words, date, limits, feasibility, findings — up to where it asks for directions.
   const framing = String(P['directionPrompt']!(ctx)).split('STEP 2 — DIRECTIONS TO CHECK.')[0]!.trim();
