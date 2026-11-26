@@ -157,6 +157,20 @@ describe('a review before research is spent on directions', () => {
     expect(applyDirectionCritique(parsed, null).kept).toHaveLength(2);
   });
 
+  it('C71: drops a direction the review marks KEEP but scores as failing a rule, even when it ranks it first', async () => {
+    const { applyDirectionCritique, critiqueJson } = await import('../server/services/goals/routeProposal.ts');
+    const parsed = parseDirections(JSON.stringify({ directions: many }), ctx({ ownerLabour: { offered: true, evidence: 'I run two embroidery machines' } as never })).directions;
+    // A lenient critic: it says KEEP for the template pack, yet scores its VALUE at 1 (a failure) and ranks it best.
+    const review = critiqueJson(
+      JSON.stringify({ reviews: [{ index: 1, verdict: 'KEEP', scores: { OWNER_FIT: 5, VALUE: 4 }, why: 'uses the machines' }, { index: 2, verdict: 'KEEP', scores: { OWNER_FIT: 3, VALUE: 1 }, why: 'easy to list' }], ranking: [2, 1] }),
+      2,
+    );
+    expect(review!.reviews[1]).toMatchObject({ verdict: 'KEEP', failed: ['VALUE'] });
+    const applied = applyDirectionCritique(parsed, review);
+    expect(applied.kept.map((one) => one.title)).toEqual([direction.title]);
+    expect(applied.dropped).toEqual([expect.objectContaining({ title: 'Notion templates for everyone', rule: 'CRITIQUE', why: expect.stringMatching(/fails VALUE/) })]);
+  });
+
   it('reads a cut-off reply and refuses a buyer kind written as the payer', () => {
     const cut = `{"owner":{},"directions":[${JSON.stringify(direction)},{"title":"half`;
     expect(parseDirections(cut, ctx({ ownerLabour: { offered: true, evidence: 'x' } as never })).directions.map((one) => one.title)).toEqual([direction.title]);

@@ -115,6 +115,19 @@ describe('one unlucky result is not a rule', () => {
     expect(methodCorrections(reading, { goalId: 'wst_1', projectId: PROJECT })).toEqual([]);
   });
 
+  it('C65: a cause behind fewer than the minimum systematic misses is not generalized, beside one that is', () => {
+    // One miscalibrated bucket: 14 misses measured late (TIMING), 2 on a day demand outran capacity (CAPACITY).
+    const predictions = Array.from({ length: 24 }, (_, i) => prediction(i));
+    const outcomes = predictions.map((p, i) => outcome(p, i >= 16, i < 14 ? ['TIMING'] : i < 16 ? ['CAPACITY'] : [], (i % 27) + 1));
+    const reading = assessModelLearning({ predictions, exposures: [], outcomes });
+    const capacity = reading.corrections.find((c) => c.cause === 'CAPACITY');
+    expect(capacity?.misses).toBe(2);
+    expect(capacity!.misses).toBeLessThan(MIN_CORRECTION_MISSES);
+    const corrections = methodCorrections(reading, { goalId: 'wst_1', projectId: PROJECT });
+    expect(corrections.map((c) => c.cause)).toEqual(['TIMING']);
+    expect(corrections[0]!.supporting).toHaveLength(14);
+  });
+
   it('a warranted correction names a specific method and keeps both sides of the evidence', () => {
     const reading = assessModelLearning({ ...systematic('TIMING'), exposures: [] });
     const [timing] = methodCorrections(reading, { goalId: 'wst_1', projectId: PROJECT }).filter((c) => c.cause === 'TIMING');
