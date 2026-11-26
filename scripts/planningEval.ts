@@ -694,14 +694,16 @@ async function probe(): Promise<void> {
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
     const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
-    const r = await chat([{ role: 'system', content: system }, { role: 'user', content: prompt }], undefined, 4000);
-    out('reply', { model: model.label, error: r.error ?? null, ms: r.ms, content: String(r.content ?? '').slice(0, 9000) });
+    const started = Date.now();
+    // The production turn: an empty reply is retried with twice the budget, then an error (`askModel`).
+    const r = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, system, prompt, 4000);
+    out('reply', { model: model.label, error: r.error ?? null, ms: Date.now() - started, content: String(r.content ?? '').slice(0, 9000) });
     if (r.error || !r.content) continue;
     const parsed = scout ? P['parseDirections']!(r.content, ctx) : P['parseRoutes']!(P['routesJson']!(r.content), ctx);
     out('parsed', parsed);
     if (!scout) {
       const routes = (parsed as { routes: unknown[] }).routes;
-      const critic = await chat([{ role: 'system', content: "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object." }, { role: 'user', content: String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))) }], undefined, 3000);
+      const critic = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.", String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))), 3000);
       const critique = critic.content ? P['critiqueJson']!(critic.content, routes.length) : null;
       out('critique', critique ? P['applyCritique']!(routes, critique, ctx) : { error: critic.error ?? 'unreadable' });
     }

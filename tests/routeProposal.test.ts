@@ -184,13 +184,14 @@ describe('a goal is given whole routes from its objective', () => {
     expect(events[0]!.summary).toMatch(/no operator model is configured/);
   });
 
-  it('drops a route with no owner fit, and keeps a second, different offer to the same kind of buyer', () => {
+  it('keeps a route with no owner fit, saying so for the critic, and keeps a second, different offer to the same kind of buyer', () => {
     const ctx: RouteContext = { objective: 'I speak Spanish and live in Seattle', currency: 'USD', remaining: 3000, daysLeft: 30, capitalLimit: null, hoursLimit: null, resources: null, industry: null, recurring: false, exclusions: [], delivers: [], held: [], refuted: [] };
     const base = ANSWER.routes[1]!;
     const { routes: kept, rejected } = parseRoutes({ routes: [{ ...base, ownerFit: undefined }, base, { ...base, offer: 'Show notes', title: 'Show notes' }] }, ctx);
+    // A missing owner-fit sentence is a gap the critic judges, never a lost route (intelligence test, 2026-11-26).
     expect(kept.map((one) => one.title)).toEqual([base.title, 'Show notes']);
-    expect(rejected.map((one) => one.why).join(' | ')).toMatch(/does not say how it uses or respects/);
-    expect(rejected.map((one) => one.why).join(' | ')).not.toMatch(/same buyer type/);
+    expect(kept[0]!.ownerFit).toMatch(/not stated by the proposer/);
+    expect(rejected.map((one) => one.rule)).toEqual(['DUPLICATE']);
   });
 
   it('rejects a route whose one sale needs more owner hours than the limit allows', () => {

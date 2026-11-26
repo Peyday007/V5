@@ -1190,6 +1190,7 @@ export async function projectEvidenceClaims(projectId: string, limit: number): P
       WHERE o.project_id = ? AND c.accepted = 1
         AND c.source_url IS NOT NULL
         AND COALESCE(c.retrieval_state, 'RETRIEVED') = 'RETRIEVED'
+        AND COALESCE(c.contradiction_state, 'UNCHALLENGED') <> 'REFUTED'
       ORDER BY c.created_at DESC, c.id DESC
       LIMIT ?`,
     [projectId, Math.max(1, Math.trunc(limit))],
@@ -1208,7 +1209,8 @@ export async function projectEvidenceClaimCount(projectId: string): Promise<numb
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
         AND c.source_url IS NOT NULL
-        AND COALESCE(c.retrieval_state, 'RETRIEVED') = 'RETRIEVED'`,
+        AND COALESCE(c.retrieval_state, 'RETRIEVED') = 'RETRIEVED'
+        AND COALESCE(c.contradiction_state, 'UNCHALLENGED') <> 'REFUTED'`,
     [projectId],
   );
   return Number(row?.n ?? 0);
