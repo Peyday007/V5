@@ -1,0 +1,333 @@
+[
+ {
+  "id": "Q1",
+  "question": "What is the average hourly rate that Seattle\u2011based small businesses are willing to pay for a 2\u2011hour email inbox triage service delivered remotely?",
+  "area": "price demand",
+  "decision": "whether email triage can meet the $500 target within 7 days",
+  "invalidates": "If the average willingness to pay is below $250, the route cannot reach $500 even with two clients",
+  "searches": [
+   "Seattle small business email management outsourcing rates",
+   "Freelance email triage pricing 2024"
+  ]
+ },
+ {
+  "id": "Q2",
+  "question": "Which vetted virtual assistant platforms (e.g., Upwork, Fiverr, PeoplePerHour) allow per\u2011task payment with instant payout to the assistant after task completion?",
+  "area": "supplier payment terms",
+  "decision": "ability to hire a VA without upfront capital",
+  "invalidates": "If no platform offers immediate post\u2011task payment, the owner cannot use a VA without cash",
+  "searches": [
+   "Upwork per\u2011task payment instant release",
+   "Fiverr gig payment after delivery instant"
+  ]
+ },
+ {
+  "id": "Q3",
+  "question": "What is the typical turnaround time for a freelance designer on Fiverr or Upwork to deliver a logo within 24 hours after receiving payment?",
+  "area": "fulfilment speed",
+  "decision": "feasibility of the 24\u2011hour logo brokerage route",
+  "invalidates": "If most designers need >24\u202fh, the route fails the 7\u2011day cash deadline",
+  "searches": [
+   "Fiverr 24\u2011hour logo design delivery guarantee",
+   "Upwork fast logo design turnaround"
+  ]
+ },
+ {
+  "id": "Q4",
+  "question": "What commission or referral fee does a reputable logo\u2011design marketplace (e.g., 99designs, DesignCrowd) pay to a broker who brings in a client?",
+  "area": "brokerage margin",
+  "decision": "whether a broker model can generate $40 profit per logo",
+  "invalidates": "If commissions are <10\u202f% of price, the $40 margin is unrealistic",
+  "searches": [
+   "99designs affiliate program payout",
+   "DesignCrowd referral commission"
+  ]
+ },
+ {
+  "id": "Q5",
+  "question": "What are the transaction fees and settlement times for PayPal, Stripe, and Square when receiving payments from U.S. buyers, and can any provide same\u2011day payout?",
+  "area": "cash\u2011flow timing",
+  "decision": "ensuring the first $500 can settle within 7 days",
+  "invalidates": "If all options settle >7 days, the route fails",
+  "searches": [
+   "PayPal instant transfer fee 2024",
+   "Stripe payout schedule US",
+   "Square same\u2011day payout"
+  ]
+ },
+ {
+  "id": "Q6",
+  "question": "How many Seattle\u2011based local businesses have posted recent requests for CSV data cleanup or spreadsheet automation on freelance job boards?",
+  "area": "market demand",
+  "decision": "whether there is enough immediate demand for CSV cleanup",
+  "invalidates": "If zero recent postings, the service lacks buyers",
+  "searches": [
+   "Upwork CSV cleanup job Seattle 2024",
+   "Freelancer.com data cleaning request Seattle"
+  ]
+ },
+ {
+  "id": "Q7",
+  "question": "What is the maximum number of rows that can be processed by OpenAI\u2019s free tier (or other free AI tools) in a 48\u2011hour window without hitting rate limits?",
+  "area": "technical feasibility",
+  "decision": "ability to deliver 10,000\u2011row cleanup for $80 using free tools",
+  "invalidates": "If free tier caps below required rows, the route needs paid API (capital)",
+  "searches": [
+   "OpenAI free tier token limit per month 2024",
+   "Free AI CSV cleaning tools row limit"
+  ]
+ },
+ {
+  "id": "Q8",
+  "question": "What are the average prices charged on platforms like Upwork for cleaning up 10,000 rows of CSV data within 48 hours?",
+  "area": "pricing benchmark",
+  "decision": "setting a competitive yet profitable price for the CSV service",
+  "invalidates": "If market price is < $50, $80 offer may be too high to attract buyers",
+  "searches": [
+   "Upwork CSV data cleaning rates 2024",
+   "Freelance spreadsheet cleanup pricing"
+  ]
+ },
+ {
+  "id": "Q9",
+  "question": "Are there any Seattle\u2011based micro\u2011task marketplaces (e.g., TaskRabbit, Gigwalk) that allow the owner to list a digital service (like email triage) and receive payment within 24\u201148 hours?",
+  "area": "channel speed",
+  "decision": "identifying fast\u2011pay channels beyond traditional freelance sites",
+  "invalidates": "If no such marketplace exists, the owner must use slower platforms",
+  "searches": [
+   "TaskRabbit digital services Seattle",
+   "Gigwalk payment timeline"
+  ]
+ },
+ {
+  "id": "Q10",
+  "question": "What is the average time from order to payout for a completed gig on Fiverr when the buyer uses the \u201cFiverr Revenue Card\u201d or PayPal?",
+  "area": "payout latency",
+  "decision": "whether Fiverr can meet the 7\u2011day cash requirement",
+  "invalidates": "If payout takes >7 days, Fiverr gigs are unsuitable",
+  "searches": [
+   "Fiverr payout schedule 2024",
+   "Fiverr Revenue Card instant payout"
+  ]
+ },
+ {
+  "id": "Q11",
+  "question": "Do any Seattle\u2011based small\u2011business networking groups (e.g., Seattle Chamber of Commerce, BNI) have a weekly email where a paid service offer could be advertised for immediate response?",
+  "area": "local outreach channel",
+  "decision": "potential to acquire clients within the 7\u2011day window via local newsletters",
+  "invalidates": "If newsletters are only monthly, the channel is too slow",
+  "searches": [
+   "Seattle Chamber of Commerce weekly newsletter advertising rates",
+   "BNI Seattle local business email promotion"
+  ]
+ },
+ {
+  "id": "Q12",
+  "question": "What is the average commission rate charged by platforms that connect freelancers with clients for data\u2011cleaning tasks (e.g., Clickworker, Amazon Mechanical Turk) and how quickly do workers get paid?",
+  "area": "subcontractor cost & payout",
+  "decision": "whether outsourcing CSV cleanup to crowd workers is viable without capital",
+  "invalidates": "If platform fees exceed $20 per job, profit margin collapses",
+  "searches": [
+   "Clickworker payment schedule",
+   "Amazon Mechanical Turk requester fees 2024"
+  ]
+ },
+ {
+  "id": "Q13",
+  "question": "Are there any \u201cpay\u2011after\u2011delivery\u201d freelance contracts on Upwork that allow the owner to receive payment before paying a subcontractor, thus avoiding upfront capital?",
+  "area": "cash\u2011flow sequencing",
+  "decision": "ability to act as a broker without own cash",
+  "invalidates": "If Upwork always holds escrow until both parties approve, the owner needs capital",
+  "searches": [
+   "Upwork escrow release after client approval",
+   "Upwork milestone payment flow"
+  ]
+ },
+ {
+  "id": "Q14",
+  "question": "What is the current demand for 24\u2011hour turnaround graphic design services on platforms like DesignCrowd, as measured by the number of posted urgent jobs in the past week?",
+  "area": "buyer urgency",
+  "decision": "likelihood of finding buyers who will pay premium for speed",
+  "invalidates": "If urgent jobs are rare, premium pricing may not be justified",
+  "searches": [
+   "DesignCrowd urgent logo design jobs 2024",
+   "Freelance graphic design 24\u2011hour deadline postings"
+  ]
+ },
+ {
+  "id": "Q15",
+  "question": "What are the legal requirements for a Seattle resident to act as a broker for freelance services (e.g., licensing, tax reporting) when no physical product is involved?",
+  "area": "regulatory compliance",
+  "decision": "whether the owner can legally operate the brokerage model",
+  "invalidates": "If a specific business license is mandatory, the owner cannot start instantly",
+  "searches": [
+   "Seattle business license for service broker 2024",
+   "Washington state tax reporting for freelance brokerage"
+  ]
+ },
+ {
+  "id": "Q16",
+  "question": "What is the average conversion rate for cold outreach emails sent to small businesses offering a 2\u2011hour email triage service, based on case studies or industry benchmarks?",
+  "area": "marketing effectiveness",
+  "decision": "how many outreach emails the owner must send within 15\u202fh to secure enough clients",
+  "invalidates": "If conversion is <1\u202f%, the owner cannot reach $500 in time",
+  "searches": [
+   "cold email conversion rate B2B services 2024",
+   "email triage service outreach success rate"
+  ]
+ },
+ {
+  "id": "Q17",
+  "question": "What are the typical fees for using a payment processor that offers instant payouts (e.g., Payoneer Instant Transfer) for amounts under $1,000?",
+  "area": "cost of fast payout",
+  "decision": "whether fees erode the $500 profit goal",
+  "invalidates": "If fees exceed $30 per transaction, profit margin may fall below target",
+  "searches": [
+   "Payoneer instant transfer fee 2024",
+   "Instant payout fees for small amounts"
+  ]
+ },
+ {
+  "id": "Q18",
+  "question": "How many Seattle\u2011based e\u2011commerce sellers are actively seeking quick logo redesigns on forums like Reddit r/SeattleEntrepreneurs or r/SmallBusiness?",
+  "area": "buyer pool size",
+  "decision": "potential volume of logo\u2011design brokerage leads",
+  "invalidates": "If no active discussions, the market may be too thin",
+  "searches": [
+   "Reddit SeattleEntrepreneurs logo design request",
+   "r/SmallBusiness logo redesign urgent"
+  ]
+ },
+ {
+  "id": "Q19",
+  "question": "What is the average time to complete a 2\u2011hour email inbox triage task when a virtual assistant uses AI\u2011assisted email sorting tools (e.g., Gmail Smart Labels, SaneBox)?",
+  "area": "efficiency gain",
+  "decision": "whether the owner can outsource the task within the 15\u2011hour limit",
+  "invalidates": "If AI tools add significant setup time, the task may exceed 2\u202fh",
+  "searches": [
+   "AI email triage time savings",
+   "SaneBox email processing speed"
+  ]
+ },
+ {
+  "id": "Q20",
+  "question": "What are the platform policies of Upwork and Fiverr regarding reselling another freelancer\u2019s work to a third\u2011party client (i.e., brokerage), and are there any prohibitions?",
+  "area": "platform compliance",
+  "decision": "whether the brokerage model can be executed on those platforms",
+  "invalidates": "If policies forbid subcontracting without disclosure, the route is blocked",
+  "searches": [
+   "Upwork subcontracting policy 2024",
+   "Fiverr resell work rules"
+  ]
+ },
+ {
+  "id": "Q21",
+  "question": "What is the average price that Seattle freelancers charge for a 2\u2011hour email inbox triage service on local gig boards (e.g., Craigslist Services, Nextdoor)?",
+  "area": "local pricing benchmark",
+  "decision": "setting a competitive price that still yields $500 total",
+  "invalidates": "If local rates are < $30, the owner may need many clients beyond time capacity",
+  "searches": [
+   "Craigslist Seattle email management service price",
+   "Nextdoor Seattle virtual assistant rates"
+  ]
+ },
+ {
+  "id": "Q22",
+  "question": "Are there any \u201cinstant\u2011pay\u201d freelance marketplaces (e.g., PeoplePerHour Instant Pay) that release funds to the seller within minutes of client approval?",
+  "area": "fast\u2011pay platforms",
+  "decision": "identifying a platform that guarantees cash within the 7\u2011day window",
+  "invalidates": "If no instant\u2011pay option exists, the owner must rely on slower payouts",
+  "searches": [
+   "PeoplePerHour instant payout feature",
+   "Freelance marketplace immediate payment"
+  ]
+ },
+ {
+  "id": "Q23",
+  "question": "What is the typical success rate of a 24\u2011hour logo design gig on Fiverr when the buyer pays via PayPal with instant transfer enabled?",
+  "area": "delivery reliability",
+  "decision": "risk assessment for the logo brokerage route",
+  "invalidates": "If success rate <80\u202f%, risk of refunds may jeopardize profit",
+  "searches": [
+   "Fiverr 24\u2011hour logo design success rate",
+   "PayPal instant transfer Fiverr refunds"
+  ]
+ },
+ {
+  "id": "Q24",
+  "question": "What are the average transaction fees for receiving money through Zelle or Venmo for business services, and how quickly do funds become available for withdrawal?",
+  "area": "alternative payment methods",
+  "decision": "whether to use peer\u2011to\u2011peer payments to avoid platform fees",
+  "invalidates": "If funds are not instantly withdrawable, timeline may be missed",
+  "searches": [
+   "Zelle business transaction fee 2024",
+   "Venmo business payout time"
+  ]
+ },
+ {
+  "id": "Q25",
+  "question": "How many Seattle\u2011based startups have posted recent requests for quick data\u2011cleaning or email management services on AngelList Talent or Crunchbase?",
+  "area": "high\u2011value buyer segment",
+  "decision": "potential to secure higher\u2011paying contracts",
+  "invalidates": "If none, the owner must target lower\u2011paying small businesses",
+  "searches": [
+   "AngelList Seattle startup data cleaning job 2024",
+   "Crunchbase Seattle startup service request email triage"
+  ]
+ },
+ {
+  "id": "Q26",
+  "question": "What is the average time to receive a payout from a freelance marketplace after a client disputes a delivery, and how often do disputes occur for services like logo design or data cleanup?",
+  "area": "risk of delayed payment",
+  "decision": "evaluating exposure to payout holds",
+  "invalidates": "If dispute resolution exceeds 7\u202fdays, the route is risky",
+  "searches": [
+   "Upwork dispute payout timeline",
+   "Fiverr dispute resolution time"
+  ]
+ },
+ {
+  "id": "Q27",
+  "question": "Are there any Seattle\u2011based community bulletin boards (e.g., Seattle Times classifieds, local Facebook groups) that allow paid service ads with a 24\u2011hour posting and immediate buyer contact?",
+  "area": "fast local advertising",
+  "decision": "whether to acquire clients via ultra\u2011quick local ads",
+  "invalidates": "If posting approval takes >24\u202fh, the channel is too slow",
+  "searches": [
+   "Seattle Times classifieds posting time",
+   "Seattle Facebook groups paid service ads policy"
+  ]
+ },
+ {
+  "id": "Q28",
+  "question": "What is the average profit margin for freelancers who act as brokers for other freelancers on platforms that allow \u201cpay\u2011after\u2011delivery\u201d (e.g., using escrow release to fund subcontractor after client payment)?",
+  "area": "brokerage profitability",
+  "decision": "whether a $40 margin per logo is realistic",
+  "invalidates": "If typical margins are <15\u202f%, the $40 target may be unrealistic",
+  "searches": [
+   "Freelance broker profit margin 2024",
+   "Subcontractor escrow release profit"
+  ]
+ },
+ {
+  "id": "Q29",
+  "question": "What are the seasonal trends for small businesses in Seattle during late November (e.g., holiday promotions, end\u2011of\u2011year budgeting) that might increase demand for quick marketing assets like logos or email cleanup?",
+  "area": "seasonal demand boost",
+  "decision": "timing of outreach to maximize buyer interest",
+  "invalidates": "If demand dips in late November, the owner may need alternative services",
+  "searches": [
+   "Seattle small business holiday marketing needs November 2024",
+   "End of year budgeting Seattle businesses services"
+  ]
+ },
+ {
+  "id": "Q30",
+  "question": "What is the maximum number of clients the owner can realistically serve within 15\u202fhours if each email triage or CSV cleanup job takes 2\u202fhours, assuming no overlap and accounting for communication time?",
+  "area": "capacity planning",
+  "decision": "determining the feasible number of gigs to hit $500",
+  "invalidates": "If capacity <3 high\u2011pay gigs, the target may be unreachable",
+  "searches": [
+   "Freelance service time management 15 hour week",
+   "Estimating number of 2\u2011hour gigs in 15\u202fh"
+  ]
+ }
+]

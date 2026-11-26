@@ -1,0 +1,17 @@
+SERVING_REVISION c52d6d3e1684df886742aafab405cfe7c01f97fa
+TRACE goal {"project":"prj_0497f093bbbb42ff8167","goal":"wst_2fc80fc56136446d9c1b","createdAt":"2026-11-25T19:28:21.908Z"}
+TRACE pages {"items":0,"submitted":0,"failed":0,"released":0,"searched":0,"readFromSearch":0,"readFromModel":0,"itemsWithDiscovery":0}
+TRACE item_failures []
+TRACE work_items [{"work_type":"RESEARCH_FRAGMENT","state":"QUEUED","n":6}]
+TRACE fragments [{"status":"QUEUED","block_cause":null,"n":6}]
+TRACE claims []
+TRACE claims_by_lane []
+TRACE claims_rejected_sample []
+TRACE claims_accepted []
+TRACE card_facts [{"kind":"RECOMMENDATION","n":16}]
+TRACE evidence_facts []
+TRACE route_asks [{"at":"2026-11-25T20:28:35.368Z","stage":"SCOUT","findingsSeen":0,"findingsShown":0,"outcome":"PROPOSED","summary":"Routes: 2 direction(s) named to scout before anything is priced, 2 rejected (2 not a proved deliverable); each one's research asks its decisive unknown first."}]
+TRACE findings_now []
+TRACE plan {"verdict":"NEEDS_EVIDENCE","chosen":null,"missing":[]}
+TRACE searches_24h [{"provider":"lite","outcome":"REFUSED","n":397},{"provider":"html","outcome":"REFUSED","n":387},{"provider":"html","outcome":"ANSWERED","n":182},{"provider":"lite","outcome":"ANSWERED","n":176},{"provider":"firecrawl","outcome":"CEILING","n":29},{"provider":"firecrawl","outcome":"ANSWERED","n":7}]
+PLANNING_EVAL: OK
