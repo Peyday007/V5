@@ -1,0 +1,33 @@
+{"contractDigest":"0a758e16edfda6fa7b7315ce","parentRevisionId":null,"stance":"EXECUTABLE",
+"strategy":{"title":"Sell the vet controlled-substance reconciliation workbook to 7 clinics at $450","opportunityIds":["cop_bfe4fc54cd3f49b7a8b2"],"why":"Evidenced $450 price, evidenced 12% paid conversion (36/300), 1,200 licensed clinics with a quarterly obligation, Brain-produced spreadsheet at $5 direct cost, $0 exposure, first cash in 4 days; 7 deals = $3,150 settled inside 30 days."},
+"alternatives":[{"title":"Raise price above $450","why":"No evidence supports a higher price; the evidenced $450 already clears the target with 7 deals."}],
+"steps":[
+{"id":"reach","kind":"REACH","label":"Email clinic managers at published business addresses (about 100 clinics)","performer":"BRAIN","costCents":0,"day":1,"dependsOn":null,"evidence":["buyerVolume","reachableChannel"],"ownerHours":0},
+{"id":"offer","kind":"OFFER","label":"Offer the reconciliation workbook at $450, payment on order","performer":"BRAIN","costCents":0,"day":2,"dependsOn":"reach","evidence":["price"],"ownerHours":0},
+{"id":"sell","kind":"SELL","label":"Take 7 paid orders","performer":"BRAIN","costCents":0,"day":5,"dependsOn":"offer","evidence":["conversionRate"],"ownerHours":0},
+{"id":"deliver","kind":"DELIVER","label":"Produce and deliver the workbook to each buyer (1 owner hour per deal review)","performer":"OWNER","costCents":3500,"day":8,"dependsOn":"sell","evidence":["delivery","directCost","humanHours"],"ownerHours":7},
+{"id":"collect","kind":"COLLECT","label":"Collect and settle payment","performer":"BRAIN","costCents":0,"day":12,"dependsOn":"deliver","evidence":["timeToFirstCash","price"],"ownerHours":0}],
+"cash":[
+{"day":5,"kind":"RECEIPT","amountCents":315000,"label":"7 orders x $450","settlesDay":12},
+{"day":12,"kind":"SPEND","amountCents":3500,"label":"Direct costs 7 x $5, paid from receipts"}],
+"proofDay":12,
+"quantities":[
+{"name":"price","status":"EVIDENCED","value":450,"unit":"USD per deal","sources":["s1"]},
+{"name":"conversionRate","status":"EVIDENCED","value":0.12,"unit":"paid orders per unique visitor","sources":["s2"]},
+{"name":"buyerVolume","status":"EVIDENCED","value":1200,"unit":"licensed clinics","sources":["s3"]},
+{"name":"directCost","status":"EVIDENCED","value":5,"unit":"USD per deal","sources":["s4"]},
+{"name":"timeToFirstCash","status":"EVIDENCED","value":4,"unit":"days","sources":["s5"]},
+{"name":"humanHours","status":"EVIDENCED","value":1,"unit":"owner hours per deal","sources":["s6"]},
+{"name":"deals","status":"EVIDENCED","value":7,"unit":"deals","sources":["s1","s2","s3"]}],
+"sources":[
+{"id":"s1","url":"https://brain.local/card/cop_bfe4fc54cd3f49b7a8b2#price","dated":"2026-11-26","claim":"$450","population":"Veterinary clinic managers","matchesBuyer":true},
+{"id":"s2","url":"https://brain.local/card/cop_bfe4fc54cd3f49b7a8b2#conversionRates","dated":"2026-11-26","claim":"36 paid pre-orders from 300 unique visitors","population":"Veterinary clinic managers","matchesBuyer":true},
+{"id":"s3","url":"https://brain.local/card/cop_bfe4fc54cd3f49b7a8b2#buyerVolume","dated":"2026-11-26","claim":"1,200 veterinary clinics are licensed by the state board; each must reconcile its controlled-substance log quarterly.","population":"Veterinary clinics","matchesBuyer":true},
+{"id":"s4","url":"https://brain.local/card/cop_bfe4fc54cd3f49b7a8b2#directCosts","dated":"2026-11-26","claim":"$5","population":"Veterinary clinic managers","matchesBuyer":true},
+{"id":"s5","url":"https://brain.local/card/cop_bfe4fc54cd3f49b7a8b2#timeToFirstCash","dated":"2026-11-26","claim":"4 days","population":"Veterinary clinic managers","matchesBuyer":true},
+{"id":"s6","url":"https://brain.local/card/cop_bfe4fc54cd3f49b7a8b2#humanHours","dated":"2026-11-26","claim":"1 human hour per deal","population":"Veterinary clinic managers","matchesBuyer":true}],
+"validation":null,"noPlan":null,"reach":null,"answers":[],
+"chain":[{"opportunityId":"cop_bfe4fc54cd3f49b7a8b2","missing":[]}],
+"excluded":[],
+"members":[{"opportunityId":"cop_bfe4fc54cd3f49b7a8b2","deals":7,"price":450,"directCost":5,"capital":0}],
+"resolves":[],"constraints":[]}

@@ -1,0 +1,19 @@
+{"contractDigest":"1b4d5474529189b33d140266","parentRevisionId":null,"stance":"NO_PLAN",
+"strategy":{"title":"No plan: brokered localisation loses money on every deal","opportunityIds":[],"why":"The only opening has five written acceptances at $2,000 each ($10,000 reach), but the subcontractor's quoted direct cost is $2,300 per deal, above the $2,000 price, so every deal loses $300 and no settled cash can be accumulated toward the $8,000 target."},
+"alternatives":[{"title":"Deliver the five accepted deals anyway","why":"Collects $10,000 gross but pays $11,500 to Polyglot Freelance Collective: net -$1,500, and with no up-front capital the shortfall cannot be funded."}],
+"steps":[{"id":"research","kind":"RESEARCH","label":"Obtain a fulfilment quote below $2,000 per deal (renegotiate Polyglot or find another localisation subcontractor) or reprice the accepted deals above cost","performer":"BRAIN","costCents":0,"day":1,"dependsOn":null,"evidence":["s1","s2"]}],
+"cash":[],"proofDay":null,
+"quantities":[
+{"name":"price","status":"EVIDENCED","value":2000,"unit":"USD/deal","sources":["s1"]},
+{"name":"directCost","status":"EVIDENCED","value":2300,"unit":"USD/deal","sources":["s2"]},
+{"name":"agreedDeals","status":"EVIDENCED","value":5,"unit":"deals","sources":["s3"]}],
+"sources":[
+{"id":"s1","url":"https://brain.local/card/cop_3aa183b595e240598502#price","dated":"2026-11-26","claim":"Price $2000","population":"Indie game studios","matchesBuyer":true},
+{"id":"s2","url":"https://brain.local/card/cop_3aa183b595e240598502#directCosts","dated":"2026-11-26","claim":"Direct costs $2300 (Polyglot Freelance Collective quote)","population":"Indie game studios","matchesBuyer":true},
+{"id":"s3","url":"https://brain.local/card/cop_3aa183b595e240598502#agreements","dated":"2026-11-26","claim":"Five WRITTEN_ACCEPTANCE agreements at $2,000","population":"Indie game studios","matchesBuyer":true}],
+"validation":null,
+"noPlan":{"decisiveGap":"ECONOMICS: direct cost $2,300 per deal is at or above the $2,000 price, so every deal loses money.","resolution":"Get a fulfilment quote under $2,000 per deal (renegotiate with Polyglot Freelance Collective or source another subcontractor), or reprice the offer above $2,300 with the accepting studios, then re-plan."},
+"reach":null,"answers":[],
+"chain":[{"opportunityId":"cop_3aa183b595e240598502","missing":["ECONOMICS"]}],
+"excluded":[{"opportunityId":"cop_3aa183b595e240598502","why":"Direct cost $2,300 exceeds price $2,000; each deal loses $300."}],
+"members":[],"resolves":["ECONOMICS"],"constraints":[]}

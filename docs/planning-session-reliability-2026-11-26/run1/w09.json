@@ -1,0 +1,29 @@
+{
+  "id": "ho-09-water-utility-agreed",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "revisionId": "rev_c121ad5c5006_c75ee5",
+  "stance": "NO_PLAN",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "no executable plan (NO_PLAN/null); names REACHABLE_BUYER, MARKET_VOLUME, CONVERSION",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no opening is startable: REACHABLE_BUYER, MARKET_VOLUME not established"
+  }
+}

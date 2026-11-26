@@ -134,6 +134,36 @@ const brainTool: McpTool = {
   },
 };
 
+const researchTool: McpTool = {
+  name: 'brain_planning_research',
+  title: 'Planning: return a research result',
+  description:
+    'Return the result of one open research question (the context lists them, parked ones marked): the answer, how it was ' +
+    'found, and each source with its URL, date, the claim it supports and the population it describes; or unanswered=true. ' +
+    'The result is recorded against the question and placed on the opening as a sourced recommendation — never as verified evidence.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      goal_id: { type: 'string' }, need_id: { type: 'string' }, answer: { type: 'string' }, method: { type: 'string' },
+      sources: { type: 'array', items: { type: 'object' } }, unanswered: { type: 'boolean' }, ...SESSION,
+    },
+    required: ['goal_id', 'need_id', 'method', 'session_id'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Planning: research', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    const goalId = requiredString(args, 'goal_id');
+    const projectId = await goalProject(goalId);
+    await authorize(principal, projectId, 'WRITE', 'operator:act');
+    const { answerResearch } = await import('../services/planning/sessionPlanning.ts');
+    const sources = Array.isArray(args['sources']) ? (args['sources'] as Record<string, unknown>[]).map((o) => ({ url: String(o['url'] ?? ''), dated: o['dated'] == null ? null : String(o['dated']), claim: String(o['claim'] ?? ''), population: String(o['population'] ?? '') })) : [];
+    return {
+      projectId,
+      value: await guarded(() => answerResearch({ goalId, needId: requiredString(args, 'need_id'), actor: sessionExecutor(principal, args), answer: optionalString(args, 'answer') ?? '', method: requiredString(args, 'method'), sources, unanswered: args['unanswered'] === true })),
+    };
+  },
+};
+
 const revisionTool: McpTool = {
   name: 'brain_planning_submit_revision',
   title: 'Planning: submit a plan revision',
@@ -220,4 +250,4 @@ const stateTool: McpTool = {
   },
 };
 
-export const PLANNING_TOOLS: readonly McpTool[] = [contractTool, contextTool, routesTool, brainTool, revisionTool, reviewTool, finalizeTool, stateTool];
+export const PLANNING_TOOLS: readonly McpTool[] = [contractTool, contextTool, routesTool, brainTool, researchTool, revisionTool, reviewTool, finalizeTool, stateTool];

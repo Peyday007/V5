@@ -51,6 +51,7 @@ export const PLANNING_EVENTS = {
   check: 'PLANNING_CHECK',
   review: 'PLANNING_REVIEW',
   final: 'PLANNING_FINAL',
+  research: 'PLANNING_RESEARCH',
 } as const;
 
 const SINCE_EVER = '1970-01-01T00:00:00.000Z';
@@ -157,6 +158,7 @@ export async function planningContext(goalId: string) {
     });
   }
   const state = await planningState(goalId);
+  const lastRun = ((await events(goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined) ?? null;
   return {
     goal: { id: goal.id, title: goal.title, intent: goal.intent },
     contract,
@@ -168,6 +170,12 @@ export async function planningContext(goalId: string) {
     revisions: state.revisions.map((r) => ({ revisionId: r.revisionId, digest: r.digest, stance: r.stance, contractDigest: r.contractDigest, stale: r.contractDigest !== contract?.digest })),
     lastReview: state.reviews[state.reviews.length - 1] ?? null,
     final: state.final,
+    // What Brain's latest planner run read: each opening it weighed, what it set aside, the scope.
+    brain: (() => {
+      const run = lastRun;
+      return run ? { at: run.at, completed: run.completed, verdict: run.verdict, summary: run.summary, openings: run.openings ?? [], excluded: run.excluded ?? [], scope: run.scope ?? null, nextTest: run.nextTest } : null;
+    })(),
+    questions: await openQuestions(goalId),
   };
 }
 
@@ -228,7 +236,61 @@ export interface BrainRunSummary {
   integrity: { rule: string; detail: string }[];
   steps: { label: string; owner: string; cost: number | null }[];
   nextTest: string | null;
+  /** Every opening the planner weighed: the chain links it judged missing, and the card the session reasons from. */
+  openings: SessionOpening[];
+  excluded: { opportunityId: string; title: string; reason: string }[];
+  /** The research questions this run raised through Brain's path-research owner (need ids). */
+  questions: string[];
+  /** The target and scope as the planner read them. */
+  scope: { targetCents: number; daysLeft: number | null; hoursCeiling: number | null; industry: string | null; recurring: string | null; hoursPerWeek: number | null } | null;
   at: string;
+}
+
+export interface SessionOpening {
+  opportunityId: string;
+  title: string;
+  missing: string[];
+  stage: string;
+  supportedReach: number;
+  potentialReach: number | null;
+  card: Record<string, unknown>;
+  agreements: { amountCents: number; currency: string; deliverable: string; evidenceKind: string; state: string; recordedBy: string }[];
+  facts: { field: string; value: string | null; kind: string }[];
+}
+
+const OPENING_FIELDS = ['payer', 'reachableChannel', 'buyingSignal', 'signalObservedAt', 'offerScope', 'acceptanceCondition', 'priceCents', 'currency', 'paymentTerms', 'fulfillmentOwner', 'deliveryMethod', 'requiredInputs', 'deadline', 'economicsNote', 'peakFundingCents', 'humanHours', 'requiredCapabilities', 'industry', 'mechanism', 'state'] as const;
+
+async function consideredOpenings(reading: { considered: { opportunityId: string; title: string; missing: string[]; stage: string; supportedReach: number; potentialReach: number | null }[] }): Promise<SessionOpening[]> {
+  const out: SessionOpening[] = [];
+  for (const c of reading.considered ?? []) {
+    const o = await getOpportunity(c.opportunityId);
+    const facts = await cardFactsFor(c.opportunityId).catch(() => []);
+    const row = (o ?? {}) as unknown as Record<string, unknown>;
+    const card: Record<string, unknown> = {};
+    // The opening's own record as Brain's planner reads it (`CashOpportunity`), every field a chain link rests on.
+    for (const k of OPENING_FIELDS) if (row[k] !== undefined && row[k] !== null && row[k] !== '') card[k] = row[k];
+    // Written agreements and commitments recorded against it (the journey's agreement rows): evidence the card's facts do not carry.
+    const { agreementsFor } = await import('../../repos/cashJourney.ts');
+    const agreements = (await agreementsFor(c.opportunityId).catch(() => [])).map((a) => ({ amountCents: a.amountCents, currency: a.currency, deliverable: a.deliverable, evidenceKind: a.evidenceKind, state: a.state, recordedBy: a.recordedBy }));
+    out.push({ opportunityId: c.opportunityId, title: c.title, missing: [...c.missing], stage: c.stage, supportedReach: c.supportedReach, potentialReach: c.potentialReach, card, agreements, facts: facts.map((f) => ({ field: f.field, value: f.value, kind: f.kind })) });
+  }
+  return out;
+}
+
+/**
+ * The research questions the reading leaves, raised through Brain's own path-research owner
+ * (`researchGoalPaths`: one narrow need per missing fact published sources can settle). Where no
+ * research is running for a question, it is parked: this session is then its executor
+ * (`answerResearch`), and its returned result is recorded against the need.
+ */
+async function raiseQuestions(reading: Parameters<typeof import('../goals/pathResearch.ts')['researchGoalPaths']>[0]['reading']): Promise<string[]> {
+  try {
+    const { researchGoalPaths } = await import('../goals/pathResearch.ts');
+    const projectId = (reading as unknown as { target: { projectId: string } }).target.projectId;
+    return await researchGoalPaths({ reading, projectId });
+  } catch {
+    return [];
+  }
 }
 
 /** Brain's real planner on this goal, bounded in time; a failure is recorded as a failure, never as a reading. */
@@ -264,17 +326,95 @@ export async function runBrain(input: { goalId: string; actor: PlanExecutor; eva
       integrity: (reading.integrity ?? []).map((v) => ({ rule: String(v.rule), detail: String(v.detail) })),
       steps: (reading.steps ?? []).map((s) => ({ label: s.label, owner: s.owner, cost: s.cost })),
       nextTest: reading.nextTest?.test ?? null,
+      openings: await consideredOpenings(reading),
+      excluded: (reading.excluded ?? []).map((x) => ({ opportunityId: x.opportunityId, title: x.title, reason: x.reason })),
+      questions: await raiseQuestions(reading),
+      scope: { targetCents: reading.target.targetCents, daysLeft: reading.target.daysLeft ?? null, hoursCeiling: reading.target.hoursCeiling ?? null, industry: reading.target.scope?.industry ?? null, recurring: reading.target.scope?.recurring ?? null, hoursPerWeek: reading.target.scope?.hoursPerWeek ?? null },
       at,
     };
   } catch (err) {
-    summary = { completed: false, error: err instanceof Error ? err.message : String(err), verdict: null, summary: null, acceptance: null, considered: [], integrity: [], steps: [], nextTest: null, at };
+    summary = { completed: false, error: err instanceof Error ? err.message : String(err), verdict: null, summary: null, acceptance: null, considered: [], integrity: [], steps: [], nextTest: null, openings: [], excluded: [], questions: [], scope: null, at };
   }
   await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.brain, summary: summary.completed ? `Brain planner read: ${summary.verdict}` : `Brain planner FAILED: ${summary.error}`, detail: { summary }, actorRef: actorOf(input.actor) });
   return summary;
 }
 
+/** Openings the session may plan on: those linked to the goal, and those Brain's own planner weighed for it. */
 async function admittedIds(goalId: string): Promise<string[]> {
-  return (await listLinks(goalId)).filter((l) => l.kind === 'OPPORTUNITY').map((l) => l.ref);
+  const linked = (await listLinks(goalId)).filter((l) => l.kind === 'OPPORTUNITY').map((l) => l.ref);
+  const run = (await events(goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined;
+  return [...new Set([...linked, ...(run?.openings ?? []).map((o) => o.opportunityId)])];
+}
+
+// ------------------------------------------------------------------------------------- research
+
+/** The research questions open on the openings this goal plans with, and what the session returned for each. */
+export async function openQuestions(goalId: string) {
+  const { listNeeds } = await import('../../repos/cashPortfolio.ts');
+  const ids = new Set(await admittedIds(goalId));
+  const goal = await liveGoal(goalId);
+  const projectId = goal.target?.projectId ?? goal.projectId;
+  if (!projectId) return [];
+  const returned = new Map((await events(goalId, PLANNING_EVENTS.research)).map((e) => [String(e.detail['needId']), e.detail]));
+  return (await listNeeds({ projectId, states: ['OPEN'] }))
+    .filter((n) => n.opportunityId && ids.has(n.opportunityId) && n.requestKey?.startsWith('question:'))
+    .map((n) => ({
+      needId: n.id,
+      opportunityId: n.opportunityId,
+      field: n.requestKey!.slice(n.requestKey!.lastIndexOf(':') + 1),
+      ask: n.nextStep,
+      settledWhen: n.completionCondition,
+      // Parked: Brain started no research for it. The session is then its executor.
+      parked: !n.candidateId,
+      returned: returned.get(n.id) ?? null,
+    }));
+}
+
+/**
+ * The session as the research executor of one open question: its returned result — the answer,
+ * the method, and dated sources with the population each describes — is recorded against the need
+ * and placed on the opening's card as a RECOMMENDATION with those sources as its basis. It is a
+ * sourced hypothesis by an identified executor, never EVIDENCE: Brain's evidence gate is still
+ * what verifies a claim, so the question stays open on the card's terms (`readNeedCondition`
+ * refuses a recommendation as an answer) while the plan may reason from the returned result.
+ */
+export async function answerResearch(input: {
+  goalId: string;
+  needId: string;
+  actor: PlanExecutor;
+  answer: string;
+  method: string;
+  sources: { url: string; dated: string | null; claim: string; population: string }[];
+  /** Searched and found nothing that settles it: recorded as a result, nothing written on the card. */
+  unanswered?: boolean;
+}) {
+  await liveGoal(input.goalId);
+  const q = (await openQuestions(input.goalId)).find((one) => one.needId === input.needId);
+  if (!q) throw new PlanningRefusal(`no open research question ${input.needId} on this goal's openings`, 'planning:research');
+  if (!input.method.trim()) throw new PlanningRefusal('a research result states how it was found', 'planning:research');
+  if (!input.unanswered) {
+    if (!input.answer.trim()) throw new PlanningRefusal('an answer is required, or mark the question unanswered', 'planning:research');
+    const bad = input.sources.filter((one) => !/^https?:\/\//.test(one.url) || !one.claim.trim() || !one.population.trim());
+    if (input.sources.length === 0 || bad.length) throw new PlanningRefusal('every source needs its URL, the claim it supports and the population it describes', 'planning:research');
+  }
+  const goal = await liveGoal(input.goalId);
+  const projectId = (goal.target?.projectId ?? goal.projectId)!;
+  let placed = false;
+  if (!input.unanswered) {
+    const { recordRecommendationFact } = await import('../../repos/cashCardFacts.ts');
+    placed = await recordRecommendationFact({
+      projectId,
+      opportunityId: q.opportunityId!,
+      field: q.field,
+      value: input.answer.slice(0, 600),
+      basis: input.sources.map((one) => `${one.claim} — ${one.url}${one.dated ? ` (${one.dated})` : ''} [${one.population}]`).join('; ').slice(0, 2000),
+      assumptions: `Returned by ${input.actor.kind} ${input.actor.id}${input.actor.model ? ` (${input.actor.model})` : ''}: ${input.method}`.slice(0, 1000),
+      uncertainty: 'Not yet through the evidence gate: a sourced research result, not a verified claim.',
+    });
+  }
+  const detail = { needId: q.needId, opportunityId: q.opportunityId, field: q.field, executor: input.actor, answer: input.answer, method: input.method, sources: input.sources, unanswered: !!input.unanswered, placedOnCard: placed, wasParked: q.parked };
+  await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.research, summary: `Research ${input.unanswered ? 'without an answer' : 'returned'} for ${q.field} on ${q.opportunityId} by ${input.actor.kind} ${input.actor.id}`, detail, actorRef: actorOf(input.actor) });
+  return detail;
 }
 
 // ------------------------------------------------------------------------------------ revisions
@@ -316,6 +456,12 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
     noPlan: input.revision.noPlan ?? null,
     reach: input.revision.reach ?? null,
     answers: input.revision.answers ?? [],
+    // The structured judgement a grader reads: carried exactly as sent, absent when not sent.
+    ...(input.revision.chain ? { chain: input.revision.chain } : {}),
+    ...(input.revision.excluded ? { excluded: input.revision.excluded } : {}),
+    ...(input.revision.members ? { members: input.revision.members } : {}),
+    ...(input.revision.resolves ? { resolves: input.revision.resolves } : {}),
+    ...(input.revision.constraints ? { constraints: input.revision.constraints } : {}),
     ...(missing.length || input.revision.truncated ? { truncated: true } : {}),
   };
   const lastContribution = (await events(goalId, PLANNING_EVENTS.contribution)).pop();

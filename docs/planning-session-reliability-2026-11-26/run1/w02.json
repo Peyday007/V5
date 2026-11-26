@@ -1,0 +1,29 @@
+{
+  "id": "ho-02-brewery-monthly",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "revisionId": "rev_1b5428d5ba6d_be1824",
+  "stance": "CONDITIONAL",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "no executable plan (CONDITIONAL/null); names CONVERSION",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: brewery established but for the close rate selling measures"
+  }
+}

@@ -128,11 +128,37 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(facts.every((f) => f.kind !== 'EVIDENCE')).toBe(true);
   }, 60_000);
 
+  it('raises the planner’s research questions through path research, and takes the session’s sourced result as a recommendation, never as evidence', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const run = await svc.runBrain({ goalId, actor: AUTHOR });
+    expect(run.completed).toBe(true);
+    expect(run.openings.map((o) => o.opportunityId)).toContain(opp);
+    const questions = await svc.openQuestions(goalId);
+    expect(questions.length).toBeGreaterThan(0);
+    // Brain started no research for them: parked, so the session is their executor.
+    expect(questions.every((q) => q.parked)).toBe(true);
+    const q = questions[0]!;
+    await expect(svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, answer: 'x', method: 'search', sources: [{ url: 'https://example.test/a', dated: '2026-11-01', claim: 'c', population: '' }] })).rejects.toThrow(/population/);
+    const r = await svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, answer: 'Published practitioner rates put it at $600–$900 a job', method: 'two published rate cards compared', sources: [{ url: 'https://example.test/rates', dated: '2026-10-01', claim: '$600–$900 per clean-up', population: 'independent dental practices' }] });
+    expect(r.wasParked).toBe(true);
+    const after = (await svc.openQuestions(goalId)).find((one) => one.needId === q.needId)!;
+    // The result is returned and recorded; the question stays open until a gated claim answers it.
+    expect(after.returned).toMatchObject({ executor: AUTHOR, field: q.field });
+    const { readNeedCondition } = await import('../server/services/cash/conditions.ts');
+    const { getNeed } = await import('../server/repos/cashPortfolio.ts');
+    const need = await getNeed(q.needId);
+    expect((await readNeedCondition(need!))?.holds ?? false).toBe(false);
+    const { cardFactsFor } = await import('../server/repos/cashCardFacts.ts');
+    expect((await cardFactsFor(q.opportunityId!)).find((f) => f.field === q.field)?.kind).not.toBe('EVIDENCE');
+  }, 120_000);
+
   it('control 1: a feasible, fully evidenced objective returns a complete plan that is reviewed and published', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
-    const r = await svc.submitRevision({ revision: revision(goalId, digest, opp), actor: AUTHOR, today: '2026-11-26' });
+    const r = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [] }, actor: AUTHOR, today: '2026-11-26' });
     expect(r.brain.completed).toBe(true);
     expect(r.problems).toEqual([]);
+    // The structured judgement a grader reads survives the transport.
+    expect(r.revision.chain).toEqual([{ opportunityId: opp, missing: [] }]);
     await svc.recordReview({ goalId, revisionId: r.revision.revisionId, reviewer: REVIEWER, verdict: 'PASS', reasons: 'recomputed and consistent', findings: [] });
     const f = await svc.finalizePlan({ goalId, revisionId: r.revision.revisionId, actor: AUTHOR });
     expect(f.published).toBe(true);

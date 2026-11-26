@@ -1,0 +1,63 @@
+{
+  "cases": 22,
+  "passed": 15,
+  "reliability": 0.6818181818181818,
+  "wilson95": {
+    "low": 0.4731822278283934,
+    "high": 0.8363961264530752
+  },
+  "criticalFailures": 0,
+  "usable": 17,
+  "e2e": 11,
+  "failures": [
+    {
+      "id": "ho-02-brewery-monthly",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "ho-09-water-utility-agreed",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "ho-13-equestrian-price-contradicted",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "ho-14-objective-changed-to-recurring",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "ho-16-grooming-short-deadline",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "mv-01-github-bounty-audit",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "mv-03-one-payer-swept-as-population",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    }
+  ]
+}

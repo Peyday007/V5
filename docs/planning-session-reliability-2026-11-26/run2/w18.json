@@ -1,0 +1,30 @@
+{
+  "id": "mv-01-github-bounty-audit",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "revisionId": "rev_38926e4c4cbf_49283a",
+  "stance": "NO_PLAN",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "declared arithmetically infeasible (TARGET) where the blocker is missing evidence on OFFER_AND_PRICE",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT",
+      "RESOLUTION_ABSENT"
+    ],
+    "gaps": [],
+    "detail": "no measurement or research of OFFER_AND_PRICE is named (names MARKET_VOLUME, REACHABLE_BUYER)"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

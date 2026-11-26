@@ -1,0 +1,29 @@
+{
+  "id": "ho-16-grooming-short-deadline",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "revisionId": "rev_6d9454fc5265_f31416",
+  "stance": "CONDITIONAL",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "no executable plan (CONDITIONAL/null); names CONVERSION, MARKET_VOLUME",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no opening is startable: MARKET_VOLUME not established"
+  }
+}

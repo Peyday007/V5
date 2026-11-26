@@ -1,0 +1,29 @@
+{
+  "id": "mv-03-one-payer-swept-as-population",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "revisionId": "rev_dc157071768c_fd9eba",
+  "stance": "NO_PLAN",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "declared arithmetically infeasible (TARGET) where the blocker is missing evidence on MARKET_VOLUME",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

@@ -19,3 +19,16 @@ spent money or contacted anyone.
 
 The ten build-brief controls are `tests/sessionPlanningPath.test.ts`, run on real services and a
 real database.
+
+## Research handoff (19–21, rebuilt world on the same objective and routes)
+
+Brain's planner reading raised 4 path-research questions through `researchGoalPaths`:
+- E-2 `revenueRange` and `buyerVolume`;
+- SBA `revenueRange` and `buyerVolume`.
+
+None had research started, so all 4 were **parked** (19). The session acted as their executor:
+
+1. It returned a sourced result for E-2 `revenueRange` (20): three dated 2026 publishers, each with the population it describes.
+2. The result is recorded against the question as returned by `APP_SESSION 67b503dd…` (21).
+3. The question stays OPEN. `readNeedCondition` accepts only a gated claim or a person, never a recommendation.
+4. The card kept the route's own $1,250 recommendation: under `mayReplace`, one recommendation never replaces another.

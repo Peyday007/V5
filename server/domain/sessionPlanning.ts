@@ -195,9 +195,28 @@ export interface PlanRevisionInput {
   reach: { value: number; calibrated: boolean; presentedAs: 'PROBABILITY' | 'COVERAGE' } | null;
   /** Answers to the previous review's findings, when revising after REVISE. */
   answers: { finding: string; resolution: string }[];
+  /**
+   * The session's own judgement of each opening it weighed: the chain links (`CHAIN_LINKS`:
+   * REACHABLE_BUYER, CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION, MARKET_VOLUME, FULFILMENT,
+   * ECONOMICS, SETTLES_IN_TIME) the evidence does not establish. Structured so a grader reads
+   * it, never the prose.
+   */
+  chain?: { opportunityId: string; missing: string[] }[];
+  /** Openings set aside, each with why. */
+  excluded?: { opportunityId: string; why: string }[];
+  /** The deals the strategy counts per member, at the price and direct cost it was judged on (major units). */
+  members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null }[];
+  /** The chain links the plan's validation test or research measures (what would resolve the unknowns). */
+  resolves?: string[];
+  /** Constraints (DEADLINE, CAPITAL, TARGET, OWNER_HOURS) the session finds rule every plan out, with the relaxation it suggests. */
+  constraints?: { constraint: string; suggestion: string }[];
   /** Set by the transport when the payload arrived incomplete. */
   truncated?: boolean;
 }
+
+/** The chain links a cash plan rests on (the planner's `CHAIN_LINKS`). */
+export const CHAIN_LINKS = ['REACHABLE_BUYER', 'CURRENT_DEMAND', 'OFFER_AND_PRICE', 'CONVERSION', 'MARKET_VOLUME', 'FULFILMENT', 'ECONOMICS', 'SETTLES_IN_TIME'] as const;
+export const PLAN_CONSTRAINTS = ['DEADLINE', 'CAPITAL', 'TARGET', 'OWNER_HOURS'] as const;
 
 export interface PlanRevision extends PlanRevisionInput {
   revisionId: string;
@@ -334,6 +353,15 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
   if (r.contractDigest !== contract.digest) add('STALE_CONTRACT', `the revision was built on contract ${r.contractDigest}; the current contract is ${contract.digest} (v${contract.version}). Rebuild it on the current objective.`);
   if (brain && !brain.completed) add('BRAIN_CHECK_FAILED', `Brain's planner did not complete (${brain.error ?? 'no result'}); the revision cannot be certified on a missing calculation`);
   for (const v of brain?.integrity ?? []) add('BRAIN_CHECK_FAILED', `Brain plan integrity ${v.rule}: ${v.detail}`);
+
+  // The structured chain judgement: closed vocabulary, and an executable plan's members carry no missing link.
+  for (const c of r.chain ?? []) {
+    for (const l of c.missing) if (!(CHAIN_LINKS as readonly string[]).includes(l)) add('INCOMPLETE_OUTPUT', `"${l}" is not a chain link (${CHAIN_LINKS.join(', ')})`, c.opportunityId);
+    if (r.stance === 'EXECUTABLE' && r.strategy.opportunityIds.includes(c.opportunityId) && c.missing.length) {
+      add('UNKNOWN_IN_EXECUTABLE', `the plan's member ${c.opportunityId} is missing ${c.missing.join(', ')}; the plan is at most CONDITIONAL`, c.opportunityId);
+    }
+  }
+  for (const k of r.constraints ?? []) if (!(PLAN_CONSTRAINTS as readonly string[]).includes(k.constraint)) add('INCOMPLETE_OUTPUT', `"${k.constraint}" is not a constraint (${PLAN_CONSTRAINTS.join(', ')})`, null);
 
   // Stance-specific completeness.
   if (r.stance === 'NO_PLAN') {
