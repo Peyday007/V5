@@ -158,4 +158,27 @@ describe("a constructed round's pattern with its fragment's payer is filed (GOAL
     expect((await listOpportunities({ projectId })).some((one) => (one.buyingSignal ?? '') === DEFINITION)).toBe(false);
     expect(await roundOf(r!.candidateId)).toMatchObject({ state: 'HARVESTED', found: 0 });
   });
+  it("files a newer pattern behind more than one window of seller's-own-page rows (F4: paged, not one oldest-first window)", async () => {
+    const w = await goal();
+    const r = await openConstructedRound({ goal: w, projectId, key: 'hvac4', title: 'Constructed: AI receptionist setup for HVAC firms', question: 'Which HVAC firms pay for AI receptionist setup?' });
+    const p = await packet(r!.candidateId);
+    // harvest({ limit: 1 }) reads a window of 4; six dropped rows fill it and more, oldest first.
+    const dropped: Claim[] = Array.from({ length: 6 }, (_, i) => ({
+      claim: `An AI receptionist answers calls for HVAC firms around the clock, plan ${i + 1}.`,
+      lane: 'demand_pattern',
+      sourceUrl: `https://receptionist${i + 1}.example.test/pricing`,
+    }));
+    await p.gate([
+      ...dropped,
+      { claim: PATTERN, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/case-studies' },
+      { claim: PAYER, lane: 'payer', sourceUrl: 'https://example.test/hvac/clients' },
+    ]);
+    await p.end('DONE');
+    await harvest({ projectId, limit: 1 });
+    const filed = (await listOpportunities({ projectId })).filter((one) => (one.buyingSignal ?? '') === PATTERN);
+    expect(filed).toHaveLength(1);
+    expect(filed[0]!.payer).toBe(PAYER);
+    // None of the seller's own pages was filed on the way.
+    for (const one of dropped) expect((await listOpportunities({ projectId })).some((o) => (o.buyingSignal ?? '') === one.claim)).toBe(false);
+  });
 });
