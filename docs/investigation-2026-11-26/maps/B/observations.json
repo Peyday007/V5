@@ -1,0 +1,712 @@
+[
+ {
+  "id": "B-O001",
+  "entity": "all 10 live goals",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:34:13Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goals__all__2026-11-26T06-34-13Z.json",
+  "observation": "Every live goal (6 cash, 4 research/engineering) reads lifecycle PAUSED and state NOT_DERIVED with stateEvidence \"read from the register only; Brain was too busy to derive the goal this run\"; next = \"not derived\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O002",
+  "entity": "wst_7b4f…, wst_db2e…, wst_fa47…, wst_deed…, wst_6631…, wst_4f0c…",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:40Z..06:42Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-40Z.json",
+  "observation": "Each cash goal is PAUSED: \"Paused by the owner's priority override of 2026-11-26 (Brain intelligence completion mission is priority #1 ...) Executed by the mission's coordinating session; `planningEval unfocus` resumes it.\" Held bins carry heldReason GOAL_PAUSED. The time the pause was applied is not shown.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O003",
+  "entity": "six cash goals",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T01:31Z..05:43Z",
+  "source": "plan readings docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "The latest stored plan reading of every cash goal predates the wave-1 deploy (05:50Z): 4f0c 01:31:31Z, db2e 02:05:47Z, 6631 04:42:49Z, deed 05:33:37Z, 7b4f 05:40:04Z, fa47 05:43:26Z. No goal has a reading taken after the deploy (read at 06:35–06:39Z).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O004",
+  "entity": "six cash goals",
+  "epoch": "E0",
+  "timestamp": "see readAt",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "All six readings end in verdict NEEDS_EVIDENCE, acceptance CANDIDATE_ONLY / IMPROVEMENT_REQUIRED, planSet.accepted 0, supportedReach 0, collections.observed 0, attempts.authorized 0 and executed 0, ladder D_BUYER_VALIDATED=E_COMMITTED=F_COLLECTED=0.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O005",
+  "entity": "six cash goals",
+  "epoch": "E0",
+  "timestamp": "see readAt",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "What reaches the owner as steps is a single step in every goal: order 1, owner BRAIN, operation RESEARCH, \"via Claude routines (RESEARCH_A_QUESTION)\", cost 0, startDay 0. No execution, outreach, pricing or collection step exists in any reading.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O006",
+  "entity": "six cash goals",
+  "epoch": "E0",
+  "timestamp": "see readAt",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "Every reading carries the same degradation: \"construction cap: 400 of N candidate arrangements composed this pass\" (N = 1658, 796, 779, 607, 779, 796); 207–1258 ranked arrangements were not composed.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O007",
+  "entity": "six cash goals",
+  "epoch": "E0",
+  "timestamp": "see readAt",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "planSet collapses 355–396 of ~423–434 candidates into 36–69 distinct provisional plans; 31–64 are marked doubleCounted. Plan signatures are bags of tokens from claim text, e.g. \"risk=all buy con crucinova is it itself outside payer puzzle right state unknown which\" (7b4f) and \"risk=borrower bpmi common insurance is mortgage most paid pmi private s safe today type\" (fa47).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O008",
+  "entity": "six cash goals",
+  "epoch": "E0",
+  "timestamp": "see readAt",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "Every reading's planSet.rebuild is the identical move: change SUPPLIER_FAILED \"unknown fulfiller\" — the most-shared supplier across plans is the absence of a fulfiller (6–14 plans share it).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O009",
+  "entity": "six cash goals",
+  "epoch": "E0",
+  "timestamp": "see readAt",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "The reconstruction stage ran in all six (variants 5–19) but reconstruction.explored.winner is null in 5 of 6; only 6631 has a winner (\"Variables (perspective:capital) … price×2.5@ALL\", replaced:true). In 4 of 6 the adoption reason is \"the reconstruction is flagged implausible (RETURN: median kept … is 14100× / 70× / 44× / 36× … (bound ×20))\", so adoption.source=BASELINE, hypothetical:true.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O010",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E0",
+  "timestamp": "2026-11-14T17:37Z vs 2026-11-26T05:40Z",
+  "source": "docs/PLANNING-RECOVERY-2026-11-14.md:303-322; docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json",
+  "observation": "State regression over time: on 11-14 the released code adopted the reconstructed plan (adoption.source RECONSTRUCTED, hypothetical false) with 2 dated steps and kill criteria; on 11-26 the same goal shows adoption.source BASELINE, hypothetical true and a single research step.",
+  "kind": "OBSERVED",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O011",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:40:04Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json",
+  "observation": "Chosen strategy only_o3 \"Lead‑Safe Certification Booking Broker\" (goalMetShare 0.204, settledP50 $8,437). The acceptance candidate is the same opportunity cop_ec16a6130ed241519c71, lacking MECHANISM and OFFER. Strategies o6/o7 fail because \"no performer is established … read as the owner's … against the 0 owner hours\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O012",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:40:04Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json",
+  "observation": "Four reach figures coexist in one reading: forecast reach 0.97 (ASSUMPTION_ONLY), reconstruction baseline 0.986 (binding CLOSE), acceptance candidate 0.204 (COVERAGE), supportedReach 0; timelines show reach 1.0 at the 30-day horizon.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O013",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:40:04Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json",
+  "observation": "Committee (tier ROUTINE, specialists NOT_RUN, reviewMs 34) FAILS on MARKET_EXPERT (volume of up to 100 deals unestablished). QUANT PASSES citing \"cop_090c05284dde420dab82 60×643 = $38,553 … proven facts alone support $38,553\"; OWNER_PROXY FAILS citing \"reconstruction of the counted legs: $0\". The QUANT figure is built from an opportunity that is not the chosen strategy.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O014",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:40:04Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json",
+  "observation": "Committee questions were sent as research (\"committee OPERATOR: when buyers … pay\", \"committee MARKET_EXPERT: who pays / what buyers pay\") with answeredBy [] and committee.answered 0.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O015",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:34Z vs 07:05Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goals__all__2026-11-26T06-34-13Z.json; docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-40Z.json",
+  "observation": "dueAt moves on each read (2026-12-26T06:34:13.525Z, then 2026-12-26T07:05:42.366Z): the 30-day deadline is \"within 30 days of the start of commercial execution (not started)\", so it floats with the clock.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O016",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:40Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-40Z.json",
+  "observation": "6 open person-requests, all \"Raising the research goal's DEADLINE ceiling\" (2026-10-18 … 2026-11-06), each \"the card names no mission\", recommendation null, moot false. 15 bins listed held GOAL_PAUSED: 1 READY, 14 NEEDS_HUMAN, 2 of them exhausted 5/5 attempts. Authority: \"No commercial grant\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O017",
+  "entity": "prj_22fb4fec295f403a8a22",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T07:19Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_list_work__prj_22fb4fec295f403a8a22__QUEUED-LEASED__2026-11-26T07-19Z.tsv",
+  "observation": "47 RESEARCH_FRAGMENT items QUEUED, 0 LEASED. Three were created after the goal was paused and after the deploy (06:36:32Z, 06:44:22Z, 06:52:22Z). Oldest queued since 2026-11-04 and 2026-11-12. Several items show leaseGeneration 3–7 with attemptCount 0 (leased and released repeatedly without an attempt being counted); 5 carry failureCategory WORKER_ERROR.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O018",
+  "entity": "prj_22fb4fec295f403a8a22",
+  "epoch": "E0",
+  "timestamp": "2026-11-04..05",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_list_work__prj_22fb4fec295f403a8a22__all-first40__2026-11-26T07-18Z.tsv",
+  "observation": "Historic audit stage: of 14 RESEARCH_AUDIT items on the first page, 9 ended FAILED ATTEMPTS_EXHAUSTED with resultSummary \"free lane (brain-b|brain-a) produced no answer Brain accepted for this RESEARCH_AUDIT\" (JUDGE and PRIMARY roles).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O019",
+  "entity": "prj_22fb4fec295f403a8a22",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T07:18:43Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_get_plan__prj_22fb4fec295f403a8a22__2026-11-26T07-18Z.json",
+  "observation": "The Master Planner for the $10k project has now/next/later empty; its single blocked item and nextBestAction is a RECONCILE: \"Reprocess or replace Opportunity Research v1B — Payer for \\\"The UK Department for Work and Pensions (DWP) published a preliminary — it could not be read.\" — unrelated to the goal plan's next test (Lead-Safe deep dive).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O020",
+  "entity": "wst_db2e2e0e5204477692d5",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T02:05:47Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json",
+  "observation": "Chosen strategy only_o1 \"HubSpot Agency Reseller Program\" (goalMetShare 0.4864), but the acceptance candidate is a different pair, \"Recurring outsourced work: US HVAC/plumbing firms · AI after + Paid task: Social media agencies … Agorapulse\" (QUANT_PORTFOLIO, reach 0), and the reconstruction best is a third, \"CAPACITY:cold-email-new-mailboxes@1500 ($1499 bought) + TRANSACTION:retainer\" (reach 0.932, binding COST).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O021",
+  "entity": "wst_db2e2e0e5204477692d5",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T02:05:47Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json",
+  "observation": "Adoption rejects the reconstruction because it \"counts money from HubSpot Agency Reseller Program, Managed SaaS Bundle …, whose price nobody has established\" — yet only_o1 HubSpot is the chosen strategy with constraintsFailed [].",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O022",
+  "entity": "wst_db2e2e0e5204477692d5",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T02:05:47Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json",
+  "observation": "Committee FAIL, QUANT critical: \"the reading presents up to $30,000 toward $5,000 — rebuilt from proven facts alone … at most $320\" (cop_631d 1×270 + cop_f0c6 1×50). causes include REPEATED_GAP and RESEARCH_NOT_FINISHING. The owner-hours constraint was read as 86 hours for the window.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O023",
+  "entity": "wst_db2e2e0e5204477692d5",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:41Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_db2e2e0e5204477692d5__2026-11-26T06-41Z.json",
+  "observation": "No work and no bins are linked to this goal (\"0 bin(s) are held\"); no person-requests; 10 mission report documents listed as evidence.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O024",
+  "entity": "wst_fa4761773e4441b89e5a",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:43:26Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json",
+  "observation": "Chosen strategy only_o1 \"AI Regulation Market Report Resale\"; acceptance candidate is cop_c97670f8157541428d84 \"Recurring outsourced work: Employers and small professional …\" (reach 0.6995); the committee's blocking defect is about a third opportunity, cop_72e0868c66ec4ea8af70 \"Buyer request: US cash home buyers/wholesalers\" counted at $1,500 whose only figure is a deposit, not a price.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O025",
+  "entity": "wst_fa4761773e4441b89e5a",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T04:51:08Z (specialists) / 05:43Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json",
+  "observation": "Committee tier FULL, specialists BOUND (reviewedAt 04:51:08Z) with models gpu:openai/gpt-oss-120b and free:auto/best-coding. gpt-oss answered INVESTOR (FAIL), OPERATOR (PASS) and MARKET_EXPERT (FAIL); free:auto/best-coding answered OWNER_PROXY (FAIL); SKEPTIC and QUANT got \"no specialist model answered within the bound (… no parseable verdict; … no parseable verdict)\". Specialist review ran ~52 min before the reading it is attached to.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O026",
+  "entity": "wst_fa4761773e4441b89e5a",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:43:26Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json",
+  "observation": "QUANT says \"proven facts alone support $412,920\" (cop_c976 740×279 + cop_a4d0 740×279) against $2,000, while objective.support says 0 supported legs, $0, and the OWNER_PROXY specialist (free model) writes \"Volume is proven at 740 buyers … 740 buyers would generate $213,860\". The 740 buyer count is a stated reachable count read as 740 purchases.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O027",
+  "entity": "wst_fa4761773e4441b89e5a",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:43:26Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json; docs/investigation-2026-11-26/maps/B/raw/brain_operator_goals__all__2026-11-26T06-34-13Z.json",
+  "observation": "The plan applies a $500 capital ceiling (\"This plan commits USD 0 of the USD 500 the goal allows\") to a goal whose words (\"Collect 2000 dollars of customer payments within 14 days\") state no capital; reconstruction best buys \"CAPACITY:cold-email-prewarmed@500 ($499 bought)\". Where $500 came from is not shown.",
+  "kind": "OBSERVED",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O028",
+  "entity": "wst_fa4761773e4441b89e5a",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:43:26Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json",
+  "observation": "Strategy basket_all reads goalMetShare 1 with infeasibleShare 0.9232 and verdict NEEDS_EVIDENCE (not NOT_VIABLE), i.e. met in every feasible world while 92% of worlds are infeasible.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O029",
+  "entity": "wst_deede4995a0c471c95ee",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:33:37Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json",
+  "observation": "Chosen strategy only_o2 \"Notion Template Customization Service\" (goalMetShare 0.20) although only_o1 LinkedIn Sales Navigator Audit (0.4992) and only_o3 Fiverr Gig Package (0.483) score higher; acceptance candidate is a fourth, \"Upwork Profile Optimization Package\" (reach 0, settledP50 0).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O030",
+  "entity": "wst_deede4995a0c471c95ee",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:33:37Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json",
+  "observation": "reachBasis \"SUPPORTED\" with reach 0.87, while supportedReach 0, objective.outcome expected/upper/adverse all 0 and the support sentence reads \"every one of the 1 counted leg(s) has a reachable channel, an offer at an established price, a fulfiller and settled cash: the outcome is the plan's\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O031",
+  "entity": "wst_deede4995a0c471c95ee",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T05:33:37Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json",
+  "observation": "QUANT PASSES: \"proven facts alone support $37,896,129,554\" from cop_f4426d62edec4bcab66c 785000×142 + cop_0db7d5128e7344989994 100000000×378 + …; OWNER_PROXY cites \"$111,220,186 of $3,000\". SKEPTIC and OWNER_PROXY fail critically on cop_fd922329 (LinkedIn audit) whose $300 is \"money returned … not sold\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O032",
+  "entity": "wst_deede4995a0c471c95ee",
+  "epoch": "unknown",
+  "timestamp": "research doc retrieved 2026-11-26",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_get_document_text__doc_09545a208e0d4fef8c62__2026-11-26T07-22Z.txt",
+  "observation": "The qualify dive on the chosen route (doc_09545a208e0d4fef8c62, v1GG) found: the one published channel requires an approved Notion partner with individually-certified humans (proctored, ID-verified); price band $1,000–$20,000 not $250–$1,000; dated demand only Aug 2026 (for a human consultant); no buyer count — \"Notion's ~100 million users measures product reach, not buyers\". The plan reading still sets the next test as \"Find a dated sign from the last 30 days that the buyer … needs it now\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O033",
+  "entity": "wst_deede4995a0c471c95ee",
+  "epoch": "unknown",
+  "timestamp": "—",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json; docs/investigation-2026-11-26/maps/B/raw/brain_get_document_text__doc_09545a208e0d4fef8c62__2026-11-26T07-22Z.txt",
+  "observation": "INFERRED: the QUANT multiplier 100,000,000 (cop_0db7d5128e7344989994) matches the \"~100 million users\" figure the research explicitly labelled as not a buyer count; the opportunity id was not resolved to its card, so the link is unconfirmed.",
+  "kind": "INFERRED",
+  "confidence": "low"
+ },
+ {
+  "id": "B-O034",
+  "entity": "prj_630132c1875545548727",
+  "epoch": "unknown",
+  "timestamp": "docs undated in excerpt (v1EM, v1GF within 11-12..11-26)",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_search_evidence__prj_630132c1875545548727__route-proposal__2026-11-26T07-21Z.txt",
+  "observation": "Research syntheses for this goal conclude the opposite of the plan's 87% reach: v1EM \"The accepted evidence does not show any lawful way … USD 3,000 … within 24 days at zero capital\"; v1GF \"None of them is shown to settle cash inside the goal's 23-day window\"; v1EG \"The accepted ledger does not establish any opening that meets the assignment's bar.\"",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O035",
+  "entity": "prj_630132c1875545548727",
+  "epoch": "unknown",
+  "timestamp": "—",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_search_evidence__prj_630132c1875545548727__route-proposal__2026-11-26T07-21Z.txt",
+  "observation": "~200 research documents exist (v1 … v1GH). Dozens are screens/payer/access/price dives on openings named \"Buyer request: buyer not yet named — Wikipedia\" (also GOV.UK, Wikimedia Foundation, Upwork, GigRadar), i.e. the source site's name stands in for the buyer. One packet (v1AF) states operation constraints \"~30 hrs/week\" for a goal whose words give no hours, while the plan says the owner hours are something \"nobody has stated\".",
+  "kind": "OBSERVED",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O036",
+  "entity": "wst_deede4995a0c471c95ee",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:56:11Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_deede4995a0c471c95ee__2026-11-26T06-41Z.json",
+  "observation": "Bin bin_753a2a3783864534998e was updated at 06:56:11Z (after pause and deploy), state READY, heldReason GOAL_PAUSED. Similar post-pause bin updates: wst_6631 bin_0ad1be3de06f42bb9e08 at 06:47:32Z.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O037",
+  "entity": "wst_66311cabe7e5442faa98",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T04:42:49Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json",
+  "observation": "Chosen only_o1 \"AI Regulation Market Research Report\"; candidate cop_c97670f8157541428d84 (the same opportunity that is the candidate of wst_fa47… in the same project prj_c567…). Committee FULL with specialists PENDING (\"the independent specialist review has not answered yet\") for every role; the SKEPTIC blocks on \"the independent model challenge answered REVISE\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O038",
+  "entity": "wst_66311cabe7e5442faa98",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T04:42:49Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json",
+  "observation": "The reconstruction found a winner using \"price×2.5@ALL\" plus deposit timing, bundle and a referral partner (reach 0.93, binding MARKET_SIZE, replaced:true) and it was then discarded as implausible (70× bound ×20). Capital tied up at start \"$10,000 within $10,000\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O039",
+  "entity": "wst_4f0c312400e1425dab2e",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T01:31:31Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+  "observation": "Chosen only_o2 \"AI Script Bundle\"; acceptance candidate HVAC + Agorapulse (cop_631d…, cop_f0c6…) — identical to the candidate of wst_db2e… in the same project prj_f1d8…. QUANT critical: \"$750,000 toward $50,000 … at most $320\"; QUANT also flags \"the plan's two downside estimators disagree\" (5033 vs 16900).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O040",
+  "entity": "wst_4f0c…/wst_db2e…; wst_fa47…/wst_6631…",
+  "epoch": "E0",
+  "timestamp": "01:31–05:43Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json",
+  "observation": "Goals that share a project share candidate legs: prj_f1d8 goals both pick HVAC+Agorapulse with identical $320 reconstruction; prj_c567 goals both pick cop_c976 (740×279). Strategy option names overlap too (fa47 and 6631 both list Premium .AI Domain Transfer, Sentiment-Analysis API Access, Financial Modeling Pack, Montgomery Permit Leads with near-identical settledP50 ≈$390/$130/$78/$65) although the targets differ 50×.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O041",
+  "entity": "six cash goals",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T07:15:53Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_allocation__all__2026-11-26T07-15Z.json",
+  "observation": "Allocation reads reach 0.0% for 5 goals (with \"reach moved -97.0 pts\" for 7b4f, -90 for fa47, -87 for 6631) and 87.0% for deede; all HOLD, marginal value 0, \"no executable work (waiting on a person or a dependency)\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O042",
+  "entity": "wst_7b4fcbb5f2384f31b6c3",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T07:05:47Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_list_projects__worker-05__2026-11-26T07-17Z.json",
+  "observation": "The hourly owner report (ops-report.20261126T07) still presents the paused goal as active: \"best reach 20.4%\", binding factor CLOSE, \"Since last report: reach 20.4% → 20.4%\", \"Planning: 0 evaluation(s), 50 plan reading(s)\" — while the only stored reading for this goal is from 05:40:04Z. It does not mention the pause.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O043",
+  "entity": "Hermes operator",
+  "epoch": "E1",
+  "timestamp": "hour ending 2026-11-26T07:00Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_list_projects__worker-05__2026-11-26T07-17Z.json",
+  "observation": "Hermes: 3 runs, 15 tool calls ok, 0 decisions, 0 actions, \"Goals inspected 0\"; models gpu:openai/gpt-oss-120b and free:auto/best-coding; last run summary is an engineering SUBMIT_FIX about a feasibility benchmark (0.8955→0.95). The report flags the factory bottleneck \"Survived 12 reports unchanged\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O044",
+  "entity": "research pipeline",
+  "epoch": "E1",
+  "timestamp": "hour ending 2026-11-26T07:00Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_list_projects__worker-05__2026-11-26T07-17Z.json",
+  "observation": "Report pipeline: discovered 74, qualified 0, research done 8 (failed 13), strategies constructed 0, economic evaluations 0, plans accepted 0; research fragments accepted 8 vs rejected 13; queued 2614, blocked 199, oldest wait 127,308 min (~88 days); incidents PROCESS_RESTART ×2.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O045",
+  "entity": "capacity",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T07:12:22Z (CACHED, age 119 s)",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_capacity__fleet__2026-11-26T07-14Z.json",
+  "observation": "Capacity read could not finish live within 20 s and was served cached. ROUTINES 0 running / 0 waiting / capacity 12; FREE_LANE 16 running of 24, 1264 waiting, both model slots \"database connections contended; holding until they free up\"; RESEARCH_SLOTS 330 running / 643, 2398 waiting, idle:true (\"283 launchable idea(s) have a free slot\"); FACTORY 0/2.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O046",
+  "entity": "GPU",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T07:13:00Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_capacity__fleet__2026-11-26T07-14Z.json",
+  "observation": "GPU pod y7us619p8bi0to RUNNING on A100 80GB ($2.19/h, continuous authorization $2.5/h since 11-24T11:39Z), balance $140.39, today $15.85; inFlight 6 vs slotTarget 16, restriction \"concurrency: database connections contended\"; accepted 662 in 24 h, 11 in the last hour, 65.6 jobs/running-hour.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O047",
+  "entity": "ops report vs capacity",
+  "epoch": "E1",
+  "timestamp": "07:05Z vs 07:12Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_list_projects__worker-05__2026-11-26T07-17Z.json; docs/investigation-2026-11-26/maps/B/raw/brain_operator_capacity__fleet__2026-11-26T07-14Z.json",
+  "observation": "Component disagreement on the same resources: the report says research \"3 running\" while capacity says RESEARCH_SLOTS 330–331 running; report says \"Idle or constrained: none\" while capacity marks RESEARCH_SLOTS idle beside work and FREE_LANE held by DB contention; report says \"MORE GPU CAPACITY: NO — nothing in the rows shows work waiting on it\" while 1,264 free-lane items wait; report says \"Models: no research model jobs\" while the GPU accepted 662 jobs in 24 h.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O048",
+  "entity": "six cash goals / ROUTINES",
+  "epoch": "E1",
+  "timestamp": "07:12Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_capacity__fleet__2026-11-26T07-14Z.json; docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json",
+  "observation": "Every plan's only step names \"Claude routines (RESEARCH_A_QUESTION)\" with capability PRESENT, but the ROUTINES pool has 0 waiting and 0 running; the report lists \"Fix ROUTINES idle dispatch via config change (BLOCKED)\". No trace shows the plan step reaching a routine.",
+  "kind": "OBSERVED",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O049",
+  "entity": "knowledge library",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:00..07:15Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_knowledge__all__2026-11-26T07-15Z.json",
+  "observation": "Knowledge passes ran every 15 min after the deploy (05:59, 06:30, 06:45, 07:00, 07:15), each DONE; the 07:15 pass applied to 30 projects with all counts 0, none of them the four cash projects; the GPU (runpod/openai/gpt-oss-120b) interpreted NAICS 3315x–3325x metal manufacturing. 1,533 industries uninterpreted.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O050",
+  "entity": "knowledge library → goals",
+  "epoch": "E0",
+  "timestamp": "2026-11-25T21:55Z..2026-11-26T05:35Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_knowledge__all__2026-11-26T07-15Z.json",
+  "observation": "Census counts were attached to buyers that are sentence fragments and marked \"buyers established … the next research round asks for conversion\": \"MJM Group's About page states they build and operate exclusive lead systems for contractor\" → NAICS 5415, 145,813–480,699 (7b4f); \"Requesters\" → NAICS 5182 (deede); \"Canon is a merchant that pays for ecommerce platform services …\" → NAICS 4541 (deede); \"Named clients publicly reviewed\" → NAICS 5416+5415, 371,758–1,894,424 (deede); \"Employers and small professional firms\" → NAICS 56133+813920, 7,782 (fa47, 6631).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O051",
+  "entity": "knowledge contradiction",
+  "epoch": "E0",
+  "timestamp": "2026-11-24T14:45:54Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_knowledge__all__2026-11-26T07-15Z.json",
+  "observation": "One UNRESOLVED contradiction kcn_1fad1e9d4a51439b98c0: 3,570 vs 71,964 \"Small and mid-size firms sending year-end client and employee gifts\" (gap 0.95), \"both stand and the planner reads the strongest per market\"; the same buyer got 21,400 from NAICS 4532 gift stores for db2e and 4f0c.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O052",
+  "entity": "integrations",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T06:36:30Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_integrations__all__2026-11-26T06-36Z.json",
+  "observation": "Google Programmable Search REPAIRING (missing BRAIN_SEARCH_API_KEY/ENGINE_ID); Google Places REFUSED HTTP 403; Stripe REPAIRING (missing STRIPE_SECRET_KEY); Anthropic and OpenAI providers NOT_IN_USE; Firecrawl CONFIGURED; Claude routines CONFIGURED; Instantly CONNECTED (12 of 18 sending accounts healthy).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O053",
+  "entity": "MCP read path",
+  "epoch": "E1",
+  "timestamp": "2026-11-26T07:23Z, 07:25Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_search_evidence__prj_22fb4fec295f403a8a22__lead-safe__2026-11-26T07-24Z.ERROR.txt",
+  "observation": "Two brain_search_evidence reads on the $10k project timed out at 60 s; the same tool answered on prj_6301 two minutes earlier. Operator history, deficiencies and experiments are refused to this credential.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O054",
+  "entity": "local data/",
+  "epoch": "E0",
+  "timestamp": "file mtime 2026-11-24T05:47Z",
+  "source": "data/brain.db.prereconcile (sqlite, read-only)",
+  "observation": "data/ holds only brain.db.prereconcile: a development-scale SQLite DB (35 migrations, 1 project \"Deal Dispatch\", 2 project_events, factory tables) — not production, no workstreams; data/runtime/project-state.json is absent.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O055",
+  "entity": "dec1125c p02 wst_3e23e344ac2040fb900e (prj_5b2e08eb38034b369350)",
+  "epoch": "E0",
+  "timestamp": "created 2026-11-25T19:28:18Z; trace on c52d6d3",
+  "source": "docs/intelligence-test-2026-11-26/planner/p02.trace.txt",
+  "observation": "Production research for p02: 6 RESEARCH_FRAGMENT QUEUED, 0 completed; 2 items released, 18 searched, 2 read; item failures \"the reply was {\\\"claims\\\":[]}\" and \"no readable source … DNS_FAILED … HTTP_ERROR\"; 0 claims. Route asks: 20:09:35Z SCOUT 0 directions, 5 rejected (4 no owner fit, 1 owner's physical work); 20:48:20Z SCOUT 4 directions. Plan NEEDS_EVIDENCE, chosen null.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O056",
+  "entity": "dec1125c p06 wst_4e256872ee2c4ccb8f76 (prj_0d617ea990f1496b8472)",
+  "epoch": "E0",
+  "timestamp": "created 2026-11-25T19:28:20Z",
+  "source": "docs/intelligence-test-2026-11-26/planner/p06.trace.txt",
+  "observation": "The only accepted claims for p06 (Seattle, $500/7 days) are three identical demand_absence statements about county forestry departments paying for a \"slot\" in a shared production run, cited to Wikipedia pages on Bartram Forest WMA, Unicoi State Park and Spirit Creek Forest. The 21:44:06Z ROUTE ask saw 3 findings, showed 1, proposed 1, rejected 2; plan chosen \"Only: 2‑Hour Email Inbox Triage for Local Biz\" at a guessed $70 (ASSUMPTION).",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O057",
+  "entity": "dec1125c p10 wst_2fc80fc56136446d9c1b (prj_0497f093bbbb42ff8167)",
+  "epoch": "E0",
+  "timestamp": "created 2026-11-25T19:28:21Z",
+  "source": "docs/intelligence-test-2026-11-26/planner/p10.trace.txt",
+  "observation": "p10 research never started: pages items 0, searched 0; 6 fragments QUEUED. One SCOUT ask at 20:28:35Z: 2 directions, 2 rejected as \"not a proved deliverable\". Plan chosen null.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O058",
+  "entity": "production search providers",
+  "epoch": "E0",
+  "timestamp": "24 h before ~2026-11-26T01Z",
+  "source": "docs/intelligence-test-2026-11-26/planner/p02.trace.txt (searches_24h)",
+  "observation": "Brain-wide search outcomes: DuckDuckGo lite REFUSED 396 / ANSWERED 175, html REFUSED 389 / ANSWERED 182; Firecrawl CEILING 29 / ANSWERED 7.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O059",
+  "entity": "dec1125c probes (p02/p06/p10)",
+  "epoch": "E0",
+  "timestamp": "2026-11-26 (revision c52d6d3)",
+  "source": "docs/intelligence-test-2026-11-26/planner/probe1_*.txt, final_*.txt (PROBE reply lines)",
+  "observation": "In 12 probe route asks, gpu:openai/gpt-oss-120b returned content \"\" with error null in 6 (probe1 p06_all, p10_cap; final p02_all, p02_cap, p06_cap, p10_all) after 47–86 s; free:auto/best-coding then answered in 8–42 s.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O060",
+  "entity": "dec1125c probes",
+  "epoch": "E0",
+  "timestamp": "2026-11-26",
+  "source": "docs/intelligence-test-2026-11-26/planner/probe1_p06_all.txt:8; final_p06_cap.txt:9; final_p10_all.txt:9; probe1_p10_cap.txt:8; final_p02_all.txt:9; final_p02_cap.txt:9",
+  "observation": "4 of the 6 fallback (free:auto/best-coding) owner blocks list refusals the owner never stated (\"no physical work\", \"no travel\", \"no deliveries\", \"no meeting customers\", \"no performing a service\", \"no running a physical operation\"): probe1_p06_all, final_p06_cap (p06 owner: \"I can put in 15 hours this week\") and probe1_p10_cap, final_p10_all. The 2 p02 fallback replies list refusals []. gpt-oss owner blocks for p06/p10 wrote \"not stated\"/[] (probe1_p06_cap, final_p06_all, final_p10_cap lists \"no physical work by owner\").",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O061",
+  "entity": "dec1125c route prompt",
+  "epoch": "E0",
+  "timestamp": "2026-11-26",
+  "source": "docs/intelligence-test-2026-11-26/planner/final_p06_cap.txt:7 (PROBE prompt)",
+  "observation": "The route ask the models receive states, under LIMITS, the standing rule \"the owner does no physical work — no travel, no deliveries … no performing a service and no running a physical operation\", and only afterwards \"For this goal only, the owner offered their own work … routes the owner personally performs — in person included — are allowed\".",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O062",
+  "entity": "dec1125c critic/parser",
+  "epoch": "E0",
+  "timestamp": "2026-11-26",
+  "source": "docs/intelligence-test-2026-11-26/planner/probe1_*.txt, final_*.txt (PROBE parsed/critique lines)",
+  "observation": "Of 12 probe asks the final ranked list was empty in 9: critic dropped the routes (p02 final ×2 on \"net 30 … first cash unlikely within 60 days\"; p10 final_all on \"Printful's Dec 3-7 delivery falls after the 90-day window from today (Nov 26)\"; p06 final_all on a \"$5 Craigslist posting fee\"), the parser kept nothing (p10 probe1_all: both routes OWNER_FIT \"does not say how it uses … the owner's stated skills\"; p06 final_cap: TaskRabbit route rejected MARGIN), or the critique was unreadable (2). Only probe1 p02 all/cap and final p10_cap ranked a route.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O063",
+  "entity": "dec1125c delivery",
+  "epoch": "E0",
+  "timestamp": "2026-11-26",
+  "source": "docs/intelligence-test-2026-11-26/planner/probe1_p02_cap.txt:2; final_p10_cap.txt:2; final_p02_all.txt:2",
+  "observation": "Findings reaching the proposer are capped: delivery {\"supplied\":111,\"shown\":40,\"cap\":\"FINDINGS_SHOWN\"}; even uncapped 105 of 111 (p02) and 126 of 135 (p10) are shown.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O064",
+  "entity": "30Q test grading",
+  "epoch": "E0",
+  "timestamp": "2026-11-26",
+  "source": "docs/INTELLIGENCE-TEST-30Q-2026-11-26.md:80-83,148-158",
+  "observation": "Blind grading of 12 Brain planner outputs on supplied, verified facts: 0 USABLE, 3 CREDIBLE_INCOMPLETE; final p02 NOT_USABLE because the critic dropped all routes; p06 strongest route (TaskRabbit, owner's own work) never proposed by any arm.",
+  "kind": "OBSERVED (doc record)",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O065",
+  "entity": "model serving",
+  "epoch": "E0",
+  "timestamp": "2026-11-26",
+  "source": "docs/model-exam-2026-11-26/REPORT.md:28-33,86-93,188-192",
+  "observation": "Outside Brain, the production fallback \"auto/best-coding\" was served 30/30 by poolside/laguna-xs-2.1 (1/30 correct, 19 critical errors); gpt-oss-120b gave 0 empty replies but 11 first-attempt HTTP 524 (~100 s proxy idle cut) that disappear with streaming. So the empty replies seen in Brain's path were not reproduced when the model was called directly.",
+  "kind": "OBSERVED (doc record)",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O066",
+  "entity": "eval research queue",
+  "epoch": "E0",
+  "timestamp": "2026-11-26T00:40–01:45Z",
+  "source": "docs/RESEARCH-STARVATION-DIAGNOSIS-2026-11-26.md:145-157",
+  "observation": "Recorded measurement: 840 eval research items queued at priority 8–9, ~690 serving cancelled goals (dec1125, dev1–dev5), 60 serving dec1125c; claims are FIFO within priority; eval fragment work ~400/day; p10 never searched, 4 of 16 fragments attempted.",
+  "kind": "OBSERVED (doc record)",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O067",
+  "entity": "GPU history",
+  "epoch": "E0",
+  "timestamp": "2026-11-19..11-24",
+  "source": "docs/audits/2026-11-24-gpu-capacity.md:14-24",
+  "observation": "GPU did no work from 2026-11-19T19:49:56Z to the audit (bounded budget exhausted, pod EXITED) while reports credited fallback work to the GPU (\"runpod 328 submitted, 418 accepted … GPU COST $125.77\" with the pod EXITED). Brain restarted every ~20–30 min; free lane 890 leases expired, 425 ineffective retries in 24 h.",
+  "kind": "OBSERVED (doc record)",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O068",
+  "entity": "fm1126a batch",
+  "epoch": "unknown",
+  "timestamp": "—",
+  "source": "repo-wide grep (excluding forbidden planning-failure-map files)",
+  "observation": "No raw record of the fm1126a batch exists in docs/, objectives/, plans/, bench/ or data/ outside the excluded planning-failure-map files; commit bf94cd5 (05:33Z) only says a \"fresh evaluation batch\" refused or misread objective phrasings (monthly figure with a start month, \"more than\" limits, bare spans, \"N hours a week at most\", zero-time owners).",
+  "kind": "OBSERVED",
+  "confidence": "medium"
+ },
+ {
+  "id": "B-O069",
+  "entity": "six cash goals — creator",
+  "epoch": "E1",
+  "timestamp": "06:40–06:42Z",
+  "source": "goal detail files docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__*",
+  "observation": "Read tools show no creator field. Authority text reads \"Russell may research on this project, within the limits you set on 2026-09-17\" (7b4f) and \"… on 2026-11-19\" (db2e, fa47, deed, 6631, 4f0c). Whether a person, the operator tool or planningEval created them is not visible.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O070",
+  "entity": "six cash goals — Cash Mode/sprint",
+  "epoch": "E1",
+  "timestamp": "06:35–07:18Z",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_get_project__prj_22fb4fec295f403a8a22__2026-11-26T07-17Z.json",
+  "observation": "Projects are named \"Cash Mode 1/2/3/4\" and each has one layer \"Opportunity Research\" MORE_RESEARCH_REQUIRED; every plan reading's continuation says \"a SQUEEZE goal keeps discovering while it sells\". No read tool exposes a Cash Mode / sprint row, its state, or any GOAL_RESEARCH_SPRINT_ACTIVATED event.",
+  "kind": "OBSERVED",
+  "confidence": "high"
+ },
+ {
+  "id": "B-O071",
+  "entity": "six cash goals — route proposals",
+  "epoch": "E0",
+  "timestamp": "see readAt",
+  "source": "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_deede4995a0c471c95ee__2026-11-26T06-38Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json, docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json; docs/investigation-2026-11-26/maps/B/raw/brain_search_evidence__prj_630132c1875545548727__route-proposal__2026-11-26T07-21Z.txt",
+  "observation": "INFERRED that route proposals did run for all six: every nextTest says \"the deep dive on … establishes or refutes the buyer, price and demand each route proposal assumed\", strategies carry product-style titles (\"Rush Lead‑Safe Certification (24‑48h)\", \"HubSpot Agency Reseller Program\", \"Notion Template Customization Service\") unlike discovery labels (\"Recurring outsourced work: …\"), and prj_6301 holds \"Qualify: <title>\" dives for deede's strategies. No route-ask record (time, stage, model, outcome) is readable for any live goal.",
+  "kind": "INFERRED",
+  "confidence": "medium"
+ }
+]

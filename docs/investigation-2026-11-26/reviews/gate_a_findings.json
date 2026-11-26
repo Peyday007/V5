@@ -1,0 +1,366 @@
+[
+ {
+  "id": "GA-01",
+  "kind": "MISSING",
+  "claim": "optimizePortfolio runs an independent-model challenge on every goal portfolio. bindChallenge -> challengePlan -> modelChallengeFor asks the operator models (modelsFor) through challengeDecision. It can replace portfolio.best (adoptionFrom) and withdraw the 90% claim (applyChallengeToAssurance). The goal path never passes challenge:false. The map lists neither this model call site nor this selector, and S4 describes optimizePortfolio as greedy/exhaustive only.",
+  "evidence": "server/services/quant/portfolio.ts:1215-1221, 1254-1300, 1327; server/services/quant/modelChallenge.ts:174-182, 273; server/services/quant/challenge.ts:1190",
+  "significance": "HIGH"
+ },
+ {
+  "id": "GA-02",
+  "kind": "MISSING",
+  "claim": "A goal's research round is created without a judgment, and launch needs one. nextLaunchable keeps only candidates whose judgment carries a missionSpec. That spec comes from the judge-unjudged pass: judgeCandidate -> askArchive, which can end the candidate as answeredByArchive with no research, then compileMission, which can refuse. Flow 7.1 goes straight from 'candidates' to launch and leaves out this gate.",
+  "evidence": "server/services/cash/discovery.ts:655-661; server/services/russell/loop.ts:1965-1986, 3069-3071, 3143-3260; server/services/russell/planning.ts:404-470",
+  "significance": "HIGH"
+ },
+ {
+  "id": "GA-03",
+  "kind": "MISSING",
+  "claim": "Entry point changeObjective is not mapped (POST /goals/:goalId/objective, goalsCli). It rewrites intent and target through readObjective only, with no assistObjective second read. It keeps every PURSUES link made under the old objective and writes GOAL_OBJECTIVE_CHANGED. routeAskDue never reads that event, so new routes wait out the 6 h interval while the old routes stay project openings that composeGoalModel reads.",
+  "evidence": "server/routes/goals.ts:200-211; server/services/goals/decide.ts:378-466; scripts/goalsCli.ts:307; server/services/goals/routeProposal.ts:86, 1364-1402",
+  "significance": "HIGH"
+ },
+ {
+  "id": "GA-04",
+  "kind": "MISSING",
+  "claim": "Entry point PATCH /register/workstreams/:id is not mapped. It changes intent, title and projectId without touching the target and records WORKSTREAM_AMENDED. intent feeds goalExclusions, ownerLabourOffer and the route prompt's owner words. A moved projectId breaks sprintCandidate's target.projectId === projectId check.",
+  "evidence": "server/routes/register.ts:225-258; server/services/russell/goalSprint.ts:63-64; server/services/goals/ownerPolicy.ts:44-49",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-05",
+  "kind": "MISSING",
+  "claim": "The §119 execution window is not modelled. For 'within 30 days' createGoal stores executionWindowDays and no due date. daysLeftOf returns the full window until execution starts. startExecutionWindows (goal tick, and the cash grant route) later writes execution_started_at and due_at. Every days_left, policy (SQUEEZE) and deadline check in the plan depends on this writer, which the map leaves out.",
+  "evidence": "server/domain/executionWindow.ts:59-64; server/services/goals/executionStart.ts:19-37; server/services/goals/tick.ts:348; server/routes/cash.ts:697; server/services/goals/decide.ts:187-189",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-06",
+  "kind": "STATE_WRITER_MISSED",
+  "claim": "The goal tick writes goal state outside decide.ts. resumeMachinePausedTargetedGoals clears paused_at through repos/goals.resumeGoal, bypassing decide.ts. startGoalExecution writes due_at and execution_started_at. The tick also holds and releases bins (GOAL_WORK_HELD/RELEASED), re-ranks bin priority (GOAL_CAPACITY_ALLOCATED) and applies research remedies. The map's state table names decide.ts as the only lifecycle writer and gives advanceGoals as 'does not plan'.",
+  "evidence": "server/services/goals/tick.ts:313-360, 432, 517, 1222; server/repos/goals.ts:62, 100, 175, 252",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-07",
+  "kind": "MISSING",
+  "claim": "REPAIRED re-reads are triggered by requestGoalPlanPass, and the map names none of its callers: reconsider (changed fact or owner-policy version), the operator director, the improvement loop's assessLiveObjectives, fallbackWatch and quant/knowledge. tick.ts productionFloorOpeners -> requestFloorResearch is the FLOOR trigger and is also unmapped.",
+  "evidence": "server/services/goals/plan.ts:5805-5821; server/services/goals/reconsider.ts:293-294; server/services/operator/director.ts:442; server/services/improvement/loop.ts:1712-1718; server/services/quant/fallbackWatch.ts:372-374; server/services/quant/knowledge.ts:815-823; server/services/goals/tick.ts:223-227",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-08",
+  "kind": "MISSING",
+  "claim": "The decision-history passes are not mapped. recordDecisionsIfDue writes a decision record per plan reading into workstream_events. reconcileFactChangesIfDue reads ownerPolicy (governingPolicy, staleAgainstPolicy) and writes reconsideration events. The map lists reconsider without its writes or its plan-pass trigger, and leaves out decisionRecord.ts and ownerPolicy.ts.",
+  "evidence": "server/services/goals/tick.ts:57, 139-143; server/services/goals/decisionRecord.ts:335, 473-479; server/services/goals/reconsider.ts:239, 382, 408; server/services/goals/ownerPolicy.ts:33-49",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-09",
+  "kind": "MISSING",
+  "claim": "A second 'best plan' selector reaches the owner. composeGoalReadings -> buildPlanSet ranks candidates by richness (number of established fields, then p50), collapses paraphrases and shared customers, and rebuilds after a channel or supplier fails (rebuildAfter). Its plans[0] lead is persisted in forecast through readingsSummary and can differ from chosen_strategy and from the acceptance candidate. The selector list S1-S18 does not include it.",
+  "evidence": "server/services/goals/plan.ts:2216-2379, 2383-2440, 5575; server/services/goals/planSet.ts:643-700",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-10",
+  "kind": "MISSING",
+  "claim": "brain_operator_goal_plan finds the goal only in operatorSnapshot, a whole-Brain cache with a 25-minute TTL and no invalidation on goal creation. If the goal is missing from the cache the tool throws notFound, and the Command Center path behaves the same. director.goalProject falls back to the register for exactly this case; planTool has no fallback. The map gives A-M119 no filter at all.",
+  "evidence": "server/mcp/operatorTools.ts:177-182; server/services/operator/snapshot.ts:37, 44-47, 65-70; server/services/operator/director.ts:449-460",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-11",
+  "kind": "MISSING",
+  "claim": "Three things the plan uses are left out. decideResearch (quant/deadline.ts) decides, for each unknown, whether to research it or learn it in execution, and that builds researchPriority, which sendPlanQuestions sends. goalExecutionPolicy returns SQUEEZE whenever daysLeft is known and money remains. missingForSale and planAuthority / readCapabilities (cash authority grants, SEND_A_MESSAGE / ISSUE_AN_INVOICE / TAKE_A_PAYMENT capability state) set the sale blockers and permissionsMissing in the steps.",
+  "evidence": "server/services/goals/plan.ts:47-75, 2058-2060, 2651, 4804-4808, 5094-5124, 5244-5248; server/domain/goalPolicy.ts:31-33",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-12",
+  "kind": "MISSING",
+  "claim": "The writers of industry nodes, which construct.ts reads, are not mapped: the industry kernel in the per-project discovery-and-kernels walk, and seedGoalIndustry behind POST /goals/:id/construction with seed=true. Flow 4.2 names 'nodes' as an input but no producer.",
+  "evidence": "server/services/russell/loop.ts:2184-2186; server/routes/goals.ts:291-306; server/services/cash/construct.ts:44, 1224",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-13",
+  "kind": "MISSING",
+  "claim": "The owner's route for operating evidence, POST /goals/:id/construction/facts, records facts with workstream_id = goal. construct.ts reads only workstream_id IS NULL facts, so these facts never reach the cash plan. planInputsFingerprint also counts only facts with a source claim, so they do not trigger a re-read either. The map calls goalConstruction unreachable for cash goals but does not note that the owner's evidence is cut off with it.",
+  "evidence": "server/routes/goals.ts:312-341; server/repos/construction.ts:224-227; server/services/cash/construct.ts:1076; server/services/goals/plan.ts:5731-5732",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-14",
+  "kind": "STATE_WRITER_MISSED",
+  "claim": "Unmapped writers of opening state inside the per-project walk: cash operate's markReady moves openings to READY. composeGoalModel orders openings by state and tier, and missingForSale needs READY. retireMarketplaceListings archives openings and cancels their research, which the worthResearching gate also blocks.",
+  "evidence": "server/services/cash/operate.ts:928-950, 1393; server/services/cash/retireListings.ts:129-140; server/services/russell/loop.ts:2559; server/services/cash/validation.ts:49",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-15",
+  "kind": "STATE_WRITER_MISSED",
+  "claim": "loadCashKnowledge, which composeGoalModel calls on every read, is mapped as a pure evidence_reader, but it writes. It runs keepCashLedger -> recordCashForecast, assessProjectIndependence, assessProjectFallbackPlan and watchFallbacks, so every plan read can append ledger and fallback records.",
+  "evidence": "server/services/cash/goalScenario.ts:3043; server/services/quant/knowledge.ts:198-241; server/services/quant/ledger.ts:441",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-16",
+  "kind": "EXCLUSION_IN_SCOPE",
+  "claim": "exclusions.md excludes quant/fallbackWatch.ts and fallbackSwitch.ts as monitors that 'do not produce' readings. In fact loadCashKnowledge (on the plan path) reads readSwitchDecision. A SWITCHED decision injects respond observations into inference through switchedPathObservations, and fallbackWatch forces REPAIRED plan re-reads.",
+  "evidence": "server/services/quant/knowledge.ts:30-31, 233-239, 1078-1092; server/services/quant/fallbackWatch.ts:372-374",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-17",
+  "kind": "EXCLUSION_IN_SCOPE",
+  "claim": "improvement/** and selfmodel/** are excluded as independent. The improvement loop's objective check calls requestGoalPlanPass for goals whose gaps it cleared, which forces an immediate re-read. The goal tick's floor opener also runs improvementTick.",
+  "evidence": "server/services/improvement/loop.ts:1710-1718; server/services/goals/tick.ts:228-231",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-18",
+  "kind": "WRONG",
+  "claim": "A-M139 says owner physical work is refused 'unless goal words offer labour'. That holds only for openings (goalScenario.ts:3086 passes ownerLabour). Constructed arrangements are screened with breaksOperatingModel without the labour argument in selectEstimatedArrangements and in construct.ts. An owner who offers labour still loses every arrangement that needs it.",
+  "evidence": "server/services/cash/goalScenario.ts:1883, 3053, 3086; server/services/cash/construct.ts:1346, 1746; server/domain/operatingModel.ts:371-373",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-19",
+  "kind": "IMPRECISE",
+  "claim": "Flow 2.2a 'Person/eval/CLI-created goal -> Cash Mode ACTIVE' is not always true. activateGoalSprints skips any project that already has a cash_modes row in any state. A project whose sprint is WINDING_DOWN or ARCHIVED is never reactivated, so discoveryAllowed and launchableUnderCashMode keep refusing goal discovery.",
+  "evidence": "server/services/russell/goalSprint.ts:100-107; server/services/cash/lifecycle.ts:417-421, 520-540",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-20",
+  "kind": "IMPRECISE",
+  "claim": "Flow 8.3 and unreachable_and_alternates say the owner notice fires 'only on ACCEPTED'. planReady also requires CHALLENGED_BY_HERMES, a committed brain_operator_decide ADOPT_PLAN with a challenger answer. Without the Hermes operator (BRAIN_OPERATOR_URL/_KEY), an ACCEPTED plan still never produces the notice, and the map does not draw that connection.",
+  "evidence": "server/domain/planReady.ts:169-178; server/services/goals/planReady.ts:179-190; server/services/operator/run.ts:217-221",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-21",
+  "kind": "WRONG",
+  "claim": "A-M141 gives the director's condition as BRAIN_OPERATOR_URL/_KEY. directorTick (directorPass, standingCommission) runs after the boot grace whether or not the operator app is configured. Only the Hermes run is gated. standingCommission still needs STANDING_AFTER_RUNS prior runs.",
+  "evidence": "server/services/operator/run.ts:202-221; server/services/operator/director.ts:1860-1866",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-22",
+  "kind": "IMPRECISE",
+  "claim": "The cash_opportunities state list leaves out COLLECTED. COLLECTED is in neither LIVE nor STOPPED in goalScenario, so collected openings drop out of the model silently.",
+  "evidence": "server/domain/types.ts:7141-7150; server/services/cash/goalScenario.ts:121-124",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-23",
+  "kind": "IMPRECISE",
+  "claim": "cash_modes is given as 'ACTIVE / other'. The enum is ACTIVE / WINDING_DOWN / ARCHIVED, and only lifecycle transitions write it (person routes plus activateGoalSprints).",
+  "evidence": "server/domain/types.ts:7102; server/services/cash/lifecycle.ts:283-331, 334-338",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-24",
+  "kind": "IMPRECISE",
+  "claim": "S15 says 'first model with parseable answer wins'. A reply where every route failed the rule checks (routes=0, rejected>0) still counts as the answer, so the next model is never tried and only critiqueAndRevise replacements can recover.",
+  "evidence": "server/services/goals/routeProposal.ts:2095-2110",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-25",
+  "kind": "IMPRECISE",
+  "claim": "Flow 3.2 says the pass throttles under pressure to maxReads:1. throttleUnderPressure can also return DEFERRED, which skips the whole goal-plans pass, including outcomes and the retry-only route arming.",
+  "evidence": "server/services/russell/loop.ts:4114-4119",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-26",
+  "kind": "IMPRECISE",
+  "claim": "The map says the knowledge loop runs 'every 60s'. It checks every 60 s but starts a pass at most every 15 min, and never while the database is shedding.",
+  "evidence": "server/services/knowledge/pipeline.ts:265, 309-316",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-27",
+  "kind": "IMPRECISE",
+  "claim": "Line numbers inside plan.ts and goalScenario.ts are 9-25 lines off: chosen=ordered[0] is at 2929, not 2903-2911; judgeAcceptance's main call at 2971, not 2962; the persisted-scenario owner check at 2625-2626, not 2604-2613; listOpportunities at 3009, not 3017. Function start lines are correct.",
+  "evidence": "server/services/goals/plan.ts:2929, 2971, 2625-2626; server/services/cash/goalScenario.ts:3009",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-28",
+  "kind": "IMPRECISE",
+  "claim": "The map says operator-created goals 'have neither' owner. PATCH /goals/:id/terms can set ownerUserId later, which enables persisted scenario runs. It does not set createdByUserId, so sprintCandidate still refuses.",
+  "evidence": "server/routes/goals.ts:173-195; server/services/goals/plan.ts:2625; server/services/russell/goalSprint.ts:65",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-29",
+  "kind": "MISSING",
+  "claim": "planInputsFingerprint, which decides EVIDENCE re-reads and whether a NOT_SUPPORTED goal is ever read again, covers openings, value layers, money, the goal row, claim-sourced construction facts and card facts. It does not cover commercial-knowledge or world-model facts, research claims that became neither facts nor openings, arrangement-library verdicts, or person-recorded facts. A goal held NOT_SUPPORTED therefore ignores those changes.",
+  "evidence": "server/services/goals/plan.ts:5722-5737, 6551",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-30",
+  "kind": "MISSING",
+  "claim": "Scripts that create or read goals and are not in the entry list: scripts/step12b-acceptance.ts (createGoal) and scripts/runpod-report.ts (readGoalPlan persist:false, planProgress). goals/status.ts cashGoalStatuses reads latestReading for scripts/factory.ts.",
+  "evidence": "scripts/step12b-acceptance.ts:1550; scripts/runpod-report.ts:221; server/services/goals/status.ts:29-46; scripts/factory.ts:1888",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-31",
+  "kind": "CONFIRMED",
+  "claim": "The MCP create-goal tool passes userId:null.",
+  "evidence": "server/mcp/operatorTools.ts:1025",
+  "significance": "HIGH"
+ },
+ {
+  "id": "GA-32",
+  "kind": "CONFIRMED",
+  "claim": "sprintCandidate requires createdByUserId, so an operator-created goal gets no sprint.",
+  "evidence": "server/services/russell/goalSprint.ts:65; server/services/goals/decide.ts:161",
+  "significance": "HIGH"
+ },
+ {
+  "id": "GA-33",
+  "kind": "CONFIRMED",
+  "claim": "discoveryAllowed vetoes unless the Cash Mode is ACTIVE. It gates route proposal and goal discovery.",
+  "evidence": "server/services/cash/lifecycle.ts:520-540; server/services/goals/routeProposal.ts:1977; server/services/cash/discovery.ts:1161",
+  "significance": "HIGH"
+ },
+ {
+  "id": "GA-34",
+  "kind": "CONFIRMED",
+  "claim": "The cash planner selects target_metric IS NOT NULL and the objective planner target_metric IS NULL; they never plan the same goal.",
+  "evidence": "server/services/goals/plan.ts:6482-6488; server/services/goals/objectivePlan.ts:774-778",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-35",
+  "kind": "CONFIRMED",
+  "claim": "ROUTE_STRONG_MODEL is defined and never used. The strong model needs both ANTHROPIC_API_KEY and BRAIN_ROUTE_MODEL.",
+  "evidence": "server/services/goals/routeProposal.ts:1405, 1419-1425",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-36",
+  "kind": "CONFIRMED",
+  "claim": "With no model, a route ask records NO_MODEL. operatorChats = strongRouteModels + challengerModels(modelsFor).",
+  "evidence": "server/services/goals/routeProposal.ts:1448-1458, 2017-2021",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-37",
+  "kind": "CONFIRMED",
+  "claim": "requiredProbability is 0.9 and minPlanOutcomes is 10. measuredPlanChance returns null below 10 outcomes and is global, not filtered by goal.",
+  "evidence": "server/services/goals/plan.ts:158, 167, 1557-1570",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-38",
+  "kind": "CONFIRMED",
+  "claim": "The committee and integrity gates can only take an ACCEPTED reading away.",
+  "evidence": "server/services/goals/plan.ts:5451-5452, 5480-5484",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-39",
+  "kind": "CONFIRMED",
+  "claim": "The persisted scenario run requires ownerUserId ?? createdByUserId.",
+  "evidence": "server/services/goals/plan.ts:2625-2626",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-40",
+  "kind": "CONFIRMED",
+  "claim": "inventEnabled needs a lane (BRAIN_CHEAP_LLM_URL or RunPod) and BRAIN_REASONING_MODEL not set to off. INVENT_EVERY_MS is 15 min.",
+  "evidence": "server/services/goals/reasoning/invent.ts:98-108; server/services/cheap/lane.ts:57-60; server/services/goals/plan.ts:3257-3264",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-41",
+  "kind": "CONFIRMED",
+  "claim": "Calibration writes only operator_learnings, and nothing on the plan path reads that table; the route proposer reads prior detail.rethink.",
+  "evidence": "server/services/goals/calibration.ts:467, 520; server/services/goals/routeProposal.ts:2022-2024",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-42",
+  "kind": "CONFIRMED",
+  "claim": "MAX_MODEL_OPPORTUNITIES = floor((80-4)/9) = 8.",
+  "evidence": "server/services/cash/goalScenario.ts:92-99; server/domain/scenario.ts:212",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-43",
+  "kind": "CONFIRMED",
+  "claim": "With no hours ceiling, hours_available is swept 20-160. readObjective reads no hours limit from 'minimal owner involvement'.",
+  "evidence": "server/services/cash/goalScenario.ts:3292-3297; server/services/industry/construction/intent.ts:626-641",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-44",
+  "kind": "CONFIRMED",
+  "claim": "The opening list is project-scoped with no goal filter.",
+  "evidence": "server/services/cash/goalScenario.ts:3009",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-45",
+  "kind": "CONFIRMED",
+  "claim": "harvest takes at most 10 per project per tick. MAX_LIVE_GOAL_ROUNDS=3; constructedShare=max(1,floor(cap/2)).",
+  "evidence": "server/services/cash/discovery.ts:2898, 949, 966-968",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-46",
+  "kind": "CONFIRMED",
+  "claim": "Constants: boot grace 10 min; REFRESH 30 min; evidence floor 2 min; top-up 5 min.",
+  "evidence": "server/services/russell/loop.ts:4035, 1676; server/services/goals/plan.ts:5673, 5690, 5701",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-47",
+  "kind": "CONFIRMED",
+  "claim": "Under focus without free-lane ownership, openGoalDiscovery returns null and spare surfaces are 0.",
+  "evidence": "server/services/cash/discovery.ts:1159; server/services/cash/researchRoom.ts:368-370",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-48",
+  "kind": "CONFIRMED",
+  "claim": "Strategy ordering: verdict rank, then mean route-critique rank (route-only strategies), then conservativeSettled, awards, missing links, goal-met share; chosen = ordered[0].",
+  "evidence": "server/services/goals/plan.ts:2903-2929",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-49",
+  "kind": "CONFIRMED",
+  "claim": "readGoalPlanSummary returns at most 8 strategies with 6 fields each, carries no summary, and falls back to goal_objective_readings.",
+  "evidence": "server/services/operator/actions.ts:134-170",
+  "significance": "MED"
+ },
+ {
+  "id": "GA-50",
+  "kind": "CONFIRMED",
+  "claim": "assistObjective fires only for an unplaced money figure, OTHER-with-money, or CASH without a deadline, and uses the first modelsFor model.",
+  "evidence": "server/services/goals/objectiveAssist.ts:40-45, 219-225; server/services/goals/decide.ts:117-120",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-51",
+  "kind": "CONFIRMED",
+  "claim": "routes/russell.ts:1713 createGoal is repos/russellAuthority's, not the commercial createGoal (name collision).",
+  "evidence": "server/routes/russell.ts:135, 1713",
+  "significance": "LOW"
+ },
+ {
+  "id": "GA-52",
+  "kind": "CONFIRMED",
+  "claim": "A NOT_SUPPORTED goal with an unchanged fingerprint is not re-read on REFRESH.",
+  "evidence": "server/services/goals/plan.ts:6551",
+  "significance": "MED"
+ }
+]

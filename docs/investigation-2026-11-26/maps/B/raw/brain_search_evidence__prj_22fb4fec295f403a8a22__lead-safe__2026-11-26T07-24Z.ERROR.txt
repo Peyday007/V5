@@ -1,0 +1,4 @@
+# Two calls, both failed identically (verbatim error):
+# 1) brain_search_evidence(project_id=prj_22fb4fec295f403a8a22, query="Lead-Safe Certification Booking Broker buyer price demand", limit=5) ~2026-11-26T07:23Z
+# 2) brain_search_evidence(project_id=prj_22fb4fec295f403a8a22, query="Lead-Safe Certification Booking Broker", limit=3) ~2026-11-26T07:25Z
+MCP server "cloud_brain" tool "brain_search_evidence" timed out after 60s. The outcome is unknown: the call may have finished, may still be running, or may never have started. Check what it did before you repeat it.

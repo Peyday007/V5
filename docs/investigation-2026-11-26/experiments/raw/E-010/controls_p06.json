@@ -1,0 +1,32 @@
+{
+ "hours_oneSaleOver15h": {
+  "kept": [],
+  "rejected": [
+   "HOURS: one sale needs about 20 owner hour(s) in the window, more than the 15 allowed in the window (the target would take 1, about 20 hours)"
+  ]
+ },
+ "hours_wholeTargetOver15h_oneSaleFits": {
+  "kept": [
+   "Recorded class: 2 h a sale, 13 sales"
+  ],
+  "rejected": []
+ },
+ "margin_costEqualsPrice": {
+  "kept": [],
+  "rejected": [
+   "MARGIN: its direct cost is not below its price"
+  ]
+ },
+ "deadline_8days": {
+  "kept": [],
+  "rejected": [
+   "DEADLINE: the first money settles after 8 day(s), beyond the 7 left"
+  ]
+ },
+ "capital_5dollars": {
+  "kept": [],
+  "rejected": [
+   "CAPITAL: ties up $5, more than the $0 allowed"
+  ]
+ }
+}

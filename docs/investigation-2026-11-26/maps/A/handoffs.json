@@ -1,0 +1,599 @@
+[
+ {
+  "id": "A-H01",
+  "producer": "readObjective (A-M007)",
+  "consumer": "createGoal (A-M006)",
+  "contract": "ObjectiveReading fields kind/amount/currency/deadline/capitalCeiling/hoursCeiling/resources/unread",
+  "transformation": "toCents; metric default SETTLED_CASH; resources joined with \"; \"",
+  "failure_behaviour": "missing currency/deadline or unplaced money -> creation refused; unrecognised phrases (e.g. \"minimal owner involvement\") silently produce no limit",
+  "evidence": "decide.ts:113-149, 202; intent.ts:627-668"
+ },
+ {
+  "id": "A-H02",
+  "producer": "assistObjective (A-M008)",
+  "consumer": "createGoal (A-M006)",
+  "contract": "amended ObjectiveReading",
+  "transformation": "only fields the words bear out are taken",
+  "failure_behaviour": "no operator model -> reading unchanged",
+  "evidence": "decide.ts:117-120; objectiveAssist.ts:219-225"
+ },
+ {
+  "id": "A-H03",
+  "producer": "createGoal (A-M006)",
+  "consumer": "workstreams row + target columns",
+  "contract": "createWorkstream (intent=objective verbatim, purpose REVENUE_DIRECT), setTerms (dueAt or executionWindowDays), setTarget (target_metric, amount, currency, ceilings, resources)",
+  "transformation": "title sliced 160",
+  "failure_behaviour": "setTarget refusal -> goal cancelled",
+  "evidence": "decide.ts:156-211"
+ },
+ {
+  "id": "A-H04",
+  "producer": "createGoal via MCP (A-M001)",
+  "consumer": "activateGoalSprints (A-M130)",
+  "contract": "workstreams.created_by_user_id",
+  "transformation": "userId:null passed",
+  "failure_behaviour": "sprintCandidate false -> no Cash Mode activated by this goal Later PATCH /goals/:id/terms can set ownerUserId (persisted runs) but never createdByUserId (GA-28).",
+  "evidence": "operatorTools.ts:1025; goalSprint.ts:62"
+ },
+ {
+  "id": "A-H05",
+  "producer": "activateGoalSprints (A-M130)",
+  "consumer": "discoveryAllowed (A-M131)",
+  "contract": "cash_modes.state ACTIVE for project",
+  "transformation": "-",
+  "failure_behaviour": "no ACTIVE mode -> proposeGoalRoutes NOT_DUE, openGoalDiscovery null A project with an existing WINDING_DOWN/ARCHIVED cash_modes row is never reactivated (goalSprint.ts:104-107) (GA-19).",
+  "evidence": "lifecycle.ts:520-540; routeProposal.ts:1981-1982; discovery.ts:1150-1151"
+ },
+ {
+  "id": "A-H06",
+  "producer": "advanceGoalPlans (A-M015)",
+  "consumer": "readGoalPlan persist:true (A-M017)",
+  "contract": "goalId, now",
+  "transformation": "due computed from goal_plan_readings, scenario_runs, fingerprint",
+  "failure_behaviour": "ScenarioBusyError -> rest of pass busy; other errors thrown out of pass",
+  "evidence": "plan.ts:6582-6607"
+ },
+ {
+  "id": "A-H07",
+  "producer": "readTarget (A-M010)",
+  "consumer": "readGoalPlan (A-M017)",
+  "contract": "TargetReading",
+  "transformation": "ledger totals minus target",
+  "failure_behaviour": "null (no target) -> readGoalPlan returns null; cash planner never runs; objective planner handles goal only if target_metric IS NULL",
+  "evidence": "plan.ts:2477-2478; objectivePlan.ts:774-778"
+ },
+ {
+  "id": "A-H08",
+  "producer": "constructArrangements (A-M019)",
+  "consumer": "goalArrangements (A-M018)",
+  "contract": "ConstructedArrangement[] (key, demand, need, supply, value, stress, signature)",
+  "transformation": "filter namesABuyerPopulation",
+  "failure_behaviour": "throws -> degraded string and [] arrangements",
+  "evidence": "plan.ts:6177-6180, 2483-2486"
+ },
+ {
+  "id": "A-H09",
+  "producer": "goalArrangements (A-M018)",
+  "consumer": "composeGoalModel (A-M025)",
+  "contract": "arrangements param",
+  "transformation": "arrangementOutOfScope prefilter then selectEstimatedArrangements to <=12 estimates (+6 reserve)",
+  "failure_behaviour": "none in scope -> no estimates",
+  "evidence": "goalScenario.ts:3156-3191"
+ },
+ {
+  "id": "A-H10",
+  "producer": "frontierTiers (A-M026)",
+  "consumer": "composeGoalModel (A-M025)",
+  "contract": "tier per opening id",
+  "transformation": "SIGNAL tier -> excluded \"evidence only\"",
+  "failure_behaviour": "-",
+  "evidence": "goalScenario.ts:3007-3009, 3108-3111"
+ },
+ {
+  "id": "A-H11",
+  "producer": "fileRoute (A-M078)",
+  "consumer": "composeGoalModel (A-M025)",
+  "contract": "cash_opportunities rows (project-scoped) + RECOMMENDATION card facts (captureMechanism, price, timeToFirstCash, hours, exposure ...)",
+  "transformation": "modelOpportunity reads facts as ESTIMATE provenance",
+  "failure_behaviour": "route openings enter every goal of that project (no goal filter in composeGoalModel); unknown whether modelOpportunity refuses them",
+  "evidence": "routeProposal.ts:1638-1690; goalScenario.ts:3017, 3112"
+ },
+ {
+  "id": "A-H12",
+  "producer": "harvest (A-M097)",
+  "consumer": "composeGoalModel (A-M025)",
+  "contract": "cash_opportunities from signalled claims",
+  "transformation": "title from openingTitle; duplicates linked",
+  "failure_behaviour": "stale/no-signal claims never become openings",
+  "evidence": "discovery.ts:2203-2330"
+ },
+ {
+  "id": "A-H13",
+  "producer": "composeGoalModel (A-M025)",
+  "consumer": "scenario engine (A-M033)",
+  "contract": "ScenarioModelDefinition (variables <=80, strategies <=8)",
+  "transformation": "included <=8 openings; combine/basket/only strategies",
+  "failure_behaviour": "included 0 -> refusal branch (no strategies)",
+  "evidence": "goalScenario.ts:3262-3282, 3443-3460; plan.ts:2500"
+ },
+ {
+  "id": "A-H14",
+  "producer": "composeGoalModel (A-M025)",
+  "consumer": "evaluateGoalPortfolio (A-M030)",
+  "contract": "portfolioInput {openings found+estimates, limits, measuredCapacity/Rates, knowledge, reserve}",
+  "transformation": "held 30 min by key",
+  "failure_behaviour": "no candidates/estimates -> portfolio null -> reconstruction null",
+  "evidence": "goalScenario.ts:3196-3248; plan.ts:3280"
+ },
+ {
+  "id": "A-H15",
+  "producer": "evaluateGoalPortfolio (A-M030)",
+  "consumer": "judgeAcceptance (A-M038)",
+  "contract": "GoalPortfolio best/pricedBest/alternatives(4)/demand/assurance/basis",
+  "transformation": "unpriced member -> pricedBest; COVERAGE basis cannot be ACCEPTED",
+  "failure_behaviour": "portfolio null -> candidate from chosen strategy or pathways",
+  "evidence": "plan.ts:1659-1760"
+ },
+ {
+  "id": "A-H16",
+  "producer": "scenario engine (A-M033)",
+  "consumer": "strategy loop (A-M036/A-M037)",
+  "contract": "ScenarioResult sweeps per strategy key",
+  "transformation": "sweepOf",
+  "failure_behaviour": "null (budget exceeded) -> no sweep, gate judges on evidence",
+  "evidence": "plan.ts:2619-2625, 2727"
+ },
+ {
+  "id": "A-H17",
+  "producer": "strategy ordering (A-M037)",
+  "consumer": "judgeAcceptance (A-M038)",
+  "contract": "chosen StrategyReading",
+  "transformation": "-",
+  "failure_behaviour": "chosen null -> pathways leading or no candidate",
+  "evidence": "plan.ts:2903-2911, 2962"
+ },
+ {
+  "id": "A-H18",
+  "producer": "judgeAcceptance (A-M038)",
+  "consumer": "reconstructionFor (A-M040)",
+  "contract": "acceptance.required, status !== ACCEPTED",
+  "transformation": "-",
+  "failure_behaviour": "reconstruction null on error (degraded)",
+  "evidence": "plan.ts:2986"
+ },
+ {
+  "id": "A-H19",
+  "producer": "inventDirections (A-M041)",
+  "consumer": "reconstructPlan (A-M040)",
+  "contract": "Direction[] via explore.invent",
+  "transformation": "parseInvented validation",
+  "failure_behaviour": "no lane / error -> library-only exploration",
+  "evidence": "plan.ts:3315; invent.ts:102-153"
+ },
+ {
+  "id": "A-H20",
+  "producer": "reconstructPlan (A-M040)",
+  "consumer": "adoptReconstruction (A-M046)",
+  "contract": "Reconstruction best/established/exploration",
+  "transformation": "implausibility and feasibility checks",
+  "failure_behaviour": "hypothetical -> BASELINE adoption, candidate null",
+  "evidence": "plan.ts:3630-3703, 2994"
+ },
+ {
+  "id": "A-H21",
+  "producer": "adoptReconstruction (A-M046)",
+  "consumer": "acceptance (CANDIDATE_ONLY)",
+  "contract": "candidate RECONSTRUCTED",
+  "transformation": "legsOf/withLegSupport",
+  "failure_behaviour": "-",
+  "evidence": "plan.ts:2995-2999"
+ },
+ {
+  "id": "A-H22",
+  "producer": "acceptance + reconstruction + pathways",
+  "consumer": "planSteps (A-M049)",
+  "contract": "adoption, reconstruction, sales, legacyNext, lead arrangement context",
+  "transformation": "arrangementSteps / openingSteps",
+  "failure_behaviour": "collectsOutsideWindow -> steps cleared, excludedPlan",
+  "evidence": "plan.ts:3046-3055"
+ },
+ {
+  "id": "A-H23",
+  "producer": "readGoalPlan built reading",
+  "consumer": "gateIntegrity (A-M062)",
+  "contract": "PlanReading",
+  "transformation": "planIntegrity + committeeOf; refusal only of ACCEPTED",
+  "failure_behaviour": "-",
+  "evidence": "plan.ts:5473-5500"
+ },
+ {
+  "id": "A-H24",
+  "producer": "gateIntegrity (A-M062)",
+  "consumer": "persistReading (A-M063)",
+  "contract": "final PlanReading, chosen",
+  "transformation": "storableAcceptance; persistableVerdict; digest",
+  "failure_behaviour": "identical digest -> no new row",
+  "evidence": "plan.ts:5523-5600"
+ },
+ {
+  "id": "A-H25",
+  "producer": "persistReading (A-M063)",
+  "consumer": "readGoalPlanSummary (A-M120)",
+  "contract": "goal_plan_readings row (verdict, chosen_strategy, strategies, next_test, forecast)",
+  "transformation": "strategies sliced to 8 x 6 fields; summary absent",
+  "failure_behaviour": "no row -> objective reading or \"no plan reading yet\"",
+  "evidence": "actions.ts:134-167"
+ },
+ {
+  "id": "A-H26",
+  "producer": "readGoalPlanSummary (A-M120)",
+  "consumer": "Command Center / Hermes (A-M119, A-M121)",
+  "contract": "JSON value",
+  "transformation": "-",
+  "failure_behaviour": "refusal -> 422 in Command Center The goal must also be in the 25-min operator snapshot or the tool throws notFound (operatorTools.ts:179; snapshot.ts:37) (GA-10).",
+  "evidence": "command.ts:65-100; operatorTools.ts:164-183"
+ },
+ {
+  "id": "A-H27",
+  "producer": "persistReading (A-M063)",
+  "consumer": "GET /goals/:goalId (A-M125)",
+  "contract": "GOAL_PLAN_READ workstream event summary (<=400 chars)",
+  "transformation": "summary.slice(0,400)",
+  "failure_behaviour": "-",
+  "evidence": "plan.ts:5605-5610; routes/goals.ts:77-95"
+ },
+ {
+  "id": "A-H28",
+  "producer": "readGoalPlan reading (ACCEPTED)",
+  "consumer": "notifyPlanReady (A-M124)",
+  "contract": "PlanReading + operator ADOPT_PLAN decision",
+  "transformation": "planReady conditions",
+  "failure_behaviour": "non-ACCEPTED -> NOT_READY; ACCEPTED without a Hermes ADOPT_PLAN with a challenger answer -> not ready (domain/planReady.ts:169-178) (GA-20)",
+  "evidence": "plan.ts:6612-6615; planReady.ts:179-181"
+ },
+ {
+  "id": "A-H29",
+  "producer": "readGoalPlan reading",
+  "consumer": "widenGoalSearch (A-M067)",
+  "contract": "reading.needsMoreOpenings, acceptance status, considered titles, bestReach, pathways.structures.searchBrief, researchDiagnosis",
+  "transformation": "diagnosisInstructions joined",
+  "failure_behaviour": "needsMoreOpenings false -> no widening",
+  "evidence": "plan.ts:6650-6660, 5854-5912"
+ },
+ {
+  "id": "A-H30",
+  "producer": "widenGoalSearch (A-M067)",
+  "consumer": "proposeGoalRoutes (A-M069)",
+  "contract": "goalId, held titles",
+  "transformation": "background, ROUTE_MAX_IN_FLIGHT=2",
+  "failure_behaviour": "errors logged, null outcome",
+  "evidence": "plan.ts:5876-5878; routeProposal.ts:2197-2247"
+ },
+ {
+  "id": "A-H31",
+  "producer": "projectEvidenceClaims (repos/research.ts:1186)",
+  "consumer": "routeContext/findingsOf (A-M070)",
+  "contract": "research_claims accepted=1, source_url not null, RETRIEVED, not REFUTED, project-scoped, newest first, limit 360",
+  "transformation": "filtered and capped to 120 findings, 280 chars each",
+  "failure_behaviour": "no claims -> SCOUT stage",
+  "evidence": "routeProposal.ts:1594, 1510-1576"
+ },
+ {
+  "id": "A-H32",
+  "producer": "routePrompt (A-M071)",
+  "consumer": "operator model chats (A-M073)",
+  "contract": "prompt string",
+  "transformation": "-",
+  "failure_behaviour": "error/empty -> next model; all fail -> NO_ANSWER event",
+  "evidence": "routeProposal.ts:2077-2093"
+ },
+ {
+  "id": "A-H33",
+  "producer": "model reply",
+  "consumer": "parseRoutes (A-M074)",
+  "contract": "JSON routes",
+  "transformation": "rule checks -> RejectedRoute rule codes",
+  "failure_behaviour": "no parseable routes -> next model A reply with routes=0 and rejected>0 is accepted and ends the chain (routeProposal.ts:2104-2108) (GA-24).",
+  "evidence": "routeProposal.ts:2083-2087"
+ },
+ {
+  "id": "A-H34",
+  "producer": "parseRoutes (A-M074)",
+  "consumer": "critiqueAndRevise (A-M076)",
+  "contract": "ProposedRoute[]",
+  "transformation": "critique ranks/drops; replacements when < 1 survives",
+  "failure_behaviour": "critique fails -> routes filed as proposed (outcome FAILED)",
+  "evidence": "routeProposal.ts:1849-1937"
+ },
+ {
+  "id": "A-H35",
+  "producer": "critiqueAndRevise (A-M076)",
+  "consumer": "fileRoute (A-M078)",
+  "contract": "RankedRoute {route, rank, why}",
+  "transformation": "rank written as ROUTE_RANK_FIELD card fact",
+  "failure_behaviour": "room exhausted -> rest not filed",
+  "evidence": "routeProposal.ts:2098-2111"
+ },
+ {
+  "id": "A-H36",
+  "producer": "fileRoute (A-M078)",
+  "consumer": "startValidations (A-M081)",
+  "contract": "route opening (isRouteOpening => FULL dive)",
+  "transformation": "-",
+  "failure_behaviour": "dive start errors -> []",
+  "evidence": "routeProposal.ts:2028, 2161; validation.ts:253"
+ },
+ {
+  "id": "A-H37",
+  "producer": "applyValidationAnswers (A-M082)",
+  "consumer": "researchBeforeSale / priceSupported (plan.ts:4914)",
+  "contract": "EVIDENCE card facts, validationSettledAt",
+  "transformation": "-",
+  "failure_behaviour": "unsettled -> route strategies NEEDS_EVIDENCE \"Research first\"",
+  "evidence": "plan.ts:2735-2763, 2849-2856"
+ },
+ {
+  "id": "A-H38",
+  "producer": "ROUTE_RANK_FIELD card fact",
+  "consumer": "strategy ordering (A-M037)",
+  "contract": "cardFact(id, ROUTE_RANK_FIELD)",
+  "transformation": "routeRankOf mean place",
+  "failure_behaviour": "missing rank -> no tiebreak",
+  "evidence": "plan.ts:2882-2900"
+ },
+ {
+  "id": "A-H39",
+  "producer": "proposeGoalRoutes rethink",
+  "consumer": "next proposeGoalRoutes ctx.lessons",
+  "contract": "GOAL_ROUTES_PROPOSED event detail.rethink",
+  "transformation": "slice(0,4)",
+  "failure_behaviour": "-",
+  "evidence": "routeProposal.ts:2021-2022"
+ },
+ {
+  "id": "A-H40",
+  "producer": "openGoalDiscovery (A-M085)",
+  "consumer": "openBucketRound (A-M087)",
+  "contract": "SearchBucket + statement question",
+  "transformation": "question text built from goal words, limits, held titles(8), diagnosis",
+  "failure_behaviour": "RoundNotOpened -> null",
+  "evidence": "discovery.ts:1340-1355, 638-698"
+ },
+ {
+  "id": "A-H41",
+  "producer": "openBucketRound (A-M087)",
+  "consumer": "launch pass (A-M098)",
+  "contract": "russell candidate row WITHOUT judgment; needs judge-unjudged pass (judgeCandidate -> askArchive -> compileMission) to gain missionSpec before nextLaunchable (GA-02)",
+  "transformation": "nextLaunchable ranking",
+  "failure_behaviour": "parked on capacity/authority",
+  "evidence": "discovery.ts:655-662; loop.ts:2801-2848; loop.ts:1965-1986, 3143-3250; planning.ts:404-470"
+ },
+ {
+  "id": "A-H42",
+  "producer": "launch (A-M099)",
+  "consumer": "startPacket (A-M100)",
+  "contract": "mission spec",
+  "transformation": "packet + bin",
+  "failure_behaviour": "saga repair on crash",
+  "evidence": "launch.ts:223"
+ },
+ {
+  "id": "A-H43",
+  "producer": "startPacket (A-M100)",
+  "consumer": "free lane worker / Claude routines (A-M102)",
+  "contract": "work_items via claimWork",
+  "transformation": "-",
+  "failure_behaviour": "retryable failures with queue backoff",
+  "evidence": "workQueue.ts:508; freeLane/worker.ts:56-72"
+ },
+ {
+  "id": "A-H44",
+  "producer": "free lane worker (A-M102)",
+  "consumer": "applyGate (A-M107)",
+  "contract": "brain_submit_claims through MCP handlers",
+  "transformation": "claims with sourceUrl, lane",
+  "failure_behaviour": "rejected claims not stored as accepted",
+  "evidence": "mcp/researchTools.ts:1412; gate.ts:363"
+ },
+ {
+  "id": "A-H45",
+  "producer": "applyGate accepted claims",
+  "consumer": "harvest (A-M097), findingsOf (A-M070), constructArrangements facts (A-M019), restructureEvidenceOf (A-M093)",
+  "contract": "research_claims accepted=1",
+  "transformation": "each reader applies its own filter",
+  "failure_behaviour": "-",
+  "evidence": "discovery.ts:2203; routeProposal.ts:1594; construct.ts:869-878"
+ },
+ {
+  "id": "A-H46",
+  "producer": "readGoalPlan portfolio/researchPriority/committee",
+  "consumer": "sendPortfolioNeeds / sendPlanQuestions / sendCommitteeNeeds (A-M089..091)",
+  "contract": "needs keyed per goal/opening/unknown",
+  "transformation": "sendNeeds raises review need + research idea candidate",
+  "failure_behaviour": "errors -> recordDegraded",
+  "evidence": "plan.ts:6621-6644; quant/needs.ts:156-240"
+ },
+ {
+  "id": "A-H47",
+  "producer": "recordGoalOutcome (A-M064)",
+  "consumer": "measuredPlanChance (A-M065)",
+  "contract": "goal_outcomes JOIN goal_plan_readings",
+  "transformation": "Wilson bound",
+  "failure_behaviour": "< 10 rows -> null",
+  "evidence": "plan.ts:1557-1570, 5651-5670"
+ },
+ {
+  "id": "A-H48",
+  "producer": "reconstructionFor exploration",
+  "consumer": "loadLibrary/loadStancePrior (A-M044)",
+  "contract": "reasoning library rows",
+  "transformation": "LIBRARY_SIZE 24",
+  "failure_behaviour": "-",
+  "evidence": "plan.ts:3295-3321"
+ },
+ {
+  "id": "A-H49",
+  "producer": "modelsFor (A-M111)",
+  "consumer": "proposeGoalRoutes, committee specialists, objectiveAssist",
+  "contract": "OperatorModel[]",
+  "transformation": "challengerModels removes <=4B GPU model",
+  "failure_behaviour": "empty -> NO_MODEL outcome recorded",
+  "evidence": "routeProposal.ts:1448-1458, 2017-2021"
+ },
+ {
+  "id": "A-H50",
+  "producer": "laneConfig (A-M108)",
+  "consumer": "inventDirections, laneObjectiveModel, free lane",
+  "contract": "LaneConfig models (<=2 + RunPod slot)",
+  "transformation": "-",
+  "failure_behaviour": "null -> invent off, objective planner skipped, no free lane",
+  "evidence": "invent.ts:98-108; objectivePlan.ts:447-452"
+ },
+ {
+  "id": "A-H51",
+  "producer": "optimizePortfolio result",
+  "consumer": "modelChallengeFor (operator models)",
+  "contract": "DecisionInput (planDecision)",
+  "transformation": "background ask, answer cached by key",
+  "failure_behaviour": "no model / not yet answered -> challenge stays due, 90% claim held; answer may replace best (adoptionFrom)",
+  "evidence": "quant/portfolio.ts:1215-1221, 1254-1300; quant/modelChallenge.ts:174-182, 267-290",
+  "gate_a": [
+   "GA-01"
+  ]
+ },
+ {
+  "id": "A-H52",
+  "producer": "judgeCandidate/compileMission",
+  "consumer": "nextLaunchable/launch",
+  "contract": "candidate.judgment.missionSpec",
+  "transformation": "archive answer may end the idea",
+  "failure_behaviour": "compiler refusal recorded; no mission",
+  "evidence": "russell/planning.ts:404-470; loop.ts:3143-3250",
+  "gate_a": [
+   "GA-02"
+  ]
+ },
+ {
+  "id": "A-H53",
+  "producer": "changeObjective",
+  "consumer": "routeAskDue / composeGoalModel",
+  "contract": "workstreams.intent + target; GOAL_OBJECTIVE_CHANGED",
+  "transformation": "readObjective only",
+  "failure_behaviour": "old PURSUES links and old route openings persist; routeAskDue ignores the event (6 h wait)",
+  "evidence": "decide.ts:378-466; routeProposal.ts:1364-1402",
+  "gate_a": [
+   "GA-03"
+  ]
+ },
+ {
+  "id": "A-H54",
+  "producer": "PATCH /register/workstreams",
+  "consumer": "goalExclusions / ownerLabourOffer / route owner words / sprintCandidate",
+  "contract": "workstreams.intent, title, projectId",
+  "transformation": "none",
+  "failure_behaviour": "target untouched; moved project breaks sprint",
+  "evidence": "routes/register.ts:225-258; goalSprint.ts:69",
+  "gate_a": [
+   "GA-04"
+  ]
+ },
+ {
+  "id": "A-H55",
+  "producer": "startExecutionWindows",
+  "consumer": "daysLeftOf -> readTarget",
+  "contract": "execution_started_at, due_at",
+  "transformation": "anchoredDueAt(startedAt, windowDays)",
+  "failure_behaviour": "never started -> full window forever (days left constant)",
+  "evidence": "executionStart.ts:19-37; executionWindow.ts:59-64",
+  "gate_a": [
+   "GA-05"
+  ]
+ },
+ {
+  "id": "A-H56",
+  "producer": "reconsider / director / improvement loop / fallbackWatch / knowledge / tick floor",
+  "consumer": "advanceGoalPlans due REPAIRED / FLOOR",
+  "contract": "in-process repairedGoals / floorRequests maps",
+  "transformation": "none",
+  "failure_behaviour": "lost on restart",
+  "evidence": "plan.ts:5805-5821, 6559-6567",
+  "gate_a": [
+   "GA-07",
+   "GA-17"
+  ]
+ },
+ {
+  "id": "A-H57",
+  "producer": "recordDecisionsIfDue",
+  "consumer": "reconcileFactChangesIfDue",
+  "contract": "GOAL_DECISION_RECORDED events + governing policy",
+  "transformation": "staleAgainstPolicy",
+  "failure_behaviour": "stale/changed -> requestGoalPlanPass",
+  "evidence": "decisionRecord.ts:473-490; reconsider.ts:239, 287-294",
+  "gate_a": [
+   "GA-08"
+  ]
+ },
+ {
+  "id": "A-H58",
+  "producer": "composeGoalReadings/buildPlanSet",
+  "consumer": "persistReading forecast (readingsSummary) -> owner",
+  "contract": "planSet.plans[] (lead plans[0])",
+  "transformation": "richness order, collapse, rebuildAfter",
+  "failure_behaviour": "lead may differ from chosen_strategy and candidate",
+  "evidence": "plan.ts:2355-2368, 2383-2440; planSet.ts:643-700",
+  "gate_a": [
+   "GA-09"
+  ]
+ },
+ {
+  "id": "A-H59",
+  "producer": "runIndustryKernel / seedGoalIndustry",
+  "consumer": "constructArrangements",
+  "contract": "industry_nodes",
+  "transformation": "none",
+  "failure_behaviour": "too few BUYER_TYPE nodes -> Brain map read (construct.ts:787)",
+  "evidence": "loop.ts:2226; industry/expand.ts:727; construction/service.ts:300; construct.ts:44",
+  "gate_a": [
+   "GA-12"
+  ]
+ },
+ {
+  "id": "A-H60",
+  "producer": "POST /goals/:id/construction/facts",
+  "consumer": "constructArrangements / planInputsFingerprint",
+  "contract": "construction_facts with workstream_id",
+  "transformation": "none",
+  "failure_behaviour": "never read by construction (workstream_id IS NULL filter); never moves the fingerprint (source_claim_id IS NOT NULL)",
+  "evidence": "routes/goals.ts:312-341; repos/construction.ts:224-227; plan.ts:5731-5732",
+  "gate_a": [
+   "GA-13"
+  ]
+ },
+ {
+  "id": "A-H61",
+  "producer": "operate.markReady / retireMarketplaceListings",
+  "consumer": "composeGoalModel",
+  "contract": "cash_opportunities.state",
+  "transformation": "state ordering / ARCHIVED exclusion",
+  "failure_behaviour": "archived listings drop out; COLLECTED drops silently",
+  "evidence": "operate.ts:948, 1393; retireListings.ts:129-140; goalScenario.ts:121-124",
+  "gate_a": [
+   "GA-14",
+   "GA-22"
+  ]
+ },
+ {
+  "id": "A-H62",
+  "producer": "loadCashKnowledge (plan path)",
+  "consumer": "cash forecast ledger / fallback records; inference",
+  "contract": "ledger rows; switch decisions -> respond observations",
+  "transformation": "keepCashLedger, readSwitchDecision",
+  "failure_behaviour": "errors swallowed",
+  "evidence": "quant/knowledge.ts:198-241, 1078-1092",
+  "gate_a": [
+   "GA-15",
+   "GA-16"
+  ]
+ }
+]

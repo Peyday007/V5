@@ -1,0 +1,172 @@
+[
+ {
+  "id": "T01",
+  "question": "Freeze the reference revision, the production revision and the evidence epochs",
+  "investigator": "lead",
+  "relates": "all",
+  "known_evidence": "git, Deploy runs",
+  "work_done": "REFERENCE.md written",
+  "status": "DONE",
+  "uncertainty": "model versions on the pod beyond its label are not read",
+  "next": null,
+  "closure": "REFERENCE.md"
+ },
+ {
+  "id": "T02",
+  "question": "Recount the existing failure map and classify each of its 218 questions' evidence by revision",
+  "investigator": "lead (rule-based script; Gate B reviews the overrides)",
+  "relates": "register/questions.json",
+  "known_evidence": "map.json at dce831b",
+  "work_done": "build_register.py: 87 recheck-after-change, 32 reusable, 73 unverified, 25 incomplete, 1 contradicted",
+  "status": "DONE",
+  "uncertainty": "the W1_COMPONENT regex is a heuristic for which questions a repair touches",
+  "next": "Gate B samples the classification",
+  "closure": "register/questions.json regenerated after Gate B; coverage fields filled by build_coverage.py"
+ },
+ {
+  "id": "T03",
+  "question": "Map A: implementation map of the goal-relevant code",
+  "investigator": "agent IMPL",
+  "relates": "server/**",
+  "known_evidence": "none reused (independent)",
+  "work_done": "dispatched",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "await",
+  "closure": "maps/A (175 mechanisms, 62 handoffs) + GATE-A-RESPONSE.md, all 30 open Gate A findings accepted"
+ },
+ {
+  "id": "T04",
+  "question": "Map B: behavioural map from production records and traces",
+  "investigator": "agent BEHAV",
+  "relates": "production read tools; docs traces",
+  "known_evidence": "30Q, integration and starvation traces",
+  "work_done": "dispatched",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "await",
+  "closure": "maps/B (71 observations; gaps in observation_gaps.md)"
+ },
+ {
+  "id": "T05",
+  "question": "Map C: requirements map derived from the outcome",
+  "investigator": "agent REQ (no repository access)",
+  "relates": "outcome",
+  "known_evidence": "owner's Section 1",
+  "work_done": "dispatched",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "await",
+  "closure": "maps/C (89 requirements)"
+ },
+ {
+  "id": "T06",
+  "question": "E-001: what produces gpt-oss's empty replies on Brain's path",
+  "investigator": "lead (causal)",
+  "relates": "cheap/modelBench.ts chatFor/readStream; routeProposal askModel",
+  "known_evidence": "12 PROBE reply lines; model exam",
+  "work_done": "proxy idle-cut explanation refuted for empty bodies; reasoning-budget explanation supported",
+  "status": "DONE",
+  "uncertainty": "H1b vs H1c (finish_reason not recorded)",
+  "next": "run the bounded 2-request probe if Gate C confirms it is needed",
+  "closure": "E-017: budget exhaustion ESTABLISHED for truncation on PROD (n=1/arm); E0 empties SUPPORTED"
+ },
+ {
+  "id": "T07",
+  "question": "Reconcile the A/B/C maps into one coverage matrix",
+  "investigator": "lead",
+  "relates": "maps/*",
+  "known_evidence": "",
+  "work_done": "",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "",
+  "closure": "register/coverage.json + register/new_diagnostics.json"
+ },
+ {
+  "id": "T08",
+  "question": "Gate A: independent implementation-coverage review",
+  "investigator": "fresh agent (not a map author)",
+  "relates": "maps/A",
+  "known_evidence": "",
+  "work_done": "",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "",
+  "closure": "reviews/GATE-A.md"
+ },
+ {
+  "id": "T09",
+  "question": "Replay known-bad and known-good inputs through REF's deterministic route path (parseRoutes, applyCritique, findingsOf, readObjective) to test diagnostic sensitivity and the W1 repairs",
+  "investigator": "causal agent",
+  "relates": "routeProposal.ts, intent.ts",
+  "known_evidence": "probe logs in docs/intelligence-test-2026-11-26/planner",
+  "work_done": "",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "build the harness in experiments/",
+  "closure": "E-010..E-017"
+ },
+ {
+  "id": "T10",
+  "question": "Gate B: independent diagnostic-validity review",
+  "investigator": "fresh agent",
+  "relates": "register, experiments",
+  "known_evidence": "",
+  "work_done": "",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "",
+  "closure": "reviews/GATE-B.md"
+ },
+ {
+  "id": "T11",
+  "question": "Root-cause register and causal graph",
+  "investigator": "lead + causal agent",
+  "relates": "all",
+  "known_evidence": "",
+  "work_done": "",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "",
+  "closure": "ROOT-CAUSES.md sections A-I; GRAPH.md"
+ },
+ {
+  "id": "T12",
+  "question": "Gate C: independent causal review",
+  "investigator": "fresh agent",
+  "relates": "ROOT-CAUSES",
+  "known_evidence": "",
+  "work_done": "",
+  "status": "DONE, verdict NOT SUFFICIENT",
+  "uncertainty": "",
+  "next": "",
+  "closure": "reviews/GATE-C.md; corrections applied in ROOT-CAUSES I"
+ },
+ {
+  "id": "T13",
+  "question": "Uncertainty register, repair blueprint, dashboard",
+  "investigator": "lead",
+  "relates": "all",
+  "known_evidence": "",
+  "work_done": "",
+  "status": "DONE",
+  "uncertainty": "",
+  "next": "",
+  "closure": "REPORT.md, UNCERTAINTY.md, REPAIR-BLUEPRINT.md"
+ },
+ {
+  "id": "T14",
+  "question": "Locate the CR-18 mechanism: why goal research is parked for a person or routed to an empty pool (U-14)",
+  "investigator": "behavioural + implementation",
+  "status": "OPEN",
+  "closure": "bin state transitions + lease refusals traced; needs operator read credential"
+ },
+ {
+  "id": "T15",
+  "question": "Observe one plan reading on PROD a8c4699 (U-16)",
+  "investigator": "behavioural",
+  "status": "BLOCKED (goals paused by owner)",
+  "closure": "one post-deploy reading"
+ }
+]

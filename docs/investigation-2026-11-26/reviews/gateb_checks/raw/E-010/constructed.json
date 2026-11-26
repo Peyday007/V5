@@ -1,0 +1,58 @@
+{
+ "knownBad_cpaAboveMargin": {
+  "kept": [],
+  "rejected": [
+   {
+    "title": "Beanie dropship (recorded figures)",
+    "why": "winning a buyer costs $39, at least the $20 a sale earns after its direct cost",
+    "rule": "ACQUISITION"
+   }
+  ],
+  "economics": null
+ },
+ "knownBad_cpaOmitted": {
+  "kept": [
+   "Beanie dropship (no CPA field)"
+  ],
+  "rejected": [],
+  "economics": {
+   "marginPerSale": 19.57,
+   "salesNeeded": 1022,
+   "acquisitionSpend": null,
+   "ownerHours": 0,
+   "firstCashBy": "6 December 2026",
+   "buyersShort": true,
+   "line": "COMPUTED (exact): each sale earns $20 after its direct cost; alone it needs 1022 sale(s) for the $20,000 still needed; it states no cost to win a buyer; 0 owner hour(s); first money by 6 December 2026 (the window ends 24 February 2027); it counts only 445 such buyers, fewer than it needs alone."
+  }
+ },
+ "knownBad_spendOverCapital": {
+  "kept": [
+   "Beanie dropship (CPA 15, spend over capital)"
+  ],
+  "rejected": [],
+  "economics": {
+   "marginPerSale": 4.57,
+   "salesNeeded": 4377,
+   "acquisitionSpend": 65655,
+   "ownerHours": 0,
+   "firstCashBy": "6 December 2026",
+   "buyersShort": false,
+   "line": "COMPUTED (exact): each sale earns $5 after its direct cost and $15 to win the buyer; alone it needs 4377 sale(s) for the $20,000 still needed; winning them costs $65,655 in total; 0 owner hour(s); first money by 6 December 2026 (the window ends 24 February 2027)."
+  }
+ },
+ "control_sound": {
+  "kept": [
+   "Sound control route"
+  ],
+  "rejected": [],
+  "economics": {
+   "marginPerSale": 250,
+   "salesNeeded": 80,
+   "acquisitionSpend": 4000,
+   "ownerHours": 0,
+   "firstCashBy": "6 December 2026",
+   "buyersShort": false,
+   "line": "COMPUTED (exact): each sale earns $250 after its direct cost and $50 to win the buyer; alone it needs 80 sale(s) for the $20,000 still needed; winning them costs $4,000 in total; 0 owner hour(s); first money by 6 December 2026 (the window ends 24 February 2027)."
+  }
+ }
+}

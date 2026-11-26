@@ -1,0 +1,336 @@
+{
+ "res": {
+  "p02": {
+   "supplied": 111,
+   "eligibleAfterFilters": 105,
+   "droppedByFilters": 6,
+   "droppedTexts": [
+    "F3: ARMLS requires Preferred Photographers to have their own service agreement with each Arizona agent they serve; ARMLS's own photographer agre",
+    "F3: At realMLS (a different MLS's photographer network, used as a comparable), fees are negotiated directly between listing agent and photograph",
+    "F26: ARMLS requires Preferred Photographers to have their own service agreement with each Arizona agent they serve; ARMLS's own photographer agre",
+    "F26: Where a photographer's agreement with an agent does not cover items in Section 4 of the ARMLS-photographer agreement, the ARMLS terms apply.",
+    "F26: realMLS states it is not responsible for payment of photographer fees under the independent agent-photographer service agreements (comparabl",
+    "F28: A March 2026 Zeitview careers guide says Zeitview mission volume can be inconsistent, especially in saturated markets."
+   ],
+   "ref120": {
+    "shown": 105,
+    "lanes": {
+     "payer": 4,
+     "current_demand": 3,
+     "risk": 1,
+     "delivery_requirements": 3,
+     "competition": 5,
+     "cost_evidence": 15,
+     "legal": 9,
+     "acquisition_access": 8,
+     "price_evidence": 22,
+     "buyer_volume": 4,
+     "timing": 19,
+     "comparable_demand": 3,
+     "effort": 7,
+     "contact_mode": 2
+    },
+    "decisive": [
+     {
+      "pattern": "/net 30|paid in full at the shoot|at the shoot/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q3 SHOWN: Real estate photographers commenting on that article report being paid in full at the shoot, while another invoices clie"
+      ]
+     },
+     {
+      "pattern": "/\\$129|\\$300 per shoot/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q2 SHOWN: PropPhoto lists real estate drone video in Mesa, Arizona as typically $129 to $300 per shoot, with typical add-on pricin"
+      ]
+     }
+    ]
+   },
+   "pre40": {
+    "shown": 40,
+    "lanes": {
+     "payer": 4,
+     "current_demand": 3,
+     "risk": 1,
+     "delivery_requirements": 3,
+     "competition": 3,
+     "cost_evidence": 3,
+     "legal": 3,
+     "acquisition_access": 3,
+     "price_evidence": 3,
+     "buyer_volume": 3,
+     "timing": 3,
+     "comparable_demand": 3,
+     "effort": 3,
+     "contact_mode": 2
+    },
+    "decisive": [
+     {
+      "pattern": "/net 30|paid in full at the shoot|at the shoot/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q3 SHOWN: Real estate photographers commenting on that article report being paid in full at the shoot, while another invoices clie"
+      ]
+     },
+     {
+      "pattern": "/\\$129|\\$300 per shoot/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q2 SHOWN: PropPhoto lists real estate drone video in Mesa, Arizona as typically $129 to $300 per shoot, with typical add-on pricin"
+      ]
+     }
+    ]
+   }
+  },
+  "p06": {
+   "supplied": 111,
+   "eligibleAfterFilters": 111,
+   "droppedByFilters": 0,
+   "droppedTexts": [],
+   "ref120": {
+    "shown": 111,
+    "lanes": {
+     "fulfiller": 5,
+     "timing": 35,
+     "cost_evidence": 17,
+     "risk": 8,
+     "delivery_requirements": 3,
+     "legal": 9,
+     "acquisition_access": 4,
+     "price_evidence": 14,
+     "payer": 3,
+     "comparable_demand": 5,
+     "current_demand": 4,
+     "effort": 1,
+     "competition": 1,
+     "(none)": 2
+    },
+    "decisive": [
+     {
+      "pattern": "/TaskRabbit/i",
+      "inSupplied": 13,
+      "shown": 13,
+      "examples": [
+       "F1 SHOWN: TaskRabbit's Seattle executive-assistant page (viewed 2026-11-26) shows 1,731 featured Taskers in Seattle, WA.",
+       "F1 SHOWN: TaskRabbit's Seattle pages say clients can schedule a Tasker as early as the same day (viewed 2026-11-26)."
+      ]
+     },
+     {
+      "pattern": "/\\$31|average.*hour/i",
+      "inSupplied": 4,
+      "shown": 4,
+      "examples": [
+       "F1 SHOWN: TaskRabbit's Seattle executive-assistant page gives an average virtual-assistant booking cost of $31 per hour (viewed 20",
+       "F22 SHOWN: TaskRabbit gives $31/hour as the cost of booking a personal assistant in Seattle (viewed 2026-11-26)."
+      ]
+     }
+    ]
+   },
+   "pre40": {
+    "shown": 40,
+    "lanes": {
+     "fulfiller": 4,
+     "timing": 4,
+     "cost_evidence": 4,
+     "risk": 3,
+     "delivery_requirements": 3,
+     "legal": 3,
+     "acquisition_access": 3,
+     "price_evidence": 3,
+     "payer": 3,
+     "comparable_demand": 3,
+     "current_demand": 3,
+     "effort": 1,
+     "competition": 1,
+     "(none)": 2
+    },
+    "decisive": [
+     {
+      "pattern": "/TaskRabbit/i",
+      "inSupplied": 13,
+      "shown": 11,
+      "examples": [
+       "F1 SHOWN: TaskRabbit's Seattle executive-assistant page (viewed 2026-11-26) shows 1,731 featured Taskers in Seattle, WA.",
+       "F1 SHOWN: TaskRabbit's Seattle pages say clients can schedule a Tasker as early as the same day (viewed 2026-11-26)."
+      ]
+     },
+     {
+      "pattern": "/\\$31|average.*hour/i",
+      "inSupplied": 4,
+      "shown": 2,
+      "examples": [
+       "F1 SHOWN: TaskRabbit's Seattle executive-assistant page gives an average virtual-assistant booking cost of $31 per hour (viewed 20",
+       "F22 SHOWN: TaskRabbit gives $31/hour as the cost of booking a personal assistant in Seattle (viewed 2026-11-26)."
+      ]
+     }
+    ]
+   }
+  },
+  "p10": {
+   "supplied": 135,
+   "eligibleAfterFilters": 126,
+   "droppedByFilters": 9,
+   "droppedTexts": [
+    "F6: Printful's average fulfillment time is 2-5 business days for all products (Printful shipping page, fetched 2026-11-26).",
+    "F6: Printful's US flat-rate standard shipping takes 3-4 business days after fulfillment.",
+    "F11: Shopify Payments US payouts typically arrive in the merchant's bank within 3 to 5 business days after a customer's payment is captured (Shop",
+    "F11: Shopify Payments' minimum settlement time in the United States is 3 business days.",
+    "F11: Shopify says new Shopify Payments merchants start with a longer settlement time, which can shorten as orders are reliably fulfilled on time.",
+    "F19: Printful's Shopify app (free to install) lists 'Automatic fulfillment for each order' on its Free plan and charges only for fulfillment and ",
+    "F19: Printful's Shopify app Growth plan costs $24.99/month and becomes free once a store reaches $12K in yearly sales.",
+    "F27: Shopify Balance: Basic, Shopify and Advanced plan stores can access payouts within 5 business days, with no monthly, annual or ACH transfer ",
+    "F27: Shopify Balance charges no monthly, annual, or ACH transfer fees."
+   ],
+   "ref120": {
+    "shown": 120,
+    "lanes": {
+     "price_evidence": 27,
+     "cost_evidence": 25,
+     "timing": 9,
+     "delivery_requirements": 2,
+     "risk": 6,
+     "effort": 1,
+     "current_demand": 15,
+     "comparable_demand": 15,
+     "fulfiller": 3,
+     "payer": 1,
+     "acquisition_access": 4,
+     "competition": 3,
+     "legal": 3,
+     "buyer_volume": 6
+    },
+    "decisive": [
+     {
+      "pattern": "/10.{0,3}20\\s*%|percent of (?:ad|media) spend|£1,?000/i",
+      "inSupplied": 3,
+      "shown": 3,
+      "examples": [
+       "Q6 SHOWN: Superscale (2026-07-23) says agencies typically charge 10–20% of monthly ad spend and $100–$149/hour in North America, v",
+       "Q6 SHOWN: Superscale (2026-07-23) gives the agency percentage-of-spend model as 10–20% of monthly ad spend."
+      ]
+     },
+     {
+      "pattern": "/52\\s*% of small businesses|monthly marketing budgets/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q5 SHOWN: In the same LocaliQ survey, 52% of small businesses had total monthly marketing budgets under $1,000."
+      ]
+     },
+     {
+      "pattern": "/\\$153|booked meeting/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q7 SHOWN: Instantly (updated 2026-03-30) reports cold email costs about $152.73 per booked meeting, versus $2,777.78 for calling."
+      ]
+     },
+     {
+      "pattern": "/\\$100.{0,6}\\$?500 per client|per client/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q7 SHOWN: Trykondo (2025-06-05) estimates agency client acquisition cost at $100–$500+ per client via cold outreach, $500–$2,000+ "
+      ]
+     }
+    ]
+   },
+   "pre40": {
+    "shown": 40,
+    "lanes": {
+     "price_evidence": 4,
+     "cost_evidence": 4,
+     "timing": 4,
+     "delivery_requirements": 2,
+     "risk": 3,
+     "effort": 1,
+     "current_demand": 3,
+     "comparable_demand": 3,
+     "fulfiller": 3,
+     "payer": 1,
+     "acquisition_access": 3,
+     "competition": 3,
+     "legal": 3,
+     "buyer_volume": 3
+    },
+    "decisive": [
+     {
+      "pattern": "/10.{0,3}20\\s*%|percent of (?:ad|media) spend|£1,?000/i",
+      "inSupplied": 3,
+      "shown": 0,
+      "examples": [
+       "Q6 CUT: Superscale (2026-07-23) says agencies typically charge 10–20% of monthly ad spend and $100–$149/hour in North America, v",
+       "Q6 CUT: Superscale (2026-07-23) gives the agency percentage-of-spend model as 10–20% of monthly ad spend."
+      ]
+     },
+     {
+      "pattern": "/52\\s*% of small businesses|monthly marketing budgets/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q5 SHOWN: In the same LocaliQ survey, 52% of small businesses had total monthly marketing budgets under $1,000."
+      ]
+     },
+     {
+      "pattern": "/\\$153|booked meeting/i",
+      "inSupplied": 1,
+      "shown": 1,
+      "examples": [
+       "Q7 SHOWN: Instantly (updated 2026-03-30) reports cold email costs about $152.73 per booked meeting, versus $2,777.78 for calling."
+      ]
+     },
+     {
+      "pattern": "/\\$100.{0,6}\\$?500 per client|per client/i",
+      "inSupplied": 1,
+      "shown": 0,
+      "examples": [
+       "Q7 CUT: Trykondo (2025-06-05) estimates agency client acquisition cost at $100–$500+ per client via cold outreach, $500–$2,000+ "
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "fault1": {
+  "refutedShown": false,
+  "contestedShown": true,
+  "contestedMarkedInPrompt": "INJECTED: Meta ads for holiday beanies cost $4 per sale in Minneapolis in 2026 (contested)."
+ },
+ "fault2": {
+  "shown": 120,
+  "noiseShown": 42,
+  "realShown": 78,
+  "decisiveP10": [
+   {
+    "pattern": "/10.{0,3}20\\s*%|percent of (?:ad|media) spend|£1,?000/i",
+    "shown": 3,
+    "inSupplied": 3
+   },
+   {
+    "pattern": "/52\\s*% of small businesses|monthly marketing budgets/i",
+    "shown": 1,
+    "inSupplied": 1
+   },
+   {
+    "pattern": "/\\$153|booked meeting/i",
+    "shown": 1,
+    "inSupplied": 1
+   },
+   {
+    "pattern": "/\\$100.{0,6}\\$?500 per client|per client/i",
+    "shown": 1,
+    "inSupplied": 1
+   }
+  ],
+  "productionReadLimit": 360
+ },
+ "fault3": {
+  "readRealClaims": 0,
+  "shownReal": 0
+ }
+}

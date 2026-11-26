@@ -1,0 +1,274 @@
+{
+ "truncPrimary_validFallback": {
+  "outcome": {
+   "kind": "PROPOSED",
+   "model": "fallback",
+   "filed": 1
+  },
+  "turns": [
+   {
+    "label": "primary",
+    "role": "proposer",
+    "maxTokens": 4000,
+    "replyChars": 2103,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "fallback",
+    "role": "proposer",
+    "maxTokens": 4000,
+    "replyChars": 604,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "fallback",
+    "role": "critic",
+    "maxTokens": 3000,
+    "replyChars": 20,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "primary",
+    "role": "critic",
+    "maxTokens": 3000,
+    "replyChars": 20,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   }
+  ],
+  "events": [
+   {
+    "at": "2026-11-26T06:50:40.269Z",
+    "summary": "Routes: 1 proposed from 3 research finding(s) and filed as openings; no critique (fallback: no parseable critique; primary: no parseable critique).",
+    "outcome": "PROPOSED",
+    "model": "fallback",
+    "reason": null,
+    "detailKeys": [
+     "outcome",
+     "model",
+     "filed",
+     "existing",
+     "rejected",
+     "rejectedByRule",
+     "refutedShown",
+     "owner",
+     "critique",
+     "grounded",
+     "superseded",
+     "rethink",
+     "stage",
+     "findingsSeen",
+     "findingsShown"
+    ],
+    "rethink": "LESSON-ALPHA: agencies buy editing by the episode, not by retainer.",
+    "critique": {
+     "outcome": "FAILED",
+     "model": null,
+     "reason": "fallback: no parseable critique; primary: no parseable critique",
+     "reviews": [],
+     "ranking": [],
+     "replacementsAsked": false,
+     "replacements": 0
+    }
+   }
+  ]
+ },
+ "truncAll": {
+  "outcome": {
+   "kind": "NO_ANSWER",
+   "reason": "no model answered with routes (primary: no parseable routes; fallback: no parseable routes)"
+  },
+  "turns": [
+   {
+    "label": "primary",
+    "role": "proposer",
+    "maxTokens": 4000,
+    "replyChars": 2103,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "fallback",
+    "role": "proposer",
+    "maxTokens": 4000,
+    "replyChars": 2103,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   }
+  ],
+  "events": [
+   {
+    "at": "2026-11-26T06:50:40.269Z",
+    "summary": "Routes: none proposed — no model answered with routes (primary: no parseable routes; fallback: no parseable routes).",
+    "outcome": "NO_ANSWER",
+    "reason": "no model answered with routes (primary: no parseable routes; fallback: no parseable routes)",
+    "detailKeys": [
+     "outcome",
+     "reason",
+     "stage",
+     "findingsSeen",
+     "findingsShown"
+    ],
+    "rethink": null,
+    "critique": null
+   }
+  ]
+ },
+ "partialPrimary": {
+  "outcome": {
+   "kind": "PROPOSED",
+   "model": "primary",
+   "filed": 1
+  },
+  "turns": [
+   {
+    "label": "primary",
+    "role": "proposer",
+    "maxTokens": 4000,
+    "replyChars": 539,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "primary",
+    "role": "critic",
+    "maxTokens": 3000,
+    "replyChars": 20,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "fallback",
+    "role": "critic",
+    "maxTokens": 3000,
+    "replyChars": 20,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   }
+  ],
+  "events": [
+   {
+    "at": "2026-11-26T06:50:40.269Z",
+    "summary": "Routes: 1 proposed from 3 research finding(s) and filed as openings; no critique (primary: no parseable critique; fallback: no parseable critique).",
+    "outcome": "PROPOSED",
+    "model": "primary",
+    "reason": null,
+    "detailKeys": [
+     "outcome",
+     "model",
+     "filed",
+     "existing",
+     "rejected",
+     "rejectedByRule",
+     "refutedShown",
+     "owner",
+     "critique",
+     "grounded",
+     "superseded",
+     "rethink",
+     "stage",
+     "findingsSeen",
+     "findingsShown"
+    ],
+    "rethink": null,
+    "critique": {
+     "outcome": "FAILED",
+     "model": null,
+     "reason": "primary: no parseable critique; fallback: no parseable critique",
+     "reviews": [],
+     "ranking": [],
+     "replacementsAsked": false,
+     "replacements": 0
+    }
+   }
+  ]
+ },
+ "emptyPrimary_validFallback": {
+  "outcome": {
+   "kind": "PROPOSED",
+   "model": "fallback",
+   "filed": 1
+  },
+  "turns": [
+   {
+    "label": "primary",
+    "role": "proposer",
+    "maxTokens": 4000,
+    "replyChars": 0,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "primary",
+    "role": "proposer",
+    "maxTokens": 8000,
+    "replyChars": 0,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "fallback",
+    "role": "proposer",
+    "maxTokens": 4000,
+    "replyChars": 604,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "fallback",
+    "role": "critic",
+    "maxTokens": 3000,
+    "replyChars": 20,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   },
+   {
+    "label": "primary",
+    "role": "critic",
+    "maxTokens": 3000,
+    "replyChars": 20,
+    "lessonsSection": false,
+    "lessonAlpha": false
+   }
+  ],
+  "events": [
+   {
+    "at": "2026-11-26T06:50:40.269Z",
+    "summary": "Routes: 1 proposed from 3 research finding(s) and filed as openings; no critique (fallback: no parseable critique; primary: no parseable critique).",
+    "outcome": "PROPOSED",
+    "model": "fallback",
+    "reason": null,
+    "detailKeys": [
+     "outcome",
+     "model",
+     "filed",
+     "existing",
+     "rejected",
+     "rejectedByRule",
+     "refutedShown",
+     "owner",
+     "critique",
+     "grounded",
+     "superseded",
+     "rethink",
+     "stage",
+     "findingsSeen",
+     "findingsShown"
+    ],
+    "rethink": "LESSON-ALPHA: agencies buy editing by the episode, not by retainer.",
+    "critique": {
+     "outcome": "FAILED",
+     "model": null,
+     "reason": "fallback: no parseable critique; primary: no parseable critique",
+     "reviews": [],
+     "ranking": [],
+     "replacementsAsked": false,
+     "replacements": 0
+    }
+   }
+  ]
+ }
+}

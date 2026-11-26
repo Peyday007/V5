@@ -1,0 +1,394 @@
+[
+ {
+  "id": "GB-01",
+  "target": "E-001",
+  "verdict": "PARTIAL",
+  "reason": "Observational, no harness. The tally reproduces exactly: 12 gpt-oss replies, 6 empty with error null at 47.2-85.4 s; 6 non-empty at 45.9-73.4 s. H1a (proxy idle cut) is correctly refuted for the empty-body symptom: at E0 (c52d6d3) the probe made one non-streamed call at 4000 tokens, and an idle cut on that path returns HTTP 524 with an error after about 100 s. H1b is correctly graded supported, not established. Missing: the discriminating datum. At E0, chatFor did read usage.completion_tokens on the non-streamed path, but the probe printed only content, so it was dropped. The proposed decisive run uses non-streamed requests at 16000 tokens. That is confounded: the exam saw streamed answers take up to 118 s, so a non-streamed 16000 request can itself hit the 524.",
+  "evidence": "reran tally over docs/intelligence-test-2026-11-26/planner/*.txt; git show c52d6d3:scripts/planningEval.ts:675 (chat(...,4000), no askModel, no stream); git show c52d6d3:server/services/cheap/modelBench.ts (completionTokens read from body.usage); docs/model-exam-2026-11-26/REPORT.md:91-99"
+ },
+ {
+  "id": "GB-02",
+  "target": "E-002",
+  "verdict": "PARTIAL",
+  "reason": "Real production probe on a8c4699, with a faithful known-bad input (111 facts; supplied=111 as recorded). The truncation is real, not a print artefact: the probe prints content.slice(0,9000), and the content is 2,103 chars ending in `\"grounds\": {\"channel`. Silent {routes:[],rejected:[]} is VERIFIED; E-010 reproduces it deterministically through REF parseRoutes. The cause attribution \"same mechanism as E-001 ... SUPPORTED, strengthened\" is NOT justified. On a8c4699 the reply came through readStream, which returns error null whenever any content arrived (modelBench.ts:166). A dropped or errored stream therefore leaves exactly this record. The data cannot separate a length stop from a stream drop. Weak indication only: if H1b held, 80.5 s for 4000 tokens fits the E0 rates, and a 4000+8000 retry in 80 s would need about 150 tok/s, so this was probably a single attempt.",
+  "evidence": "raw/E-002/eval.txt lines 2-10; scripts/planningEval.ts:700; modelBench.ts:166"
+ },
+ {
+  "id": "GB-03",
+  "target": "E-010",
+  "verdict": "PARTIAL",
+  "reason": "Imports the REAL parseRoutes, routesJson, routeEconomics and economicsLine. probes.json regenerates byte-identical from the recorded planner files with extract_probes.py, and all outputs rerun byte-identical. Known-bad detection is verified for W1d (OWNER_FIT now kept), for W1c not firing without the CPA field, and for the E-002 truncation (silent zero). Three defects in the diagnostic. (1) The \"correct HOURS rejection no longer fires\" control is mis-specified. Commit 4baa4dc deliberately moved the whole-target hours sum to the plan (withoutSpareOwnerWork, plan.ts:1309), so a parser-level control cannot fail it; the plan-level check was never run. (2) The spend-over-capital injection assumes total acquisition spend must not exceed the capital limit. At CPA $15 below the $19.57 margin, spend is recycled from proceeds, and the register's own C29-F expects \"payable-from-proceeds\" to be distinguished. So \"not caught\" is not an established defect without a cash-timing model. (3) Miscount: the recorded replies are 18 E0 (12 non-empty, 6 empty) plus 1 E1, not \"17 non-empty\".",
+  "evidence": "reviews/gateb_checks/raw/E-010/* == experiments/raw/E-010/* (cmp); git show 4baa4dc; raw/E-010/constructed.json knownBad_spendOverCapital line"
+ },
+ {
+  "id": "GB-04",
+  "target": "E-011",
+  "verdict": "PARTIAL",
+  "reason": "Uses the REAL critiqueJson and applyCritique (critiqueJson is unchanged c52d6d3 -> REF), and it reproduces. VERIFIED: one co-rule defeats W1b. failed = named rules UNION score-derived rules (critiqueJson), and numericOnly needs every rule to be WINDOW or CAPITAL (routeProposal.ts:1268), so the 4 recorded false WINDOW drops still drop. The F999 and no-rule injections are valid: applyCritique never reads why or refs. NOT justified: the \"true WINDOW/CAPITAL violation kept\" controls are scored as defects, but the REF critic prompt tells the critic to REPAIR a disputed figure. The REPAIR control does drop correctly. These controls test critic non-compliance against a documented contract, so they show a risk, not a defect. Reconstruction caveat: the record holds only the post-applyCritique text, so every recorded drop was rebuilt as verdict DROP. If the CAPITAL-only p06 drop was originally KEEP with a low score, REF still drops it, so the \"1 of 10 changed\" is conditional.",
+  "evidence": "routeProposal.ts:1248-1300 (numericOnly; KEEP && failed>0 drops); critiquePrompt text \"When you dispute one of the route's own figures ... REPAIR it\"; raw/E-011/replay.json reconstructed verdicts"
+ },
+ {
+  "id": "GB-05",
+  "target": "E-012 (delivery, dedupe, REFUTED filter, CONTESTED)",
+  "verdict": "VERIFIED_DIAGNOSTIC",
+  "reason": "Real findingsOf. The input selection mirrors tools/batch.py, including its 280-char cut. Known-bad: final_p10_cap recorded 0 of 4 decisive facts; I recounted the recorded PROBE findings and got [0,0,0,0]. At REF: 4 of 4. The dedupe drops are exact normalized repeats (findingsOf compares the whole normalized statement), and no distinct fact is lost under the 280 cut; I rechecked this independently. The REFUTED control works. The CONTESTED check compares against text that the harness itself wrote \"(contested)\" into, so the output cannot show whether a marker exists. The conclusion still holds by code: findingsOf filters only REFUTED and adds no marker.",
+  "evidence": "routeProposal.ts:1510-1545; GATE-B recount over planner/final_p10_cap.txt; raw/E-012/result.json"
+ },
+ {
+  "id": "GB-06",
+  "target": "E-012 F3 (DB recency cut)",
+  "verdict": "PARTIAL",
+  "reason": "The fault is simulated with an array .slice(0,360) in the harness, not with projectEvidenceClaims, so \"0 real claims shown\" follows from the arithmetic. The conclusion rests on static SQL that is correct: ORDER BY c.created_at DESC LIMIT ?, with FINDINGS_SHOWN*3 at routeProposal.ts:1595 and FINDINGS_COUNTED=600 at :1971. Missing: an executed sandbox run that inserts more than 600 newer claims through the repository and calls proposeGoalRoutes.",
+  "evidence": "server/repos/research.ts:1193-1195; harness/e012_findings.ts read360"
+ },
+ {
+  "id": "GB-07",
+  "target": "E-013",
+  "verdict": "VERIFIED_DIAGNOSTIC",
+  "reason": "Real readObjective. Controls 2/2 and dec1125c 3/3 are faithful, and rerun byte-identical. The new-paraphrase expectations are reasonable human readings, and 11 of 14 silent misses checks out from the unread arrays. Limits: the fm1126a set is RECONSTRUCTED, not a replay of a recorded failure, and 2/12 is a constructed-set rate, not a population rate. My end-to-end check GB-G (createGoal, interpreter null, sandbox) confirms that capital misses reach the stored target as capitalCeilingCents null (\"Budget is capped at $4k\", \"not putting a cent in\"). It also adds: amount misses (\"ten thousand bucks\", \"Half a grand\", \"twenty-five hundred dollars\") silently create a goal with target null, which is worse than E-013 states. Window misses (\"fortnight\", \"this weekend\") are REFUSED loudly at createGoal, so they are not silent downstream. The production model assist (objectiveAssist) triggers only on missing amount, deadline or unplaced money and was not tested.",
+  "evidence": "reviews/gateb_checks/raw/gb_checks.json G_createGoal; decide.ts:113-150; objectiveAssist.ts:1-40"
+ },
+ {
+  "id": "GB-08",
+  "target": "E-014",
+  "verdict": "VERIFIED_DIAGNOSTIC",
+  "reason": "Real routePrompt, critiquePrompt, directionPrompt, discoveryFocusFor and questionFor, and it reruns byte-identical. The harness bucket text is simpler than openGoalRound's, but the finding does not depend on it: questionFor appends executionFrameSentence or OPERATING_MODEL_SENTENCE unconditionally (discovery.ts:1880-1881), and openGoalRound passes the frame (:1345). Controls b and c behave correctly. Offer detection misses 3 of 4, from result.json. Effect on model behaviour (for example TaskRabbit being excluded) is inferred, not measured.",
+  "evidence": "discovery.ts:1310-1345,1870-1881; raw/E-014/result.json"
+ },
+ {
+  "id": "GB-09",
+  "target": "E-015",
+  "verdict": "VERIFIED_DIAGNOSTIC",
+  "reason": "Real chatFor, readStream through chatFor, askModel and proposeGoalRoutes; outputs reproduce, with chain.json differing only in timestamps. My added sensitivity controls (GB-S) show the erasure is specific to content having arrived. An error event or reset with NO content keeps its error (S1, S3); the same fault after content gives error null (S2, S4). A clean stream with [DONE] reads correctly (S5). An H1b-shaped stream (reasoning deltas only, finish_reason length, usage 4000) yields content \"\" with completionTokens 4000 in chatFor, but askModel returns only {content,error}, so the 4000 is lost (S7). Relevance caveat: (iv) the unclosed <think> and (viii) the final SSE line without a newline are real code fragilities. Their occurrence on the production gpt-oss path (separate reasoning channel; SSE terminated by a blank line and [DONE]) is not shown. Calling the E-002 mechanism a candidate is correctly hedged.",
+  "evidence": "reviews/gateb_checks/raw/gb_checks.json S1-S7; modelBench.ts:133-166; routeProposal.ts:1436-1447"
+ },
+ {
+  "id": "GB-10",
+  "target": "E-016",
+  "verdict": "VERIFIED_DIAGNOSTIC",
+  "reason": "Real proposeGoalRoutes chain on a sandbox DB. Positive control: ask 2 at +6 h contains LESSON-ALPHA. Ask 3 at +31 h does not. The code confirms the cause: lessons come only from ROUTE_EVENT rows since now - max(DAY, interval) (:1946, :2023), and a null rethink is filtered rather than overwriting. The static claims are confirmed by grep: no readGoalPlan or committee read in routeProposal.ts, and replacements are filed with score null (:1914). Minor gap: no ask-3 control inside 24 h after a null-rethink ask. The code makes it unnecessary.",
+  "evidence": "raw/E-016/lessons.json turns; routeProposal.ts:1946,2023,2137,1914"
+ },
+ {
+  "id": "GB-11",
+  "target": "L-001",
+  "verdict": "VERIFIED_DIAGNOSTIC",
+  "reason": "grep confirms that no bench/planningReliability file references proposeGoalRoutes, routeProposal, chatFor, askModel or discovery. readGoalPlan does not reach armRouteProposal: only widenGoalSearch (plan.ts:5854-5877) does, and it is called from the tick paths (:6556, :6570, :6647). No test under tests/ combines discovery with the proposer and the plan; all the proposer tests use scripted models. Nuance the lead omits: the bench DOES go through createGoal, and so readObjective (world.ts:243), so RC15 objective misreads are observable by it when cases carry such phrasings.",
+  "evidence": "bench/planningReliability/world.ts:224-248; server/services/goals/plan.ts:5854-5877,6556-6647"
+ },
+ {
+  "id": "GB-12",
+  "target": "Causal discrimination: empty/truncated gpt-oss replies (E-001/E-002/E-015)",
+  "verdict": "PARTIAL",
+  "reason": "ESTABLISHED: (a) E0 empties are not the proxy idle cut: non-streamed, under 100 s, 200 with error null. (b) Brain's records cannot tell a length stop, a reasoning-only reply, a stream drop or a stream error apart (readStream:166, askModel drops completionTokens, no finish_reason anywhere). (c) A truncated reply parses to silent zero routes. SUPPORTED ONLY: H1b, the reasoning budget, for the E0 empties. CANDIDATES, not separated: for E-002 (streamed), a length stop (H1b), or a stream drop or error erased by readStream. H1c (answer misplaced in reasoning_content, or template) is not excluded for E0. The idle cut is implausible for E-002, because streaming keeps bytes flowing, but the maximum inter-chunk gap was not recorded. Minimal separating experiment: a probe variant that records per attempt max_tokens, finish_reason, usage.completion_tokens (stream_options.include_usage), whether [DONE] arrived, any reader exception, reasoning-delta chars and the maximum inter-chunk gap. Replay the E-002 prompt 5+ times, streamed, at 4000 and 16000. Predictions: H1b gives finish_reason=length with tokens equal to max_tokens and [DONE]; a drop gives no finish_reason, no [DONE] and a reader error or early close; H1c gives finish_reason=stop with empty content and JSON in the reasoning; an idle cut needs a gap of 100 s or more.",
+  "evidence": "see GB-01, GB-02, GB-09"
+ },
+ {
+  "id": "GB-20",
+  "target": "register C01-R",
+  "verdict": "CLASS_WRONG",
+  "reason": "VALID AND REUSABLE, but its component goals/target.ts reads through readObjective (target.ts:116), and W1i changed intent.ts. The W1_COMPONENT regex misses \"target.ts\". Should be NEEDS RECHECK.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-21",
+  "target": "register C02-M",
+  "verdict": "CLASS_OK",
+  "reason": "Model exam, isolation only; no Brain code involved.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-22",
+  "target": "register C13-P",
+  "verdict": "CLASS_OK",
+  "reason": "Source-reading refusals (sources/*); no source-reader file changed c52d6d3..REF.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-23",
+  "target": "register C14-X",
+  "verdict": "CLASS_WRONG",
+  "reason": "RC6 queue/capacity measurement (\"2,063 waiting beside 278 free slots\"), classed reusable. The research allocation and free-lane paths changed after E0: 585d3fb 01:52Z, 3c4dbd2 03:20Z, 5c34d37 03:48Z, a38fe9b 05:47Z in goalWork.ts, workQueue.ts and freeLane/*. REFERENCE.md itself says REF differs from PROD in freeLane/capacity.ts. Should be NEEDS RECHECK.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-24",
+  "target": "register C16-I",
+  "verdict": "CLASS_WRONG",
+  "reason": "Evidence is \"GROUND_LANES (9fb993c)\", a commit or code reference, not behaviour, so it should be INCOMPLETE. groundsOf is in routeProposal.ts, a W1 file, which the rule says flags it.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-25",
+  "target": "register C17-P",
+  "verdict": "CLASS_OK",
+  "reason": "30Q verification counts (behavioural, the eval's own verifier); path untouched.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-26",
+  "target": "register C18-R",
+  "verdict": "CLASS_WRONG",
+  "reason": "Evidence \"9fb993c.\" is a commit hash: code-only, so INCOMPLETE. groundsOf sits in a W1-changed file.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-27",
+  "target": "register C38-P",
+  "verdict": "CLASS_WRONG",
+  "reason": "Evidence \"NEW_FINDINGS_FOR_REASK.\" is a constant name (code). Its component routeAskDue (routeProposal.ts:1364) lies inside a hunk changed c52d6d3..REF (@@ +1364,7, +1378,25). Should be INCOMPLETE or NEEDS RECHECK, not reusable.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-28",
+  "target": "register C38-F",
+  "verdict": "CLASS_WRONG",
+  "reason": "Evidence \"ROUTE_RETRY_AFTER_FAILURE_MS 30 min\" is a constant (code), in routeProposal.ts (W1). Same as C38-P.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-29",
+  "target": "register C01-P",
+  "verdict": "CLASS_OK",
+  "reason": "Behavioural fm1126a; intent.ts changed by W1i; E-013 confirms the recheck is needed and fails on new phrasings.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-30",
+  "target": "register C03-F",
+  "verdict": "CLASS_OK",
+  "reason": "Behavioural; ownerLabourOffer is in the W1 component regex; E-014 re-measured it (3 of 4 missed).",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-31",
+  "target": "register C06-I",
+  "verdict": "CLASS_OK",
+  "reason": "Behavioural 30Q; proposer path changed by W1.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-32",
+  "target": "register C09-R",
+  "verdict": "CLASS_WRONG",
+  "reason": "Evidence \"replacementPrompt names failures; refuted list.\" describes code, but kind is BEHAVIORAL and class VALID. The touched-before-code-only ordering makes code readings \"VALID\". Should be INCOMPLETE (plus recheck).",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-33",
+  "target": "register C12-I",
+  "verdict": "CLASS_OK",
+  "reason": "Behavioural 30Q grades; proposer touched.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-34",
+  "target": "register C22-I",
+  "verdict": "CLASS_WRONG",
+  "reason": "Evidence \"heldTitles only.\" is a code reading of plan.ts:5877, labelled VALID. E-016 re-measured it statically. Should be INCOMPLETE.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-35",
+  "target": "register C25-F",
+  "verdict": "CLASS_WRONG",
+  "reason": "map_evidence \"None.\", kind CODE_ONLY, yet class VALID BUT NEEDS RECHECK. There is no measurement to be valid. Should be UNVERIFIED or INCOMPLETE.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-36",
+  "target": "register C30-I",
+  "verdict": "CLASS_WRONG",
+  "reason": "map_evidence \"No repair.\" (CODE_ONLY), labelled VALID. Should be INCOMPLETE or UNVERIFIED.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-37",
+  "target": "register C35-F",
+  "verdict": "CLASS_OK",
+  "reason": "Behavioural report reading; RC7 touched.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-38",
+  "target": "register C06-P",
+  "verdict": "CLASS_OK",
+  "reason": "Mixed (supplied research works; production 0 facts), map NEEDS RECHECK; INCOMPLETE is apt.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-39",
+  "target": "register C10-R",
+  "verdict": "CLASS_OK",
+  "reason": "Function exists, execution starved, unmeasured; INCOMPLETE is apt.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-40",
+  "target": "register C13-F",
+  "verdict": "CLASS_OK",
+  "reason": "Partial behavioural fallback measure; INCOMPLETE is apt.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-41",
+  "target": "register C17-R",
+  "verdict": "CLASS_OK",
+  "reason": "True in eval only; production gate unmeasured; INCOMPLETE is apt.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-42",
+  "target": "register C35-I",
+  "verdict": "CLASS_OK",
+  "reason": "Existence of the \"missing\" lists only; INCOMPLETE is apt.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-43",
+  "target": "register C01-I",
+  "verdict": "CLASS_OK",
+  "reason": "No evidence; UNVERIFIED.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-44",
+  "target": "register C34-X",
+  "verdict": "CLASS_OK",
+  "reason": "No evidence; UNVERIFIED.",
+  "evidence": "register/questions.json row; REFERENCE.md epochs; git diff c52d6d3 2d79f7d --stat -- server"
+ },
+ {
+  "id": "GB-45",
+  "target": "override C23-M",
+  "verdict": "CLASS_WRONG",
+  "reason": "The mechanism part is right. The map attributes the empties to the proxy idle cut, and the primary data contradicts that: E0 was non-streamed, empties came back under 100 s with 200 and error null, while the idle cut gives a 524. The class CONTRADICTED is wrong for the question as written (\"Same prompt, larger max_tokens\" -> \"Answers\"). The PASS evidence (exam: streaming + 16000 tokens + exam prompts) does not test the question: it is not Brain's prompt, and two variables changed together. But no evidence shows that a larger budget fails. The status is therefore unsupported, not contradicted. Correct class: INCOMPLETE (confounded), with the note \"map attribution contradicted\".",
+  "evidence": "docs/model-exam-2026-11-26/REPORT.md:91-99,188-192; planner PROBE reply tally; c52d6d3 non-streamed chatFor"
+ },
+ {
+  "id": "GB-46",
+  "target": "override C07-M",
+  "verdict": "CLASS_OK",
+  "reason": "INCOMPLETE is justified, and more strongly than the override says. The test is \"Control model on the same DIRECTION prompt\". The exam used exam prompts, and the 30Q control used Brain's final ROUTE prompt with all facts (planner/control_prompt_*.txt; 30Q doc line 35). Neither measurement is the test.",
+  "evidence": "docs/INTELLIGENCE-TEST-30Q-2026-11-26.md:35,83; planner/control_prompt_p06.txt"
+ },
+ {
+  "id": "GB-47",
+  "target": "override C36-P",
+  "verdict": "CLASS_OK",
+  "reason": "INCOMPLETE as a mixed row is defensible. The production half (fm1126a f01: the plan is research steps on constructed arrangements) is a valid behavioural FAIL on plan.ts, which is unchanged c52d6d3..REF, but it rests on n=1. The exam half is model isolation. A split is recommended: production FAIL reusable, exam half MODEL_ISOLATION.",
+  "evidence": "git diff c52d6d3 2d79f7d --stat (plan.ts absent)"
+ },
+ {
+  "id": "GB-48",
+  "target": "build_register.py rule: touched-before-code-only",
+  "verdict": "CLASS_WRONG",
+  "reason": "classify() tests w1_touched before CODE_ONLY, so all 15 CODE_ONLY rows on touched paths get \"VALID BUT NEEDS RECHECK AFTER CHANGES\", although their evidence is a code reading or \"None.\": C02-F, C03-I, C04-R, C05-I, C05-F, C08-I, C19-I, C22-P, C23-F, C25-R, C25-F, C30-I, C31-R, C31-F, C37-R. The \"VALID\" prefix asserts a measurement that does not exist.",
+  "evidence": "experiments/build_register.py classify()"
+ },
+ {
+  "id": "GB-49",
+  "target": "build_register.py rule: only W1 files count as changed",
+  "verdict": "CLASS_WRONG",
+  "reason": "E0 serving was c52d6d3 (00:05Z) and earlier, but 8 non-W1 server files changed between c52d6d3 and REF: operatingModel.ts, decide.ts, goalWork.ts, workQueue.ts, freeLane/worker.ts, freeLane/capacity.ts, cashPortfolio.ts, infra.ts. Pre-W1 commits on W1 files also changed behaviour; E-010 shows 4baa4dc altered HOURS. The RC6 queue and capacity rows are classed reusable in spite of this: C07-R, C11-R, C14-P, C14-X. The source-reading rows C13-P, C15-P and C15-X are unaffected. The rule should diff each row's measurement revision against REF, not the W1 set.",
+  "evidence": "git diff --stat c52d6d3 2d79f7d -- server; git log c52d6d3..2d79f7d -- goalWork.ts workQueue.ts freeLane/"
+ },
+ {
+  "id": "GB-50",
+  "target": "build_register.py rule: W1_COMPONENT regex",
+  "verdict": "CLASS_WRONG",
+  "reason": "The regex is name-based and misses symbols that live in W1 files: groundsOf (C16-I, C18-R, C18-I, C18-F), routeAskDue (C38-P), target.ts->readObjective (C01-R). It also catches \"ask\" loosely. Kind detection marks commit hashes and constant names as BEHAVIORAL (C15-I, C16-F, C17-X, C38-F). Use a file and line map from the component to its source path.",
+  "evidence": "register rows listed"
+ },
+ {
+  "id": "GB-60",
+  "target": "question C23-F",
+  "verdict": "SPEC_DEFECT",
+  "reason": "Tests only \"empty content\". A truncated, reasoning-only, unclosed-<think>, or error-erased partial reply passes the test while being a failed turn (E-015 iv-x; E-002). It should test \"an incomplete reply (finish_reason!=stop, unparseable or partial JSON, stream without [DONE]) is an error, retried and recorded\".",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-61",
+  "target": "question C23-M",
+  "verdict": "SPEC_DEFECT",
+  "reason": "\"Same prompt, larger max_tokens\" was answered by an exam that changed the prompt, streaming and the budget together, and recorded no finish_reason or completion_tokens. As run, it cannot separate H1a, H1b and H1c. It needs Brain's prompt, one variable at a time, with finish_reason and usage recorded.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-62",
+  "target": "question C23-P",
+  "verdict": "SPEC_DEFECT",
+  "reason": "\">=95% valid\" cannot be measured from Brain's production record. A fallback's success omits the primary's failure (E-015 chain: PROPOSED detail has no failures field), and a truncated reply with one complete route counts as an answer. \"Valid\" must be defined, and failures recorded per model.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-63",
+  "target": "question C23-I",
+  "verdict": "SPEC_DEFECT",
+  "reason": "\"Fallback quality equals primary\" cannot be read from the goal record: which model failed, and why, is not kept on success.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-64",
+  "target": "question C30-F",
+  "verdict": "SPEC_DEFECT",
+  "reason": "Scoped to loss \"to a field rule\". Whole-output loss with no rule (truncated JSON -> {routes:[],rejected:[]}) is outside the test by construction (E-002, E-010).",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-65",
+  "target": "question C31-F",
+  "verdict": "SPEC_DEFECT",
+  "reason": "One-sided. A rule that overrules every WINDOW-only drop passes, including true violations, and a co-rule defeats it. It must be paired with \"a true numeric violation is still dropped or repaired\" (C31-P does this) and with the co-rule case.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-66",
+  "target": "question C30-P",
+  "verdict": "SPEC_DEFECT",
+  "reason": "Its ground truth (the graders' \"correct HOURS rejection\") sits at the parser level, while 4baa4dc moved the whole-target hours check to the plan (withoutSpareOwnerWork). A parser-level test now reports a FAIL that may not be a defect. It must check hours at the plan level.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-67",
+  "target": "question C21-P",
+  "verdict": "SPEC_DEFECT",
+  "reason": "Measured through the probe, which supplies claims directly (deps.claims). That bypasses projectEvidenceClaims' ORDER BY created_at DESC LIMIT 360/600, so it cannot detect the recency cut (E-012 F3).",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-68",
+  "target": "question C03-P",
+  "verdict": "SPEC_DEFECT",
+  "reason": "\"Does every prompt state the lift?\" passes a question that states the lift AND the contradicting standing sentence (E-014: discovery has both). The test must also require that the standing \"no physical work\" sentence is absent when an offer was read.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-69",
+  "target": "question C03-I",
+  "verdict": "SPEC_DEFECT",
+  "reason": "\"Discovery asks about in-person work when offered\" passes on the focus sentence alone, and the map pointed at REMOTE_AI_FOCUS (:1304), which W1g fixed. It cannot see the executionFrameSentence appended by questionFor (:1881).",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-70",
+  "target": "question C04-R",
+  "verdict": "SPEC_DEFECT",
+  "reason": "\"Shown in routeContext\" is satisfied by the next ask (+6 h) while lessons are lost after 24 h (E-016). It needs a horizon: every later ask, or the durable store.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-71",
+  "target": "question C01-P",
+  "verdict": "SPEC_DEFECT",
+  "reason": "The planned \"recheck on the next batch\" detects nothing if the batch reuses the repaired phrase classes (E-013: 7/7 on the batch classes, 2/12 on new ones). It needs held-out paraphrases and a check that a miss is named in unread.",
+  "evidence": "see GATE-B.md section 4"
+ },
+ {
+  "id": "GB-72",
+  "target": "question C25-P/C25-I (economics injection)",
+  "verdict": "SPEC_DEFECT",
+  "reason": "The register gives no rule for whether total acquisition spend is bounded by capital or recycled from proceeds (contrast C29-F). A test of \"spend over capital caught\" has no defined correct answer.",
+  "evidence": "see GATE-B.md section 4"
+ }
+]
