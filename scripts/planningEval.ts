@@ -712,9 +712,18 @@ async function probe(): Promise<void> {
   }
   // `fixed` also applies the branch's hours rule (one sale must fit: parsed against one sale's worth of target) and the critic's combining sentence.
   const parseCtx = fixed ? { ...ctx, remaining: 1 } : ctx;
+  // The branch's window end date (windowEnd), written into both prompts.
+  const dated = (text: string): string => {
+    if (!fixed || !ctx['today']) return text;
+    const days = Number(ctx['daysLeft']);
+    const end = new Date(Date.parse(`${String(ctx['today']).slice(0, 10)}T00:00:00.000Z`) + Math.max(0, Math.round(days)) * 86_400_000);
+    const label = end.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    return text.replace(`collected within ${days} day(s).`, `collected within ${days} day(s), by ${label}.`);
+  };
+  prompt = dated(prompt);
   const criticText = (text: string): string =>
     fixed
-      ? consistent(text).replace("for a product that would fit any request. Then rank", "for a product that would fit any request. The plan combines the routes you keep and holds their hours, capital and money together, so never drop a route only because it alone collects part of the money still needed; judge whether it pays inside the window. Then rank")
+      ? dated(consistent(text)).replace("for a product that would fit any request. Then rank", "for a product that would fit any request. The plan combines the routes you keep and holds their hours, capital and money together, so never drop a route only because it alone collects part of the money still needed; judge whether it pays inside the window. Then rank")
       : text;
   if (mode.includes('labour')) prompt = prompt.replace('using only the skills and assets their words state and inside their stated hours', 'using the skills and assets their words state, or work that needs none, inside their stated hours');
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
