@@ -35,27 +35,66 @@ lives or dies on plan #1.
   two proof orders.
 - Before any sample goes out, Brain checks it against the same checklist.
 
-## Request for quote (to send once contact is authorized; NOT sent)
+## Request for quote, exact text (PREPARED, NOT SENT; supersedes the earlier draft)
 
-> Subject: Paid reviewer for E-2 business plans, Dec 1–23, ~1 hour per plan
+**Send to:**
+- Avvale (info@avvale.co.uk; partner call https://tidycal.com/avvaleltd/partner-intro-call)
+- Mikel Consulting (+1-800-250-1759; contact form at /us/contact on their site)
+- 2–3 marketplace E-2 plan writers, through Fiverr or Upwork messages: **only if a buyer account is authorized**
+
+**Excluded:** WritePal Global. It publishes $200–$300/hr and a $5,000 minimum, which is over budget.
+
+> Subject: Quote request: paid review of 2 E-2 business plans, Dec 2–11, 2026
 >
-> We produce E-2 treaty-investor business plans (5-year financials, monthly
-> Year 1, marginality and hiring analysis) for immigration attorneys. We need
-> an experienced E-2/L-1 business-plan writer to review each plan before
-> delivery.
+> We prepare E-2 treaty-investor business plans for immigration attorneys and
+> want an experienced E-2 plan writer to review two client plans before
+> delivery. Please quote against these exact terms.
 >
-> - **Scope:** review against our checklist; comment, not rewrite; one
->   re-check of the revised draft.
-> - **Volume:** 2–9 plans between Dec 1 and Dec 23, at most 2 a day.
-> - **Turnaround:** within 24 hours of receipt.
-> - **Pay:** fixed per plan; please quote. Our ceiling is $95 per plan for the
->   first two and $120 after.
-> - **Confidentiality:** an NDA covering client identity and financial data;
->   no reuse of any content.
+> 1. **Qualifications.**
+>    - At least 20 E-2 or L-1 plans written, evidenced by 2 redacted samples or
+>      a verifiable count.
+>    - Familiarity with marginality, investment-at-risk and 5-year projections.
+>    - Will sign an NDA covering client identity and financial data.
+> 2. **Scope per plan.**
+>    - Review a 30–40 page plan and its 5-year model against our written
+>      checklist (provided).
+>    - Written comments with page references.
+>    - No rewriting and no contact with the client or attorney.
+> 3. **Turnaround.** Within 24 hours of receiving each draft.
+> 4. **Revision obligations.**
+>    - Re-check the revised plan within 24 hours each time the attorney asks
+>      for changes, for 30 days after first delivery.
+>    - Please state whether re-checks are included in your fixed fee and how
+>      many; if not, your price per re-check.
+> 5. **Capacity.**
+>    - Two plans, expected Dec 2–11, 2026, at most one per day.
+>    - If more follow: up to 2 a day through Dec 23. Please state your maximum.
+> 6. **Payment timing.** Per plan, paid in full within 2 business days of your
+>    first review, by card or ACH.
+> 7. **Price.**
+>    - A fixed price per plan **including all re-checks within 30 days**, and
+>      the total for the two plans.
+>    - Our ceiling is **$95 per plan, $190 for the two**.
+>    - If you cannot include all re-checks, quote a fee that includes 2
+>      re-checks and a per-re-check price after that.
 >
-> Please send: (1) your per-plan price; (2) 2–3 redacted E-2 plans you wrote,
-> or an approval count you can evidence; (3) your availability by date; (4)
-> your maximum plans per day.
+> Please reply with price, availability for Dec 2–11, maximum plans per day,
+> and samples. A quote creates no obligation on either side until both confirm
+> in writing.
+
+**Status:** prepared only. No provider has seen, quoted or accepted these
+terms. Fulfilment is **not secured** until one accepts in writing.
+
+**Affordability of these terms** (ledger.py, section "COMMITTED
+OBLIGATIONS"):
+- The proof stage must keep cash plus commitments ≤ $300.
+- It fits only if the per-plan fee includes the re-checks: $95 with up to 2,
+  or $75 with up to 3.
+- Any separately priced re-check ($25 or $40) breaks the $300.
+- "Unlimited revisions" cannot be bounded unless the fee includes every
+  re-check.
+- An approved first case that is never paid loses $96–$116 in sunk cost; its
+  receivable is not revenue.
 
 ## Selection rule
 

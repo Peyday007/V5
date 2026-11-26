@@ -162,6 +162,27 @@ entries and asserts `net = payments − refunds − fees − spend`.
 | **Yield the target implies** | about 9 orders from up to 1,500 firms contacted ≈ **0.6 orders per 100 firms** | Against an upper-bound national flow of 570–720 plans a month (§2) |
 | **Cost per order the cap allows** | ≤ $120 review + $15 API + fees | With no ad: 9 orders spend $1,510. With the ad, review must fall to ~$40. |
 
+### Attorney-to-payment stages (conditional; each rate is conditional on the stage before)
+
+Required end-to-end yield:
+- **Proof:** 2 paid orders from 800 firms contacted = **0.25%**.
+- **$10k:** about 9 paid from 1,500 = **0.6%**.
+
+| # | Stage (conditional on the previous one) | Relevant evidence | Needs the live test? |
+|---|---|---|---|
+| 1 | The listed firm actually handles E-2 cases | Partial: AILA business-practice segment 8,000+ members (AILA 2025 kit); we filter on the firm's own E-2 page. No caseload distribution; one vendor form segments firms by 1–5 / 6–15 / 16–30 / 30+ E-2 cases a year. | Yes: the share of filtered firms with active E-2 work |
+| 2 | Email reaches an inbox (not bounced, not spam) | None for a new brand domain; bounces are measurable, inbox placement is not | Yes |
+| 3 | An attorney or staff member reads it | None | Yes (reply-based only) |
+| 4 | The firm has an E-2 client needing a plan with filing soon enough to order by ~Dec 4 | Context only: GAO FY2014–17 investor adjudications of 5,300–6,800 a year show the flow exists. **Historical counts are not a current ceiling or forecast**: FY2025 totals are higher and the investor split is unpublished. | Yes |
+| 5 | The firm is willing to try a new provider instead of its current one | Incumbents exist: Joorney (300+ attorneys, 2023 fees $1,650–$4,000), Avvale white-label, Investor Visa Desk partner form. Switching rate unknown. | Yes |
+| 6 | The firm sends a complete intake by ~Dec 4 | None | Yes |
+| 7 | The client accepts our engagement at $1,250 | Price is inside the published band ($1,200 Mikel to $3,200 Avvale; Fiverr $200–$600 below) | Yes, though the price itself is evidenced as competitive |
+| 8 | The attorney approves the draft | Sample plan exists; no attorney has judged it | Yes |
+| 9 | The client pays by ACH within 3 days and it settles | Stripe mechanics published; payer behaviour unknown | Yes |
+
+Only stages 1 (partly), 7 (price band) and 9 (mechanics) have relevant
+evidence. Stages 2–6 and 8 are measured only by the live test.
+
 **What the first paid orders validate, exactly:**
 - **Willingness to refer:** an attorney sent a real client to an unknown
   provider at $1,250.
