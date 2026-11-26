@@ -129,3 +129,48 @@ See `UNCERTAINTY.md`.
   - This supersedes G's "NOT SEPARATED" for E-002.
 - **CR-16**: the partial loss is reproduced on production. A truncated reply parsed to 2 routes and the third left no record.
 - **New interaction (I-W1e×CR-01).** The W1e repair delivers 105 findings instead of 40, which makes a 9k-token prompt and a longer reasoning chain under the unchanged budget. The repair raised the truncation incidence. This is a repair-induced amplification and belongs in the graph.
+
+## I. Corrections from Gate C (independent causal review, reviews/GATE-C.md, verdict NOT SUFFICIENT) and Map B (maps/B). These supersede every earlier row where they conflict.
+
+| finding | correction applied |
+|---|---|
+| GC-01 | **CR-02** is downgraded to SUPPORTED as a cause of the production outcome. It stays ESTABLISHED only in isolation (the model exam). The 30Q strong-model control (0/3) was confounded by the pre-W1g standing rule (CR-05) and by missing facts (p10 category A). It ran no critic, arbiter or plan reading. "Model and machinery are jointly causal" is therefore **UNRESOLVED (U-05)**, and the CR-10 reference is withdrawn from section D. |
+| GC-02 | **Every goal plan reading is E0.** The readings run 01:31–05:43Z, before the a8c4699 deploy at 05:41–05:50Z. Since then every goal is PAUSED by the owner's override (B-O001), and a paused goal gets no route asks (`routeProposal.ts:1944`). **Plan behaviour on PROD a8c4699 is unobserved for every live goal.** The word "live" in CR-10, GRAPH and elsewhere means E0. |
+| GC-03 + Map B | **New row CR-18: goal research is parked for a person or routed to an empty pool** (SUPPORTED). The outcome on wst_7b4f (NEEDS_EVIDENCE, committee FAIL, supportedReach 0) is explained by unresearched legs, not by the selector. The committee FAIL is a correct block on unresearched volume. Evidence: 13 of 15 bins NEEDS_HUMAN at 0/5 attempts; research attempts read 18 researched, 0 authorized, 0 executed; DEADLINE-ceiling requests open since October (Gate C). Every plan's only step names Claude routines, whose pool shows 0 waiting and 0 running (B-O048). 47 fragments are QUEUED with 0 LEASED (B-O017). The pipeline shows 0 qualified and 0 strategies constructed in the hour (B-O044). The mechanism (why bins go to NEEDS_HUMAN, why routines receive nothing, the judgment and compile outcomes) is **UNRESOLVED (U-13, U-14)**. **CR-10 and CR-11 are withdrawn as the explanation of this outcome**: acceptance refuses unpriced legs whatever the selector. |
+| GC-04 | **CR-10's behavioural evidence is replaced.** "Generic constructed strategy chosen" was never observed; every chosen candidate is a `cop_` opening, and the 0.97 is the headline combination, not the chosen candidate (0.204). The new evidence (E0): different goals in one project, with different targets, receive the identical candidate (two pairs, Gate C). One reading holds up to four different "best" strategies in 5 of 6 goals (B-O020, B-O024, B-O029). A **separate node** is added: headline and committee figures inflated by unpriced or absurd quantities (B-O026: $412,920 "proven" against $0 supported). |
+| GC-05 | Edge corrected. "Primary empty or truncated" leads to the fallback (the working path, measured 6/12 in E0). "Partial turn accepted" **ends the chain** (E-002, E-017 arm A). The phrase "largely the fallback's" is replaced by 6/12. |
+| GC-06 | The `readStream` error erasure was **introduced by W1j** (commit 56f2699), the repair for the refuted idle-cut cause. It is a concealment path, not the demonstrated cause of E-002, and it is evidence for the CR-12 repair loop. E0 and E1 truncations ran different code paths (U-01 note). |
+| GC-07 | **Shared classes revised.** **M1a, turn integrity**: CR-01 and CR-16, one correction (a turn contract). **M1b, deterministic verification of model claims**: CR-03 and CR-04. It depends on a specification that does not yet exist (Q-R042, the cash-flow and peak-capital rule). **M2**: CR-05, CR-06, owner profile (CR-09). CR-13 is removed. **M3**: CR-09, CR-10. CR-11, CR-13 and CR-14 are listed as **independent causes**. |
+| GC-08 | The supply-to-CR-07 edge is corrected. **CR-08 masks CR-07; fixing CR-08 amplifies CR-07** (more claims, harder recency cut). Findings are read project-wide, a goal-isolation gap added to CR-07. |
+| GC-11 | **CR-12** stays ESTABLISHED only for "the acceptance gate and post-merge verification are blind to the failing path". The repair feedback loop is **SUPPORTED**, with evidence from W1i (E-013) and W1j (GC-06). The L-002 label misreport is SUPPORTED. |
+| GC-12 | **CR-13**: observed contribution **0, pending U-03**. Its graph edge is hypothetical. |
+| GC-13 | **CR-11** is restated: the readiness bar *is* the money-commitment confidence bar, and NEEDS_EVIDENCE covers both. It stays SUPPORTED, with its contribution to the observed outcome undemonstrated. |
+| GC-14 | **New row CR-19: constraint provenance on live goals is untraced** (OBSERVED SYMPTOM). wst_7b4f's 0 owner hours and $3,000 capital are not stated in the owner's words, and the reader's own rule would give $1,000. The source (createGoal reading, objectiveAssist, terms PATCH or policy) is **UNRESOLVED (U-15)**. |
+| GC-15, GC-16 | CR-04's correction depends on a required-field contract and the Q-R042 specification. In CR-03, the F999 and ruleless drops are labelled **vulnerability, not an observed cause**. The co-rule defeat stays ESTABLISHED. |
+| GC-17, GC-19, GC-21 | X_REPEAT and the CR-14→bad-math edge are **hypothetical**. CR-14 is re-routed to the headline-inflation node (U-08). "strongRouteModels inert" is SUPPORTED pending U-07. |
+| GC-22 | **I-W1e×CR-01 is downgraded to SUSPECTED and withdrawn from the graph.** Pre-repair data shows 3/6 empties at 40 findings and 3/6 at 79–126, and the pre-repair 105-finding prompt also came back empty. The decisive test (arm A at 40 vs 105 findings, n≥5) was not run. |
+| GC-23 | **H1b is ESTABLISHED as operating on PROD for the E-002 prompt (n=1 per arm).** E-002's own reply is SUPPORTED-consistent, and the E0 empties are SUPPORTED. "No record" for the lost route cites the code (`routeProposal.ts:2099-2108`), not a production record. |
+
+### Status table after Gates A, B and C (authoritative)
+
+| id | status | contribution to the observed outcome |
+|---|---|---|
+| CR-01 turn completeness (M1a) | ESTABLISHED (acceptance defect; H1b budget mechanism on PROD, n=1) | E0 evaluation failures; E1 probe (E-002) |
+| CR-02 model ceiling | ESTABLISHED in isolation; SUPPORTED as production cause | model and machinery share UNRESOLVED (U-05) |
+| CR-03 critic veto (M1b) | ESTABLISHED (co-rule defeat, recorded false drops still drop); F999 is a vulnerability | E0 p02 |
+| CR-04 economics (M1b) | ESTABLISHED (field-conditional rule); requirement unspecified (Q-R042) | E-010 |
+| CR-05 standing rule as text (M2) | ESTABLISHED mechanism; E0 behaviour observed | E0 fallback replies |
+| CR-06 objective reader (M2) | ESTABLISHED (silent misreads; amount miss gives a goal with no target) | E-013 |
+| CR-07 findings selection | ESTABLISHED mechanism (project-wide, recency); masked by CR-08 | latent |
+| CR-08 research supply | SUPPORTED (E0); E1 queue 47 queued / 0 leased (B-O017) | major, mechanism shared with CR-18 |
+| CR-09 per-goal state (M3) | ESTABLISHED | E-016 |
+| CR-10 no arbiter (M3) | ESTABLISHED (structure); E0 behaviour: identical candidates across goals, four "bests" | not the cause of the wst_7b4f verdict |
+| CR-11 readiness = commitment bar | SUPPORTED; contribution undemonstrated | — |
+| CR-12 evaluation blind | ESTABLISHED (gate); loop SUPPORTED | concealment |
+| CR-13 operator goals unsearched | SUPPORTED (code); incidence 0 observed | — |
+| CR-14 fuzzy buyer links | SUPPORTED; B-O050 observed E0 | headline inflation (hypothetical edge) |
+| CR-15 question anchoring | SUPPORTED (E0) | E0 30Q |
+| CR-16 silent discard (M1a) | ESTABLISHED | E-002, E-017 |
+| CR-17 (Gate A) | as recorded in F | — |
+| **CR-18 research parked / routed to empty pool** | **SUPPORTED** (observed); mechanism UNRESOLVED | **explains the live goals' NEEDS_EVIDENCE / supportedReach 0 (E0)** |
+| **CR-19 constraint provenance** | OBSERVED SYMPTOM; UNRESOLVED | — |

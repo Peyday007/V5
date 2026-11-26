@@ -125,3 +125,24 @@ Not re-verified here:
 - Queue/worker recovery under DB contention while a goal is planning.
 - GPU throttling (the event loop caps concurrency) interacting with the route-ask latency budget.
 - Whether CR-13 affects any live goal (Map B pending).
+
+## Revision after Gate C (authoritative where it conflicts with the diagram above)
+
+```mermaid
+flowchart LR
+  CR18["CR-18 research parked for a person / routed to empty routine pool (SUPPORTED, mechanism U-14)"] --> LEGS["legs unpriced, volume unresearched (B-O013)"]
+  CR08["CR-08 supply starved (SUPPORTED)"] --> LEGS
+  LEGS --> ACC["acceptance refuses unsupported legs (correct)"] --> OUT["NEEDS_EVIDENCE, supportedReach 0, committee FAIL (E0 readings)"]
+  CR10["CR-10 no arbiter (ESTABLISHED structure)"] --> SAME["different goals get identical candidate; 4 'bests' per reading (E0)"] --> OUT2["incoherent plan presentation"]
+  CR14["CR-14 fuzzy buyer links"] -.hypothetical.-> INFL["headline/committee figures inflated (B-O026)"] --> OUT2
+  PRIM["primary empty/truncated (E-001 6/12; E-017 length)"] --> FB["fallback laguna answers (works, weak)"] --> CR05x["invented refusals (CR-05, E0)"]
+  CR01["CR-01 partial turn accepted (ESTABLISHED)"] --> END["chain ends; routes lost silently (CR-16)"] --> NOROUTE["no route reaches the owner (E-002)"]
+  CR08 -. masks .-> CR07["CR-07 findings cut by recency, project-wide"]
+  FIX8["fixing CR-08"] -. amplifies .-> CR07
+  W1J["W1j repair (56f2699)"] --> ERASE["readStream erases errors"] -. conceals .-> CR01
+  CR12["CR-12 gate blind (ESTABLISHED)"] --> LOOP["repairs declared done, unverified (SUPPORTED: W1i, W1j)"] --> CR12
+  CR13["CR-13"] -.hypothetical, incidence 0.-> NOROUTE
+```
+
+- **Removed:** I-W1e×CR-01 (SUSPECTED, GC-22). "Generic constructed strategy chosen" (never observed, GC-04). CR-01 ⇒ model as a causal edge (GC-05).
+- **Unobserved on E1:** every plan-level node. Plan behaviour on a8c4699 has not been read for any goal (GC-02, U-16).

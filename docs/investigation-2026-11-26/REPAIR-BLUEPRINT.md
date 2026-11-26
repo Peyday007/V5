@@ -107,3 +107,12 @@ These are lessons from the evidence:
 - **No fix whose trigger depends on the model volunteering a new field** (W1c).
 - **No time-window horizon on lessons** (W1h).
 - **No "MERGED" counted as progress** without a Stage-0 production-path measurement.
+
+## Revision after Gate C (GC-09, GC-10, GC-15) — supersedes the stage contents above where they conflict
+
+- **Stage 0 (visibility) becomes factorial.** Each end-to-end measurement crosses supply (production supply vs supplied verified facts) with model (production gpt-oss vs an exam-passing model). Without this, the unfixed Stage 4 causes (supply, model) hide the deltas from Stages 1–3. If the factorial cannot be run, Stage 4 must come before the end-to-end proofs of Stages 1–3.
+- **Stage 0 also locates CR-18** (U-14): why goal research is parked for a person or routed to an empty pool. Of the known causes this explains most of the live outcome, so its repair joins Stage 4 (supply) once located.
+- **Stage 1 (M1a, turn contract)** covers every model call site: route, critic, direction, replacement, specialists, and the portfolio model challenge inside `optimizePortfolio` (GA-01). Its contract is finish reason `stop`, a complete parse, every discard counted with its reason, and the served model recorded. The budget is set from measured reasoning use (E-017: 5,046 tokens needed against a 4,000 budget).
+- **Stage 1b (M1b, deterministic verification)** first needs the Q-R042 specification: the cash-flow timeline, peak capital, and whether acquisition spend is bounded by capital. Then it needs a required-field contract for route economics. This is a specification decision first and code second.
+- **Stage 3 (M3)** adds CR-07 (findings selection by decision relevance and goal scope, proof E-012), CR-17 and goal isolation of findings.
+- **Proof of the whole.** The planningReliability bench is extended end to end (CR-12) before any stage is declared effective. A merged repair is verified by replaying its own known-bad and held-out inputs (E-010 to E-017) on production.

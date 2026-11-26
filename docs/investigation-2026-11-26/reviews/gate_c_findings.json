@@ -1,86 +1,283 @@
 [
- {"id":"GC-01","target":"CR-02 'partial' note; ROOT-CAUSES D (RC14 CORRECTED); GRAPH 'Reading the graph' 1","severity":"critical",
-  "finding":"The 30Q strong-model control (Claude Sonnet, 0/3 usable) is cited as proof that the model alone is insufficient and that Brain's machinery (CR-10, CR-15) is jointly causal. The control prompts are E0 route prompts that carry the standing rule 'the owner does no physical work - ... no meeting customers, no performing a service' together with the contradictory labour lift: the exact defect W1g/d5beaf6 later documented as making the model read policy as the owner's refusals. The control picked online routes for the drone pilot (p02) and for the 15-hour owner (p06), which is consistent with obeying that sentence. p10's control failure is category A (information never found). The control ran only the route prompt: no Brain critic, arbiter or plan reading, so CR-10 was never exercised.",
-  "primary_evidence":["docs/intelligence-test-2026-11-26/planner/control_prompt_p02.txt (standing-rule sentence + 'owner offered their own work')","docs/intelligence-test-2026-11-26/planner/control_prompt_p06.txt (same)","server/domain/operatingModel.ts:375-386","docs/intelligence-test-2026-11-26/grading/grade_result_p02.json (Z: rethink steered away from direct-to-agent)","docs/intelligence-test-2026-11-26/grading/grade_result_p10.json (Y: category A)","docs/INTELLIGENCE-TEST-30Q-2026-11-26.md:31 (control = identical final prompt answered by Sonnet)"],
-  "required_correction":"Mark the model-versus-machinery separation UNRESOLVED (U-05): the control is confounded by CR-05 and by fact gaps (CR-15, category A). Remove the CR-10 reference. Downgrade CR-02 as a cause of the production outcome to SUPPORTED (keep ESTABLISHED for the isolation capability measurement). Run U-05 with the post-W1g prompt through parser and critic."},
- {"id":"GC-02","target":"CR-10 evidence; GRAPH 'Structural ceiling (M3)'; 'live $10k reading'","severity":"critical",
-  "finding":"The 'live $10k goal reading' is readAt 2026-11-26T05:40:04Z, before the a8c4699 Deploy run was even created (05:41:36Z). REFERENCE.md tags anything before ~05:50Z as E0 (pre-W1). All six production plan readings are 02:05-05:43Z. Every goal is now PAUSED by the owner's priority override, and proposeGoalRoutes returns NOT_DUE for a paused goal. So no E1 plan behaviour exists, and the register presents E0 evidence as the live post-repair outcome.",
-  "primary_evidence":["docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (readAt 05:40:04.336Z)","docs/investigation-2026-11-26/REFERENCE.md:13,15","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-40Z.json (lifecycle PAUSED)","server/services/goals/routeProposal.ts:1944"],
-  "required_correction":"Tag every goal reading E0. State explicitly that plan behaviour on PROD a8c4699 is unobserved for every live goal. Remove 'live' as an E1 qualifier from the CR-10 and GRAPH text."},
- {"id":"GC-03","target":"Explanation of the live outcome (NEEDS_EVIDENCE, committee FAIL, supportedReach 0); CR-10, CR-11, CR-08","severity":"critical",
-  "finding":"The register attributes the live outcome to the missing arbiter (CR-10) and the readiness gate (CR-11). The reading itself shows a different proximate mechanism. The only candidate leg cop_ec16 lacks MECHANISM and OFFER, and its causes are VOLUME_UNRESEARCHED, NO_BUYER, NO_SUPPORTED_PRICE, SETTLEMENT_UNKNOWN and NO_FULFILLER. The committee FAIL is a correct block on unresearched volume. judgeAcceptance refuses any combination with unpriced or unsupported legs whatever the selector. One arbiter would therefore not change the outcome. The goal's research record, which is the most direct explanation, appears in no CR row: of the 15 bins listed (25 held), 13 are NEEDS_HUMAN at 0/5 attempts and 2 are exhausted at 5/5; planSet attempts are researched 18, authorized 0, executed 0; and 6 requests 'Raising the research goal's DEADLINE ceiling' have been open since 2026-10-18, marked 'the card names no mission'. CR-08's evidence comes from the dec1125c eval goals, not this goal.",
-  "primary_evidence":["docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (forecast.causes, acceptance.legs, committee.blocker, planSet.attempts)","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-40Z.json (work[], requests[])","server/services/goals/plan.ts:1674-1676","server/services/goals/plan.ts:1809-1811","docs/RESEARCH-STARVATION-DIAGNOSIS-2026-11-26.md:5-14"],
-  "required_correction":"Add a read-only per-goal research trace for wst_7b4f: why bins are NEEDS_HUMAN at 0 attempts, the judgment and compile outcomes (U-13), and the ceiling requests. Add an UNRESOLVED cause row for 'goal research parked for a person / research ceilings unanswered'. Re-attribute the live outcome to missing leg evidence (CR-08 plus the new row), with CR-10 and CR-11 as non-proximate."},
- {"id":"GC-04","target":"CR-10 evidence and GRAPH node X_GENERIC","severity":"critical",
-  "finding":"X_GENERIC ('generic constructed strategy chosen') is not observed. All six readings chose cop_ openings (source STRATEGY or QUANT_PORTFOLIO); none chose an arr_ arrangement. The cited '0.97 reach' is portfolio.best.reach, the headline best combination with unpriced arr_ members, while the chosen candidate's reach is 0.204. The register conflates the two. The '424 candidates, 355 collapses' counts are deduplication and do not show a missing arbiter. Uncited, stronger production evidence for CR-10's project-scope mechanism: wst_66311 ($10k to $100k in 90 d) and wst_fa47 ($2k in 14 d) in one project choose the identical candidate cop_c97670; wst_4f0c ($50k in 6 months, $25k capital) and wst_db2e ($5k a month, 10 h a week, $1.5k) in one project both choose cop_631dad + cop_f0c67.",
-  "primary_evidence":["docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json (acceptance.candidate.opportunityIds)","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goals__all__2026-11-26T06-34-13Z.json (projectIds)","server/services/cash/goalScenario.ts:3009","server/services/goals/plan.ts:5305"],
-  "required_correction":"Replace CR-10's behavioural evidence with the identical-candidate pairs (E0). Replace X_GENERIC with 'different goals in one project receive the same candidate'. Add a separate node for 'headline reach inflated by unpriced constructed arrangements'. Stop citing planSet collapses as arbiter evidence."},
- {"id":"GC-05","target":"GRAPH edge CR01 ==> MOD; ROOT-CAUSES C.1","severity":"major",
-  "finding":"Handoff to the fallback model happens on the working path (empty or error, then 2x retry, then the next model), which E-015 shows correct. CR-01, acceptance of incomplete turns, acts the opposite way: a truncated reply with one complete route, or with all routes rule-rejected, is accepted and ENDS the chain. The cause of the handoff is the primary's failure (mechanism UNRESOLVED, U-01) plus an unqualified fallback (CR-02). 'Largely the fallback's' is overstated: the 30Q measured 6/12 empty, with the critic served by the same model.",
-  "primary_evidence":["server/services/goals/routeProposal.ts:1436-1447","server/services/goals/routeProposal.ts:2097-2108","docs/INTELLIGENCE-TEST-30Q-2026-11-26.md:161-163"],
-  "required_correction":"Draw the edge from 'primary empty or truncated (U-01)' to MOD. Relabel CR-01 -> X_FALLBACK as 'partial turn accepted / chain ended'. Replace 'largely' with the measured 6/12."},
- {"id":"GC-06","target":"CR-01, CR-12 loop, ROOT-CAUSES C.4, UNCERTAINTY U-01","severity":"major",
-  "finding":"git log -S shows that readStream's 'error: content.trim() ? null : error' was introduced by W1j (56f2699, 2026-11-26 05:38Z). W1j is the streaming repair for the idle-cut cause that this register REFUTES. That repair created the path through which E-002's E1 truncation is indistinguishable from a stream drop. It is the one demonstrated instance of the repair loop, and it means E0 replies (non-streamed) and E1 replies (streamed) ran different code.",
-  "primary_evidence":["git log -S\"content.trim() ? null : error\" -- server/services/cheap/modelBench.ts -> 56f2699","server/services/cheap/modelBench.ts:166","docs/PLANNING-FAILURE-MAP.md:633 (W1j)"],
-  "required_correction":"Record W1j as having introduced the erasure, in CR-01 and as the evidence for the CR-12 loop edge. Note in U-01 that E0 and E1 truncations ran different code paths."},
- {"id":"GC-07","target":"Shared classes M1, M2, M3","severity":"major",
-  "finding":"M1 is partly thematic. CR-01, CR-16 and GA-24 share one turn-integrity contract. CR-03 and CR-04 need computed economics and a cash-timing model (Q-R042), whose requirement Gate B found unspecified, so a turn contract does not remove them. M2 wrongly includes CR-13, which is eligibility derived from the creating door, not owner-fact reading. M3 wrongly includes CR-11 (an acceptance-policy threshold) and CR-14 (knowledge-link quality); neither is removed by a goal record or an arbiter.",
-  "primary_evidence":["server/services/russell/goalSprint.ts:67","server/services/cash/lifecycle.ts:520-541","server/services/goals/plan.ts:1648-1660","docs/INTELLIGENCE-INTEGRATION-DIAGNOSIS-2026-11-26.md:33,112-116","docs/investigation-2026-11-26/reviews/GATE-B.md (GB-60s, C25-P/I)"],
-  "required_correction":"Split M1 into M1a (turn integrity) and M1b (deterministic verification, dependent on a Q-R042 specification). Remove CR-13 from M2, and CR-11 and CR-14 from M3; list them as independent causes."},
- {"id":"GC-08","target":"GRAPH edge INF --> CR07; CR-07","severity":"major",
-  "finding":"CR-07's mechanism (lane and recency selection, newest-first DB limit) does not depend on supply, and more supply worsens the recency cut (E-012 400-claim noise). The edge is a masking/amplification relation drawn as causation. Findings are also read project-wide (projectEvidenceClaims(projectId)), not per goal. Map C Q-R010 (goal isolation) has no capability, and the register omits this.",
-  "primary_evidence":["server/services/goals/routeProposal.ts:1595","server/services/goals/routeProposal.ts:1976","server/services/goals/routeProposal.ts:2170","docs/investigation-2026-11-26/experiments/raw/E-012/result.json","docs/investigation-2026-11-26/register/C_to_existing_capabilities.json (Q-R010 NO_EXISTING_CAPABILITY)"],
-  "required_correction":"Replace INF --> CR07 with 'CR-08 masks CR-07; fixing CR-08 amplifies CR-07'. Add project-scoped findings to CR-07 (or to CR-10) as a goal-isolation mechanism."},
- {"id":"GC-09","target":"REPAIR-BLUEPRINT coverage","severity":"major",
-  "finding":"No stage repairs CR-07 (findings by relevance) or CR-17 (change propagation and the fingerprint). Stage 1's turn contract does not name GA-01, the model challenge inside optimizePortfolio, which can replace portfolio.best on every plan read and is subject to CR-01 and CR-02.",
-  "primary_evidence":["docs/investigation-2026-11-26/REPAIR-BLUEPRINT.md (grep CR-07/CR-17: no match)","docs/investigation-2026-11-26/reviews/GATE-A.md GA-01 (quant/portfolio.ts:1215-1221,1254-1300)"],
-  "required_correction":"Add CR-07 to Stage 3 or Stage 4, with its E-012 proof. Add CR-17 to Stage 3. Add every model call site (route, critic, direction, portfolio challenge) to Stage 1's contract scope."},
- {"id":"GC-10","target":"REPAIR-BLUEPRINT stage ordering","severity":"major",
-  "finding":"Stages 1 and 3 prove themselves with a 'Stage-0 evaluation, delta measured' on the production path, while Stage 4 (supply, and the model owner item) runs in parallel. Per the graph, unfixed CR-08 conceals CR-03, CR-04 and CR-07. With unfixed CR-02 (gpt-oss empty 50%, fallback 1/30), a loud-failing contract produces more NO_ANSWER outcomes. End-to-end deltas for Stages 1-3 will read near zero whether or not those stages are correct.",
-  "primary_evidence":["docs/investigation-2026-11-26/REPAIR-BLUEPRINT.md (Stage 1 proof, Stage 4 'parallel')","docs/investigation-2026-11-26/GRAPH.md (X_NOFACTS -.-> CR03/CR04/CR07)"],
-  "required_correction":"Make Stage 0 factorial (production supply versus supplied verified facts; production model versus an exam-passing model), or require Stage 4 before the end-to-end proofs of Stages 1-3."},
- {"id":"GC-11","target":"CR-12 status scope; GRAPH CR12 -.-> FINAL 'conceals all M1-M3'; LOOP","severity":"major",
-  "finding":"The ad-hoc 30Q and planningEval probes did drive the failing path and exposed M1-M3; they are this investigation's evidence base. What is concealed is the acceptance gate (planningReliability, L-001) and post-merge verification. W1 rows are labelled MERGED_PENDING_PRODUCTION, so 'declared done' is not evidenced for W1. The bundled L-002 served-model mislabel is SUPPORTED, not ESTABLISHED.",
-  "primary_evidence":["docs/investigation-2026-11-26/evidence/L-001-acceptance-suite-scope.md","docs/investigation-2026-11-26/evidence/L-002-operational-evidence-inventory.md (Status: SUPPORTED)","docs/PLANNING-FAILURE-MAP.md:619-633"],
-  "required_correction":"Restrict CR-12 ESTABLISHED to 'the gate and post-merge verification are blind'. Mark the loop edge SUPPORTED, with W1i (E-013) and W1j (GC-06) as its evidence. Split the L-002 item out as SUPPORTED."},
- {"id":"GC-12","target":"CR-13 and GRAPH CR13 --> CAP_DISC --> X_NOROUTE --> FINAL","severity":"major",
-  "finding":"There is no incidence evidence. Eval goals pass a userId, and the live $10k plan reads route-proposal openings ('each route proposal assumed'), so CR-13 explains none of the observed failures.",
-  "primary_evidence":["scripts/planningEval.ts:109","server/mcp/operatorTools.ts:1025","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (nextTest)"],
-  "required_correction":"Mark the edge hypothetical and state CR-13's observed contribution as 0, pending U-03."},
- {"id":"GC-13","target":"CR-11","severity":"major",
-  "finding":"'Readiness cannot be reached by research' is overstated. judgeAcceptance accepts on EVIDENCED_PORTFOLIO when every member is priced, the basis is PROBABILITY, the chain is complete, the 5th percentile is at least the required level and every leg is supported. That path is reachable by research, though steep. Only the MEASURED_RECORD path needs 10 or more outcomes. On the live goal CR-11 is masked: with supportedReach 0, no relaxation of the gate yields a usable plan.",
-  "primary_evidence":["server/services/goals/plan.ts:1770-1835","server/services/goals/plan.ts:1858-1864"],
-  "required_correction":"Restate CR-11 as 'the readiness bar is the money-commitment confidence bar; NEEDS_EVIDENCE covers both'. Keep it SUPPORTED, with its contribution to the observed outcome undemonstrated."},
- {"id":"GC-14","target":"CR-05/CR-06 evidence; live goal constraints","severity":"major",
-  "finding":"The live $10k goal's words ('using little up-front capital') state no hours and no figure. Its reading tests '0 owner hours ... in every tested case', which makes 4 of 8 strategies NOT_VIABLE, and applies 'the 3000 USD the owner said this goal may commit'. The reader's LITTLE_CAPITAL rule would give 10% of $10,000, which is $1,000. Both are constraints presented as the owner's words with untraced provenance: a direct live instance of M2 that the register does not cite.",
-  "primary_evidence":["docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (strategies[].constraintsFailed)","server/services/industry/construction/intent.ts:899-922","server/services/goals/portfolio.ts:1592-1593"],
-  "required_correction":"Trace the goal target's hoursCeiling and capitalCeilingCents provenance (createGoal reading, objectiveAssist, terms PATCH or policy). Add the result as CR-05/CR-06 live evidence or as a new row."},
- {"id":"GC-15","target":"CR-04 correction class","severity":"minor",
-  "finding":"'Economics derived by code from every route's figures' cannot derive a CPA the route does not state. The correction needs a required-field contract, where a missing CPA means the route is incomplete, and the unspecified spend-versus-proceeds rule.",
-  "primary_evidence":["docs/investigation-2026-11-26/experiments/raw/E-010/constructed.json","docs/investigation-2026-11-26/reviews/GATE-B.md (GB-03 item 2)"],
-  "required_correction":"Name the required-field contract and the Q-R042 specification as prerequisites in CR-04 and Stage 1."},
- {"id":"GC-16","target":"CR-03","severity":"minor",
-  "finding":"F999 and the ruleless DROP are injected vulnerabilities. No recorded critique cites a non-existent finding. The recorded harm is misreadings paired with a co-rule.",
-  "primary_evidence":["server/services/goals/routeProposal.ts:1268","docs/investigation-2026-11-26/experiments/raw/E-011/replay.json"],
-  "required_correction":"Keep ESTABLISHED for the co-rule defeat. Label F999 and the ruleless drop as 'vulnerability, not an observed cause'."},
- {"id":"GC-17","target":"GRAPH CR09 --> X_REPEAT","severity":"minor",
-  "finding":"E-016 shows that lessons expire at 24 h, in a sandbox. 'Same mistake each ask' is not observed in production.",
-  "primary_evidence":["server/services/goals/routeProposal.ts:1946","docs/investigation-2026-11-26/experiments/raw/E-016/lessons.json"],
-  "required_correction":"Mark X_REPEAT hypothetical, or cite a production goal with repeated refuted directions."},
- {"id":"GC-18","target":"Map B evidence integrity","severity":"minor",
-  "finding":"The raw file for wst_4f0c is not valid JSON (it fails to parse at char 10285), so any figure cited from it cannot be machine-verified.",
-  "primary_evidence":["docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json"],
-  "required_correction":"Re-capture the reading, or note the file as truncated."},
- {"id":"GC-19","target":"CR-14 and GRAPH CR14 --> CAP_BUYER --> X_BADMATH","severity":"minor",
-  "finding":"Fuzzy knowledge links feed arrangements only. No reading chose an arrangement, and the live leg's causes include NO_BUYER, so the buyer question was not falsely closed there. There is no demonstrated path to the outcome beyond the headline best-combination reach.",
-  "primary_evidence":["docs/INTELLIGENCE-INTEGRATION-DIAGNOSIS-2026-11-26.md:33","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (forecast.causes)"],
-  "required_correction":"Re-route the edge to 'headline reach inflated', or mark it hypothetical (U-08)."},
- {"id":"GC-20","target":"GRAPH completeness","severity":"minor",
-  "finding":"The graph omits CR-17, GA-18 (arrangements screened without the labour offer), GA-01 (portfolio model challenge), GA-24 (a rule-rejected reply ends the chain), the W1j-introduced erasure, project-scoped findings, and the live goal's research parking (NEEDS_HUMAN bins, unanswered ceiling requests). It also omits the observed 'Brain was too busy to derive the goal' symptom on all 10 goals.",
-  "primary_evidence":["docs/investigation-2026-11-26/GRAPH.md","docs/investigation-2026-11-26/reviews/GATE-A.md (GA-01, GA-18, GA-24)","docs/investigation-2026-11-26/maps/B/raw/brain_operator_goals__all__2026-11-26T06-34-13Z.json (stateEvidence)"],
-  "required_correction":"Add the nodes and edges, each with its evidence status."},
- {"id":"GC-21","target":"CR-02 sub-claim 'strongRouteModels is inert because no key is set'","severity":"minor",
-  "finding":"The code shows only that the list is empty unless both ANTHROPIC_API_KEY and BRAIN_ROUTE_MODEL are set. The production configuration was not observed (U-07 open).",
-  "primary_evidence":["server/services/goals/routeProposal.ts:1419-1425","docs/investigation-2026-11-26/UNCERTAINTY.md (U-07)"],
-  "required_correction":"Mark the sub-claim SUPPORTED (code, plus the 30Q doc's statement) pending U-07."}
+ {
+  "id": "GC-01",
+  "target": "CR-02 'partial' note; ROOT-CAUSES D (RC14 CORRECTED); GRAPH 'Reading the graph' 1",
+  "severity": "critical",
+  "finding": "The 30Q strong-model control (Claude Sonnet, 0/3 usable) is cited as proof that the model alone is insufficient and that Brain's machinery (CR-10, CR-15) is jointly causal. The control prompts are E0 route prompts that carry the standing rule 'the owner does no physical work - ... no meeting customers, no performing a service' together with the contradictory labour lift: the exact defect W1g/d5beaf6 later documented as making the model read policy as the owner's refusals. The control picked online routes for the drone pilot (p02) and for the 15-hour owner (p06), which is consistent with obeying that sentence. p10's control failure is category A (information never found). The control ran only the route prompt: no Brain critic, arbiter or plan reading, so CR-10 was never exercised.",
+  "primary_evidence": [
+   "docs/intelligence-test-2026-11-26/planner/control_prompt_p02.txt (standing-rule sentence + 'owner offered their own work')",
+   "docs/intelligence-test-2026-11-26/planner/control_prompt_p06.txt (same)",
+   "server/domain/operatingModel.ts:375-386",
+   "docs/intelligence-test-2026-11-26/grading/grade_result_p02.json (Z: rethink steered away from direct-to-agent)",
+   "docs/intelligence-test-2026-11-26/grading/grade_result_p10.json (Y: category A)",
+   "docs/INTELLIGENCE-TEST-30Q-2026-11-26.md:31 (control = identical final prompt answered by Sonnet)"
+  ],
+  "required_correction": "Mark the model-versus-machinery separation UNRESOLVED (U-05): the control is confounded by CR-05 and by fact gaps (CR-15, category A). Remove the CR-10 reference. Downgrade CR-02 as a cause of the production outcome to SUPPORTED (keep ESTABLISHED for the isolation capability measurement). Run U-05 with the post-W1g prompt through parser and critic."
+ },
+ {
+  "id": "GC-02",
+  "target": "CR-10 evidence; GRAPH 'Structural ceiling (M3)'; 'live $10k reading'",
+  "severity": "critical",
+  "finding": "The 'live $10k goal reading' is readAt 2026-11-26T05:40:04Z, before the a8c4699 Deploy run was even created (05:41:36Z). REFERENCE.md tags anything before ~05:50Z as E0 (pre-W1). All six production plan readings are 02:05-05:43Z. Every goal is now PAUSED by the owner's priority override, and proposeGoalRoutes returns NOT_DUE for a paused goal. So no E1 plan behaviour exists, and the register presents E0 evidence as the live post-repair outcome.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (readAt 05:40:04.336Z)",
+   "docs/investigation-2026-11-26/REFERENCE.md:13,15",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-40Z.json (lifecycle PAUSED)",
+   "server/services/goals/routeProposal.ts:1944"
+  ],
+  "required_correction": "Tag every goal reading E0. State explicitly that plan behaviour on PROD a8c4699 is unobserved for every live goal. Remove 'live' as an E1 qualifier from the CR-10 and GRAPH text."
+ },
+ {
+  "id": "GC-03",
+  "target": "Explanation of the live outcome (NEEDS_EVIDENCE, committee FAIL, supportedReach 0); CR-10, CR-11, CR-08",
+  "severity": "critical",
+  "finding": "The register attributes the live outcome to the missing arbiter (CR-10) and the readiness gate (CR-11). The reading itself shows a different proximate mechanism. The only candidate leg cop_ec16 lacks MECHANISM and OFFER, and its causes are VOLUME_UNRESEARCHED, NO_BUYER, NO_SUPPORTED_PRICE, SETTLEMENT_UNKNOWN and NO_FULFILLER. The committee FAIL is a correct block on unresearched volume. judgeAcceptance refuses any combination with unpriced or unsupported legs whatever the selector. One arbiter would therefore not change the outcome. The goal's research record, which is the most direct explanation, appears in no CR row: of the 15 bins listed (25 held), 13 are NEEDS_HUMAN at 0/5 attempts and 2 are exhausted at 5/5; planSet attempts are researched 18, authorized 0, executed 0; and 6 requests 'Raising the research goal's DEADLINE ceiling' have been open since 2026-10-18, marked 'the card names no mission'. CR-08's evidence comes from the dec1125c eval goals, not this goal.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (forecast.causes, acceptance.legs, committee.blocker, planSet.attempts)",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-40Z.json (work[], requests[])",
+   "server/services/goals/plan.ts:1674-1676",
+   "server/services/goals/plan.ts:1809-1811",
+   "docs/RESEARCH-STARVATION-DIAGNOSIS-2026-11-26.md:5-14"
+  ],
+  "required_correction": "Add a read-only per-goal research trace for wst_7b4f: why bins are NEEDS_HUMAN at 0 attempts, the judgment and compile outcomes (U-13), and the ceiling requests. Add an UNRESOLVED cause row for 'goal research parked for a person / research ceilings unanswered'. Re-attribute the live outcome to missing leg evidence (CR-08 plus the new row), with CR-10 and CR-11 as non-proximate."
+ },
+ {
+  "id": "GC-04",
+  "target": "CR-10 evidence and GRAPH node X_GENERIC",
+  "severity": "critical",
+  "finding": "X_GENERIC ('generic constructed strategy chosen') is not observed. All six readings chose cop_ openings (source STRATEGY or QUANT_PORTFOLIO); none chose an arr_ arrangement. The cited '0.97 reach' is portfolio.best.reach, the headline best combination with unpriced arr_ members, while the chosen candidate's reach is 0.204. The register conflates the two. The '424 candidates, 355 collapses' counts are deduplication and do not show a missing arbiter. Uncited, stronger production evidence for CR-10's project-scope mechanism: wst_66311 ($10k to $100k in 90 d) and wst_fa47 ($2k in 14 d) in one project choose the identical candidate cop_c97670; wst_4f0c ($50k in 6 months, $25k capital) and wst_db2e ($5k a month, 10 h a week, $1.5k) in one project both choose cop_631dad + cop_f0c67.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_66311cabe7e5442faa98__2026-11-26T06-39Z.json (acceptance.candidate.opportunityIds)",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_fa4761773e4441b89e5a__2026-11-26T06-37Z.json",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_db2e2e0e5204477692d5__2026-11-26T06-36Z.json",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goals__all__2026-11-26T06-34-13Z.json (projectIds)",
+   "server/services/cash/goalScenario.ts:3009",
+   "server/services/goals/plan.ts:5305"
+  ],
+  "required_correction": "Replace CR-10's behavioural evidence with the identical-candidate pairs (E0). Replace X_GENERIC with 'different goals in one project receive the same candidate'. Add a separate node for 'headline reach inflated by unpriced constructed arrangements'. Stop citing planSet collapses as arbiter evidence."
+ },
+ {
+  "id": "GC-05",
+  "target": "GRAPH edge CR01 ==> MOD; ROOT-CAUSES C.1",
+  "severity": "major",
+  "finding": "Handoff to the fallback model happens on the working path (empty or error, then 2x retry, then the next model), which E-015 shows correct. CR-01, acceptance of incomplete turns, acts the opposite way: a truncated reply with one complete route, or with all routes rule-rejected, is accepted and ENDS the chain. The cause of the handoff is the primary's failure (mechanism UNRESOLVED, U-01) plus an unqualified fallback (CR-02). 'Largely the fallback's' is overstated: the 30Q measured 6/12 empty, with the critic served by the same model.",
+  "primary_evidence": [
+   "server/services/goals/routeProposal.ts:1436-1447",
+   "server/services/goals/routeProposal.ts:2097-2108",
+   "docs/INTELLIGENCE-TEST-30Q-2026-11-26.md:161-163"
+  ],
+  "required_correction": "Draw the edge from 'primary empty or truncated (U-01)' to MOD. Relabel CR-01 -> X_FALLBACK as 'partial turn accepted / chain ended'. Replace 'largely' with the measured 6/12."
+ },
+ {
+  "id": "GC-06",
+  "target": "CR-01, CR-12 loop, ROOT-CAUSES C.4, UNCERTAINTY U-01",
+  "severity": "major",
+  "finding": "git log -S shows that readStream's 'error: content.trim() ? null : error' was introduced by W1j (56f2699, 2026-11-26 05:38Z). W1j is the streaming repair for the idle-cut cause that this register REFUTES. That repair created the path through which E-002's E1 truncation is indistinguishable from a stream drop. It is the one demonstrated instance of the repair loop, and it means E0 replies (non-streamed) and E1 replies (streamed) ran different code. E-017 (raw/E-017/eval.txt) shows the erasure did not operate in that sample: [DONE] arrived, there were no errors, and the stop was a length stop. It is a demonstrated concealment path, not E-002's demonstrated cause.",
+  "primary_evidence": [
+   "git log -S\"content.trim() ? null : error\" -- server/services/cheap/modelBench.ts -> 56f2699",
+   "server/services/cheap/modelBench.ts:166",
+   "docs/PLANNING-FAILURE-MAP.md:633 (W1j)"
+  ],
+  "required_correction": "Record W1j as having introduced the erasure, in CR-01 and as the evidence for the CR-12 loop edge. Note in U-01 that E0 and E1 truncations ran different code paths."
+ },
+ {
+  "id": "GC-07",
+  "target": "Shared classes M1, M2, M3",
+  "severity": "major",
+  "finding": "M1 is partly thematic. CR-01, CR-16 and GA-24 share one turn-integrity contract. CR-03 and CR-04 need computed economics and a cash-timing model (Q-R042), whose requirement Gate B found unspecified, so a turn contract does not remove them. M2 wrongly includes CR-13, which is eligibility derived from the creating door, not owner-fact reading. M3 wrongly includes CR-11 (an acceptance-policy threshold) and CR-14 (knowledge-link quality); neither is removed by a goal record or an arbiter.",
+  "primary_evidence": [
+   "server/services/russell/goalSprint.ts:67",
+   "server/services/cash/lifecycle.ts:520-541",
+   "server/services/goals/plan.ts:1648-1660",
+   "docs/INTELLIGENCE-INTEGRATION-DIAGNOSIS-2026-11-26.md:33,112-116",
+   "docs/investigation-2026-11-26/reviews/GATE-B.md (GB-60s, C25-P/I)"
+  ],
+  "required_correction": "Split M1 into M1a (turn integrity) and M1b (deterministic verification, dependent on a Q-R042 specification). Remove CR-13 from M2, and CR-11 and CR-14 from M3; list them as independent causes."
+ },
+ {
+  "id": "GC-08",
+  "target": "GRAPH edge INF --> CR07; CR-07",
+  "severity": "major",
+  "finding": "CR-07's mechanism (lane and recency selection, newest-first DB limit) does not depend on supply, and more supply worsens the recency cut (E-012 400-claim noise). The edge is a masking/amplification relation drawn as causation. Findings are also read project-wide (projectEvidenceClaims(projectId)), not per goal. Map C Q-R010 (goal isolation) has no capability, and the register omits this.",
+  "primary_evidence": [
+   "server/services/goals/routeProposal.ts:1595",
+   "server/services/goals/routeProposal.ts:1976",
+   "server/services/goals/routeProposal.ts:2170",
+   "docs/investigation-2026-11-26/experiments/raw/E-012/result.json",
+   "docs/investigation-2026-11-26/register/C_to_existing_capabilities.json (Q-R010 NO_EXISTING_CAPABILITY)"
+  ],
+  "required_correction": "Replace INF --> CR07 with 'CR-08 masks CR-07; fixing CR-08 amplifies CR-07'. Add project-scoped findings to CR-07 (or to CR-10) as a goal-isolation mechanism."
+ },
+ {
+  "id": "GC-09",
+  "target": "REPAIR-BLUEPRINT coverage",
+  "severity": "major",
+  "finding": "No stage repairs CR-07 (findings by relevance) or CR-17 (change propagation and the fingerprint). Stage 1's turn contract does not name GA-01, the model challenge inside optimizePortfolio, which can replace portfolio.best on every plan read and is subject to CR-01 and CR-02.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/REPAIR-BLUEPRINT.md (grep CR-07/CR-17: no match)",
+   "docs/investigation-2026-11-26/reviews/GATE-A.md GA-01 (quant/portfolio.ts:1215-1221,1254-1300)"
+  ],
+  "required_correction": "Add CR-07 to Stage 3 or Stage 4, with its E-012 proof. Add CR-17 to Stage 3. Add every model call site (route, critic, direction, portfolio challenge) to Stage 1's contract scope."
+ },
+ {
+  "id": "GC-10",
+  "target": "REPAIR-BLUEPRINT stage ordering",
+  "severity": "major",
+  "finding": "Stages 1 and 3 prove themselves with a 'Stage-0 evaluation, delta measured' on the production path, while Stage 4 (supply, and the model owner item) runs in parallel. Per the graph, unfixed CR-08 conceals CR-03, CR-04 and CR-07. With unfixed CR-02 (gpt-oss empty 50%, fallback 1/30), a loud-failing contract produces more NO_ANSWER outcomes. End-to-end deltas for Stages 1-3 will read near zero whether or not those stages are correct.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/REPAIR-BLUEPRINT.md (Stage 1 proof, Stage 4 'parallel')",
+   "docs/investigation-2026-11-26/GRAPH.md (X_NOFACTS -.-> CR03/CR04/CR07)"
+  ],
+  "required_correction": "Make Stage 0 factorial (production supply versus supplied verified facts; production model versus an exam-passing model), or require Stage 4 before the end-to-end proofs of Stages 1-3."
+ },
+ {
+  "id": "GC-11",
+  "target": "CR-12 status scope; GRAPH CR12 -.-> FINAL 'conceals all M1-M3'; LOOP",
+  "severity": "major",
+  "finding": "The ad-hoc 30Q and planningEval probes did drive the failing path and exposed M1-M3; they are this investigation's evidence base. What is concealed is the acceptance gate (planningReliability, L-001) and post-merge verification. W1 rows are labelled MERGED_PENDING_PRODUCTION, so 'declared done' is not evidenced for W1. The bundled L-002 served-model mislabel is SUPPORTED, not ESTABLISHED.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/evidence/L-001-acceptance-suite-scope.md",
+   "docs/investigation-2026-11-26/evidence/L-002-operational-evidence-inventory.md (Status: SUPPORTED)",
+   "docs/PLANNING-FAILURE-MAP.md:619-633"
+  ],
+  "required_correction": "Restrict CR-12 ESTABLISHED to 'the gate and post-merge verification are blind'. Mark the loop edge SUPPORTED, with W1i (E-013) and W1j (GC-06) as its evidence. Split the L-002 item out as SUPPORTED."
+ },
+ {
+  "id": "GC-12",
+  "target": "CR-13 and GRAPH CR13 --> CAP_DISC --> X_NOROUTE --> FINAL",
+  "severity": "major",
+  "finding": "There is no incidence evidence. Eval goals pass a userId, and the live $10k plan reads route-proposal openings ('each route proposal assumed'), so CR-13 explains none of the observed failures.",
+  "primary_evidence": [
+   "scripts/planningEval.ts:109",
+   "server/mcp/operatorTools.ts:1025",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (nextTest)"
+  ],
+  "required_correction": "Mark the edge hypothetical and state CR-13's observed contribution as 0, pending U-03."
+ },
+ {
+  "id": "GC-13",
+  "target": "CR-11",
+  "severity": "major",
+  "finding": "'Readiness cannot be reached by research' is overstated. judgeAcceptance accepts on EVIDENCED_PORTFOLIO when every member is priced, the basis is PROBABILITY, the chain is complete, the 5th percentile is at least the required level and every leg is supported. That path is reachable by research, though steep. Only the MEASURED_RECORD path needs 10 or more outcomes. On the live goal CR-11 is masked: with supportedReach 0, no relaxation of the gate yields a usable plan.",
+  "primary_evidence": [
+   "server/services/goals/plan.ts:1770-1835",
+   "server/services/goals/plan.ts:1858-1864"
+  ],
+  "required_correction": "Restate CR-11 as 'the readiness bar is the money-commitment confidence bar; NEEDS_EVIDENCE covers both'. Keep it SUPPORTED, with its contribution to the observed outcome undemonstrated."
+ },
+ {
+  "id": "GC-14",
+  "target": "CR-05/CR-06 evidence; live goal constraints",
+  "severity": "major",
+  "finding": "The live $10k goal's words ('using little up-front capital') state no hours and no figure. Its reading tests '0 owner hours ... in every tested case', which makes 4 of 8 strategies NOT_VIABLE, and applies 'the 3000 USD the owner said this goal may commit'. The reader's LITTLE_CAPITAL rule would give 10% of $10,000, which is $1,000. Both are constraints presented as the owner's words with untraced provenance: a direct live instance of M2 that the register does not cite.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (strategies[].constraintsFailed)",
+   "server/services/industry/construction/intent.ts:899-922",
+   "server/services/goals/portfolio.ts:1592-1593"
+  ],
+  "required_correction": "Trace the goal target's hoursCeiling and capitalCeilingCents provenance (createGoal reading, objectiveAssist, terms PATCH or policy). Add the result as CR-05/CR-06 live evidence or as a new row."
+ },
+ {
+  "id": "GC-15",
+  "target": "CR-04 correction class",
+  "severity": "minor",
+  "finding": "'Economics derived by code from every route's figures' cannot derive a CPA the route does not state. The correction needs a required-field contract, where a missing CPA means the route is incomplete, and the unspecified spend-versus-proceeds rule.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/experiments/raw/E-010/constructed.json",
+   "docs/investigation-2026-11-26/reviews/GATE-B.md (GB-03 item 2)"
+  ],
+  "required_correction": "Name the required-field contract and the Q-R042 specification as prerequisites in CR-04 and Stage 1."
+ },
+ {
+  "id": "GC-16",
+  "target": "CR-03",
+  "severity": "minor",
+  "finding": "F999 and the ruleless DROP are injected vulnerabilities. No recorded critique cites a non-existent finding. The recorded harm is misreadings paired with a co-rule.",
+  "primary_evidence": [
+   "server/services/goals/routeProposal.ts:1268",
+   "docs/investigation-2026-11-26/experiments/raw/E-011/replay.json"
+  ],
+  "required_correction": "Keep ESTABLISHED for the co-rule defeat. Label F999 and the ruleless drop as 'vulnerability, not an observed cause'."
+ },
+ {
+  "id": "GC-17",
+  "target": "GRAPH CR09 --> X_REPEAT",
+  "severity": "minor",
+  "finding": "E-016 shows that lessons expire at 24 h, in a sandbox. 'Same mistake each ask' is not observed in production.",
+  "primary_evidence": [
+   "server/services/goals/routeProposal.ts:1946",
+   "docs/investigation-2026-11-26/experiments/raw/E-016/lessons.json"
+  ],
+  "required_correction": "Mark X_REPEAT hypothetical, or cite a production goal with repeated refuted directions."
+ },
+ {
+  "id": "GC-18",
+  "target": "Map B evidence integrity",
+  "severity": "minor",
+  "finding": "The raw file for wst_4f0c is not valid JSON (it fails to parse at char 10285), so any figure cited from it cannot be machine-verified.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_4f0c312400e1425dab2e__2026-11-26T06-39Z.json"
+  ],
+  "required_correction": "Re-capture the reading, or note the file as truncated."
+ },
+ {
+  "id": "GC-19",
+  "target": "CR-14 and GRAPH CR14 --> CAP_BUYER --> X_BADMATH",
+  "severity": "minor",
+  "finding": "Fuzzy knowledge links feed arrangements only. No reading chose an arrangement, and the live leg's causes include NO_BUYER, so the buyer question was not falsely closed there. There is no demonstrated path to the outcome beyond the headline best-combination reach.",
+  "primary_evidence": [
+   "docs/INTELLIGENCE-INTEGRATION-DIAGNOSIS-2026-11-26.md:33",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goal_plan__wst_7b4fcbb5f2384f31b6c3__2026-11-26T06-35Z.json (forecast.causes)"
+  ],
+  "required_correction": "Re-route the edge to 'headline reach inflated', or mark it hypothetical (U-08)."
+ },
+ {
+  "id": "GC-20",
+  "target": "GRAPH completeness",
+  "severity": "minor",
+  "finding": "The graph omits CR-17, GA-18 (arrangements screened without the labour offer), GA-01 (portfolio model challenge), GA-24 (a rule-rejected reply ends the chain), the W1j-introduced erasure, project-scoped findings, and the live goal's research parking (NEEDS_HUMAN bins, unanswered ceiling requests). It also omits the observed 'Brain was too busy to derive the goal' symptom on all 10 goals.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/GRAPH.md",
+   "docs/investigation-2026-11-26/reviews/GATE-A.md (GA-01, GA-18, GA-24)",
+   "docs/investigation-2026-11-26/maps/B/raw/brain_operator_goals__all__2026-11-26T06-34-13Z.json (stateEvidence)"
+  ],
+  "required_correction": "Add the nodes and edges, each with its evidence status."
+ },
+ {
+  "id": "GC-21",
+  "target": "CR-02 sub-claim 'strongRouteModels is inert because no key is set'",
+  "severity": "minor",
+  "finding": "The code shows only that the list is empty unless both ANTHROPIC_API_KEY and BRAIN_ROUTE_MODEL are set. The production configuration was not observed (U-07 open).",
+  "primary_evidence": [
+   "server/services/goals/routeProposal.ts:1419-1425",
+   "docs/investigation-2026-11-26/UNCERTAINTY.md (U-07)"
+  ],
+  "required_correction": "Mark the sub-claim SUPPORTED (code, plus the 30Q doc's statement) pending U-07."
+ },
+ {
+  "id": "GC-22",
+  "target": "ROOT-CAUSES H 'New interaction (I-W1e x CR-01)'; E-017 'Interaction newly shown'",
+  "severity": "major",
+  "finding": "The claim that W1e's larger findings set raised truncation incidence, and that this explains E-002, is not supported, and E0 data contradict it. In the 18 recorded E0 replies, gpt-oss returned empty content on 3 of 6 asks with 40 findings (final_p02_cap, final_p06_cap, probe1_p10_cap) and on 3 of 6 asks with 79-126 findings (final_p02_all, final_p10_all, probe1_p06_all). final_p02_all at E0 had the same 105 findings and a 35,040-char prompt as E-017 and returned empty. E-017 ran no 40-finding arm, so the needed counterfactual is unmeasured. The E0-empty versus E1-truncated difference has an unexcluded competing explanation: W1j's non-streamed-to-streamed change, with n=1 at E1.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/experiments/raw/E-010/probes.json (replies[].content length by findings count)",
+   "docs/investigation-2026-11-26/experiments/raw/E-017/eval.txt (setup findings 105, prompt_tokens 9010)",
+   "scripts/planningEval.ts:755-758 (arms: no reduced-findings arm)"
+  ],
+  "required_correction": "Downgrade I-W1e x CR-01 to SUSPECTED. Keep it out of GRAPH as a demonstrated amplification edge. If it matters, run arm A with the 40-finding prompt at n>=5 against the 105-finding prompt."
+ },
+ {
+  "id": "GC-23",
+  "target": "ROOT-CAUSES H 'supersedes G NOT SEPARATED for E-002'; CR-16 'third left no record'",
+  "severity": "minor",
+  "finding": "E-017 is a new single sample per arm (temperature 0.3), not a re-read of E-002's reply: E-002 took 80.5 s for 2,103 chars, arm A took 41 s for 4,085 chars. It establishes that the length mechanism operates on PROD a8c4699 for this prompt. It does not identify E-002's own reply's mechanism. The raw file and probe code agree with the write-up on every figure. 'The third route left no record' rests on code reading: the probe calls parseRoutes only and records nothing.",
+  "primary_evidence": [
+   "docs/investigation-2026-11-26/experiments/raw/E-017/eval.txt",
+   "docs/investigation-2026-11-26/experiments/raw/E-010/probes.json (E-002_eval_p02_cap: 80547 ms, 2103 chars)",
+   "scripts/planningEval.ts:806-808",
+   "server/services/goals/routeProposal.ts:2099-2108"
+  ],
+  "required_correction": "Word it as: 'H1b ESTABLISHED as operating on PROD for the E-002 prompt (n=1); E-002's reply SUPPORTED-consistent; E0 empties SUPPORTED'. Cite routeProposal.ts:2099-2108 for 'no record'."
+ }
 ]

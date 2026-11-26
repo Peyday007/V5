@@ -2,9 +2,9 @@
 
 **Reviewer:** Gate C. I did not author the register, the graph, the blueprint, the maps or the experiments.
 **Scope:** `ROOT-CAUSES.md` (section G overrides earlier rows where they conflict), `GRAPH.md` and `REPAIR-BLUEPRINT.md`, checked against primary evidence: source at REF, the raw production readings in `maps/B/raw/`, the 30Q artefacts, the experiment raw outputs and git history.
-**Method:** I opened every file:line I cite below. I did not re-run the E-010..E-016 harnesses, because Gate B re-ran them byte-identically and none of my findings depends on their outputs beyond what Gate B confirmed. My new evidence comes from three sources: the six raw production plan readings, the 30Q control prompts and grades, and `git log -S`.
+**Method:** I opened every file:line I cite below. I did not re-run the E-010..E-016 harnesses, because Gate B re-ran them byte-identically and none of my findings depends on their outputs beyond what Gate B confirmed. My new evidence comes from four sources: the six raw production plan readings, the 30Q control prompts and grades, `git log -S`, and (added late, at the coordinator's request) E-017's raw output `experiments/raw/E-017/eval.txt` together with the probe code in `scripts/planningEval.ts:717-810`, tabulated against the 19 recorded replies in `experiments/raw/E-010/probes.json`.
 **Constraints kept:** no source, production, database or experiment changes; no production or model calls.
-**Machine-readable findings:** `reviews/gate_c_findings.json` (21 findings: 4 critical, 11 major, 6 minor).
+**Machine-readable findings:** `reviews/gate_c_findings.json` (23 findings: 4 critical, 11 major, 8 minor).
 
 ## Verdict: NOT SUFFICIENT (v1)
 
@@ -26,7 +26,7 @@ Only GC-03 needs new evidence: a read-only, per-goal research trace for `wst_7b4
 
 | id | lead status (after G) | Gate C status | causal claim demonstrated? | finding |
 |---|---|---|---|---|
-| CR-01 | ESTABLISHED (acceptance defect); UNRESOLVED upstream | **ESTABLISHED, unchanged in scope** | Yes, for "an incomplete turn is accepted and indistinguishable". Confirmed by code: `modelBench.ts:166` (`error: content.trim() ? null : error`), `:169` (stripThink), `routeProposal.ts:1436-1447`. | <ul><li>The error erasure was **introduced by W1j** (`56f2699`, 05:38Z), the repair for the refuted idle-cut cause (GC-06).</li><li>The graph edge CR-01 ⇒ MOD is misattributed (GC-05).</li></ul> |
+| CR-01 | ESTABLISHED (acceptance defect). Section H: upstream mechanism ESTABLISHED for truncation | **Acceptance defect: ESTABLISHED. Upstream budget exhaustion: ESTABLISHED as operating on PROD a8c4699 for the E-002 prompt (n=1 per arm). E-002's own reply: SUPPORTED (consistent), not separated. E0 empties: SUPPORTED, now strongly** | <ul><li>Yes. The raw E-017 data: arm A `finish_reason:["length"]`, completion 4000/4000, `sawDone:true`, `errors:[]`, maxGap 1.98 s, `parsedRoutes:2`. Arm B completes (`stop`, 5046 tokens). Arm C completes (`stop`, 1384 tokens).</li><li>The probe uses the production system prompt (identical to `routeProposal.ts:1815-1816`), the real `routeContext`/`routePrompt`, the production temperature 0.3 (`modelBench.ts:90`) and the real `parseRoutes`.</li><li>Code: `modelBench.ts:166`, `:169`; `routeProposal.ts:1436-1447`.</li></ul> | <ul><li>Section H overreaches in saying it "supersedes NOT SEPARATED for E-002". E-017 is a new sample, not E-002's reply (GC-23).</li><li>The W1e × CR-01 interaction in section H is contradicted by E0 data (GC-22).</li><li>The error erasure was **introduced by W1j** (`56f2699`). It did not operate in E-017's sample, so it is a concealment path, not E-002's demonstrated cause (GC-06).</li><li>The edge CR-01 ⇒ MOD is misattributed (GC-05).</li></ul> |
 | CR-02 | ESTABLISHED in isolation | **ESTABLISHED as a capability measurement; SUPPORTED as a cause of the production outcome** | Not as a production cause: the exam used its own prompts, and the only in-Brain counterfactual (the 30Q control) is confounded (GC-01). "Inert because no key is set" is a production-configuration claim that was never observed (U-07; GC-21). | GC-01, GC-21 |
 | CR-03 | ESTABLISHED (co-rule defeat, F999) | **ESTABLISHED for the co-rule defeat on recorded drops** (`routeProposal.ts:1268`). F999 and the ruleless DROP are an **injected vulnerability, not an observed cause** | Partly. The recorded harm (p02 final, p10 Printful) is misreadings with WINDOW plus a co-rule. No recorded critique cites a non-existent finding. | GC-16 |
 | CR-04 | ESTABLISHED (W1c fires only with the field); requirement unspecified | **ESTABLISHED (narrow)** | Yes, for the narrow claim. The correction class "derived by code from every route's figures" cannot derive a CPA the route does not state. It needs a required-field contract (M1a) **and** the unspecified cash-flow requirement (Q-R042). | GC-07, GC-15 |
@@ -41,8 +41,40 @@ Only GC-03 needs new evidence: a read-only, per-goal research trace for `wst_7b4
 | CR-13 | SUPPORTED (code); incidence UNKNOWN | **SUPPORTED (code); observed contribution 0** | Eval goals pass a userId (`scripts/planningEval.ts:109`), and the live $10k goal holds route-proposal openings, so CR-13 explains none of the observed failures. It is grouped under M2 wrongly. | GC-07, GC-12 |
 | CR-14 | SUPPORTED | **SUPPORTED (mechanism); path to the outcome not shown** | It feeds arrangements only (INTEGRATION-DIAGNOSIS:33). No reading chose an arrangement, and the live leg's causes include NO_BUYER, so the question was not falsely closed there. | GC-19 |
 | CR-15 | SUPPORTED (E0) | **SUPPORTED (E0)** | It is the main explanation for p06 (category A, upstream), and it also confounds the control (GC-01). | — |
-| CR-16 | ESTABLISHED | **ESTABLISHED** | Yes (E-002, E-010; `routeProposal.ts:2099-2108`). | — |
+| CR-16 | ESTABLISHED; section H: partial loss reproduced on production | **ESTABLISHED** | <ul><li>Yes (E-002, E-010; `routeProposal.ts:2099-2108`).</li><li>E-017 arm A: a `length`-stopped reply parses to 2 routes; its `contentTail` ends inside a third route.</li><li>"The third left no record" is established by code reading (the chain accepts at least 1 route), not by a production record: the probe calls only `parseRoutes`.</li></ul> | GC-23 |
 | CR-17 | SUPPORTED (code) | **SUPPORTED (code)** | Mechanism only. It is **absent from the graph and the blueprint** (GC-09, GC-20). | GC-09, GC-20 |
+
+## 1a. E-017 and ROOT-CAUSES section H (judged from `raw/E-017/eval.txt`)
+
+1. **The write-up matches the raw file on every figure.**
+   - Prompt: 9,010 prompt tokens, 35,437 chars, 105 findings.
+   - Arm A: 41,090 ms; content 4,085 chars, reasoning 11,112.
+   - Arm B: 5,046 tokens.
+   - Arm C: 1,384 tokens.
+   - `thinkTagInContent:false` everywhere and `trailing_buffer_chars:0`.
+
+   I found no misreport.
+2. **Separation is valid for this sample.**
+   - Only `max_tokens` and `reasoning_effort` vary. The prompt, model and server are held constant.
+   - The probe bypasses `chatFor`/`readStream` (it uses raw `fetch`), so it sees exactly what they discard.
+   - The arms are not the same draw (temperature 0.3, n=1), so "the budget is the variable" holds as a single paired observation, not as a rate.
+3. **E-002 is not thereby separated.**
+   - E-002 took 80.5 s for 2,103 chars. Arm A took 41 s for 4,085 chars of the same prompt.
+   - The sample shows the length mechanism *operates*. It does not identify the mechanism of E-002's own reply, which is consistent with it but not separated from it.
+   - Status for E-002: SUPPORTED, strongly (GC-23).
+4. **The W1e × CR-01 "repair-induced amplification" is not supported, and E0 data contradict it.**
+   - In the 18 recorded E0 replies (`raw/E-010/probes.json`), gpt-oss returned empty content on:
+     - 3 of 6 asks with 40 findings (final_p02_cap, final_p06_cap, probe1_p10_cap);
+     - 3 of 6 asks with 79–126 findings (final_p02_all, final_p10_all, probe1_p06_all).
+   - final_p02_all at E0 had the *same* 105 findings and a 35,040-char prompt as E-017, and returned empty.
+   - So budget exhaustion at 4,000 tokens was present at the same rate on 40-finding prompts before W1e.
+   - E-017 ran no 40-finding arm, so the counterfactual the interaction needs was never measured.
+   - The E0 "empty" versus E1 "truncated" difference has an unexcluded competing explanation: W1j moved the path from non-streamed to streamed (GC-06), and n is 1 at E1.
+   - Correct status: SUSPECTED. It must not enter the graph as a demonstrated edge (GC-22).
+5. **Effect on the blueprint.**
+   - U-01 is resolved enough to set Stage 1's parameters: treat `length` as a failed turn, and use an adequate budget.
+   - Arm C ("effort low") completed, but nobody graded its routes. Lowering reasoning effort is an untested quality trade, not a proven correction.
+   - The 2× empty retry (`routeProposal.ts:1444`) never fires on partial content, so it does not cover arm A's case.
 
 ## 2. Shared classes: genuine or thematic?
 
@@ -66,6 +98,7 @@ Only GC-03 needs new evidence: a read-only, per-goal research trace for `wst_7b4
 | `CR14 --> CAP_BUYER --> X_BADMATH` | No demonstrated path to the outcome (GC-19). |
 | `CR09 --> CAP_STATE --> X_REPEAT` | X_REPEAT is not observed in production (GC-17). |
 | `CR12 -.-> FINAL` ("conceals all M1-M3") | Overstated: it conceals from the gate and from post-merge verification, not from end-to-end probes (GC-11). |
+| proposed `W1e ==> CR-01` (section H) | **Reject as a demonstrated edge.** The E0 empty rate was the same at 40 and at more than 79 findings (GC-22). Record it as SUSPECTED. |
 | `FINAL ==> LOOP ==> FINAL` | **Supported, and the best evidence is missing from it.** W1j's streaming repair for a refuted cause introduced the `readStream` error erasure (GC-06). That is the demonstrated instance of "repair declared, new failure introduced". |
 | `X_NOFACTS -.-> CR03/CR04/CR07` | Supported: the supplied-facts arms exposed each one. |
 | `CR04 <==> CR03` | Supported by code reading only. Acceptable as an amplification edge. |
@@ -133,3 +166,4 @@ Only GC-03 needs new evidence: a read-only, per-goal research trace for `wst_7b4
 | GC-08 | Correct INF → CR-07. Add project-scoped findings. |
 | GC-09, GC-10 | Add CR-07, CR-17 and GA-01 to the blueprint. Make the Stage 0 evaluation factorial, or reorder the stages. |
 | GC-11 to GC-21 | The status and edge corrections listed in the JSON. |
+| GC-22, GC-23 (E-017 and section H) | Downgrade I-W1e × CR-01 to SUSPECTED; it is contradicted by the equal E0 empty rate at 40 and at more than 79 findings. Word E-017 as "H1b operates on PROD for this prompt (n=1)", not as a re-separation of E-002. |
