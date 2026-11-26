@@ -60,6 +60,7 @@
 import { commercialRealityOf } from './commercialReality.ts';
 import { fulfillerParty } from '../../domain/operatingModel.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import type { ConstructedArrangement } from '../cash/construct.ts';
 import { payerNounWords } from '../cash/volume.ts';
 import type { VariableProvenance } from '../../domain/scenario.ts';
 import type { GoalPortfolio } from './portfolio.ts';
@@ -1526,6 +1527,109 @@ const REPEATED_FIX: Record<GapKind, string> = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Partial arrangements: kept, never abandoned (OPP-04)                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The id a constructed arrangement takes in a goal model: `ARRANGEMENT_ID_PREFIX`
+ * (`cash/goalScenario.ts`) and the key. Spelled here because that module imports
+ * this one; a test holds the two equal.
+ */
+export const PARTIAL_ARRANGEMENT_ID_PREFIX = 'arr_';
+/** At most this many partial arrangements are read as pathways, so the reading stays bounded. */
+export const MAX_PARTIAL_PATHWAYS = 12;
+
+const unknownInput = (note: string): ModelInput => ({ value: null, low: null, high: null, provenance: 'UNKNOWN', source: null, note });
+
+/**
+ * A constructed arrangement the goal's model could not price (production
+ * 2026-11-26: 30 live goals, no pathway on any — every design was cut as
+ * "nothing reconstructs its value", so none reached `readPathways`) as the
+ * modelled opening `pathwayOf` reads. Every quantity is UNKNOWN with no value
+ * and no range — an unknown is not a favourable assumption (S-0061, §39) —
+ * except what the design itself states: a one-off is one deal. The buyer is
+ * the design's own buyer population, ESTIMATED as the hypothesis it is. Pure.
+ */
+export function partialArrangementOpening(arrangement: ConstructedArrangement, input: { projectId: string; currency: string }): ModelledOpportunity {
+  const repeatable = arrangement.design.repeat !== 'ONE_OFF';
+  const missing = arrangement.unknownParts.length ? `; still to establish: ${arrangement.unknownParts.slice(0, 4).join(', ')}` : '';
+  const opportunity = {
+    id: `${PARTIAL_ARRANGEMENT_ID_PREFIX}${arrangement.key}`,
+    projectId: input.projectId,
+    title: `Constructed: ${arrangement.label}`.slice(0, 200),
+    mechanism: 'OTHER',
+    industry: arrangement.sector,
+    source: null,
+    payer: null,
+    reachableChannel: null,
+    buyingSignal: null,
+    signalObservedAt: null,
+    offerScope: null,
+    priceCents: null,
+    currency: input.currency,
+    fulfillmentOwner: null,
+    peakFundingCents: null,
+    humanHours: null,
+    expiresAt: null,
+    duplicateOfId: null,
+    requiredCapabilities: [],
+    state: 'DISCOVERED',
+    createdAt: new Date(0).toISOString(),
+    paymentTerms: null,
+  } as unknown as ModelledOpportunity['opportunity'];
+  return {
+    opportunity,
+    index: 0,
+    tier: 'ESTIMATE',
+    repeatable,
+    price: unknownInput(`nothing establishes what ${arrangement.demand.name.slice(0, 80)} pay for this design, and no comparable price reaches it${missing}`),
+    capital: unknownInput('nobody has established the money this design ties up before buyers pay'),
+    hours: unknownInput('nobody has established who performs the work'),
+    daysToCash: unknownInput('nobody has established when the money would settle'),
+    close: unknownInput('no buyer of this kind has been asked yet'),
+    respond: unknownInput('nobody has established how many prospects of this kind reply'),
+    directCost: unknownInput('nobody has established the direct cost of one deal'),
+    volume: repeatable
+      ? unknownInput(`a ${arrangement.design.repeat.toLowerCase().replace('_', ' ')} design repeats, but nobody has established how many buyers exist or how often they buy`)
+      : { value: 1, low: 1, high: 1, provenance: 'ASSUMPTION', source: null, note: 'a one-off design is one deal' },
+    agreed: false,
+    agreedValue: 0,
+    agreedDeals: 0,
+    fulfilledBy: null,
+    competitiveAward: false,
+    estimated: { arrangementKey: arrangement.key, tier: 'UNKNOWN', observations: 0 },
+  };
+}
+
+/**
+ * The goal's in-scope constructed arrangements the model did not read, as
+ * pathways: each fact marked, its missing components named as gaps, and the
+ * moves that learn or supply them. Arrangements already modelled are skipped
+ * (their pathway is the modelled one), and the order given is kept — the
+ * constructor's own. Pure.
+ */
+export function partialPathways(
+  arrangements: readonly ConstructedArrangement[],
+  modelledIds: ReadonlySet<string>,
+  input: { projectId: string; remaining: number; daysLeft: number; currency: string; perArrangement: number | null; outreachPerDay: number; permissionsMissing: string[]; now: Date; limit?: number },
+): TransactionPathway[] {
+  const out: TransactionPathway[] = [];
+  const seen = new Set<string>();
+  for (const arrangement of arrangements) {
+    if (out.length >= (input.limit ?? MAX_PARTIAL_PATHWAYS)) break;
+    const id = `${PARTIAL_ARRANGEMENT_ID_PREFIX}${arrangement.key}`;
+    if (modelledIds.has(id) || seen.has(id) || arrangement.stress.exposure === 'EXCEEDS') continue;
+    seen.add(id);
+    const p = pathwayOf(partialArrangementOpening(arrangement, input), null, { ...input, capabilities: null });
+    // Nothing about it is priced, so it contributes nothing yet: an unknown is never read as money (S-0061).
+    p.contribution = { p10: 0, p50: 0, p90: 0 };
+    p.gross = { p10: 0, p50: 0, p90: 0 };
+    out.push(p);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
 /* The whole reading                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -1578,6 +1682,13 @@ export function readPathways(input: {
   rounds: GoalRoundOutcome[];
   now: Date;
   capabilities?: BrainCapabilities | null;
+  /**
+   * The goal's in-scope constructed arrangements (OPP-04): those the model did
+   * not read are kept as partial pathways with every unpriced input UNKNOWN,
+   * never dropped. Their moves follow every modelled pathway's; they take no
+   * part in the living portfolio or the information value, which read money.
+   */
+  partial?: { projectId: string; arrangements: readonly ConstructedArrangement[] } | null;
 }): PathwayReading {
   const remaining = input.target.remainingCents / 100;
   const daysLeft = Math.max(0, input.target.daysLeft ?? 0);
@@ -1592,9 +1703,24 @@ export function readPathways(input: {
     return Math.max(c?.supportedReach ?? 0, c?.potentialReach ?? 0, one.price.high ?? one.price.value ?? 0);
   };
   const chosen = [...input.modelled].sort((a, b) => potential(b) - potential(a)).slice(0, MAX_PATHWAYS);
-  const pathways = chosen.map((one) =>
+  const modelledPathways = chosen.map((one) =>
     pathwayOf(one, judged.get(one.opportunity.id) ?? null, { remaining, daysLeft, currency: input.target.currency, perArrangement, outreachPerDay: outreach.high, permissionsMissing: input.permissionsMissing, now: input.now, capabilities: input.capabilities ?? null }),
   );
+  const partial = input.partial
+    ? partialPathways(input.partial.arrangements, new Set(input.modelled.map((one) => one.opportunity.id)), {
+        projectId: input.partial.projectId,
+        remaining,
+        daysLeft,
+        currency: input.target.currency,
+        perArrangement,
+        outreachPerDay: outreach.high,
+        permissionsMissing: input.permissionsMissing,
+        now: input.now,
+        limit: Math.min(MAX_PARTIAL_PATHWAYS, Math.max(0, MAX_PATHWAYS - modelledPathways.length)),
+      })
+    : [];
+  // What reads money (portfolio, information value, sale ordering) reads the modelled pathways; a partial one adds its moves after them.
+  const pathways = modelledPathways;
   const portfolio = livingPortfolio(pathways, { remaining, capitalCeiling: ceiling });
   const leaders = new Set(portfolio.leading?.members ?? []);
   const byId = new Map(pathways.map((p) => [p.opportunityId, p]));
@@ -1618,35 +1744,39 @@ export function readPathways(input: {
     if (p && m) push(p, m);
   }
   for (const p of order) for (const m of p.moves) if (m.action === 'RESEARCH') push(p, m);
+  // The cheapest path to learn or supply a partial arrangement's missing component (S-0061): after every modelled move.
+  for (const p of partial) for (const m of p.moves) if (m.action === 'CONSTRUCT') push(p, m);
+  for (const p of partial) for (const m of p.moves) if (m.action === 'RESEARCH') push(p, m);
+  const all = [...modelledPathways, ...partial];
   const facts = { proven: 0, estimated: 0, unknown: 0 };
-  for (const p of pathways) {
+  for (const p of all) {
     facts.proven += p.counts.proven;
     facts.estimated += p.counts.estimated;
     facts.unknown += p.counts.unknown;
   }
-  const constructionMoves = pathways.reduce((n, p) => n + p.moves.filter((m) => m.action === 'CONSTRUCT').length, 0);
+  const constructionMoves = all.reduce((n, p) => n + p.moves.filter((m) => m.action === 'CONSTRUCT').length, 0);
   return {
     structures,
-    pathways,
+    pathways: all,
     portfolio,
     informationValue: information,
     failures,
     nextActions: nextActions.slice(0, MAX_NEXT_ACTIONS),
     measures: {
-      pathways: pathways.length,
-      found: pathways.filter((p) => p.origin === 'FOUND').length,
-      constructed: pathways.filter((p) => p.origin === 'CONSTRUCTED').length,
-      executable: pathways.filter((p) => p.executable).length,
-      proceedWithoutEngineering: pathways.filter((p) => p.executable || p.moves.some((m) => m.action === 'SELL')).length,
-      withReachableBuyer: pathways.filter((p) => p.channel.status !== 'UNKNOWN' && p.buyer.status !== 'UNKNOWN' && !p.gaps.includes('SUPPLY_WITHOUT_BUYER')).length,
-      withFulfiller: pathways.filter((p) => p.fulfiller.status !== 'UNKNOWN').length,
-      withRightsGranted: pathways.filter((p) => p.rights.status === 'PROVEN').length,
-      withCapacity: pathways.filter((p) => p.capacity.status !== 'UNKNOWN').length,
-      producedByBrain: pathways.filter((p) => p.producedBy !== null).length,
-      acquisition: Object.fromEntries(ACQUISITION_METHODS.map((m) => [m, pathways.filter((p) => p.acquisition.method === m).length])) as Record<AcquisitionMethod, number>,
+      pathways: all.length,
+      found: all.filter((p) => p.origin === 'FOUND').length,
+      constructed: all.filter((p) => p.origin === 'CONSTRUCTED').length,
+      executable: all.filter((p) => p.executable).length,
+      proceedWithoutEngineering: all.filter((p) => p.executable || p.moves.some((m) => m.action === 'SELL')).length,
+      withReachableBuyer: all.filter((p) => p.channel.status !== 'UNKNOWN' && p.buyer.status !== 'UNKNOWN' && !p.gaps.includes('SUPPLY_WITHOUT_BUYER')).length,
+      withFulfiller: all.filter((p) => p.fulfiller.status !== 'UNKNOWN').length,
+      withRightsGranted: all.filter((p) => p.rights.status === 'PROVEN').length,
+      withCapacity: all.filter((p) => p.capacity.status !== 'UNKNOWN').length,
+      producedByBrain: all.filter((p) => p.producedBy !== null).length,
+      acquisition: Object.fromEntries(ACQUISITION_METHODS.map((m) => [m, all.filter((p) => p.acquisition.method === m).length])) as Record<AcquisitionMethod, number>,
       facts,
       constructionMoves,
-      variants: pathways.reduce((n, p) => n + p.moves.filter((m) => m.variant).length, 0),
+      variants: all.reduce((n, p) => n + p.moves.filter((m) => m.variant).length, 0),
       leadingNetP50: portfolio.leading?.net.p50 ?? 0,
       leadingCoverage: portfolio.leading?.coverage ?? 0,
     },

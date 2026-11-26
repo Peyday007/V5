@@ -2533,6 +2533,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       ? []
       : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory() });
     const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
+    // A refused model on a goal still live keeps its partial arrangements as marked pathways, never none (OPP-04, S-0061).
+    const refusedPathways =
+      !target.achieved && (target.daysLeft ?? 0) > 0
+        ? readPathways({ modelled: [...model.considered, ...(model.estimates ?? [])], considered: [], target, portfolio: model.portfolio, permissionsMissing: permissions, rounds: [], now, partial: { projectId: target.projectId, arrangements: inGoalScope(arrangements, model) } })
+        : null;
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
       daysLeft: target.daysLeft,
@@ -2589,7 +2594,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
           remaining: target.remainingCents / 100,
         }),
       ],
-      pathways: null,
+      pathways: refusedPathways,
       reconstruction: refusedReconstruction,
       adoption: refusedPlan.adoption,
       steps: refusedSteps,
@@ -2959,6 +2964,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     rounds,
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
+    // The goal's constructed arrangements the model could not price are kept as partial pathways, every unknown marked (OPP-04).
+    partial: { projectId: target.projectId, arrangements: inGoalScope(arrangements, model) },
   });
   trace('pathways');
   /*
