@@ -2,7 +2,7 @@
 
 **What was run.**
 - Workflow: `planning-eval.yml finishprobe --run dec1125c --case p02`, run 45774422897, 2026-11-26 07:19Z.
-- Served from production. The investigation branch's `scripts/planningEval.ts` adds a `finishprobe` command; `server/` is unchanged.
+- Served from production. The `finishprobe` command lived in `scripts/planningEval.ts` at commit c456093 on the investigation branch; it was removed after the run, so the branch carries no code change. `server/` was never changed.
 - Input: the same 111 facts as E-002. 105 findings were shown, giving a 35,437-character prompt.
 - Each of three arms sent one raw streamed request to the first challenger model, `gpu:openai/gpt-oss-120b`, on the existing GPU.
 - For each request the probe recorded what `readStream` discards: `finish_reason`, `usage`, whether `[DONE]` arrived, stream error events, reasoning length, the time to the first content token and the largest gap between chunks.

@@ -712,106 +712,6 @@ async function probe(): Promise<void> {
 }
 
 /**
- * finishprobe --run R --case C [--batch-b64 facts]: DIAGNOSTIC ONLY (investigation
- * 2026-11-26, U-01 / Gate B §2). The exact route prompt `probe` builds, sent with a
- * raw streamed request (not `chatFor`) to the first challenger model at several
- * budgets, recording what `readStream` discards: finish_reason, usage, whether
- * [DONE] arrived, stream error events, reasoning length, first-content latency and
- * the largest gap between chunks. Writes nothing.
- */
-async function finishprobe(): Promise<void> {
-  const run = safeId(flag('run'), '--run');
-  const kase = safeId(flag('case'), '--case');
-  const factsB64 = batchB64();
-  const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
-  if (!project) fail(`no project for ${run} ${kase}`);
-  const goal = (await listWorkstreams()).find((one) => one.projectId === project.id && !one.archivedAt);
-  if (!goal) fail('no goal');
-  const out = (label: string, value: unknown) => console.log(`FPROBE ${label} ${JSON.stringify(value)}`);
-  const P = (await import('../server/services/goals/routeProposal.ts')) as unknown as Record<string, (...args: unknown[]) => unknown>;
-  const { readTarget } = await import('../server/services/goals/target.ts');
-  const target = await readTarget(goal, new Date());
-  if (!target) fail('no target');
-  let supplied: unknown[] | null = null;
-  if (factsB64) {
-    const batch = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as unknown;
-    const facts = (Array.isArray(batch) ? batch : ((batch as { facts: unknown[] }).facts ?? [])) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
-    supplied = facts.map((one, i) => ({ id: `probe_${i + 1}`, claim: one.claim, sourceUrl: one.sourceUrl, sourceTitle: one.sourceTitle ?? null, sourcePublisher: null, sourceDate: one.sourceDate ?? null, evidenceLane: one.lane ?? null, retrievedAt: new Date().toISOString() }));
-  }
-  const read = (await P['routeContext']!(goal, target, [], supplied ? { claims: async () => supplied } : {})) as { ctx: Record<string, unknown> } | null;
-  if (!read) fail('no context');
-  const ctx = read.ctx;
-  ctx['today'] = new Date().toISOString().slice(0, 10);
-  const findings = (ctx['findings'] as unknown[] | undefined) ?? [];
-  const prompt = String(findings.length < 3 ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
-  out('setup', { findings: findings.length, promptChars: prompt.length });
-  const { modelsFor } = await import('../server/services/operator/run.ts');
-  const { challengerModels } = await import('../server/services/operator/decisions.ts');
-  const model = challengerModels(await modelsFor())[0];
-  if (!model) fail('no model');
-  out('model', { label: model.label, model: model.model });
-  const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
-  const arms: { arm: string; max: number; extra: Record<string, unknown> }[] = [
-    { arm: 'A_4000', max: 4000, extra: {} },
-    { arm: 'B_16000', max: 16000, extra: {} },
-    { arm: 'C_4000_effort_low', max: 4000, extra: { reasoning_effort: 'low' } },
-  ];
-  for (const a of arms) {
-    const started = Date.now();
-    const rec: Record<string, unknown> = { arm: a.arm, max_tokens: a.max };
-    let content = '', reasoning = '', last = started, maxGap = 0, firstContentMs: number | null = null, chunks = 0;
-    const finish: string[] = [];
-    const errors: string[] = [];
-    let done = false, usage: unknown = null, status = 0, ctype = '';
-    try {
-      const res = await fetch(`${model.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(model.apiKey ? { authorization: `Bearer ${model.apiKey}` } : {}) },
-        body: JSON.stringify({ model: model.model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }], temperature: 0.3, max_tokens: a.max, stream: true, stream_options: { include_usage: true }, ...a.extra }),
-        signal: AbortSignal.timeout(600_000),
-      });
-      status = res.status; ctype = res.headers.get('content-type') ?? '';
-      if (!res.ok || !res.body) { errors.push(`HTTP ${res.status} ${(await res.text()).slice(0, 300)}`); }
-      else {
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = '';
-        for (;;) {
-          const { value, done: end } = await reader.read();
-          if (end) break;
-          const now = Date.now(); maxGap = Math.max(maxGap, now - last); last = now; chunks++;
-          buf += dec.decode(value, { stream: true });
-          let at: number;
-          while ((at = buf.indexOf('\n')) >= 0) {
-            const line = buf.slice(0, at).trim(); buf = buf.slice(at + 1);
-            if (!line.startsWith('data:')) continue;
-            const data = line.slice(5).trim();
-            if (data === '[DONE]') { done = true; continue; }
-            try {
-              const ev = JSON.parse(data) as { choices?: { delta?: Record<string, unknown>; finish_reason?: string | null }[]; usage?: unknown; error?: { message?: string } };
-              if (ev.error) errors.push(String(ev.error.message ?? 'stream error').slice(0, 300));
-              const d = ev.choices?.[0]?.delta ?? {};
-              const c = typeof d['content'] === 'string' ? (d['content'] as string) : '';
-              if (c && firstContentMs === null) firstContentMs = Date.now() - started;
-              content += c;
-              reasoning += typeof d['reasoning_content'] === 'string' ? (d['reasoning_content'] as string) : typeof d['reasoning'] === 'string' ? (d['reasoning'] as string) : '';
-              const f = ev.choices?.[0]?.finish_reason; if (f) finish.push(f);
-              if (ev.usage) usage = ev.usage;
-            } catch { errors.push(`unparsed line ${data.slice(0, 80)}`); }
-          }
-        }
-        rec['trailing_buffer_chars'] = buf.length;
-      }
-    } catch (caught) { errors.push(`exception ${(caught as Error).name}: ${(caught as Error).message.slice(0, 200)}`); }
-    Object.assign(rec, { status, ctype, ms: Date.now() - started, chunks, maxGapMs: maxGap, firstContentMs, finish_reason: finish, sawDone: done, usage, errors, contentChars: content.length, reasoningChars: reasoning.length, thinkTagInContent: /<think>/.test(content), contentTail: content.slice(-300), reasoningTail: reasoning.slice(-300) });
-    let parsedRoutes: number | null = null;
-    try { parsedRoutes = (P['parseRoutes']!(P['routesJson']!(content), ctx) as { routes: unknown[] }).routes.length; } catch { parsedRoutes = null; }
-    rec['parsedRoutes'] = parsedRoutes;
-    out('arm', rec);
-  }
-}
-
-/**
  * questions --run R --case C [--count N] [--batch-b64 facts]: Brain's own
  * production models list the research questions a goal's planning needs
  * answered, framed exactly as the scouting ask frames a goal (the owner's
@@ -970,7 +870,6 @@ try {
   else if (command === 'retire') await retire();
   else if (command === 'trace') await trace();
   else if (command === 'probe') await probe();
-  else if (command === 'finishprobe') await finishprobe();
   else if (command === 'items') await items();
   else if (command === 'questions') await questions();
   else fail('command must be create | read | update | stall');
