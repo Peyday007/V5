@@ -686,6 +686,8 @@ async function probe(): Promise<void> {
   const models = challengerModels(await modelsFor());
   out('models', models.map((m) => m.label));
   const prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
+  // The exact ask, so a control can put the identical prompt to another model.
+  out('prompt', prompt);
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
     const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
