@@ -919,6 +919,16 @@ async function questions(): Promise<void> {
 async function capacity(): Promise<void> {
   const out = (label: string, value: unknown) => console.log(`CAPACITY ${label} ${JSON.stringify(value)}`);
   const q = (sql: string, params: SqlParam[] = []): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  if (flag('goal') === 'light') {
+    // Only what decides which research the lane works: fast enough to finish under database pressure.
+    const since = new Date(Date.now() - 6 * 3_600_000).toISOString();
+    const run = `SUBSTR(p.name, 21, 9)`;
+    out('eval_done_by_run_6h', await q(`SELECT ${run} AS run, wi.work_type, wi.state, wi.priority, COUNT(*) AS n, MAX(wi.updated_at) AS last FROM work_items wi JOIN projects p ON p.id = wi.project_id WHERE p.name LIKE 'Planning evaluation %' AND wi.updated_at > ? AND wi.state NOT IN ('QUEUED', 'LEASED') GROUP BY 1, 2, 3, 4 ORDER BY 1, 2`, [since]));
+    out('other_done_6h', await q(`SELECT wi.work_type, wi.state, wi.priority, COUNT(*) AS n FROM work_items wi WHERE wi.updated_at > ? AND wi.state NOT IN ('QUEUED', 'LEASED') AND wi.project_id NOT IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') GROUP BY 1, 2, 3 ORDER BY n DESC LIMIT 30`, [since]));
+    out('leased_now', await q(`SELECT ${run} AS run, wi.work_type, wi.priority, wi.worker_id, wi.lease_expires_at, wi.attempt_count FROM work_items wi JOIN projects p ON p.id = wi.project_id WHERE wi.state = 'LEASED' ORDER BY wi.lease_expires_at LIMIT 40`));
+    out('queued_head', await q(`SELECT ${run} AS run, wi.work_type, wi.priority, wi.available_at, wi.attempt_count, wi.target_worker_id FROM work_items wi JOIN projects p ON p.id = wi.project_id WHERE wi.state = 'QUEUED' ORDER BY wi.priority DESC, wi.available_at LIMIT 40`));
+    return;
+  }
   const ks = await import('../server/services/sources/keyedSearch.ts');
   out('providers', ks.KEYED_SEARCH_PROVIDERS.map((p) => ({ id: p.id, ceiling: ks.dailySearchCeiling(p, process.env), ceilingSetInEnv: /^\d+$/.test((process.env[p.ceilingEnv] ?? '').trim()), keyPresent: !!(process.env[p.id === 'firecrawl' ? 'FIRECRAWL_API_KEY' : 'BRAIN_SEARCH_API_KEY'] ?? '').trim() })));
   const key = (process.env['FIRECRAWL_API_KEY'] ?? '').trim();
