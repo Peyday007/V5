@@ -68,7 +68,7 @@ import type { ResearchClaim } from '../../domain/types.ts';
 import { chatFor, type ChatFn } from '../cheap/modelBench.ts';
 import { challengerModels } from '../operator/decisions.ts';
 import { getWorkstream, linkWorkstream, recordWorkstreamEvent, workstreamEventsOfKind } from '../../repos/register.ts';
-import { createOpportunity, getOpportunity, opportunitiesWithRecordPrefix, transitionOpportunity, updateOpportunity } from '../../repos/cashPortfolio.ts';
+import { createOpportunity, getOpportunity, liveOpeningsWithRecordPrefix, opportunitiesWithRecordPrefix, transitionOpportunity, updateOpportunity } from '../../repos/cashPortfolio.ts';
 import { claimsByIds, projectEvidenceClaimCount, projectEvidenceClaims } from '../../repos/research.ts';
 import { cardFactsFor, recordRecommendationFact } from '../../repos/cashCardFacts.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
@@ -1194,6 +1194,8 @@ export interface RouteDeps {
   env?: NodeJS.ProcessEnv;
   /** The project's gated, sourced claims, newest first; production: `projectEvidenceClaims`. */
   claims?: (projectId: string) => Promise<ResearchClaim[]>;
+  /** How many of the goal's routes and scouted directions are still live; production: `liveOpeningsWithRecordPrefix`. */
+  liveRoutes?: (projectId: string, goalId: string) => Promise<number>;
   /** File one cited claim as a route's EVIDENCE fact; production: `writeEvidenceAnswer`. */
   writeEvidence?: (input: { opportunity: CashOpportunity; field: string; claim: ResearchClaim; needId: string | null }) => Promise<boolean>;
 }
@@ -1233,7 +1235,7 @@ export function askYieldedNothing(detail: Record<string, unknown>): boolean {
 export function routeAskDue(
   asks: readonly { createdAt: string; detail: Record<string, unknown> }[],
   now: Date,
-  options: { retryOnly?: boolean; findings?: number } = {},
+  options: { retryOnly?: boolean; findings?: number; live?: number } = {},
 ): { due: true; onFindings?: boolean } | { due: false; reason: string } {
   const last = asks[0];
   if (!last) return { due: true };
@@ -1247,15 +1249,25 @@ export function routeAskDue(
   // An ask recorded before the loop counted findings says nothing about what was new since; it waits the ordinary interval.
   const seen = typeof last.detail['findingsSeen'] === 'number' ? (last.detail['findingsSeen'] as number) : Number.POSITIVE_INFINITY;
   if (options.findings !== undefined && options.findings - seen >= NEW_FINDINGS_FOR_REASK && since >= ROUTE_RETRY_AFTER_FAILURE_MS) return { due: true, onFindings: true };
-  const failed = askYieldedNothing(last.detail);
+  /*
+   * A goal research has left with nothing live — every route and scouted
+   * direction it holds ruled out, declined or stopped — is where an ask that
+   * yielded nothing leaves it, and is asked again as soon (with the refutations
+   * in the prompt). A contradiction that kills a goal's last route used to wait
+   * out the six-hour interval unless three more findings arrived beside it.
+   */
+  // Only after an ask that filed or held something: a NO_MODEL ask is configuration, never a refutation.
+  const refutedAll = options.live === 0 && last.detail['outcome'] === 'PROPOSED' && !askYieldedNothing(last.detail);
+  const failed = askYieldedNothing(last.detail) || refutedAll;
   if (options.retryOnly && !failed) return { due: false, reason: `routes were last asked for at ${last.createdAt} and that ask yielded routes or found no model` };
-  const failedToday = asks.filter((one) => askYieldedNothing(one.detail) && now.getTime() - Date.parse(one.createdAt) < DAY).length;
+  // A re-ask after refutation counts every ask of the day against the cap, so filing and refuting cannot cycle.
+  const failedToday = asks.filter((one) => (refutedAll || askYieldedNothing(one.detail)) && now.getTime() - Date.parse(one.createdAt) < DAY).length;
   const wait = failed && failedToday < ROUTE_FAILED_ASKS_PER_DAY ? ROUTE_RETRY_AFTER_FAILURE_MS : ROUTE_PROPOSAL_EVERY_MS;
   if (since >= wait) return { due: true };
   return {
     due: false,
     reason: failed
-      ? `routes were last asked for at ${last.createdAt} and it yielded no route (${failedToday} such ask(s) today); asked again ${Math.round(wait / 60_000)} minutes after`
+      ? `routes were last asked for at ${last.createdAt} and ${refutedAll ? 'research has since ruled out everything it held' : 'it yielded no route'} (${failedToday} such ask(s) today); asked again ${Math.round(wait / 60_000)} minutes after`
       : `routes were last asked for at ${last.createdAt}`,
   };
 }
@@ -1762,6 +1774,13 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       ? (await deps.claims(goal.projectId).catch(() => [] as ResearchClaim[])).length
       : await projectEvidenceClaimCount(goal.projectId).catch(() => 0);
     due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, findings: count });
+  }
+  if (!due.due && goal.projectId && last && now.getTime() - Date.parse(last.createdAt) >= ROUTE_RETRY_AFTER_FAILURE_MS) {
+    // Has research ruled out everything the goal holds? One count, read only when the cheap answers say no.
+    const live = deps.liveRoutes
+      ? await deps.liveRoutes(goal.projectId, goal.id).catch(() => undefined)
+      : await liveOpeningsWithRecordPrefix(goal.projectId, goalRoutePrefix(goal.id)).catch(() => undefined);
+    if (live === 0) due = routeAskDue(asks, now, { retryOnly: input.retryOnly === true, live });
   }
   if (!due.due) return { kind: 'NOT_DUE', reason: due.reason };
   const claimsOf = deps.claims ?? ((projectId: string) => projectEvidenceClaims(projectId, FINDINGS_COUNTED));

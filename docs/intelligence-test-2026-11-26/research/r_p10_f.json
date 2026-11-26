@@ -1,0 +1,673 @@
+{
+ "goal": "p10",
+ "worker": "p10_f",
+ "results": [
+  {
+   "id": "F1",
+   "status": "ANSWERED",
+   "answer": "For Thanksgiving/BFCM week, Meta CPAs run higher than the annual ~$37 apparel median. A 27-brand DTC panel shows a median CPA of ~$51 and ROAS of ~1.65 in Black Friday week 2025, and CPMs were 59% above September. No Minnesota- or winter-accessory-specific figure was found.",
+   "facts": [
+    {
+     "claim": "In MHI's fixed panel of 27 DTC brands, Meta ads in Black Friday week 2025 (Nov 24-30) had a median CPA of $50.86 and median ROAS of 1.65 (article dated 2026-10-31; no apparel breakdown).",
+     "quote": "Black Friday week (24 to 30 November) had a median CPA of $50.86 and a median ROAS of 1.65",
+     "sourceUrl": "https://mhigrowthengine.com/blog/meta-ads-black-friday-benchmarks-2025/",
+     "sourceTitle": "Black Friday 2025 Meta Ads Benchmarks: Daily CPA, ROAS and Spend Index for DTC Brands",
+     "sourceDate": "2026-10-31",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "In the same MHI panel, Cyber Monday week 2025 (Dec 1-7) had a median Meta CPA of $50.07 and median ROAS of 1.74.",
+     "quote": "Cyber Monday week (1 to 7 December) $50.07 and 1.74 at an index of 214",
+     "sourceUrl": "https://mhigrowthengine.com/blog/meta-ads-black-friday-benchmarks-2025/",
+     "sourceTitle": "Black Friday 2025 Meta Ads Benchmarks",
+     "sourceDate": "2026-10-31",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Across all qualifying brands (37) in MHI's data, Black Friday week 2025 had the quarter's lowest median Meta CPA at $44.00.",
+     "quote": "Black Friday week had the lowest median CPA of the quarter at $44.00 (37 brands)",
+     "sourceUrl": "https://mhigrowthengine.com/blog/meta-ads-black-friday-benchmarks-2025/",
+     "sourceTitle": "Black Friday 2025 Meta Ads Benchmarks",
+     "sourceDate": "2026-10-31",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Lebesgue (2026-10-16): among its biggest Meta spenders, the median brand paid 59% more CPM in Black Friday week 2025 than in September 2025.",
+     "quote": "Among the biggest Meta spenders on Lebesgue, the median brand paid 59% more per 1,000 impressions in Black Friday week.",
+     "sourceUrl": "https://lebesgue.io/facebook-ads/are-meta-ads-worth-it-black-friday",
+     "sourceTitle": "Are Meta Ads Worth It on Black Friday? CPM and ROAS Data",
+     "sourceDate": "2026-10-16",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Lebesgue (2026-10-16): Meta CPMs for Cyber week 2025 averaged 31% above September 2025.",
+     "quote": "Cyber week as a whole averaged 31% above September.",
+     "sourceUrl": "https://lebesgue.io/facebook-ads/are-meta-ads-worth-it-black-friday",
+     "sourceTitle": "Are Meta Ads Worth It on Black Friday? CPM and ROAS Data",
+     "sourceDate": "2026-10-16",
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://mhigrowthengine.com/blog/meta-ads-black-friday-benchmarks-2025/",
+    "https://lebesgue.io/facebook-ads/are-meta-ads-worth-it-black-friday"
+   ],
+   "failed": [],
+   "notes": "Searched BFCM 2025 Meta benchmarks. Panel data is DTC overall, not apparel or Minnesota; known annual apparel median CPA is $36.76."
+  },
+  {
+   "id": "F2",
+   "status": "PARTIAL",
+   "answer": "Printful fulfils in 2-5 business days, then ships in 3-4 business days standard or 1-3 express in the US, so an order placed Nov 26 lands roughly Dec 3-10. Its 2025 US-fulfilled apparel cutoff was Dec 11 standard, but knitwear fulfilled outside the US had a Nov 15 cutoff. The 2026 deadline table could not be read, and no supplier 'guarantees' a date.",
+   "facts": [
+    {
+     "claim": "Printful's average fulfillment time is 2-5 business days for all products (Printful shipping page, fetched 2026-11-26).",
+     "quote": "Our fulfillment time average is 2–5 business days for all products.",
+     "sourceUrl": "https://www.printful.com/shipping",
+     "sourceTitle": "Printful Shipping",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Printful's US flat-rate standard shipping takes 3-4 business days after fulfillment.",
+     "quote": "Flat Rate (Standard) (3–4 business days after fulfillment)",
+     "sourceUrl": "https://www.printful.com/shipping",
+     "sourceTitle": "Printful Shipping",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Printful's US express shipping takes 1-3 business days after fulfillment.",
+     "quote": "Express (1–3 business days after fulfillment)",
+     "sourceUrl": "https://www.printful.com/shipping",
+     "sourceTitle": "Printful Shipping",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Printful's 2025 guide (dated 2025-11-06) set US-fulfilled apparel holiday order deadlines of Dec 11 (standard) and Dec 16 (express); the 2026 table was not readable.",
+     "quote": "Apparel: Standard Dec 11, Express Dec 16",
+     "sourceUrl": "https://www.printful.com/blog/your-holiday-shipping-and-order-deadline-guide",
+     "sourceTitle": "Your holiday shipping and order deadline guide",
+     "sourceDate": "2025-11-06",
+     "lane": "timing"
+    },
+    {
+     "claim": "Printful's 2025 guide listed a Nov 15 standard deadline for knitwear fulfilled outside the US, with no express option (knit beanies may route this way).",
+     "quote": "Knitwear: Standard Nov 15",
+     "sourceUrl": "https://www.printful.com/blog/your-holiday-shipping-and-order-deadline-guide",
+     "sourceTitle": "Your holiday shipping and order deadline guide",
+     "sourceDate": "2025-11-06",
+     "lane": "risk"
+    },
+    {
+     "claim": "Printful's 'Holiday order deadlines 2026' page says all US-destination orders carry a $0.40 surcharge on all shipping methods from Oct 15, 2026 to Jan 17, 2027.",
+     "quote": "all orders with a US destination address will include a $0.40 surcharge across all shipping methods",
+     "sourceUrl": "https://www.printful.com/holiday-order-deadlines",
+     "sourceTitle": "Holiday order deadlines 2026",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Printful says express shipping is only available for stores with live rates and Shopify users eligible for US domestic shipping.",
+     "quote": "Express shipping is only available for stores with live rates and Shopify users who are eligible for US domestic shipping",
+     "sourceUrl": "https://www.printful.com/holiday-order-deadlines",
+     "sourceTitle": "Holiday order deadlines 2026",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    }
+   ],
+   "opened": [
+    "https://www.printful.com/shipping",
+    "https://www.printful.com/blog/your-holiday-shipping-and-order-deadline-guide",
+    "https://www.printful.com/holiday-order-deadlines"
+   ],
+   "failed": [
+    "https://www.printful.com/holiday-order-deadlines: deadline table not in fetched text (JS)"
+   ],
+   "notes": "Known fact: Printful's beanie page quoted Dec 3-7 delivery. Whether 2026 beanies are fulfilled in the US or abroad was not confirmed."
+  },
+  {
+   "id": "F3",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Syncee suppliers set 30-50% margins; Printful says POD sellers target 20-40% (some as low as 10%).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F4",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Derivable from known benchmarks: apparel CPC $0.71 and conversion 1.46% (≈7,000 clicks, ≈100 orders per $5k at annual rates). BFCM CPMs are higher; see F1.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F5",
+   "status": "UNANSWERED",
+   "answer": "Not researched.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Not researched: the 12-question research cap for this round was reached on higher-priority questions."
+  },
+  {
+   "id": "F6",
+   "status": "ANSWERED",
+   "answer": "With Printful, orders take 2-5 business days to fulfil and 3-4 business days to ship within the US. Shopify Payments pays out 3-5 business days after capture, longer at first for new merchants. Cash therefore arrives within about a week of the sale, well inside the 90 days.",
+   "facts": [
+    {
+     "claim": "Printful's average fulfillment time is 2-5 business days for all products (Printful shipping page, fetched 2026-11-26).",
+     "quote": "Our fulfillment time average is 2–5 business days for all products.",
+     "sourceUrl": "https://www.printful.com/shipping",
+     "sourceTitle": "Printful Shipping",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Printful's US flat-rate standard shipping takes 3-4 business days after fulfillment.",
+     "quote": "Flat Rate (Standard) (3–4 business days after fulfillment)",
+     "sourceUrl": "https://www.printful.com/shipping",
+     "sourceTitle": "Printful Shipping",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Shopify Payments US payouts typically arrive in the merchant's bank within 3 to 5 business days after a customer's payment is captured (Shopify Help Center, fetched 2026-11-26).",
+     "quote": "Payouts typically arrive in your bank account within 3 to 5 business days after a customer's payment is captured",
+     "sourceUrl": "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts",
+     "sourceTitle": "Payouts with Shopify Payments in the United States",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Shopify Payments' minimum settlement time in the United States is 3 business days.",
+     "quote": "In the United States, the minimum settlement time is 3 business days.",
+     "sourceUrl": "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts",
+     "sourceTitle": "Payouts with Shopify Payments in the United States",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Shopify says new Shopify Payments merchants start with a longer settlement time, which can shorten as orders are reliably fulfilled on time.",
+     "quote": "When you begin receiving payouts, your settlement time is longer.",
+     "sourceUrl": "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts",
+     "sourceTitle": "Payouts with Shopify Payments in the United States",
+     "sourceDate": null,
+     "lane": "risk"
+    }
+   ],
+   "opened": [
+    "https://www.printful.com/shipping",
+    "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts"
+   ],
+   "failed": [],
+   "notes": "Cash arrives at payment capture plus payout, not at delivery."
+  },
+  {
+   "id": "F7",
+   "status": "ANSWERED",
+   "answer": "On Shopify Basic: $39/month (or a $1/month trial offer) plus Shopify Payments at 2.9% + 30¢, or an extra 2% with a third-party processor. Printful's app is free to install, and its cost is the per-item base price. Processing on $20k at a ~$60 AOV comes to roughly 3.4%, well under 15%.",
+   "facts": [
+    {
+     "claim": "Shopify's Basic plan costs $39/month billed monthly or $29/month billed yearly (Shopify pricing page, fetched 2026-11-26).",
+     "quote": "$39 USD/mo",
+     "sourceUrl": "https://www.shopify.com/pricing",
+     "sourceTitle": "Shopify Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Shopify Payments' US online card rate on the Basic plan is 2.9% + 30 cents per transaction.",
+     "quote": "2.9% + 30¢",
+     "sourceUrl": "https://www.shopify.com/pricing",
+     "sourceTitle": "Shopify Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Shopify charges an extra 2% transaction fee on the Basic plan when a third-party payment provider is used instead of Shopify Payments.",
+     "quote": "2%",
+     "sourceUrl": "https://www.shopify.com/pricing",
+     "sourceTitle": "Shopify Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Shopify's pricing page (Nov 2026) offers a 3-day free trial, then $1/month for 3 months.",
+     "quote": "Try 3 days free, then $1/month for 3 months.",
+     "sourceUrl": "https://www.shopify.com/pricing",
+     "sourceTitle": "Shopify Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Printful's Shopify app (free to install) lists 'Automatic fulfillment for each order' on its Free plan and charges only for fulfillment and shipping when a product sells.",
+     "quote": "Automatic fulfillment for each order",
+     "sourceUrl": "https://apps.shopify.com/printful",
+     "sourceTitle": "Printful: Print on Demand – Shopify App Store",
+     "sourceDate": null,
+     "lane": "effort"
+    },
+    {
+     "claim": "Printful's Shopify app Growth plan costs $24.99/month and becomes free once a store reaches $12K in yearly sales.",
+     "quote": "FREE once you reach $12K in yearly sales",
+     "sourceUrl": "https://apps.shopify.com/printful",
+     "sourceTitle": "Printful: Print on Demand – Shopify App Store",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.shopify.com/pricing",
+    "https://apps.shopify.com/printful"
+   ],
+   "failed": [],
+   "notes": "The total-fee percentage is arithmetic from the quoted rates, not a sourced figure."
+  },
+  {
+   "id": "F8",
+   "status": "PARTIAL",
+   "answer": "Upwork Meta-ads freelancers charge $15-$40/hour (median $25), so a $1,500 flat fee is plausible. No verified flat-fee package, and no evidence of 'no owner oversight', was found.",
+   "facts": [
+    {
+     "claim": "Superscale (2026-07-23) reports Upwork Meta-ads freelancers at $15-$40/hour (median $25) and says small advertisers get flat minimums, without naming an amount.",
+     "quote": "Freelancers on Upwork charge $15 to $40 per hour with a $25 median.",
+     "sourceUrl": "https://superscale.ai/learn/meta-ads-management-cost/",
+     "sourceTitle": "Meta ads management cost",
+     "sourceDate": "2026-07-23",
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://superscale.ai/learn/meta-ads-management-cost/",
+    "https://www.fiverr.com/ecommercegrow_3/run-high-converting-facebook-ads-for-your-shopify-store",
+    "https://www.upwork.com/services/product/marketing-facebook-ads-management"
+   ],
+   "failed": [
+    "https://www.fiverr.com/ecommercegrow_3/run-high-converting-facebook-ads-for-your-shopify-store: 403",
+    "https://www.upwork.com/services/product/marketing-facebook-ads-management: 403"
+   ],
+   "notes": "Fiverr gig prices were not visible in search; gig pages returned 403."
+  },
+  {
+   "id": "F9",
+   "status": "PARTIAL",
+   "answer": "NRF estimated US online return rates of 19.3% for 2025 and holiday returns of 17%. No winter-accessory-specific or 2026 rate was found.",
+   "facts": [
+    {
+     "claim": "NRF/Happy Returns (2025-10-15): an estimated 19.3% of US online sales would be returned in 2025.",
+     "quote": "an estimated 19.3% of online sales will be returned in 2025.",
+     "sourceUrl": "https://nrf.com/media-center/press-releases/consumers-expected-to-return-nearly-850-billion-in-merchandise-in-2025",
+     "sourceTitle": "Consumers Expected to Return Nearly $850 Billion in Merchandise in 2025",
+     "sourceDate": "2025-10-15",
+     "lane": "risk"
+    },
+    {
+     "claim": "NRF (2025-10-15): US retailers expected 17% of 2025 holiday sales to be returned.",
+     "quote": "retailers expect 17% of holiday sales to be returned",
+     "sourceUrl": "https://nrf.com/media-center/press-releases/consumers-expected-to-return-nearly-850-billion-in-merchandise-in-2025",
+     "sourceTitle": "Consumers Expected to Return Nearly $850 Billion in Merchandise in 2025",
+     "sourceDate": "2025-10-15",
+     "lane": "risk"
+    },
+    {
+     "claim": "NRF (2025-10-15): US retailers estimated 15.8% of annual 2025 sales would be returned, totalling $849.9 billion.",
+     "quote": "Retailers estimate that 15.8% of their annual sales will be returned this year, totaling $849.9 billion",
+     "sourceUrl": "https://nrf.com/media-center/press-releases/consumers-expected-to-return-nearly-850-billion-in-merchandise-in-2025",
+     "sourceTitle": "Consumers Expected to Return Nearly $850 Billion in Merchandise in 2025",
+     "sourceDate": "2025-10-15",
+     "lane": "risk"
+    }
+   ],
+   "opened": [
+    "https://nrf.com/media-center/press-releases/consumers-expected-to-return-nearly-850-billion-in-merchandise-in-2025"
+   ],
+   "failed": [],
+   "notes": "Category-specific data not found; Printful's custom-product return policy not checked."
+  },
+  {
+   "id": "F10",
+   "status": "ANSWERED",
+   "answer": "Meta has no seasonal approval delay on record: review is typically completed within 24 hours, though some reviews take longer.",
+   "facts": [
+    {
+     "claim": "Meta's ad review starts automatically before ads run and is typically completed within 24 hours, though it may take longer in some cases (Meta Transparency Center, Advertising Standards).",
+     "quote": "Our ad review process starts automatically before ads begin running, and is typically completed within 24 hours,",
+     "sourceUrl": "https://transparency.meta.com/policies/ad-standards/",
+     "sourceTitle": "Introduction to the Advertising Standards",
+     "sourceDate": null,
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://www.facebook.com/business/help/204798856225114",
+    "https://transparency.meta.com/policies/ad-standards/"
+   ],
+   "failed": [
+    "https://www.facebook.com/business/help/204798856225114: page body not rendered (title only)"
+   ],
+   "notes": ""
+  },
+  {
+   "id": "F11",
+   "status": "ANSWERED",
+   "answer": "Shopify Payments US payouts arrive 3-5 business days after payment capture (minimum settlement 3 business days), with a longer settlement at first for new merchants. Through Shopify Balance, payouts arrive within 5 business days at no fee. Far under 30 days.",
+   "facts": [
+    {
+     "claim": "Shopify Payments US payouts typically arrive in the merchant's bank within 3 to 5 business days after a customer's payment is captured (Shopify Help Center, fetched 2026-11-26).",
+     "quote": "Payouts typically arrive in your bank account within 3 to 5 business days after a customer's payment is captured",
+     "sourceUrl": "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts",
+     "sourceTitle": "Payouts with Shopify Payments in the United States",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Shopify Payments' minimum settlement time in the United States is 3 business days.",
+     "quote": "In the United States, the minimum settlement time is 3 business days.",
+     "sourceUrl": "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts",
+     "sourceTitle": "Payouts with Shopify Payments in the United States",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Shopify says new Shopify Payments merchants start with a longer settlement time, which can shorten as orders are reliably fulfilled on time.",
+     "quote": "When you begin receiving payouts, your settlement time is longer.",
+     "sourceUrl": "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts",
+     "sourceTitle": "Payouts with Shopify Payments in the United States",
+     "sourceDate": null,
+     "lane": "risk"
+    },
+    {
+     "claim": "Shopify Balance: Basic, Shopify and Advanced plan stores can access payouts within 5 business days, with no monthly, annual or ACH transfer fees (Shopify Balance page, fetched 2026-11-26).",
+     "quote": "within 5 business days",
+     "sourceUrl": "https://www.shopify.com/balance/features",
+     "sourceTitle": "Shopify Balance",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Shopify Balance charges no monthly, annual, or ACH transfer fees.",
+     "quote": "There are no monthly, annual, or ACH transfer fees.",
+     "sourceUrl": "https://www.shopify.com/balance/features",
+     "sourceTitle": "Shopify Balance",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states/payouts",
+    "https://help.shopify.com/en/manual/payments/shopify-payments/payouts/payout-schedule",
+    "https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries/united-states",
+    "https://www.shopify.com/balance/features"
+   ],
+   "failed": [],
+   "notes": "The two other Shopify help URLs returned only link stubs."
+  },
+  {
+   "id": "F12",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Instantly benchmarks cold email at $152.73 per booked meeting (target <$150 for SMB) with a 3.43% reply rate.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F13",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Recruiting affiliates for a new store would not change the strategy choice in 90 days. Known: Amazon pays 4% on apparel; brands raised commissions 7% in November.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F14",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: the median Apparel & Accessories Meta CPA is $36.76 (annual); for BFCM see F1 (~$44-51).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F15",
+   "status": "PARTIAL",
+   "answer": "Printful's bulk discount needs 25+ units of the same product in one order (up to ~32-55% depending on product). The page does not say it applies to individually dropshipped orders, and beanie eligibility was not confirmed.",
+   "facts": [
+    {
+     "claim": "Printful bulk pricing starts at 25 or more units of the same product in one order and is applied automatically (Printful bulk-discount page, fetched 2026-11-26).",
+     "quote": "bulk pricing starts at 25 or more units of the same product.",
+     "sourceUrl": "https://www.printful.com/bulk-discount",
+     "sourceTitle": "Printful bulk discount",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Printful advertises up to 55% off on 25+ custom products; bulk custom T-shirts cap around 32% and hoodies around 38%.",
+     "quote": "Save up to 55% on 25+ custom products",
+     "sourceUrl": "https://www.printful.com/bulk-discount",
+     "sourceTitle": "Printful bulk discount",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.printful.com/bulk-discount"
+   ],
+   "failed": [],
+   "notes": "Per-customer dropship orders are single units, so the bulk tier likely would not apply, but that is not stated."
+  },
+  {
+   "id": "F16",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Checkout drop-off is already embedded in the known 1.46% click-to-purchase conversion benchmark.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F17",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "An optional discount would only lower costs; it cannot invalidate a strategy.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F18",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Repeat purchases within 90 days do not decide viability within the 90-day window.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F19",
+   "status": "PARTIAL",
+   "answer": "The Printful Shopify app lists automatic fulfillment for each order, so no Zapier/Make is needed for routing. The help-center pages on the auto-confirm settings returned 403, so 'zero manual intervention' is not fully confirmed.",
+   "facts": [
+    {
+     "claim": "Printful's Shopify app (free to install) lists 'Automatic fulfillment for each order' on its Free plan and charges only for fulfillment and shipping when a product sells.",
+     "quote": "Automatic fulfillment for each order",
+     "sourceUrl": "https://apps.shopify.com/printful",
+     "sourceTitle": "Printful: Print on Demand – Shopify App Store",
+     "sourceDate": null,
+     "lane": "effort"
+    },
+    {
+     "claim": "Printful's Shopify app Growth plan costs $24.99/month and becomes free once a store reaches $12K in yearly sales.",
+     "quote": "FREE once you reach $12K in yearly sales",
+     "sourceUrl": "https://apps.shopify.com/printful",
+     "sourceTitle": "Printful: Print on Demand – Shopify App Store",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://apps.shopify.com/printful",
+    "https://help.printful.com/hc/en-us/articles/360014066619-How-do-the-import-order-settings-for-my-integration-work",
+    "https://help.printful.com/hc/en-us/articles/360014006880-How-does-Shopify-know-when-my-Printful-orders-are-shipped"
+   ],
+   "failed": [
+    "https://help.printful.com/hc/en-us/articles/360014066619-How-do-the-import-order-settings-for-my-integration-work: 403",
+    "https://help.printful.com/hc/en-us/articles/360014006880-How-does-Shopify-know-when-my-Printful-orders-are-shipped: 403"
+   ],
+   "notes": "Customer service, ad management and exceptions still need an outsourced person or AI (see F8, F24)."
+  },
+  {
+   "id": "F20",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: dropshipping supplier margins of 30-50% (Syncee) vs POD margins of 20-40% (Printful).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F21",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Affiliate network availability does not change strategy choice within the window (see F13).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F22",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Domain/SSL setup is not a constraint at the scale of this decision; a pre-built store is delivered within 24 hours (known Tradelle fact).",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F23",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "ShipBob needs prepaid inventory; Printful's express option (1-3 business days after fulfillment, F2) already covers faster delivery.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F24",
+   "status": "PARTIAL",
+   "answer": "AI support agents cost about $0.19-$0.99 per ticket or outcome, and offshore human support $6-$14/hour. No verified per-order holiday figure was found; per-ticket costs are well under $5.",
+   "facts": [
+    {
+     "claim": "eDesk's AI support agent costs $0.99 per outcome (a reply sent or an action taken), with no charge when it takes no action (page updated 2026-11-17).",
+     "quote": "It costs $0.99 per outcome, a reply sent or an action taken: no reply, no action, no charge.",
+     "sourceUrl": "https://www.edesk.com/blog/how-to-reduce-customer-service-costs-ecommerce/",
+     "sourceTitle": "How to reduce customer service costs in ecommerce",
+     "sourceDate": "2026-11-17",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Ringly (2026) prices outsourced Shopify support at $6-$14/hour offshore and $12-$25/hour nearshore, and AI ticket handling at $0.19-$0.50 per ticket.",
+     "quote": "AI handles the same ticket at $0.19-$0.50.",
+     "sourceUrl": "https://www.ringly.io/blog/shopify-support-cost-per-ticket",
+     "sourceTitle": "Shopify customer service cost: the real numbers for 2026",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.ringly.io/blog/shopify-support-cost-per-ticket",
+    "https://www.edesk.com/blog/how-to-reduce-customer-service-costs-ecommerce/"
+   ],
+   "failed": [],
+   "notes": "Sources are vendor blogs (directional)."
+  },
+  {
+   "id": "F25",
+   "status": "ALREADY_ANSWERED",
+   "answer": "Known: Apparel & Accessories median Meta ROAS is 2.18 annually; F1 adds a BFCM-week median ROAS of 1.65-1.74 for a DTC panel.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F26",
+   "status": "UNANSWERED",
+   "answer": "Not researched.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": "Not researched: the 12-question research cap for this round was reached on higher-priority questions."
+  },
+  {
+   "id": "F27",
+   "status": "ANSWERED",
+   "answer": "Stripe Instant Payouts cost 1.5% (minimum 50¢). Shopify Balance gives Shopify Payments payouts within 5 business days with no ACH fees. Either way the cost is under 5%.",
+   "facts": [
+    {
+     "claim": "Stripe's US pricing page lists Instant Payouts at 1.5% of payout volume (minimum fee 50 cents) and standard domestic card processing at 2.9% + 30 cents.",
+     "quote": "1.5% of Instant Payouts volume",
+     "sourceUrl": "https://stripe.com/pricing",
+     "sourceTitle": "Stripe Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Shopify Balance: Basic, Shopify and Advanced plan stores can access payouts within 5 business days, with no monthly, annual or ACH transfer fees (Shopify Balance page, fetched 2026-11-26).",
+     "quote": "within 5 business days",
+     "sourceUrl": "https://www.shopify.com/balance/features",
+     "sourceTitle": "Shopify Balance",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Shopify Balance charges no monthly, annual, or ACH transfer fees.",
+     "quote": "There are no monthly, annual, or ACH transfer fees.",
+     "sourceUrl": "https://www.shopify.com/balance/features",
+     "sourceTitle": "Shopify Balance",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://stripe.com/pricing",
+    "https://www.shopify.com/balance/features"
+   ],
+   "failed": [],
+   "notes": "No Shopify-native instant payout fee was found."
+  },
+  {
+   "id": "F28",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Long-term CLV does not affect the 90-day viability decision.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F29",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "Etsy's ban (known) covers AI functional guides, not product copy on one's own Shopify store; it does not change strategy.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  },
+  {
+   "id": "F30",
+   "status": "SKIPPED_NO_DECISION_VALUE",
+   "answer": "POD suppliers supply product mockups; a creative-cost figure would not change viability.",
+   "facts": [],
+   "opened": [],
+   "failed": [],
+   "notes": ""
+  }
+ ]
+}

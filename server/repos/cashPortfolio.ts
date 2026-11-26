@@ -364,6 +364,25 @@ export async function opportunitiesWithRecordPrefix(
 }
 
 /**
+ * How many openings filed under this record prefix are still live: neither
+ * archived nor declined, and not ruled out by research (a non-empty
+ * `disqualifiedBy` card fact, `DISQUALIFIED_FIELD`). One count, so a goal's
+ * route ask can learn that research has refuted everything it holds without
+ * reading every card.
+ */
+export async function liveOpeningsWithRecordPrefix(projectId: string, prefix: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM cash_opportunities o
+      WHERE o.project_id = ? AND substr(o.external_record_id, 1, ?) = ?
+        AND o.state NOT IN ('ARCHIVED', 'DECLINED')
+        AND NOT EXISTS (SELECT 1 FROM cash_card_facts f
+                         WHERE f.opportunity_id = o.id AND f.field = 'disqualifiedBy' AND TRIM(f.value) <> '')`,
+    [projectId, prefix.length, prefix],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
  * The opportunities a Russell idea belongs to.
  *
  * Reads `candidate_id` only. `discovered_by_candidate_id` names the broad

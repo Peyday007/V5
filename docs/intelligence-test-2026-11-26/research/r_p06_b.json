@@ -1,0 +1,421 @@
+{
+ "goal": "p06",
+ "worker": "p06_b",
+ "results": [
+  {
+   "id": "Q11",
+   "status": "PARTIAL",
+   "answer": "Yes for the Seattle Metropolitan Chamber: its Weekly Digest email goes out every Monday to ~17,000 subscribers and sells ads at $100-$150/week, but ad spots are for Chamber members only (Entrepreneur membership starts at $500/year) and artwork must be submitted two business days ahead; the rate sheet is dated 2023. BNI chapters meet weekly in person, but no BNI weekly email ad product was found.",
+   "facts": [
+    {
+     "claim": "The Seattle Metropolitan Chamber of Commerce Weekly Digest email has 17,000 subscribers, a 33% open rate and new issues every Monday (Chamber ad sheet, 2023 rates, hosted 2025).",
+     "quote": "CHAMBER WEEKLY DIGEST EMAIL ADS 17,000 subscribers 33% Open Rate New Issues Every Monday",
+     "sourceUrl": "https://www.seattlechamber.com/wp-content/uploads/2025/01/Ad_Sheet_2023.pdf",
+     "sourceTitle": "Ad Sheet 2023 (Seattle Metropolitan Chamber of Commerce)",
+     "sourceDate": "2023",
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "Seattle Chamber Weekly Digest email ads cost $600/month or $150/week for top billing and $400/month or $100/week within the newsletter (2023 ad sheet).",
+     "quote": "Top billing: $600/mo. or $150/wk. Within newsletter: $400/mo. or $100/wk.",
+     "sourceUrl": "https://www.seattlechamber.com/wp-content/uploads/2025/01/Ad_Sheet_2023.pdf",
+     "sourceTitle": "Ad Sheet 2023 (Seattle Metropolitan Chamber of Commerce)",
+     "sourceDate": "2023",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Seattle Chamber ad spots are for Chamber members only and must be submitted at least two business days before the start date; the Chamber reviews and approves artwork.",
+     "quote": "All ad spots are for Chamber members only. Ads must be submitted at least two business days prior to the ad’s start date",
+     "sourceUrl": "https://www.seattlechamber.com/wp-content/uploads/2025/01/Ad_Sheet_2023.pdf",
+     "sourceTitle": "Ad Sheet 2023 (Seattle Metropolitan Chamber of Commerce)",
+     "sourceDate": "2023",
+     "lane": "timing"
+    },
+    {
+     "claim": "Seattle Metropolitan Chamber Entrepreneur membership (small businesses under 25 employees) starts at $500 per year in the 2026 prospectus and includes sponsorship and advertising opportunities.",
+     "quote": "ENTREPRENEUR Starts at $500 per year Entrepreneur memberships are tailored for small businesses (fewer than 25 employees)",
+     "sourceUrl": "https://www.seattlechamber.com/wp-content/uploads/2026/03/Membership-Prospectus-2026.pdf",
+     "sourceTitle": "Membership Prospectus 2026 (Seattle Metropolitan Chamber of Commerce)",
+     "sourceDate": "2026-03",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "BNI members attend weekly chapter meetings with a structured agenda aimed at exchanging referrals (BNI global about page).",
+     "quote": "Members across the globe attend weekly Chapter meetings that follow a structured agenda proven to maximize referrals.",
+     "sourceUrl": "https://www.bni.com/about",
+     "sourceTitle": "About BNI",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    }
+   ],
+   "opened": [
+    "https://www.seattlechamber.com/wp-content/uploads/2025/01/Ad_Sheet_2023.pdf",
+    "https://www.seattlechamber.com/wp-content/uploads/2026/03/Membership-Prospectus-2026.pdf",
+    "https://www.bni.com/about"
+   ],
+   "failed": [
+    "https://www.seattlechamber.com/wp-content/uploads/2026/03/Membership-Prospectus-2026.pdf: WebFetch exceeded 10MB limit; read via curl+pdftotext instead"
+   ],
+   "notes": "Ad sheet is 2023 pricing; current rates unconfirmed. Membership ($500/yr) is a capital requirement for this channel. No BNI Seattle email-promotion product found; BNI is weekly in-person referral meetings."
+  },
+  {
+   "id": "Q12",
+   "status": "PARTIAL",
+   "answer": "Amazon Mechanical Turk no longer exists as an option: it permanently closed on September 30, 2026 (it charged requesters a minimum 20% commission). Clickworker pays its workers weekly (Wednesday-Friday bill run, $10 ACH / €10 PayPal minimum); Clickworker's client-side commission could not be verified from an opened page.",
+   "facts": [
+    {
+     "claim": "Amazon Mechanical Turk permanently closed on September 30, 2026 (official MTurk pricing page, viewed 2026-11-26).",
+     "quote": "Amazon Mechanical Turk permanently closed on September 30, 2026.",
+     "sourceUrl": "https://www.mturk.com/pricing",
+     "sourceTitle": "Amazon Mechanical Turk pricing",
+     "sourceDate": null,
+     "lane": "risk"
+    },
+    {
+     "claim": "Before closing, Amazon Mechanical Turk requesters paid Amazon a minimum 20% commission on completed jobs (Wikipedia, figure as of 2019).",
+     "quote": "Requesters paid Amazon a minimum 20% commission on the price of successfully completed jobs",
+     "sourceUrl": "https://en.wikipedia.org/wiki/Amazon_Mechanical_Turk",
+     "sourceTitle": "Amazon Mechanical Turk - Wikipedia",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Amazon closed Mechanical Turk on September 30, 2026 after announcing it in August 2026, with users given until October 30, 2026 to finalize transactions.",
+     "quote": "Amazon closed the service on September 30, 2026 after announcing the intention to do so in August 2026.",
+     "sourceUrl": "https://en.wikipedia.org/wiki/Amazon_Mechanical_Turk",
+     "sourceTitle": "Amazon Mechanical Turk - Wikipedia",
+     "sourceDate": null,
+     "lane": "risk"
+    },
+    {
+     "claim": "Clickworker pays workers weekly (Wednesday to Friday) via PayPal, Payoneer, ACH and bank transfer, with minimums of $10 for US ACH and €10 for PayPal.",
+     "quote": "Wednesday to Friday weekly",
+     "sourceUrl": "https://support-workplace.clickworker.com/support/solutions/articles/80000672350",
+     "sourceTitle": "Clickworker payment methods (support)",
+     "sourceDate": null,
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://www.mturk.com/pricing",
+    "https://en.wikipedia.org/wiki/Amazon_Mechanical_Turk",
+    "https://support-workplace.clickworker.com/support/solutions/articles/80000672350",
+    "https://www.clickworker.com/pricing/"
+   ],
+   "failed": [
+    "https://www.clickworker.com/pricing/: page opened but showed no fee figures"
+   ],
+   "notes": "False premise: MTurk is closed as of 2026-11-26. Clickworker client 40% service fee appeared only in a search snippet (clickworker.com/pricing), not on the opened page, so not recorded."
+  },
+  {
+   "id": "Q13",
+   "status": "PARTIAL",
+   "answer": "Upwork fixed-price contracts are client-funded into escrow before work starts; after the freelancer submits work the client has 14 days to approve, and silence auto-releases funds, followed by a five-day pending hold before withdrawal (secondary source, 2026). So the owner is paid from client funds without own capital, but cash can arrive up to ~19 days after submission; official Upwork pages returned 403.",
+   "facts": [
+    {
+     "claim": "On Upwork fixed-price contracts, a funded milestone (client money in escrow) is the prerequisite for payment protection (GigRadar, April 2026).",
+     "quote": "Funded milestone is the first prerequisite for every Upwork protection.",
+     "sourceUrl": "https://gigradar.io/blog/upwork-payment-protection-fixed-price",
+     "sourceTitle": "Upwork Payment Protection: Fixed-Price Escrow and Milestone Disputes (2026 Free Calculator)",
+     "sourceDate": "2026-04-29",
+     "lane": "payer"
+    },
+    {
+     "claim": "After an Upwork freelancer clicks Submit Work, the client has 14 days to approve, request changes, or do nothing, and silence for 14 days means automatic release (GigRadar, April 2026).",
+     "quote": "After you click Submit Work, the client has 14 days to approve, request changes, or do nothing.",
+     "sourceUrl": "https://gigradar.io/blog/upwork-payment-protection-fixed-price",
+     "sourceTitle": "Upwork Payment Protection: Fixed-Price Escrow and Milestone Disputes (2026 Free Calculator)",
+     "sourceDate": "2026-04-29",
+     "lane": "timing"
+    },
+    {
+     "claim": "Once Upwork escrow funds are approved or auto-released they sit in a five-day Pending state before withdrawal (GigRadar, April 2026).",
+     "quote": "Once approved or auto-released, funds go into a five-day Pending state.",
+     "sourceUrl": "https://gigradar.io/blog/upwork-payment-protection-fixed-price",
+     "sourceTitle": "Upwork Payment Protection: Fixed-Price Escrow and Milestone Disputes (2026 Free Calculator)",
+     "sourceDate": "2026-04-29",
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+    "https://support.upwork.com/hc/en-us/articles/211063748",
+    "https://community.upwork.com/t5/Clients/When-will-escrow-automatically-release-funds-to-the-freelancer/m-p/712054",
+    "https://gigradar.io/blog/upwork-payment-protection-fixed-price",
+    "https://www.upwork.com/legal"
+   ],
+   "failed": [
+    "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts: 403",
+    "https://support.upwork.com/hc/en-us/articles/211063748: 403",
+    "https://www.upwork.com/legal: 403",
+    "https://community.upwork.com/...712054: 301 redirect to support home (community retired)"
+   ],
+   "notes": "Only secondary (GigRadar 2026) evidence opened; Upwork official help and legal pages blocked 403 from this environment."
+  },
+  {
+   "id": "Q14",
+   "status": "PARTIAL",
+   "answer": "DesignCrowd's public job board on 2026-11-26 listed 44 open design jobs (37 Logo & Branding), mostly US$150-300 budgets with 2-6 days left; none carried an urgent/express/24-hour label. Postings-in-past-week counts are not shown, so 'urgent jobs in the past week' cannot be measured directly.",
+   "facts": [
+    {
+     "claim": "DesignCrowd's job board showed 44 open design jobs on 2026-11-26, of which 37 were Logo & Branding.",
+     "quote": "Open Jobs (44)",
+     "sourceUrl": "https://www.designcrowd.com/jobs",
+     "sourceTitle": "Design Jobs | DesignCrowd",
+     "sourceDate": "2026-11-26",
+     "lane": "current_demand"
+    },
+    {
+     "claim": "Open DesignCrowd logo jobs on 2026-11-26 had typical budgets of US$150 to US$300, e.g. 'Logo for doors, trim and custom trim work company' at US$150 with 4 days left.",
+     "quote": "Logo for doors, trim and custom trim work company",
+     "sourceUrl": "https://www.designcrowd.com/jobs",
+     "sourceTitle": "Design Jobs | DesignCrowd",
+     "sourceDate": "2026-11-26",
+     "lane": "price_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.designcrowd.com/jobs"
+   ],
+   "failed": [],
+   "notes": "First page (20 of 44) reviewed; no 'urgent', 'express' or '24 hour' labels on any card; tags seen were Featured/Highlighted/Guaranteed. Posting dates not shown, so weekly volume not measurable."
+  },
+  {
+   "id": "Q15",
+   "status": "ANSWERED",
+   "answer": "Seattle requires anyone doing business in the city (including professional/personal services and home-based businesses) to hold a Seattle business license tax certificate, $73 for 2026 at under $20,000 revenue; online applications are usually printable within 2-3 business days. Washington State tax registration is required once gross income reaches $12,000/year (or sales tax applies). No broker-specific license was found for brokering freelance services.",
+   "facts": [
+    {
+     "claim": "Seattle says anyone doing business in Seattle must have a Seattle business license tax certificate, renewed annually by Dec. 31 (seattle.gov, 2026).",
+     "quote": "Anyone doing business in Seattle must have a Seattle business license tax certificate, also known as a business license or general business license.",
+     "sourceUrl": "https://www.seattle.gov/city-finance/business-taxes-and-licenses/business-licenses",
+     "sourceTitle": "Business Licenses - City Finance | seattle.gov",
+     "sourceDate": "2026",
+     "lane": "legal"
+    },
+    {
+     "claim": "Seattle's license certificate is required for providing professional or personal services and for home-based businesses, even if the business is not yet profitable.",
+     "quote": "Even if you are starting a new business and have not become profitable yet, you must apply for a business license tax certificate and renew it annually.",
+     "sourceUrl": "https://www.seattle.gov/city-finance/business-taxes-and-licenses/business-licenses",
+     "sourceTitle": "Business Licenses - City Finance | seattle.gov",
+     "sourceDate": "2026",
+     "lane": "legal"
+    },
+    {
+     "claim": "The 2026 Seattle business license tax certificate fee is $73 for annual Seattle taxable revenue of $0-$19,999.",
+     "quote": "$0 - $19,999** $59 $65 $68 $71 $73 $76",
+     "sourceUrl": "https://www.seattle.gov/city-finance/business-taxes-and-licenses/business-licenses",
+     "sourceTitle": "Business Licenses - City Finance | seattle.gov",
+     "sourceDate": "2026",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "A Seattle business license applied for online can usually be printed once payment processes, usually within 2-3 business days.",
+     "quote": "you should be able to print it once the payment has processed, usually within 2-3 business days.",
+     "sourceUrl": "https://www.seattle.gov/city-finance/business-taxes-and-licenses/business-licenses",
+     "sourceTitle": "Business Licenses - City Finance | seattle.gov",
+     "sourceDate": "2026",
+     "lane": "timing"
+    },
+    {
+     "claim": "Effective 2026, a business with $4,000 or less of Seattle gross income and no place of business in Seattle is not required to get a Seattle license certificate (a Seattle resident working from home has a place of business in the city).",
+     "quote": "Any person whose annual value of products, gross proceeds of sales, or gross income of the business in the City is equal to or less than $4,000 and who does not maintain a place of business within the City is not required",
+     "sourceUrl": "https://www.seattle.gov/city-finance/business-taxes-and-licenses/business-licenses",
+     "sourceTitle": "Business Licenses - City Finance | seattle.gov",
+     "sourceDate": "2026",
+     "lane": "legal"
+    },
+    {
+     "claim": "Washington State requires a state Tax Registration if gross income is $12,000 per year or more, or if the service requires collecting sales tax.",
+     "quote": "Your gross income is $12,000 per year or more.",
+     "sourceUrl": "https://dor.wa.gov/manage-business/state-endorsements/tax-registration",
+     "sourceTitle": "Tax registration | Washington Department of Revenue",
+     "sourceDate": null,
+     "lane": "legal"
+    }
+   ],
+   "opened": [
+    "https://www.seattle.gov/city-finance/business-taxes-and-licenses/business-licenses",
+    "https://www.seattle.gov/city-finance/business-taxes-and-licenses",
+    "https://www.seattle.gov/taxes",
+    "https://seattle.gov/city-finance/business-taxes-and-licenses/business-taxes/seattle-shield-bando-tax-changes",
+    "https://dor.wa.gov/manage-business/state-endorsements/tax-registration"
+   ],
+   "failed": [
+    "https://www.seattle.gov/taxes: 403 via WebFetch",
+    "https://seattle.gov/.../seattle-shield-bando-tax-changes: 403 via WebFetch"
+   ],
+   "notes": "seattle.gov license page read via curl (WebFetch 403). No Seattle regulatory endorsement for service brokerage found on the endorsement list summary (taxis, short-term rentals etc.)."
+  },
+  {
+   "id": "Q16",
+   "status": "PARTIAL",
+   "answer": "No benchmark specific to email-triage offers was found. Belkins' 2026 study of 7.5M cold emails found a 0.45% average reply rate across 2025 campaigns (0.72% for 0-10-employee companies) and ~1,200 meetings booked; other vendor pages cite 5-9% averages, so reported rates vary widely by method.",
+   "facts": [
+    {
+     "claim": "Belkins' analysis of 7.5 million B2B cold emails found a 0.45% average reply rate across all 2025 campaigns (page updated June 2026).",
+     "quote": "The average reply rate across all 2025 campaigns was 0.45%",
+     "sourceUrl": "https://belkins.io/blog/cold-email-response-rates",
+     "sourceTitle": "What are B2B cold email response rates? Belkins' 2026 study",
+     "sourceDate": "2026-06-26",
+     "lane": "comparable_demand"
+    },
+    {
+     "claim": "In Belkins' 2025 cold email data, very small companies (0-10 employees) replied at 0.72%.",
+     "quote": "Very small companies (0–10 employees) reply at 0.72%",
+     "sourceUrl": "https://belkins.io/blog/cold-email-response-rates",
+     "sourceTitle": "What are B2B cold email response rates? Belkins' 2026 study",
+     "sourceDate": "2026-06-26",
+     "lane": "comparable_demand"
+    },
+    {
+     "claim": "Belkins booked over 1,200 appointments from about 7.5 million cold emails analysed in 2025 (~0.016% meetings per email).",
+     "quote": "we booked over 1,200 appointments",
+     "sourceUrl": "https://belkins.io/blog/cold-email-response-rates",
+     "sourceTitle": "What are B2B cold email response rates? Belkins' 2026 study",
+     "sourceDate": "2026-06-26",
+     "lane": "comparable_demand"
+    },
+    {
+     "claim": "Instantly's 2026 benchmark page puts the all-in external average cold email reply rate at roughly 5% to 9%.",
+     "quote": "roughly 5% and 9%",
+     "sourceUrl": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+     "sourceTitle": "Cold email reply rate benchmarks (Instantly)",
+     "sourceDate": "2026-07-01",
+     "lane": "comparable_demand"
+    }
+   ],
+   "opened": [
+    "https://belkins.io/blog/cold-email-response-rates",
+    "https://instantly.ai/blog/cold-email-reply-rate-benchmarks"
+   ],
+   "failed": [],
+   "notes": "Reply rate is not paid conversion; no source gave purchase conversion for an inbox-triage offer."
+  },
+  {
+   "id": "Q17",
+   "status": "PARTIAL",
+   "answer": "No Payoneer 'Instant Transfer' product was found; Payoneer charges 1% to receive US ACH payments (up to 3.99%+$0.49 by card) and $1.50 per USD withdrawal to a US bank. Instant payout fees elsewhere: Stripe 1.5% (min $0.50), PayPal 1.75% capped at $25 — all well under $30 on a $500 amount.",
+   "facts": [
+    {
+     "claim": "Payoneer charges 1% to receive a payment by ACH bank debit from a US payer and up to 3.99% + $0.49 by credit card.",
+     "quote": "ACH bank debit (US only): 1%",
+     "sourceUrl": "https://www.payoneer.com/pricing/",
+     "sourceTitle": "Payoneer Fees",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Payoneer charges a fixed $1.50 per USD withdrawal to a US bank account for certain US customers.",
+     "quote": "a fixed fee of 1.50 USD applies per withdrawal or payment",
+     "sourceUrl": "https://www.payoneer.com/pricing/",
+     "sourceTitle": "Payoneer Fees",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Stripe Instant Payouts cost 1.5% of payout volume with a 50-cent minimum; US domestic card processing is 2.9% + 30 cents.",
+     "quote": "1.5% of Instant Payouts volume",
+     "sourceUrl": "https://stripe.com/pricing",
+     "sourceTitle": "Stripe Pricing",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "PayPal US Instant Transfer to a bank or debit card costs 1.75% of the amount, maximum $25; standard transfer is free.",
+     "quote": "1.75% of amount transferred",
+     "sourceUrl": "https://www.paypal.com/us/webapps/mpp/paypal-fees",
+     "sourceTitle": "PayPal Fees",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.payoneer.com/pricing/",
+    "https://stripe.com/pricing",
+    "https://www.paypal.com/us/legalhub/paypal/consumer-fees",
+    "https://www.paypal.com/us/webapps/mpp/paypal-fees",
+    "https://squareup.com/us/en/payments/instant-transfer"
+   ],
+   "failed": [
+    "https://www.paypal.com/us/legalhub/paypal/consumer-fees: 404",
+    "https://squareup.com/us/en/payments/instant-transfer: 404"
+   ],
+   "notes": "Premise check: no 'Payoneer Instant Transfer' feature found in Payoneer pricing or search; Payoneer pricing page gave no withdrawal timing."
+  },
+  {
+   "id": "Q18",
+   "status": "UNANSWERED",
+   "answer": "Could not be measured: Reddit is unreachable from this environment and no evidence that r/SeattleEntrepreneurs exists was found.",
+   "facts": [],
+   "opened": [
+    "https://www.reddit.com/r/SeattleEntrepreneurs/about.json",
+    "https://www.reddit.com/r/smallbusiness/search.json?q=logo%20redesign",
+    "https://www.reddit.com/r/Seattle/search.json?q=logo",
+    "https://www.reddit.com/r/SeattleEntrepreneurs/",
+    "https://www.bark.com/en/us/logo-design/washington/seattle/"
+   ],
+   "failed": [
+    "reddit.com JSON endpoints: 403",
+    "https://www.reddit.com/r/SeattleEntrepreneurs/: WebFetch cannot fetch reddit.com",
+    "https://www.bark.com/en/us/logo-design/washington/seattle/: 403"
+   ],
+   "notes": "Searches 'r/SeattleEntrepreneurs subreddit' and 'reddit Seattle small business looking for logo designer 2026' returned no such subreddit or threads (only directories); subreddit existence unconfirmed, possibly a false premise."
+  },
+  {
+   "id": "Q19",
+   "status": "PARTIAL",
+   "answer": "No measured time for a VA triage session with AI tools was found; vendor claims are about weekly savings, e.g. SaneBox's founder says it saves users 2.5 hours per week on average.",
+   "facts": [
+    {
+     "claim": "SaneBox's founder states SaneBox saves users 2.5 hours per week on average (Ness Labs feature, vendor claim).",
+     "quote": "On average, SaneBox saves users 2.5 hours each week.",
+     "sourceUrl": "https://nesslabs.com/sanebox-featured-tool",
+     "sourceTitle": "Focus on the email that matters with Dmitri Leonov, founder of SaneBox (Ness Labs)",
+     "sourceDate": null,
+     "lane": "effort"
+    }
+   ],
+   "opened": [
+    "https://nesslabs.com/sanebox-featured-tool"
+   ],
+   "failed": [],
+   "notes": "Vendor marketing claim, methodology unpublished; nothing on setup time or per-session triage duration."
+  },
+  {
+   "id": "Q20",
+   "status": "PARTIAL",
+   "answer": "Official Upwork and Fiverr terms pages returned 403, so the policies could not be read directly. A 2026 secondary source says Upwork explicitly permits delegation only on fixed-price contracts and that delegating hourly work triggers fraud flags; no Fiverr rule could be verified.",
+   "facts": [
+    {
+     "claim": "A 2026 Upwork guide states fixed-price is the only Upwork contract structure where delegation is explicitly permitted, and hourly delegation triggers fraud flags.",
+     "quote": "fixed-price is also the only structure where Upwork explicitly permits delegation.",
+     "sourceUrl": "https://gigradar.io/blog/upwork-payment-protection-fixed-price",
+     "sourceTitle": "Upwork Payment Protection: Fixed-Price Escrow and Milestone Disputes (2026 Free Calculator)",
+     "sourceDate": "2026-04-29",
+     "lane": "legal"
+    }
+   ],
+   "opened": [
+    "https://www.upwork.com/legal",
+    "https://www.fiverr.com/legal-portal/legal-terms/terms-of-service",
+    "https://community.upwork.com/t5/Freelancers/Most-recent-terms-regarding-subcontracting/m-p/1093953",
+    "https://community.upwork.com/t5/Upwork-Trust-Safety-Policies/Ensuring-Upwork-s-Platform-and-Tools-Are-Used-As-Intended/ta-p/1065152",
+    "https://blog.fiverr.com/post/fiverrs-updated-sellers-policy-whats-new",
+    "https://help.fiverr.com/hc/en-us/articles/32242973123985",
+    "https://conductatlas.com/platform/fiverr/fiverr-terms-of-service/payment-withdrawal-restrictions-and-pending-clearance/",
+    "https://gigradar.io/blog/upwork-payment-protection-fixed-price"
+   ],
+   "failed": [
+    "https://www.upwork.com/legal: 403 (WebFetch and curl)",
+    "https://www.fiverr.com/legal-portal/legal-terms/terms-of-service: 403",
+    "Upwork community threads: 301 to support home (retired)",
+    "https://blog.fiverr.com/...: 301 to fiverr.com/resources/guides",
+    "https://help.fiverr.com/hc/en-us/articles/32242973123985: 403",
+    "web.archive.org: blocked",
+    "conductatlas Fiverr clause: marked unpublished, no text"
+   ],
+   "notes": "Search snippets suggested Upwork staff treat subcontracting a fixed-price contract without client permission as a violation, but the page could not be opened, so not recorded."
+  }
+ ]
+}

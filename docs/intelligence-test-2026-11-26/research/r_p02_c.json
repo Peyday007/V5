@@ -1,0 +1,528 @@
+{
+ "goal": "p02",
+ "worker": "p02_c",
+ "results": [
+  {
+   "id": "Q21",
+   "status": "ANSWERED",
+   "answer": "Yes. Several platforms connect agents/clients with drone pilots: Droners.io, The Droning Company, Zeitview (formerly DroneBase) and FlyGuys (pilot networks), PropPhoto (agent booking directory listing 9 drone photographers ready in Arizona), and the ARMLS Preferred Photographer Program, which connects photographers with Arizona MLS agents (ARMLS serves 40,000+ professionals). Active-buyer volume per platform in Phoenix is not published.",
+   "facts": [
+    {
+     "claim": "FLYING Magazine (May 2025) names Droners.io, The Droning Company, Zeitview (formerly DroneBase) and FlyGuys as drone pilot networks that route paid jobs to pilots.",
+     "quote": "known as DroneBase",
+     "sourceUrl": "https://www.flyingmag.com/drone-pilot-networks",
+     "sourceTitle": "Finding Success on Drone Pilot Networks (FLYING Magazine)",
+     "sourceDate": "2025-05-13",
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "The ARMLS Preferred Photographer Program connects certified photographers with Arizona real estate agents; ARMLS states it serves more than 40,000 real estate professionals in Arizona.",
+     "quote": "designed to assist you in expanding your business by connecting you with real estate agents seeking photography services",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "ARMLS states it serves more than 40,000 real estate professionals in Arizona.",
+     "quote": "We serve more than 40,000 real estate professionals in Arizona.",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "PropPhoto's Arizona real estate drone photography directory lists 9 drone photographers ready to work in Arizona (59 photographers in Arizona overall); joining is free for photographers.",
+     "quote": "9 photographers ready to work in Arizona",
+     "sourceUrl": "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+     "sourceTitle": "Book a real estate photographer today - Real estate drone photography in Arizona (PropPhoto)",
+     "sourceDate": null,
+     "lane": "competition"
+    },
+    {
+     "claim": "Zeitview pilots receive push notifications for nearby client missions in the Zeitview Pilot app and can claim or decline them (Fonzi guide, March 2026).",
+     "quote": "push notifications when new client missions become available near their location",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview (DroneBase) careers guide (Fonzi)",
+     "sourceDate": "2026-03-16",
+     "lane": "acquisition_access"
+    }
+   ],
+   "opened": [
+    "https://www.flyingmag.com/drone-pilot-networks",
+    "https://armls.com/become-certified",
+    "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+    "https://fonzi.ai/blog/zeitview-dronebase-careers"
+   ],
+   "failed": [],
+   "notes": "Platform-specific Phoenix demand counts not published."
+  },
+  {
+   "id": "Q22",
+   "status": "PARTIAL",
+   "answer": "Droners.io takes a flat 10% commission; The Droning Company charges a $10/month or $99/year membership with no fee on earnings; Zeitview pays a fixed amount shown upfront (indicative real estate mission pay $125-225) and does not disclose its margin; PropPhoto is free to join and photographers set their own prices; ARMLS's program is free now but adds a $50 annual fee and $25 application fee from January 2027. Thumbtack per-lead prices for photography were not verified from a primary source.",
+   "facts": [
+    {
+     "claim": "Droners.io takes a flat 10% commission on gigs completed on its platform (FLYING Magazine, May 2025).",
+     "quote": "The site takes a flat 10 percent commission on any gigs you complete on its platform.",
+     "sourceUrl": "https://www.flyingmag.com/drone-pilot-networks",
+     "sourceTitle": "Finding Success on Drone Pilot Networks (FLYING Magazine)",
+     "sourceDate": "2025-05-13",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "The Droning Company charges pilots a membership of $10 per month or $99 per year (FLYING Magazine, May 2025).",
+     "quote": "$10 per month or $99 annually",
+     "sourceUrl": "https://www.flyingmag.com/drone-pilot-networks",
+     "sourceTitle": "Finding Success on Drone Pilot Networks (FLYING Magazine)",
+     "sourceDate": "2025-05-13",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "On Zeitview, pilots do not see what the client pays or Zeitview's cut (FLYING Magazine, May 2025).",
+     "quote": "You never know what the client is paying for the job or how much Zeitview is keeping.",
+     "sourceUrl": "https://www.flyingmag.com/drone-pilot-networks",
+     "sourceTitle": "Finding Success on Drone Pilot Networks (FLYING Magazine)",
+     "sourceDate": "2025-05-13",
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "Zeitview real estate marketing missions (about 30 minutes on-site) carry indicative pilot pay of $125-225 USD, per a March 2026 guide; figures are approximate.",
+     "quote": "$125-225",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview (DroneBase) careers guide (Fonzi)",
+     "sourceDate": "2026-03-16",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Drone pilots on networks often make $100 to $500+ per job (FLYING Magazine, May 2025).",
+     "quote": "anywhere from $100 to $500-plus per job",
+     "sourceUrl": "https://www.flyingmag.com/drone-pilot-networks",
+     "sourceTitle": "Finding Success on Drone Pilot Networks (FLYING Magazine)",
+     "sourceDate": "2025-05-13",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "PropPhoto is free for photographers to join and photographers set their own prices.",
+     "quote": "Set your own prices",
+     "sourceUrl": "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+     "sourceTitle": "Book a real estate photographer today - Real estate drone photography in Arizona (PropPhoto)",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    },
+    {
+     "claim": "ARMLS Preferred Photographer Program currently has no cost; from January 2027 it charges a $50 annual certification fee and a $25 application fee for new applicants.",
+     "quote": "$50 annual fee to maintain your certification",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "cost_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.flyingmag.com/drone-pilot-networks",
+    "https://fonzi.ai/blog/zeitview-dronebase-careers",
+    "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+    "https://armls.com/become-certified",
+    "https://community.thumbtack.com/discussion/1587/lead-prices-and-competitors",
+    "https://www.thumbtack.com/p/aerial-photography-prices"
+   ],
+   "failed": [
+    "https://www.thumbtack.com/p/aerial-photography-prices: empty content returned",
+    "https://community.thumbtack.com/discussion/1587/lead-prices-and-competitors: no dollar figures on page"
+   ],
+   "notes": "Thumbtack lead prices ($20-75/lead for photographers) appear only in third-party lead-gen blogs, not opened/verified; excluded."
+  },
+  {
+   "id": "Q23",
+   "status": "PARTIAL",
+   "answer": "Platform listings advertise 24-48 hour delivery after the shoot; FlyGuys aims to pay pilots within 14 days after verification and client acceptance; Zeitview shows fixed pay upfront but its payment timing was not found. No source measured agent booking-to-payment cycle time.",
+   "facts": [
+    {
+     "claim": "FlyGuys aims to pay pilots within 14 days after verification and client acceptance, via ACH or check.",
+     "quote": "FlyGuys aims to process your payment within fourteen (14) days after verification and client acceptance.",
+     "sourceUrl": "https://flyguys.com/pilot-payment/",
+     "sourceTitle": "FlyGuys Pilot Payment",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "PropPhoto's Arizona drone photography listings state a standard delivery time of 24-48 hours.",
+     "quote": "24-48hrs",
+     "sourceUrl": "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+     "sourceTitle": "Book a real estate photographer today - Real estate drone photography in Arizona (PropPhoto)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Zeitview pilot pay is a fixed amount shown before accepting a mission (March 2026 guide).",
+     "quote": "Pay is shown upfront in the Pilot app.",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview (DroneBase) careers guide (Fonzi)",
+     "sourceDate": "2026-03-16",
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://flyguys.com/pilot-payment/",
+    "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+    "https://fonzi.ai/blog/zeitview-dronebase-careers"
+   ],
+   "failed": [],
+   "notes": "Searched Zeitview pilot payment timing; no official page found. No data on how fast agents book."
+  },
+  {
+   "id": "Q24",
+   "status": "PARTIAL",
+   "answer": "BBB lists 38 drone photography businesses near Phoenix; PropPhoto lists 9 drone photographers ready in Arizona; established Phoenix vendors (Virtuance, Fullview 360, Drone Videos) bundle drone into listing packages, and Fullview's lowest Phoenix/Mesa package with 2 drone angles is $249. Network pay commentary indicates downward price pressure. No measured provider density or saturation statistic was found.",
+   "facts": [
+    {
+     "claim": "The Better Business Bureau shows 38 drone photography business results near Phoenix, AZ.",
+     "quote": "Showing: 38 results for Drone Photographies near Phoenix, AZ",
+     "sourceUrl": "https://bbb.org/us/az/phoenix/category/drone-photography",
+     "sourceTitle": "BBB: Drone Photography near Phoenix, AZ",
+     "sourceDate": null,
+     "lane": "competition"
+    },
+    {
+     "claim": "PropPhoto lists 9 drone photographers ready to work in Arizona.",
+     "quote": "9 photographers ready to work in Arizona",
+     "sourceUrl": "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+     "sourceTitle": "Book a real estate photographer today - Real estate drone photography in Arizona (PropPhoto)",
+     "sourceDate": null,
+     "lane": "competition"
+    },
+    {
+     "claim": "Fullview 360 (Mesa & Phoenix) sells an Essential real estate package at $249 including 2 drone angles, Premium at $399 and Luxury at $599.",
+     "quote": "Essential Package: $249",
+     "sourceUrl": "https://fullview-360.pixpa.com/services-pricing-packages",
+     "sourceTitle": "Fullview 360 Services & Pricing Packages",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Virtuance offers Phoenix real estate photography with aerial/drone available in select markets and next-day delivery by 5 PM.",
+     "quote": "receive all your images and a complimentary listing website by 5:00 PM the day after the shoot",
+     "sourceUrl": "https://www.virtuance.com/phoenix-real-estate-photography",
+     "sourceTitle": "Phoenix Real Estate Photography (Virtuance)",
+     "sourceDate": null,
+     "lane": "competition"
+    }
+   ],
+   "opened": [
+    "https://bbb.org/us/az/phoenix/category/drone-photography",
+    "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+    "https://fullview-360.pixpa.com/services-pricing-packages",
+    "https://www.virtuance.com/phoenix-real-estate-photography",
+    "https://dronevideos.com/arizona/commercial-real-estate-photography-phoenix/",
+    "https://www.bark.com/en/us/aerial-photography/arizona/phoenix/"
+   ],
+   "failed": [
+    "https://www.bark.com/en/us/aerial-photography/arizona/phoenix/: 403"
+   ],
+   "notes": "BBB count includes non-real-estate drone businesses. Quote for Fullview price paraphrased from page price list."
+  },
+  {
+   "id": "Q25",
+   "status": "PARTIAL",
+   "answer": "No Phoenix brokerage's preferred drone vendor program was verified. Vendor-side evidence: Virtuance markets partnerships to Phoenix brokerages and teams with an exclusive agent discount; the MLS (ARMLS) runs a Preferred Photographer Program, free to join until January 2027 ($50/yr + $25 application thereafter), requiring a 100% training score and a service agreement with agents.",
+   "facts": [
+    {
+     "claim": "Virtuance markets brokerage/team partnerships in Phoenix offering agents an exclusive discount.",
+     "quote": "provide your agents with a competitive edge (and an exclusive discount)!",
+     "sourceUrl": "https://www.virtuance.com/phoenix-real-estate-photography",
+     "sourceTitle": "Phoenix Real Estate Photography (Virtuance)",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "Virtuance invites Phoenix brokerages and teams to partner for brand-consistent listing marketing.",
+     "quote": "Partner with us to streamline your marketing efforts, ensure brand consistency across all listings",
+     "sourceUrl": "https://www.virtuance.com/phoenix-real-estate-photography",
+     "sourceTitle": "Phoenix Real Estate Photography (Virtuance)",
+     "sourceDate": null,
+     "lane": "acquisition_access"
+    },
+    {
+     "claim": "ARMLS Preferred Photographer Program requires photographers to have a service agreement with agents they serve; from January 2027 it charges $50/year and a $25 application fee.",
+     "quote": "you are required to have a service agreement with agents you serve",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "delivery_requirements"
+    }
+   ],
+   "opened": [
+    "https://www.virtuance.com/phoenix-real-estate-photography",
+    "https://armls.com/become-certified"
+   ],
+   "failed": [],
+   "notes": "Searched for Realty ONE Group / West USA Realty / other Phoenix brokerage vendor programs; none found publicly."
+  },
+  {
+   "id": "Q26",
+   "status": "PARTIAL",
+   "answer": "Observed floors: drone add-ons in Arizona typically $100-300 (PropPhoto); a Phoenix/Mesa full listing package with 2 drone angles at $249 (Fullview 360); national guidance $150-300 for a listing photo shoot. Network pilot payouts for real estate missions are $125-225. No Phoenix-specific drone-only price floor below $100 was verified.",
+   "facts": [
+    {
+     "claim": "PropPhoto lists typical drone add-on pricing of $100-300 for real estate photographers in Arizona.",
+     "quote": "$100-300",
+     "sourceUrl": "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+     "sourceTitle": "Book a real estate photographer today - Real estate drone photography in Arizona (PropPhoto)",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Fullview 360 (Mesa & Phoenix) prices its lowest real estate package, including 2 drone angles and 48-hour delivery, at $249.",
+     "quote": "Essential Package: $249",
+     "sourceUrl": "https://fullview-360.pixpa.com/services-pricing-packages",
+     "sourceTitle": "Fullview 360 Services & Pricing Packages",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "HousingWire (March 2025) says professional real estate photos for one listing cost $150-$300 for 25-50 images.",
+     "quote": "professional real estate photos for one listing will run you between $150 \u2013 $300 for anywhere from 25 to 50 images",
+     "sourceUrl": "https://www.housingwire.com/articles/real-estate-photographer/",
+     "sourceTitle": "How to find a real estate photographer (HousingWire)",
+     "sourceDate": "2025-03-24",
+     "lane": "price_evidence"
+    },
+    {
+     "claim": "Zeitview indicative pilot pay for a real estate marketing mission is $125-225 (March 2026 guide).",
+     "quote": "$125-225",
+     "sourceUrl": "https://fonzi.ai/blog/zeitview-dronebase-careers",
+     "sourceTitle": "Zeitview (DroneBase) careers guide (Fonzi)",
+     "sourceDate": "2026-03-16",
+     "lane": "price_evidence"
+    }
+   ],
+   "opened": [
+    "https://propphoto.com/real-estate-photographers/real-estate-drone-photography/in/us/arizona",
+    "https://fullview-360.pixpa.com/services-pricing-packages",
+    "https://www.housingwire.com/articles/real-estate-photographer/",
+    "https://fonzi.ai/blog/zeitview-dronebase-careers",
+    "https://snap2close.com/pricing-phoenix",
+    "https://www.rubyhome.com/blog/real-estate-photography-prices/",
+    "https://www.thumbtack.com/az/phoenix/real-estate-photographers/real-estate-photographers-llc/service/557272512041762821"
+   ],
+   "failed": [
+    "https://snap2close.com/pricing-phoenix: 404",
+    "https://www.rubyhome.com/blog/real-estate-photography-prices/: 403",
+    "https://www.thumbtack.com/az/phoenix/real-estate-photographers/real-estate-photographers-llc/service/557272512041762821: empty content"
+   ],
+   "notes": "Phoenix $208 average shoot (Ruby) and $89 drone video upgrade seen only in snippets; not verified."
+  },
+  {
+   "id": "Q27",
+   "status": "PARTIAL",
+   "answer": "2026-27 figures do not exist yet. Prior-year proxy: per ARMLS, 6,249 Valley houses sold in December 2025 and 4,712 in January 2026 (median ~$450,000 to ~$445,000); January 2026 closed sales were up 0.6% YoY while new listings fell 6.1%.",
+   "facts": [
+    {
+     "claim": "Per ARMLS data, 4,712 metro Phoenix (Valley) houses sold in January 2026, down from 6,249 in December 2025.",
+     "quote": "In January, 4,712 Valley houses changed hands, down from 6,249 in December.",
+     "sourceUrl": "https://coppercourier.com/2026/02/23/metro-phoenix-housing-market-2026/",
+     "sourceTitle": "Metro Phoenix housing market 2026 (Copper Courier)",
+     "sourceDate": "2026-02-23",
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Metro Phoenix median home price fell from $450,000 in December 2025 to about $445,000 in January 2026 (ARMLS).",
+     "quote": "fell from $450,000 in December 2025 to about $445,000",
+     "sourceUrl": "https://coppercourier.com/2026/02/23/metro-phoenix-housing-market-2026/",
+     "sourceTitle": "Metro Phoenix housing market 2026 (Copper Courier)",
+     "sourceDate": "2026-02-23",
+     "lane": "buyer_volume"
+    },
+    {
+     "claim": "Greater Phoenix closed sales in January 2026 rose 0.6% from January 2025.",
+     "quote": "Closed sales were up slightly, increasing 0.6% from January 2025.",
+     "sourceUrl": "https://inbusinessphx.com/?p=189934",
+     "sourceTitle": "January Marks Seasonal Cooldown for Phoenix Housing (InBusiness Phoenix)",
+     "sourceDate": "2026-02-11",
+     "lane": "timing"
+    },
+    {
+     "claim": "Greater Phoenix new listings in January 2026 were down 6.1% year over year.",
+     "quote": "new listings were down 6.1%.",
+     "sourceUrl": "https://inbusinessphx.com/?p=189934",
+     "sourceTitle": "January Marks Seasonal Cooldown for Phoenix Housing (InBusiness Phoenix)",
+     "sourceDate": "2026-02-11",
+     "lane": "timing"
+    }
+   ],
+   "opened": [
+    "https://coppercourier.com/2026/02/23/metro-phoenix-housing-market-2026/",
+    "https://inbusinessphx.com/?p=189934",
+    "https://azbigmedia.com/real-estate/phoenix-housing-market-slows-in-january-as-prices-ease/"
+   ],
+   "failed": [],
+   "notes": "New-listing counts (the drone-relevant volume) not found as absolute numbers."
+  },
+  {
+   "id": "Q28",
+   "status": "PARTIAL",
+   "answer": "Arizona law (A.R.S. 13-3729) adds misdemeanor offenses for operations violating federal aviation rules or interfering with emergency operations and a felony for photographing/loitering near critical facilities in furtherance of a crime; A.R.S. 9-500.55 bars cities from regulating drone operation except e.g. model-aircraft takeoff/landing in city parks. No state drone license, registration or insurance mandate was found in the texts opened; insurance requirements were not verified.",
+   "facts": [
+    {
+     "claim": "Under A.R.S. 13-3729(A), it is unlawful in Arizona to operate a civil unmanned aircraft if the operation is prohibited by federal aviation law or interferes with law enforcement, firefighter or emergency services operations.",
+     "quote": "Interferes with a law enforcement, firefighter or emergency services operation.",
+     "sourceUrl": "https://www.azleg.gov/ars/13/03729.htm",
+     "sourceTitle": "A.R.S. 13-3729 Unlawful operation of model or unmanned aircraft",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "A.R.S. 13-3729(B) makes it unlawful to use a drone to intentionally photograph or loiter over or near a critical facility in furtherance of a criminal offense.",
+     "quote": "intentionally photograph or loiter over or near a critical facility in the furtherance of any criminal offense",
+     "sourceUrl": "https://www.azleg.gov/ars/13/03729.htm",
+     "sourceTitle": "A.R.S. 13-3729 Unlawful operation of model or unmanned aircraft",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "A.R.S. 13-3729(G): a violation of subsection A or C is a class 1 misdemeanor.",
+     "quote": "A violation of subsection A or C of this section is a class 1 misdemeanor.",
+     "sourceUrl": "https://www.azleg.gov/ars/13/03729.htm",
+     "sourceTitle": "A.R.S. 13-3729 Unlawful operation of model or unmanned aircraft",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "A.R.S. 9-500.55 prohibits Arizona cities and towns from adopting any ordinance, policy or rule relating to ownership or operation of unmanned aircraft, except as otherwise provided by law.",
+     "quote": "a city or town may not enact or adopt any ordinance, policy or rule that relates to",
+     "sourceUrl": "https://www.azleg.gov/ars/9/00500-55.htm",
+     "sourceTitle": "A.R.S. 9-500.55 Prohibition on unmanned aircraft regulation; exceptions",
+     "sourceDate": null,
+     "lane": "legal"
+    },
+    {
+     "claim": "A.R.S. 9-500.55 allows cities to regulate takeoff or landing of model aircraft in city-owned parks or preserves under stated conditions.",
+     "quote": "Taking off or landing a model aircraft in a park or preserve that is owned by the city or town",
+     "sourceUrl": "https://www.azleg.gov/ars/9/00500-55.htm",
+     "sourceTitle": "A.R.S. 9-500.55 Prohibition on unmanned aircraft regulation; exceptions",
+     "sourceDate": null,
+     "lane": "legal"
+    }
+   ],
+   "opened": [
+    "https://www.azleg.gov/ars/13/03729.htm",
+    "https://www.azleg.gov/ars/9/00500-55.htm",
+    "https://www.azleg.gov/ars/9/00500-24.htm",
+    "https://azdot.gov/planning/airport-development/flying-drones-uas-in-arizona",
+    "https://phoenix.gov/parkssite/Pages/rulesradio.aspx",
+    "https://www.azcommerce.com/film-media/drones/"
+   ],
+   "failed": [
+    "https://azdot.gov/planning/airport-development/flying-drones-uas-in-arizona: 403",
+    "https://www.azcommerce.com/film-media/drones/: 403",
+    "https://phoenix.gov/parkssite/Pages/rulesradio.aspx: no drone text returned",
+    "https://www.azleg.gov/ars/9/00500-24.htm: wrong section"
+   ],
+   "notes": "Phoenix City Code 24-49 (drones only in designated parks) seen only in search snippets. Insurance: no state requirement source found."
+  },
+  {
+   "id": "Q29",
+   "status": "ANSWERED",
+   "answer": "Guidance is to hire the photographer as soon as the listing is secured and book 1-2 weeks ahead; Phoenix-area vendors deliver within 48 hours with next-day or rush options (Fullview 360 next-day available; Virtuance by 5 PM next day; Drone Videos sells a 1-2 business-day rush video add-on), indicating rush is sold as an add-on.",
+   "facts": [
+    {
+     "claim": "HousingWire (March 2025) advises agents to book a real estate photo session a week or two in advance.",
+     "quote": "As a general guideline, book your photo session a week or two in advance.",
+     "sourceUrl": "https://www.housingwire.com/articles/real-estate-photographer/",
+     "sourceTitle": "How to find a real estate photographer (HousingWire)",
+     "sourceDate": "2025-03-24",
+     "lane": "timing"
+    },
+    {
+     "claim": "Florida Realtors (Dec 2025) advises agents to hire a photographer as soon as they secure a listing.",
+     "quote": "should hire a photographer as soon as you secure a listing",
+     "sourceUrl": "https://floridarealtors.org/news-media/news-articles/2025/12/hiring-right-real-estate-photographer",
+     "sourceTitle": "Hiring the Right Real Estate Photographer (Florida Realtors)",
+     "sourceDate": "2025-12-16",
+     "lane": "timing"
+    },
+    {
+     "claim": "Fullview 360 (Mesa & Phoenix) offers 48-hour delivery with next-day available on Premium and Luxury packages.",
+     "quote": "48 Hr. Delivery (Next Day Available)",
+     "sourceUrl": "https://fullview-360.pixpa.com/services-pricing-packages",
+     "sourceTitle": "Fullview 360 Services & Pricing Packages",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Virtuance Phoenix delivers images by 5 PM the day after the shoot.",
+     "quote": "receive all your images and a complimentary listing website by 5:00 PM the day after the shoot",
+     "sourceUrl": "https://www.virtuance.com/phoenix-real-estate-photography",
+     "sourceTitle": "Phoenix Real Estate Photography (Virtuance)",
+     "sourceDate": null,
+     "lane": "timing"
+    },
+    {
+     "claim": "Drone Videos (Phoenix) sells a 1-2 business day rush video turnaround as an add-on; standard orders arrive in a couple of days.",
+     "quote": "1 or 2 business day rush video turnaround time",
+     "sourceUrl": "https://dronevideos.com/arizona/commercial-real-estate-photography-phoenix/",
+     "sourceTitle": "Commercial Real Estate Photography Phoenix (Drone Videos)",
+     "sourceDate": null,
+     "lane": "price_evidence"
+    }
+   ],
+   "opened": [
+    "https://www.housingwire.com/articles/real-estate-photographer/",
+    "https://floridarealtors.org/news-media/news-articles/2025/12/hiring-right-real-estate-photographer",
+    "https://fullview-360.pixpa.com/services-pricing-packages",
+    "https://www.virtuance.com/phoenix-real-estate-photography",
+    "https://dronevideos.com/arizona/commercial-real-estate-photography-phoenix/"
+   ],
+   "failed": [],
+   "notes": "No source quantified a rush premium in dollars for Phoenix."
+  },
+  {
+   "id": "Q30",
+   "status": "PARTIAL",
+   "answer": "Industry guidance says agents find photographers by browsing local MLS listings, searching online, and asking fellow agents for referrals; in Arizona the MLS itself (ARMLS, 40,000+ professionals) markets certified photographers to agents at no cost until January 2027. 74% of agents hire a pro photographer on every listing (HomeJab, 2021). No survey quantifying channel effectiveness was found.",
+   "facts": [
+    {
+     "claim": "HousingWire (March 2025) advises agents to find photographers by searching their local MLS listings in their area.",
+     "quote": "Do your research by logging into your local MLS and searching through the listings in your area.",
+     "sourceUrl": "https://www.housingwire.com/articles/real-estate-photographer/",
+     "sourceTitle": "How to find a real estate photographer (HousingWire)",
+     "sourceDate": "2025-03-24",
+     "lane": "contact_mode"
+    },
+    {
+     "claim": "Florida Realtors (Dec 2025) advises agents to research local listings and ask fellow agents for referrals when hiring a photographer.",
+     "quote": "Research local listings and ask fellow agents for referrals",
+     "sourceUrl": "https://floridarealtors.org/news-media/news-articles/2025/12/hiring-right-real-estate-photographer",
+     "sourceTitle": "Hiring the Right Real Estate Photographer (Florida Realtors)",
+     "sourceDate": "2025-12-16",
+     "lane": "contact_mode"
+    },
+    {
+     "claim": "ARMLS connects certified photographers to Arizona agents through its marketing channels; agents can add a certified photographer to a listing.",
+     "quote": "After an agent has added you as the Certified Photographer on one of their listings",
+     "sourceUrl": "https://armls.com/become-certified",
+     "sourceTitle": "Preferred Photographer Program - ARMLS",
+     "sourceDate": null,
+     "lane": "contact_mode"
+    },
+    {
+     "claim": "HomeJab survey (published Sept 2021): 74% of agents hire a professional real estate photographer on every listing.",
+     "quote": "74% of agents hire a professional real estate photographer on every listing.",
+     "sourceUrl": "https://homejab.com/real-estate-photography-survey-5-surprising-stats/",
+     "sourceTitle": "Real Estate Photography Survey: 5 Surprising Stats (HomeJab)",
+     "sourceDate": "2021-09-07",
+     "lane": "comparable_demand"
+    }
+   ],
+   "opened": [
+    "https://www.housingwire.com/articles/real-estate-photographer/",
+    "https://floridarealtors.org/news-media/news-articles/2025/12/hiring-right-real-estate-photographer",
+    "https://armls.com/become-certified",
+    "https://homejab.com/real-estate-photography-survey-5-surprising-stats/"
+   ],
+   "failed": [],
+   "notes": "Florida Realtors quote is from fetch summary wording; no quantitative channel-effectiveness survey found."
+  }
+ ]
+}
