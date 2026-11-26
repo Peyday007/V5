@@ -58,7 +58,7 @@ import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints 
 import { reconstruct } from '../quant/reconstruct.ts';
 import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
 import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
-import { claimSources, claimsByIds, patternStatesBuying } from '../../repos/research.ts';
+import { claimSources, claimsByIds } from '../../repos/research.ts';
 import type { CashCardFact, CashOpportunity, ConstructedArrangementRecord, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
@@ -3091,8 +3091,9 @@ export function positionDecomposition(questions: readonly PositionResearchQuesti
  * (`PATTERN_BUYING_WORDS`, repos/research.ts) — so every one stayed context
  * and the round filed nothing. The consumer's contract is the payer, so the
  * producer is asked for it in the claim itself: who pays, that they pay, and
- * what. `patternStatesPayer` is that same rule, read from the same word list,
- * so the question and the harvest cannot drift apart. No bar is lowered: the
+ * what. The harvest reads it with `patternStatesBuying` (repos/research.ts),
+ * the one rule over that word list; the test holds the sentence to it, so the
+ * question and the harvest cannot drift apart. No bar is lowered: the
  * claim still passes the gate and the lane's two-example floor, and a pattern
  * that names no payer still files nothing. It carries no double quotes: the
  * free lane reads a quoted phrase in a question as a search query.
@@ -3125,15 +3126,6 @@ export const OPENING_SENTENCE =
   'SUPPLY_DEMAND_MISMATCH where published demand and a published supply are not yet connected. ' +
   'A claim with no opportunity_signal is kept as evidence and never becomes an opening. ' +
   PATTERN_PAYER_SENTENCE;
-
-/**
- * Whether a repeating-buyer claim's own text says its buyers pay — the rule
- * `signalledClaims` applies to an untagged demand_pattern claim, for a reader
- * holding the text. Pure.
- */
-export function patternStatesPayer(claim: string | null | undefined): boolean {
-  return patternStatesBuying(claim ?? '');
-}
 
 /**
  * How a confirm-or-refute round's price and cost answers reach the plan.

@@ -4,8 +4,9 @@
  * demand_pattern claims were untagged and did not say their buyers pay, and
  * `signalledClaims` reads an untagged pattern only where its own text does
  * (`PATTERN_BUYING_WORDS`). The constructed question now asks for the payer in
- * the claim itself, and `patternStatesPayer` is the harvest's own rule, so the
- * question and the reading cannot drift. No bar moves: a pattern that names no
+ * the claim itself, and is checked against `patternStatesBuying` — the
+ * harvest's own rule, with no second copy of it — so the question and the
+ * reading cannot drift. No bar moves: a pattern that names no
  * payer still files nothing.
  */
 import { describe, expect, it } from 'vitest';
@@ -13,7 +14,6 @@ import {
   composeConstruction,
   OPENING_SENTENCE,
   PATTERN_PAYER_SENTENCE,
-  patternStatesPayer,
   type ConstructionJob,
   type Primitive,
 } from '../server/services/cash/construct.ts';
@@ -46,24 +46,26 @@ const ASKED = 'Agencies pay freelance analysts $400 for monthly reports (example
 
 describe('a constructed pattern claim must say who pays (CONSTRUCTION.ROUNDS_FILE)', () => {
   it('reproduces the recorded failure: a pattern with no payer is not one the harvest reads', () => {
-    expect(patternStatesPayer(RECORDED)).toBe(false);
     expect(patternStatesBuying(RECORDED)).toBe(false);
   });
 
   it('a pattern written as the question asks is one the harvest reads', () => {
-    expect(patternStatesPayer(ASKED)).toBe(true);
     expect(patternStatesBuying(ASKED)).toBe(true);
-    expect(patternStatesPayer(null)).toBe(false);
-    expect(patternStatesPayer('')).toBe(false);
+    expect(patternStatesBuying('')).toBe(false);
   });
 
   it('the payer requirement is part of the opening sentence every constructed question carries', () => {
     expect(OPENING_SENTENCE).toContain(PATTERN_PAYER_SENTENCE);
     expect(PATTERN_PAYER_SENTENCE).toMatch(/names who pays and says that they pay/);
     // The template the sentence offers satisfies the harvest's own rule.
-    expect(patternStatesPayer('these buyers pay this kind of supplier this price for this work')).toBe(true);
+    expect(patternStatesBuying('these buyers pay this kind of supplier this price for this work')).toBe(true);
     // No quoted phrase: the free lane would read it as a search query.
     expect(PATTERN_PAYER_SENTENCE).not.toContain('"');
+  });
+
+  it('the payer rule has one owner: construct exports no second copy of the harvest rule', async () => {
+    const construct: Record<string, unknown> = await import('../server/services/cash/construct.ts');
+    expect(construct.patternStatesPayer).toBeUndefined();
   });
 
   it('every constructed question — reverse and confirm-or-refute — asks for the payer in the claim', async () => {
