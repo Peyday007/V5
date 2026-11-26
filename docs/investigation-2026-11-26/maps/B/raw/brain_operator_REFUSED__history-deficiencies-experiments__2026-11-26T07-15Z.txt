@@ -1,0 +1,4 @@
+# Verbatim errors for operator read tools refused to this credential (worker-05):
+brain_operator_history() -> No such resource, or it is not available to you.
+brain_operator_deficiencies() -> No such resource, or it is not available to you.
+brain_operator_experiments(limit=10) -> No such resource, or it is not available to you.

@@ -14,7 +14,9 @@ import {
   brainCpu,
   cpuReason,
   controlStep,
+  databaseSaturation,
   decideTarget,
+  SATURATION_WAIT_MS,
   slotShare,
   SLOTS_PER_DB_CONNECTION,
   readCapacity,
@@ -28,6 +30,34 @@ import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 
 const calm = { db: false, lagMs: 5, cpu: 0.1 };
+
+describe('databaseSaturation: a queue is saturation only when it cost a caller a real wait', () => {
+  const quiet = { failures: 0, peakWaiting: 0, peakControlWaiting: 0, workloadMax: 8, longestWorkloadWaitMs: 0, longestControlWaitMs: 0 };
+
+  it('production 2026-11-26: a momentary control waiter or eight short workload waiters only hold the lane', () => {
+    // The process readings of that day: workload checkouts p95 0 ms (worst 28 ms), control at most 257 ms, no failure.
+    expect(databaseSaturation({ ...quiet, peakControlWaiting: 1, longestControlWaitMs: 257, longestWorkloadWaitMs: 28 })).toEqual({ db: false, dbContended: true });
+    expect(databaseSaturation({ ...quiet, peakWaiting: 8, longestWorkloadWaitMs: 28 })).toEqual({ db: false, dbContended: true });
+  });
+
+  it('a queue at the ceiling that made a caller wait a second still halves', () => {
+    expect(databaseSaturation({ ...quiet, peakWaiting: 8, longestWorkloadWaitMs: SATURATION_WAIT_MS }).db).toBe(true);
+    expect(databaseSaturation({ ...quiet, peakControlWaiting: 1, longestControlWaitMs: 1500 }).db).toBe(true);
+  });
+
+  it('a felt infrastructure failure halves whatever the waits read', () => {
+    expect(databaseSaturation({ ...quiet, failures: 1 }).db).toBe(true);
+  });
+
+  it('a very long workload wait halves even when the sampled peak missed the queue', () => {
+    expect(databaseSaturation({ ...quiet, longestWorkloadWaitMs: SATURATION_WAIT_MS * 5 }).db).toBe(true);
+    expect(databaseSaturation({ ...quiet, longestWorkloadWaitMs: SATURATION_WAIT_MS * 5 - 1 }).db).toBe(false);
+  });
+
+  it('no queue and no wait is neither saturated nor contended', () => {
+    expect(databaseSaturation(quiet)).toEqual({ db: false, dbContended: false });
+  });
+});
 
 describe('the decision', () => {
   it('doubles while useful work waits and errors are acceptable', () => {

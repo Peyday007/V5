@@ -1,0 +1,879 @@
+[
+ {
+  "id": "ND-R-Q-R010",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Goal isolation and scoped knowledge reuse",
+  "must_detect": [
+   "plan for the wrong objective after a worker picked up a mismatched item",
+   "another owner's assets assumed",
+   "cross-goal cache returns wrong-region figures"
+  ],
+  "correct_behaviour": "No fact, constraint or figure in goal A's plan originates from goal B unless it is general knowledge marked as reused and applicability-checked; a plan always answers its own objective.",
+  "observability": "Trace each plan fact's origin goal id."
+ },
+ {
+  "id": "ND-R-Q-R018",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Generalization to unfamiliar objectives",
+  "must_detect": [
+   "hard-coded strategy library",
+   "prompts tuned on the development set"
+  ],
+  "correct_behaviour": "Performance on held-out objectives is not materially worse than on development objectives.",
+  "observability": "Compare usable rate on held-out vs development objectives."
+ },
+ {
+  "id": "ND-R-Q-R021",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Backward decomposition from the target",
+  "must_detect": [
+   "forward-only storytelling with no volume math",
+   "ignores that last-week sales won't settle"
+  ],
+  "correct_behaviour": "Decomposition arithmetic is deterministic and consistent with Q-R041; it states required daily volume and compares it to stated capacity.",
+  "observability": "Replay decomposition numerically."
+ },
+ {
+  "id": "ND-R-Q-R022",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Completion of partial strategies",
+  "must_detect": [
+   "good strategy dropped for a fixable gap",
+   "incomplete strategy selected"
+  ],
+  "correct_behaviour": "Every incomplete strategy ends as completed, or abandoned with a recorded reason; none passes to selection incomplete.",
+  "observability": "List strategies that changed completeness status and why."
+ },
+ {
+  "id": "ND-R-Q-R026",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Unknowns never resolved favourably by default",
+  "must_detect": [
+   "timeout on research read as 'no problem'",
+   "missing price data replaced with optimistic guess",
+   "an untested decisive assumption presented as fact"
+  ],
+  "correct_behaviour": "No ranking or feasibility verdict uses an optimistic value for an unknown without a disclosed assumption and a test step; the plan contains a test for each unresolved decisive unknown.",
+  "observability": "For each decisive unknown, check its status, the value used in ranking, and the plan's test step."
+ },
+ {
+  "id": "ND-R-Q-R032",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MINOR",
+  "target": "Reuse of existing evidence before new research",
+  "must_detect": [
+   "paying twice for the same answer",
+   "reusing inapplicable evidence"
+  ],
+  "correct_behaviour": "A brief whose answer exists at sufficient quality and freshness is not re-researched; reuse records applicability check.",
+  "observability": "Count duplicate research of answered questions."
+ },
+ {
+  "id": "ND-R-Q-R034",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Reconstruction of unpublished figures",
+  "must_detect": [
+   "reconstruction presented as fact",
+   "implausible mechanism"
+  ],
+  "correct_behaviour": "Each reconstruction lists components, their sources, the formula, and a range; it is never presented as a published figure.",
+  "observability": "Audit reconstructed figures' derivation chains."
+ },
+ {
+  "id": "ND-R-Q-R037",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Competitor and alternative analysis",
+  "must_detect": [
+   "price above market with no reason",
+   "saturated marketplace ignored"
+  ],
+  "correct_behaviour": "Price assumption is positioned against evidenced competitor prices; a differentiation or channel reason exists.",
+  "observability": "Compare plan price to competitor evidence."
+ },
+ {
+  "id": "ND-R-Q-R044",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Uncertainty and probability of reaching target",
+  "must_detect": [
+   "point estimate passed as 'will achieve'",
+   "false precision",
+   "correlated assumptions treated as independent"
+  ],
+  "correct_behaviour": "Confidence is derived from stated ranges by a reproducible method; a point estimate is not presented as certainty; the most sensitive input matches sensitivity analysis.",
+  "observability": "Re-run uncertainty propagation; compare stated confidence."
+ },
+ {
+  "id": "ND-R-Q-R051",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "System's own executional capacity",
+  "must_detect": [
+   "plan says 'Brain will send 500 emails' with no sending integration"
+  ],
+  "correct_behaviour": "Every step assigned to 'the system' maps to a capability the system has; otherwise it is reassigned.",
+  "observability": "Map system-assigned steps to integration inventory."
+ },
+ {
+  "id": "ND-R-Q-R057",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Critic calibration",
+  "must_detect": [
+   "critic never tested so misses are invisible"
+  ],
+  "correct_behaviour": "Per-category recall is measured and meets a set threshold on the frozen revision.",
+  "observability": "Inspect calibration results."
+ },
+ {
+  "id": "ND-R-Q-R065",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MINOR",
+  "target": "Fallback strategy",
+  "must_detect": [
+   "fallback infeasible after primary spends capital"
+  ],
+  "correct_behaviour": "Fallback has its own feasibility from the trigger date with remaining capital.",
+  "observability": "Check fallback economics from trigger date."
+ },
+ {
+  "id": "ND-R-Q-R068",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Checkpoints and kill criteria",
+  "must_detect": [
+   "no early test; failure discovered at day 30"
+  ],
+  "correct_behaviour": "Each decisive unknown has a checkpoint testing it early; thresholds derive from the funnel model.",
+  "observability": "Map decisive unknowns to checkpoints."
+ },
+ {
+  "id": "ND-R-Q-R069",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Money-commitment schedule",
+  "must_detect": [
+   "spend hidden in steps",
+   "exceeds capital"
+  ],
+  "correct_behaviour": "Sum and peak <= capital; each irreversible spend flagged for approval.",
+  "observability": "Sum commitments; compare with capital."
+ },
+ {
+  "id": "ND-R-Q-R070",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Plan rendering from the structured model",
+  "must_detect": [
+   "model rewrites figures",
+   "sections omitted",
+   "truncated document"
+  ],
+  "correct_behaviour": "Every number and date in the document is injected from structured fields; all usable-plan sections present.",
+  "observability": "Diff rendered values with structured model."
+ },
+ {
+  "id": "ND-R-Q-R071",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Deterministic usable-plan completeness validator",
+  "must_detect": [
+   "validator absent so incomplete plans ship"
+  ],
+  "correct_behaviour": "No released plan lacks a usable-plan element; failing plans are repaired or the goal reports blocked.",
+  "observability": "Run validator over released plans."
+ },
+ {
+  "id": "ND-R-Q-R074",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Execution result capture",
+  "must_detect": [
+   "results not recorded",
+   "results from integrations misattributed"
+  ],
+  "correct_behaviour": "Each checkpoint has an actual value or an explicit 'not measured'; actuals are attributed to the step that produced them.",
+  "observability": "Compare checkpoint table to actuals."
+ },
+ {
+  "id": "ND-R-Q-R075",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Prediction-vs-outcome attribution",
+  "must_detect": [
+   "miss blamed vaguely",
+   "assumption unchanged after refutation"
+  ],
+  "correct_behaviour": "Each significant miss is attributed to specific assumptions; those assumptions' status changes.",
+  "observability": "Inspect attribution records."
+ },
+ {
+  "id": "ND-R-Q-R077",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Learning from reasoning failures without test-set overfit",
+  "must_detect": [
+   "tuning on evaluation set",
+   "fixing symptoms per case"
+  ],
+  "correct_behaviour": "Each improvement targets a classified failure; acceptance objectives are never used for tuning.",
+  "observability": "Audit tuning data against evaluation set."
+ },
+ {
+  "id": "ND-R-Q-R078",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Safe execution of external effects",
+  "must_detect": [
+   "double charge",
+   "duplicate outreach violating rules"
+  ],
+  "correct_behaviour": "No duplicated effects under retry/crash; unknown outcomes surfaced.",
+  "observability": "Fault-inject during effects; count duplicates."
+ },
+ {
+  "id": "ND-R-Q-R082",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Database integrity and recovery",
+  "must_detect": [
+   "partial writes produce half-updated economics",
+   "connection loss treated as empty data"
+  ],
+  "correct_behaviour": "After an injected DB failure, goal model is either pre- or post-transaction, never between; derived state recomputes cleanly.",
+  "observability": "Fault injection on DB writes; consistency checker."
+ },
+ {
+  "id": "ND-R-Q-R083",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Per-goal compute and research budget",
+  "must_detect": [
+   "runaway cost",
+   "budget cut mid-step truncates outputs silently"
+  ],
+  "correct_behaviour": "Spend per goal within budget; budget exhaustion produces a terminal outcome with disclosed gaps.",
+  "observability": "Budget ledger per goal."
+ },
+ {
+  "id": "ND-R-Q-R084",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "End-to-end trace for diagnosis",
+  "must_detect": [
+   "prose-only logs",
+   "missing prompts",
+   "trace not linked to versions"
+  ],
+  "correct_behaviour": "For any plan figure or decision, the trace reaches the model call and evidence that produced it.",
+  "observability": "Pick random plan facts; follow trace to origin."
+ },
+ {
+  "id": "ND-R-Q-R085",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Frozen, identifiable revision and reproducibility",
+  "must_detect": [
+   "hot-fix mid-evaluation",
+   "model provider silently changes model version"
+  ],
+  "correct_behaviour": "All 30 acceptance plans carry the same revision id; no config or prompt changed during the run.",
+  "observability": "Check revision ids on all evaluated plans; diff config across run."
+ },
+ {
+  "id": "ND-R-Q-R086",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Unfamiliar, feasible objective suite",
+  "must_detect": [
+   "suite leaks into tuning",
+   "suite skewed to easy objectives",
+   "infeasible items counted"
+  ],
+  "correct_behaviour": "No suite objective (or near-duplicate) appears in development data; each has a feasibility argument by someone other than the system.",
+  "observability": "Leakage check vs development data; diversity stats."
+ },
+ {
+  "id": "ND-R-Q-R087",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Independent grading against the usable-plan rubric",
+  "must_detect": [
+   "grader shares the system's blind spots",
+   "grading on prose quality",
+   "grader cannot verify facts"
+  ],
+  "correct_behaviour": "Each grade lists element verdicts and any critical mistakes with evidence; agreement between graders measured and adequate.",
+  "observability": "Inter-rater agreement; spot-audit grades."
+ },
+ {
+  "id": "ND-R-Q-R088",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "CRITICAL",
+  "target": "Acceptance computation",
+  "must_detect": [
+   "rerunning failures until they pass",
+   "mixing revisions"
+  ],
+  "correct_behaviour": "Verdict reproducible from grade records; no cherry-picked reruns; revision single.",
+  "observability": "Audit run log and grade records."
+ },
+ {
+  "id": "ND-R-Q-R089",
+  "source": "MAP_C_REQUIREMENT",
+  "criticality": "MAJOR",
+  "target": "Failure classification to requirements",
+  "must_detect": [
+   "failures explained by narrative only"
+  ],
+  "correct_behaviour": "Every failure has at least one mapped requirement with trace evidence.",
+  "observability": "Inspect mapping records."
+ },
+ {
+  "id": "ND-M-A-M008",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "model_call",
+  "target": "server/services/goals/objectiveAssist.ts:201 assistObjective + operatorInterpreter",
+  "produces": "amended ObjectiveReading, only fields the words bear out",
+  "filters_caps_vetoes": "timeout OBJECTIVE_ASSIST_TIMEOUT_MS=30000 (objectiveAssist.ts:34); null interpreter when no operator model -> reading unchanged",
+  "sweep_keyword": "assistObjective",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M020",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/cash/construct.ts:1882 selectCandidates",
+  "produces": "CandidateSelection {considered, selected, held, evidenced, rotated, neverComposed}",
+  "filters_caps_vetoes": "CUT: considered - selected candidates never composed this pass (reported as construction cap degraded line plan.ts:2491-2495)",
+  "sweep_keyword": "selectCandidates",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M031",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/quant/portfolio.ts:1133 optimizePortfolio",
+  "produces": "best combination (greedy + exhaustive under EXHAUSTIVE_LIMIT=12), bestEligible, ranked, singles, refused; THEN bindChallenge (portfolio.ts:1215-1221, 1254) may replace best via adoptionFrom and withdraw the 90% claim via applyChallengeToAssurance (A-M144, A-M145)",
+  "filters_caps_vetoes": "CLAIM_THRESHOLD=0.9, CLAIM_PERCENTILE=0.05, MIN_EVIDENCE_SAMPLE=20 (405-412)",
+  "sweep_keyword": "optimizePortfolio",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M034",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/goals/plan.ts:961 linkChecks",
+  "produces": "8 LinkCheck (REACHABLE_BUYER, CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION, MARKET_VOLUME, FULFILMENT, ECONOMICS, SETTLES_IN_TIME)",
+  "filters_caps_vetoes": "CHAIN_LINKS (plan.ts:136)",
+  "sweep_keyword": "linkChecks",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M035",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/goals/plan.ts:1309 withoutUnestablishedLots/withoutLossMakingLots/withoutSpareOwnerWork/withoutSpareCapitalLots",
+  "produces": "members pruned",
+  "filters_caps_vetoes": "DISCARD members failing a link, loss-making, over owner hours, over capital",
+  "sweep_keyword": "withoutUnestablishedLots",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M036",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/goals/plan.ts:2684 strategy constraint checks (constraintsFailed)",
+  "produces": "constraintsFailed strings -> verdict NOT_VIABLE",
+  "filters_caps_vetoes": "reach counted only at priceSupported prices (\"prices buyers are shown to pay\", plan.ts:2738-2756); awaiting-dive routes counted only in ifResearchHolds (2758-2763)",
+  "sweep_keyword": "strategy",
+  "sweep_hits": 3,
+  "confirmed_uncovered": false,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M037",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/goals/plan.ts:2920 strategy ordering -> chosen",
+  "produces": "chosen = ordered[0]",
+  "filters_caps_vetoes": "route-rank tiebreak only between strategies whose every member awaits research (plan.ts:2882-2900) chosen = ordered[0] at plan.ts:2929 (GA-27).",
+  "sweep_keyword": "strategy",
+  "sweep_hits": 3,
+  "confirmed_uncovered": false,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M039",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "critic",
+  "target": "server/services/goals/plan.ts:2963 demotion of RECOMMENDABLE strategies when not ACCEPTED",
+  "produces": "strategy verdict NEEDS_EVIDENCE + nextTest",
+  "filters_caps_vetoes": "VETO: every RECOMMENDABLE strategy is relabelled NEEDS_EVIDENCE (plan.ts:2963-2976)",
+  "sweep_keyword": "demotion",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M041",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "model_call",
+  "target": "server/services/goals/reasoning/invent.ts:102 inventDirections",
+  "produces": "Direction[] (reasoning methods/programs), proposed/refused counts",
+  "filters_caps_vetoes": "INVENT_CALLS_MAX=4 concurrent, INVENT_TIMEOUT_MS=90000, maxTokens 3000, json:true, one retry after 429 with INVENT_BACKOFF_MS=4000 (invent.ts:22-33,113-135); model = lane models round-robin (RunPod slot first when configured, lane.ts:68)",
+  "sweep_keyword": "inventDirections",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M042",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "parser",
+  "target": "server/services/goals/reasoning/invent.ts:None parseInvented",
+  "produces": "validated Direction[]; rejections",
+  "filters_caps_vetoes": "invalid methods refused (counts refused/rejections)",
+  "sweep_keyword": "parseInvented",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M046",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/goals/plan.ts:3630 adoptReconstruction",
+  "produces": "PlanAdoption {source BASELINE|RECONSTRUCTED, hypothetical, reason}, candidate",
+  "filters_caps_vetoes": "VETO: implausible, infeasible, no material improvement, assumed-only moves, no held opening, unpriced members => hypothetical/BASELINE (plan.ts:3636-3703)",
+  "sweep_keyword": "adoptReconstruction",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M047",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/goals/plan.ts:3743 judgeFeasibility / judgeHeldMarkets",
+  "produces": "InfeasibleConclusion (arithmetic or held-market) => NOT_SUPPORTED",
+  "filters_caps_vetoes": "HEADROOM_NIL=0.005 (3730); NOT_SUPPORTED stops re-reads on clock (plan.ts:6570) and continuation",
+  "sweep_keyword": "judgeFeasibility",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M051",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/goals/plan.ts:6222 leadingArrangement",
+  "produces": "lead arrangement",
+  "filters_caps_vetoes": "inGoalScope filter (6288)",
+  "sweep_keyword": "leadingArrangement",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M059",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "model_call",
+  "target": "server/services/goals/committeeSpecialists.ts:327 armSpecialistReview / startSpecialistReview",
+  "produces": "COMMITTEE_SPECIALIST_REVIEW events read by next committeeContextOf",
+  "filters_caps_vetoes": "SPECIALIST_ROLE_BUDGET_MS=60000, SPECIALIST_ATTEMPT_MS=45000, SPECIALIST_RETRY_MS=30min, SPECIALIST_MAX_IN_FLIGHT=2 (committeeSpecialists.ts:45-57)",
+  "sweep_keyword": "armSpecialistReview",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M061",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/domain/planIntegrity.ts:261 planIntegrity",
+  "produces": "violations[]",
+  "filters_caps_vetoes": "refuseForIntegrity: ACCEPTED -> CANDIDATE_ONLY/NO_CANDIDATE (plan.ts:5431)",
+  "sweep_keyword": "planIntegrity",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M062",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/goals/plan.ts:5473 gateIntegrity",
+  "produces": "final PlanReading (integrity, committee; acceptance possibly refused)",
+  "filters_caps_vetoes": "only acts on ACCEPTED readings",
+  "sweep_keyword": "gateIntegrity",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M063",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/goals/plan.ts:5523 persistReading",
+  "produces": "goal_plan_readings row (verdict, chosen_strategy, strategies JSON, next_test, forecast JSON incl. acceptance, steps, adoption, committee, degraded); GOAL_PLAN_READ event (summary sliced 400); workstream_links PURSUES",
+  "filters_caps_vetoes": "SKIP when digest unchanged and forecast carries acceptance (plan.ts:5531); non-ACCEPTED verdict passed through persistableVerdict; summary itself not a column (only event summary.slice(0,400))",
+  "sweep_keyword": "persistReading",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M064",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/goals/plan.ts:5651 recordGoalOutcome",
+  "produces": "goal_outcomes row ACHIEVED|MISSED",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "recordGoalOutcome",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M066",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "recovery",
+  "target": "server/services/goals/plan.ts:3349 recordDegraded",
+  "produces": "GOAL_PLAN_DEGRADED-style event, at most once per hour per kind (DEGRADED_EVENT_EVERY_MS=60min, 3341)",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "recordDegraded",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M107",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/research/gate.ts:363 applyGate",
+  "produces": "accepted / rejected claims (NOT_ACCEPTED_REASON_CODES 77), fragment pass/block",
+  "filters_caps_vetoes": "claim without sourceUrl rejected; fragment mostly rejected => blocked; laneFitFailure; observation date checks",
+  "sweep_keyword": "applyGate",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M111",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/operator/run.ts:78 modelsFor",
+  "produces": "ranked OperatorModel[] (free:<model> x<=2, gpu:<model>)",
+  "filters_caps_vetoes": "operatorModels slices lane models to 2 (domain/operator.ts:329); rankOperatorModels by (ok+1)/(runs+2) and benchmark (284-299)",
+  "sweep_keyword": "modelsFor",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M112",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/operator/decisions.ts:88 challengerModels",
+  "produces": "models minus weak GPU (<=4B params) unless that is all",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "challengerModels",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M114",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "parser",
+  "target": "server/services/goals/objectivePlan.ts:95 interpretObjective",
+  "produces": "ObjectiveInterpretation",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "interpretObjective",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M116",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "parser",
+  "target": "server/services/goals/objectivePlan.ts:271 parseStrategies / parseCritique / codeFindings",
+  "produces": "validated strategies, findings",
+  "filters_caps_vetoes": "unsourced EVIDENCE relabelled ASSUMPTION",
+  "sweep_keyword": "parseStrategies",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M117",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/goals/objectivePlan.ts:374 decideObjective",
+  "produces": "PLAN_READY | NEEDS_EVIDENCE | NOT_SUPPORTED decision",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "decideObjective",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M130",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/russell/goalSprint.ts:95 activateGoalSprints / sprintCandidate",
+  "produces": "Cash Mode activation (cash_modes ACTIVE) + GOAL_RESEARCH_SPRINT_ACTIVATED",
+  "filters_caps_vetoes": "VETO: no sprint => discoveryAllowed false => proposeGoalRoutes NOT_DUE and openGoalDiscovery null unless the project already has an ACTIVE Cash Mode GA-19: an existing non-ACTIVE mode keeps discoveryAllowed false (lifecycle.ts:531-539) and launchableUnderCashMode false (lifecycle.ts:417-421). GA-04: a register PATCH moving projectId breaks target.projectId === projectId.",
+  "sweep_keyword": "activateGoalSprints",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M131",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/cash/lifecycle.ts:520 discoveryAllowed",
+  "produces": "{allowed, mode, reason}",
+  "filters_caps_vetoes": "VETO when no Cash Mode or not ACTIVE cash_modes states: ACTIVE / WINDING_DOWN / ARCHIVED (domain/types.ts:7102); written only by lifecycle transitions (lifecycle.ts:283-338) from person routes and activateGoalSprints.",
+  "sweep_keyword": "discoveryAllowed",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M132",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/cash/researchRoom.ts:343 routineFocus / freeLaneOwnsResearch / cashSpareSurfaces",
+  "produces": "spare surfaces count; focus gate",
+  "filters_caps_vetoes": "focus without free-lane ownership => spare 0 and goal discovery refused",
+  "sweep_keyword": "routineFocus",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M133",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/goals/tick.ts:345 advanceGoals",
+  "produces": "holds and releases bins (GOAL_WORK_HELD/RELEASED, tick.ts:416, 432), re-ranks bin priority (GOAL_CAPACITY_ALLOCATED, tick.ts:517), resumes machine-paused targeted goals via repos/goals.resumeGoal bypassing decide.ts (tick.ts:313-343, 346), starts execution windows (tick.ts:348 -> A-M149), applies research remedies (GOAL_RESEARCH_REMEDY_APPLIED, tick.ts:1227), runs memory passes decisions/calibration/reconsider (tick.ts:139-143), floor openers (A-M154)",
+  "filters_caps_vetoes": "does not plan",
+  "sweep_keyword": "advanceGoals",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M143",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/goals/plan.ts:6460 in-process held state (lastReadings, lastArrangements, explored, lastInvent, inFlight maps)",
+  "produces": "held reading used for top-ups and route arming",
+  "filters_caps_vetoes": "lost on restart: armRouteProposal retryOnly compensates (plan.ts:6536-6545)",
+  "sweep_keyword": "process",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M144",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "model_call",
+  "target": "server/services/quant/modelChallenge.ts:267 modelChallengeFor / startAsk / operatorAsker -> askPlanChallenger -> challengeDecision",
+  "produces": "ModelChallenge answer (cached by planChallengeKey) bound on a later evaluation",
+  "filters_caps_vetoes": "MODEL_CHALLENGE_MAX_IN_FLIGHT=2, MODEL_CHALLENGE_RETRY_MS=30 min, MEMO_LIMIT=256 (modelChallenge.ts:166-170); answer not yet given leaves challenge due, which holds the 90% claim",
+  "sweep_keyword": "modelChallengeFor",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M145",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/quant/portfolio.ts:1254 bindChallenge / adoptionFrom / applyChallengeToAssurance",
+  "produces": "result.adoption (a repair replacing portfolio.best), assurance.challenge; can withdraw claimsAtLeast90",
+  "filters_caps_vetoes": "a challenge can only take a claim away (portfolio.ts:~1327)",
+  "sweep_keyword": "bindChallenge",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M151",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/goals/tick.ts:313 resumeMachinePausedTargetedGoals",
+  "produces": "paused_at cleared via repos/goals.resumeGoal (bypasses decide.ts)",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "resumeMachinePausedTargetedGoals",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M152",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/goals/tick.ts:432 goal holds and capacity allocation",
+  "produces": "bin holds/releases, bin priority (repos/goals.ts:175, 252); GOAL_WORK_HELD/RELEASED, GOAL_CAPACITY_ALLOCATED events",
+  "filters_caps_vetoes": "decides order in which goal research is dispatched",
+  "sweep_keyword": "capacity",
+  "sweep_hits": 5,
+  "confirmed_uncovered": false,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M153",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "recovery",
+  "target": "server/services/goals/plan.ts:5805 requestGoalPlanPass / requestFloorResearch",
+  "produces": "in-process repairedGoals / floorRequests maps => REPAIRED / FLOOR due in advanceGoalPlans",
+  "filters_caps_vetoes": "process memory only; lost on restart",
+  "sweep_keyword": "requestGoalPlanPass",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M154",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "recovery",
+  "target": "server/services/goals/tick.ts:221 productionFloorOpeners (widenGoalSearch -> requestFloorResearch; openSystemHealth -> improvementTick)",
+  "produces": "floor requests; improvement loop run",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "productionFloorOpeners",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M155",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "recovery",
+  "target": "server/services/improvement/loop.ts:1710 improvementTick objective check -> selfmodel/objectives.assessLiveObjectives -> requestGoalPlanPass",
+  "produces": "REPAIRED re-read for goals whose gaps were cleared",
+  "filters_caps_vetoes": "",
+  "sweep_keyword": "improvementTick",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M159",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/goals/planSet.ts:649 buildPlanSet / rebuildAfter",
+  "produces": "PlanSet plans[] ordered by richness (established fields x1e9 + modelled p50; planSet.ts:643-646), paraphrases/shared customers collapsed, rebuilds after a failed channel or supplier",
+  "filters_caps_vetoes": "its plans[0] lead can differ from chosen_strategy and from the acceptance candidate",
+  "sweep_keyword": "buildPlanSet",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M161",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/services/quant/deadline.ts:56 decideResearch",
+  "produces": "research now vs learn in execution verdict",
+  "filters_caps_vetoes": "decides which unknowns become researchPriority, which sendPlanQuestions sends",
+  "sweep_keyword": "decideResearch",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M162",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "selector",
+  "target": "server/domain/goalPolicy.ts:31 goalExecutionPolicy",
+  "produces": "SQUEEZE whenever daysLeft known and money remains, else EVIDENCE_FIRST",
+  "filters_caps_vetoes": "SQUEEZE suppresses market tests (plan.ts:2940-2941)",
+  "sweep_keyword": "goalExecutionPolicy",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M163",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/goals/plan.ts:5094 missingForSale / planAuthority / missingPermissions / readCapabilities",
+  "produces": "sale blockers, permissionsMissing in steps",
+  "filters_caps_vetoes": "PLAN_AUTHORITY_MEMO_MS=10 s (plan.ts:57)",
+  "sweep_keyword": "missingForSale",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M167",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/cash/operate.ts:948 operate -> markReady",
+  "produces": "cash_opportunities.state READY",
+  "filters_caps_vetoes": "composeGoalModel orders openings by state; missingForSale needs READY",
+  "sweep_keyword": "operate",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M168",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "state_transition",
+  "target": "server/services/cash/retireListings.ts:129 retireMarketplaceListings",
+  "produces": "openings ARCHIVED (LISTING_ARCHIVE_REASON), their research cancelled",
+  "filters_caps_vetoes": "archived openings leave the model (listed as STOPPED only if updated after goal creation)",
+  "sweep_keyword": "retireMarketplaceListings",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M170",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/services/goals/plan.ts:5722 planInputsFingerprint",
+  "produces": "fingerprint string",
+  "filters_caps_vetoes": "does NOT cover knowledge/world-model facts, research claims that became neither facts nor openings, arrangement library verdicts, goal-scoped person facts; a NOT_SUPPORTED goal ignores those changes (plan.ts:6570)",
+  "sweep_keyword": "planInputsFingerprint",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ },
+ {
+  "id": "ND-M-A-M175",
+  "source": "MAP_A_UNCOVERED_DECISION",
+  "kind": "validator",
+  "target": "server/domain/planReady.ts:169 planReady conditions (incl. CHALLENGED_BY_HERMES, DEFENSIBLE_UNCERTAINTY)",
+  "produces": "ready / per-condition reasons",
+  "filters_caps_vetoes": "requires a committed Hermes ADOPT_PLAN with a challenger answer",
+  "sweep_keyword": "planReady",
+  "sweep_hits": 0,
+  "confirmed_uncovered": true,
+  "must_detect": "that its decision on a recorded goal input matches the Map C requirement it serves, and that a wrong decision is visible in the plan reading"
+ }
+]

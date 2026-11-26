@@ -1,0 +1,2395 @@
+{
+  "map": "C",
+  "investigation": "2026-11-26",
+  "derived_from": "outcome definition only (no Brain code or docs read)",
+  "brain_implements_note": "every requirement's brain_implements is TO BE RECONCILED by the code investigator",
+  "node_count": 109,
+  "edge_count": 306,
+  "depends_on_is_acyclic": true,
+  "nodes": [
+    {
+      "id": "Q-R001",
+      "stage": "S01",
+      "criticality": "CRITICAL",
+      "title": "Structured objective specification"
+    },
+    {
+      "id": "Q-R002",
+      "stage": "S01",
+      "criticality": "CRITICAL",
+      "title": "Target-metric semantics"
+    },
+    {
+      "id": "Q-R003",
+      "stage": "S01",
+      "criticality": "CRITICAL",
+      "title": "Owner capability and asset profile"
+    },
+    {
+      "id": "Q-R004",
+      "stage": "S01",
+      "criticality": "CRITICAL",
+      "title": "Constraint provenance: owner constraint vs system policy"
+    },
+    {
+      "id": "Q-R005",
+      "stage": "S01",
+      "criticality": "MAJOR",
+      "title": "Ambiguity resolution with minimal owner involvement"
+    },
+    {
+      "id": "Q-R006",
+      "stage": "S01",
+      "criticality": "MAJOR",
+      "title": "Objective feasibility pre-screen and honest infeasibility"
+    },
+    {
+      "id": "Q-R007",
+      "stage": "S01",
+      "criticality": "CRITICAL",
+      "title": "Jurisdiction and location determination"
+    },
+    {
+      "id": "Q-R008",
+      "stage": "S02",
+      "criticality": "CRITICAL",
+      "title": "One shared per-goal understanding"
+    },
+    {
+      "id": "Q-R009",
+      "stage": "S02",
+      "criticality": "CRITICAL",
+      "title": "Change propagation and staleness"
+    },
+    {
+      "id": "Q-R010",
+      "stage": "S02",
+      "criticality": "CRITICAL",
+      "title": "Goal isolation and scoped knowledge reuse"
+    },
+    {
+      "id": "Q-R011",
+      "stage": "S02",
+      "criticality": "CRITICAL",
+      "title": "Assumption register"
+    },
+    {
+      "id": "Q-R012",
+      "stage": "S02",
+      "criticality": "MAJOR",
+      "title": "Durable, resumable reasoning state"
+    },
+    {
+      "id": "Q-R013",
+      "stage": "S03",
+      "criticality": "MAJOR",
+      "title": "Economic environment model"
+    },
+    {
+      "id": "Q-R014",
+      "stage": "S03",
+      "criticality": "CRITICAL",
+      "title": "Calendar and time arithmetic"
+    },
+    {
+      "id": "Q-R015",
+      "stage": "S03",
+      "criticality": "MINOR",
+      "title": "Owner-advantage mapping"
+    },
+    {
+      "id": "Q-R016",
+      "stage": "S04",
+      "criticality": "CRITICAL",
+      "title": "Broad opportunity discovery without a fixed catalog"
+    },
+    {
+      "id": "Q-R017",
+      "stage": "S04",
+      "criticality": "MAJOR",
+      "title": "Conservative, revisitable hard-constraint screening"
+    },
+    {
+      "id": "Q-R018",
+      "stage": "S04",
+      "criticality": "CRITICAL",
+      "title": "Generalization to unfamiliar objectives"
+    },
+    {
+      "id": "Q-R019",
+      "stage": "S05",
+      "criticality": "MAJOR",
+      "title": "Genuinely different strategies"
+    },
+    {
+      "id": "Q-R020",
+      "stage": "S05",
+      "criticality": "CRITICAL",
+      "title": "Complete strategy specification"
+    },
+    {
+      "id": "Q-R021",
+      "stage": "S05",
+      "criticality": "CRITICAL",
+      "title": "Backward decomposition from the target"
+    },
+    {
+      "id": "Q-R022",
+      "stage": "S05",
+      "criticality": "MAJOR",
+      "title": "Completion of partial strategies"
+    },
+    {
+      "id": "Q-R023",
+      "stage": "S06",
+      "criticality": "CRITICAL",
+      "title": "Decisive-unknown identification"
+    },
+    {
+      "id": "Q-R024",
+      "stage": "S06",
+      "criticality": "MAJOR",
+      "title": "Research bounded by decision value"
+    },
+    {
+      "id": "Q-R025",
+      "stage": "S06",
+      "criticality": "MAJOR",
+      "title": "Answerable research questions"
+    },
+    {
+      "id": "Q-R026",
+      "stage": "S06",
+      "criticality": "CRITICAL",
+      "title": "Unknowns never resolved favourably by default"
+    },
+    {
+      "id": "Q-R027",
+      "stage": "S07",
+      "criticality": "MAJOR",
+      "title": "Research queue execution"
+    },
+    {
+      "id": "Q-R028",
+      "stage": "S07",
+      "criticality": "CRITICAL",
+      "title": "Source capture with provenance"
+    },
+    {
+      "id": "Q-R029",
+      "stage": "S07",
+      "criticality": "CRITICAL",
+      "title": "Faithful evidence extraction"
+    },
+    {
+      "id": "Q-R030",
+      "stage": "S07",
+      "criticality": "CRITICAL",
+      "title": "Evidence verification and quality grading"
+    },
+    {
+      "id": "Q-R031",
+      "stage": "S07",
+      "criticality": "MAJOR",
+      "title": "Evidence conflict handling without overwrite"
+    },
+    {
+      "id": "Q-R032",
+      "stage": "S07",
+      "criticality": "MINOR",
+      "title": "Reuse of existing evidence before new research"
+    },
+    {
+      "id": "Q-R033",
+      "stage": "S07",
+      "criticality": "MAJOR",
+      "title": "Adaptive search strategy"
+    },
+    {
+      "id": "Q-R034",
+      "stage": "S07",
+      "criticality": "MAJOR",
+      "title": "Reconstruction of unpublished figures"
+    },
+    {
+      "id": "Q-R035",
+      "stage": "S08",
+      "criticality": "CRITICAL",
+      "title": "Buyer existence, reachability and willingness to pay"
+    },
+    {
+      "id": "Q-R036",
+      "stage": "S08",
+      "criticality": "CRITICAL",
+      "title": "Supplier and seller analysis"
+    },
+    {
+      "id": "Q-R037",
+      "stage": "S08",
+      "criticality": "MAJOR",
+      "title": "Competitor and alternative analysis"
+    },
+    {
+      "id": "Q-R038",
+      "stage": "S08",
+      "criticality": "CRITICAL",
+      "title": "Fulfilment analysis"
+    },
+    {
+      "id": "Q-R039",
+      "stage": "S08",
+      "criticality": "CRITICAL",
+      "title": "Acquisition channel access and performance"
+    },
+    {
+      "id": "Q-R040",
+      "stage": "S09",
+      "criticality": "CRITICAL",
+      "title": "Unit economics with all material costs"
+    },
+    {
+      "id": "Q-R041",
+      "stage": "S09",
+      "criticality": "CRITICAL",
+      "title": "Volume and funnel model to collected revenue"
+    },
+    {
+      "id": "Q-R042",
+      "stage": "S09",
+      "criticality": "CRITICAL",
+      "title": "Cash-flow timeline and peak capital requirement"
+    },
+    {
+      "id": "Q-R043",
+      "stage": "S09",
+      "criticality": "CRITICAL",
+      "title": "Deterministic arithmetic verification"
+    },
+    {
+      "id": "Q-R044",
+      "stage": "S09",
+      "criticality": "MAJOR",
+      "title": "Uncertainty and probability of reaching target"
+    },
+    {
+      "id": "Q-R045",
+      "stage": "S09",
+      "criticality": "CRITICAL",
+      "title": "Provenance for every plan figure"
+    },
+    {
+      "id": "Q-R046",
+      "stage": "S10",
+      "criticality": "CRITICAL",
+      "title": "Payment acceptance and settlement feasibility"
+    },
+    {
+      "id": "Q-R047",
+      "stage": "S10",
+      "criticality": "CRITICAL",
+      "title": "Critical-path timing feasibility"
+    },
+    {
+      "id": "Q-R048",
+      "stage": "S10",
+      "criticality": "CRITICAL",
+      "title": "Owner-involvement budget"
+    },
+    {
+      "id": "Q-R049",
+      "stage": "S10",
+      "criticality": "CRITICAL",
+      "title": "Capability, licence and credential requirements"
+    },
+    {
+      "id": "Q-R050",
+      "stage": "S10",
+      "criticality": "CRITICAL",
+      "title": "Legal, regulatory and terms-of-service compliance"
+    },
+    {
+      "id": "Q-R051",
+      "stage": "S10",
+      "criticality": "MAJOR",
+      "title": "System's own executional capacity"
+    },
+    {
+      "id": "Q-R052",
+      "stage": "S11",
+      "criticality": "CRITICAL",
+      "title": "Independent adversarial critique"
+    },
+    {
+      "id": "Q-R053",
+      "stage": "S11",
+      "criticality": "CRITICAL",
+      "title": "Internal contradiction detection"
+    },
+    {
+      "id": "Q-R054",
+      "stage": "S11",
+      "criticality": "CRITICAL",
+      "title": "Unsupported-assumption detection"
+    },
+    {
+      "id": "Q-R055",
+      "stage": "S11",
+      "criticality": "CRITICAL",
+      "title": "Objective and constraint conformance check"
+    },
+    {
+      "id": "Q-R056",
+      "stage": "S11",
+      "criticality": "CRITICAL",
+      "title": "Model-output validation"
+    },
+    {
+      "id": "Q-R057",
+      "stage": "S11",
+      "criticality": "MAJOR",
+      "title": "Critic calibration"
+    },
+    {
+      "id": "Q-R058",
+      "stage": "S12",
+      "criticality": "CRITICAL",
+      "title": "Evidence-triggered revision"
+    },
+    {
+      "id": "Q-R059",
+      "stage": "S12",
+      "criticality": "MAJOR",
+      "title": "Planned repair, not blind retry"
+    },
+    {
+      "id": "Q-R060",
+      "stage": "S12",
+      "criticality": "CRITICAL",
+      "title": "Convergence and termination"
+    },
+    {
+      "id": "Q-R061",
+      "stage": "S13",
+      "criticality": "MAJOR",
+      "title": "Comparison on a common basis"
+    },
+    {
+      "id": "Q-R062",
+      "stage": "S13",
+      "criticality": "CRITICAL",
+      "title": "Single arbiter for competing proposals"
+    },
+    {
+      "id": "Q-R063",
+      "stage": "S13",
+      "criticality": "MAJOR",
+      "title": "Defensible selection rationale"
+    },
+    {
+      "id": "Q-R064",
+      "stage": "S13",
+      "criticality": "MAJOR",
+      "title": "Model routing, escalation and independence"
+    },
+    {
+      "id": "Q-R065",
+      "stage": "S13",
+      "criticality": "MINOR",
+      "title": "Fallback strategy"
+    },
+    {
+      "id": "Q-R066",
+      "stage": "S14",
+      "criticality": "CRITICAL",
+      "title": "Executable step plan"
+    },
+    {
+      "id": "Q-R067",
+      "stage": "S14",
+      "criticality": "CRITICAL",
+      "title": "Named first action"
+    },
+    {
+      "id": "Q-R068",
+      "stage": "S14",
+      "criticality": "MAJOR",
+      "title": "Checkpoints and kill criteria"
+    },
+    {
+      "id": "Q-R069",
+      "stage": "S14",
+      "criticality": "CRITICAL",
+      "title": "Money-commitment schedule"
+    },
+    {
+      "id": "Q-R070",
+      "stage": "S14",
+      "criticality": "CRITICAL",
+      "title": "Plan rendering from the structured model"
+    },
+    {
+      "id": "Q-R071",
+      "stage": "S14",
+      "criticality": "CRITICAL",
+      "title": "Deterministic usable-plan completeness validator"
+    },
+    {
+      "id": "Q-R072",
+      "stage": "S15",
+      "criticality": "CRITICAL",
+      "title": "Plan readiness separate from money-commitment approval"
+    },
+    {
+      "id": "Q-R073",
+      "stage": "S15",
+      "criticality": "CRITICAL",
+      "title": "Honest status and confidence disclosure"
+    },
+    {
+      "id": "Q-R074",
+      "stage": "S16",
+      "criticality": "MAJOR",
+      "title": "Execution result capture"
+    },
+    {
+      "id": "Q-R075",
+      "stage": "S16",
+      "criticality": "MAJOR",
+      "title": "Prediction-vs-outcome attribution"
+    },
+    {
+      "id": "Q-R076",
+      "stage": "S16",
+      "criticality": "MAJOR",
+      "title": "Learning that changes later decisions"
+    },
+    {
+      "id": "Q-R077",
+      "stage": "S16",
+      "criticality": "MAJOR",
+      "title": "Learning from reasoning failures without test-set overfit"
+    },
+    {
+      "id": "Q-R078",
+      "stage": "S16",
+      "criticality": "MAJOR",
+      "title": "Safe execution of external effects"
+    },
+    {
+      "id": "Q-R079",
+      "stage": "S17",
+      "criticality": "MAJOR",
+      "title": "Model provider failure resilience"
+    },
+    {
+      "id": "Q-R080",
+      "stage": "S17",
+      "criticality": "CRITICAL",
+      "title": "Research infrastructure failure handling"
+    },
+    {
+      "id": "Q-R081",
+      "stage": "S17",
+      "criticality": "MAJOR",
+      "title": "Work queue and worker reliability"
+    },
+    {
+      "id": "Q-R082",
+      "stage": "S17",
+      "criticality": "MAJOR",
+      "title": "Database integrity and recovery"
+    },
+    {
+      "id": "Q-R083",
+      "stage": "S17",
+      "criticality": "MAJOR",
+      "title": "Per-goal compute and research budget"
+    },
+    {
+      "id": "Q-R084",
+      "stage": "S17",
+      "criticality": "MAJOR",
+      "title": "End-to-end trace for diagnosis"
+    },
+    {
+      "id": "Q-R085",
+      "stage": "S17",
+      "criticality": "CRITICAL",
+      "title": "Frozen, identifiable revision and reproducibility"
+    },
+    {
+      "id": "Q-R086",
+      "stage": "S18",
+      "criticality": "CRITICAL",
+      "title": "Unfamiliar, feasible objective suite"
+    },
+    {
+      "id": "Q-R087",
+      "stage": "S18",
+      "criticality": "CRITICAL",
+      "title": "Independent grading against the usable-plan rubric"
+    },
+    {
+      "id": "Q-R088",
+      "stage": "S18",
+      "criticality": "CRITICAL",
+      "title": "Acceptance computation"
+    },
+    {
+      "id": "Q-R089",
+      "stage": "S18",
+      "criticality": "MAJOR",
+      "title": "Failure classification to requirements"
+    },
+    {
+      "id": "Q-CM01",
+      "kind": "critical_mistake",
+      "title": "Arithmetic cannot reach the target"
+    },
+    {
+      "id": "Q-CM02",
+      "kind": "critical_mistake",
+      "title": "Wrong target metric"
+    },
+    {
+      "id": "Q-CM03",
+      "kind": "critical_mistake",
+      "title": "Cash cannot settle inside the window"
+    },
+    {
+      "id": "Q-CM04",
+      "kind": "critical_mistake",
+      "title": "Capital exceeded or working capital ignored"
+    },
+    {
+      "id": "Q-CM05",
+      "kind": "critical_mistake",
+      "title": "Buyer does not exist or cannot be reached"
+    },
+    {
+      "id": "Q-CM06",
+      "kind": "critical_mistake",
+      "title": "Decisive figure fabricated or unsupported"
+    },
+    {
+      "id": "Q-CM07",
+      "kind": "critical_mistake",
+      "title": "Requires a capability, licence or account the owner lacks"
+    },
+    {
+      "id": "Q-CM08",
+      "kind": "critical_mistake",
+      "title": "Owner involvement exceeds the limit"
+    },
+    {
+      "id": "Q-CM09",
+      "kind": "critical_mistake",
+      "title": "Invented or dropped restriction"
+    },
+    {
+      "id": "Q-CM10",
+      "kind": "critical_mistake",
+      "title": "Unlawful or terms-of-service-breaking action"
+    },
+    {
+      "id": "Q-CM11",
+      "kind": "critical_mistake",
+      "title": "No named, executable first action"
+    },
+    {
+      "id": "Q-CM12",
+      "kind": "critical_mistake",
+      "title": "Timeline infeasible"
+    },
+    {
+      "id": "Q-CM13",
+      "kind": "critical_mistake",
+      "title": "Internal contradiction"
+    },
+    {
+      "id": "Q-CM14",
+      "kind": "critical_mistake",
+      "title": "Supplier or fulfilment cannot deliver"
+    },
+    {
+      "id": "Q-CM15",
+      "kind": "critical_mistake",
+      "title": "Money committed without approval or outside ceiling"
+    },
+    {
+      "id": "Q-CM16",
+      "kind": "critical_mistake",
+      "title": "Stale or superseded evidence used"
+    },
+    {
+      "id": "Q-CM17",
+      "kind": "critical_mistake",
+      "title": "Material cost omitted"
+    },
+    {
+      "id": "Q-CM18",
+      "kind": "critical_mistake",
+      "title": "Decisive unknown hidden or resolved favourably"
+    },
+    {
+      "id": "Q-CM19",
+      "kind": "critical_mistake",
+      "title": "Plan for the wrong objective or corrupted output"
+    },
+    {
+      "id": "Q-CM20",
+      "kind": "critical_mistake",
+      "title": "No plan or false infeasibility for a feasible objective"
+    }
+  ],
+  "edges": [
+    {
+      "from": "Q-R001",
+      "to": "Q-R002",
+      "type": "depends_on",
+      "meaning": "Q-R002 requires Q-R001"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R003",
+      "type": "depends_on",
+      "meaning": "Q-R003 requires Q-R001"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R004",
+      "type": "depends_on",
+      "meaning": "Q-R004 requires Q-R001"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R005",
+      "type": "depends_on",
+      "meaning": "Q-R005 requires Q-R001"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R005",
+      "type": "depends_on",
+      "meaning": "Q-R005 requires Q-R003"
+    },
+    {
+      "from": "Q-R023",
+      "to": "Q-R005",
+      "type": "depends_on",
+      "meaning": "Q-R005 requires Q-R023"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R006",
+      "type": "depends_on",
+      "meaning": "Q-R006 requires Q-R001"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R006",
+      "type": "depends_on",
+      "meaning": "Q-R006 requires Q-R003"
+    },
+    {
+      "from": "Q-R013",
+      "to": "Q-R006",
+      "type": "depends_on",
+      "meaning": "Q-R006 requires Q-R013"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R007",
+      "type": "depends_on",
+      "meaning": "Q-R007 requires Q-R003"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R008",
+      "type": "depends_on",
+      "meaning": "Q-R008 requires Q-R001"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R009",
+      "type": "depends_on",
+      "meaning": "Q-R009 requires Q-R008"
+    },
+    {
+      "from": "Q-R045",
+      "to": "Q-R009",
+      "type": "depends_on",
+      "meaning": "Q-R009 requires Q-R045"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R010",
+      "type": "depends_on",
+      "meaning": "Q-R010 requires Q-R008"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R011",
+      "type": "depends_on",
+      "meaning": "Q-R011 requires Q-R008"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R012",
+      "type": "depends_on",
+      "meaning": "Q-R012 requires Q-R008"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R013",
+      "type": "depends_on",
+      "meaning": "Q-R013 requires Q-R001"
+    },
+    {
+      "from": "Q-R007",
+      "to": "Q-R013",
+      "type": "depends_on",
+      "meaning": "Q-R013 requires Q-R007"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R014",
+      "type": "depends_on",
+      "meaning": "Q-R014 requires Q-R001"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R015",
+      "type": "depends_on",
+      "meaning": "Q-R015 requires Q-R003"
+    },
+    {
+      "from": "Q-R013",
+      "to": "Q-R015",
+      "type": "depends_on",
+      "meaning": "Q-R015 requires Q-R013"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R016",
+      "type": "depends_on",
+      "meaning": "Q-R016 requires Q-R008"
+    },
+    {
+      "from": "Q-R013",
+      "to": "Q-R016",
+      "type": "depends_on",
+      "meaning": "Q-R016 requires Q-R013"
+    },
+    {
+      "from": "Q-R015",
+      "to": "Q-R016",
+      "type": "depends_on",
+      "meaning": "Q-R016 requires Q-R015"
+    },
+    {
+      "from": "Q-R004",
+      "to": "Q-R016",
+      "type": "depends_on",
+      "meaning": "Q-R016 requires Q-R004"
+    },
+    {
+      "from": "Q-R016",
+      "to": "Q-R017",
+      "type": "depends_on",
+      "meaning": "Q-R017 requires Q-R016"
+    },
+    {
+      "from": "Q-R004",
+      "to": "Q-R017",
+      "type": "depends_on",
+      "meaning": "Q-R017 requires Q-R004"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R017",
+      "type": "depends_on",
+      "meaning": "Q-R017 requires Q-R003"
+    },
+    {
+      "from": "Q-R016",
+      "to": "Q-R018",
+      "type": "depends_on",
+      "meaning": "Q-R018 requires Q-R016"
+    },
+    {
+      "from": "Q-R017",
+      "to": "Q-R019",
+      "type": "depends_on",
+      "meaning": "Q-R019 requires Q-R017"
+    },
+    {
+      "from": "Q-R019",
+      "to": "Q-R020",
+      "type": "depends_on",
+      "meaning": "Q-R020 requires Q-R019"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R020",
+      "type": "depends_on",
+      "meaning": "Q-R020 requires Q-R008"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R021",
+      "type": "depends_on",
+      "meaning": "Q-R021 requires Q-R020"
+    },
+    {
+      "from": "Q-R002",
+      "to": "Q-R021",
+      "type": "depends_on",
+      "meaning": "Q-R021 requires Q-R002"
+    },
+    {
+      "from": "Q-R014",
+      "to": "Q-R021",
+      "type": "depends_on",
+      "meaning": "Q-R021 requires Q-R014"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R022",
+      "type": "depends_on",
+      "meaning": "Q-R022 requires Q-R020"
+    },
+    {
+      "from": "Q-R011",
+      "to": "Q-R023",
+      "type": "depends_on",
+      "meaning": "Q-R023 requires Q-R011"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R023",
+      "type": "depends_on",
+      "meaning": "Q-R023 requires Q-R020"
+    },
+    {
+      "from": "Q-R021",
+      "to": "Q-R023",
+      "type": "depends_on",
+      "meaning": "Q-R023 requires Q-R021"
+    },
+    {
+      "from": "Q-R023",
+      "to": "Q-R024",
+      "type": "depends_on",
+      "meaning": "Q-R024 requires Q-R023"
+    },
+    {
+      "from": "Q-R032",
+      "to": "Q-R024",
+      "type": "depends_on",
+      "meaning": "Q-R024 requires Q-R032"
+    },
+    {
+      "from": "Q-R083",
+      "to": "Q-R024",
+      "type": "depends_on",
+      "meaning": "Q-R024 requires Q-R083"
+    },
+    {
+      "from": "Q-R023",
+      "to": "Q-R025",
+      "type": "depends_on",
+      "meaning": "Q-R025 requires Q-R023"
+    },
+    {
+      "from": "Q-R023",
+      "to": "Q-R026",
+      "type": "depends_on",
+      "meaning": "Q-R026 requires Q-R023"
+    },
+    {
+      "from": "Q-R011",
+      "to": "Q-R026",
+      "type": "depends_on",
+      "meaning": "Q-R026 requires Q-R011"
+    },
+    {
+      "from": "Q-R025",
+      "to": "Q-R027",
+      "type": "depends_on",
+      "meaning": "Q-R027 requires Q-R025"
+    },
+    {
+      "from": "Q-R081",
+      "to": "Q-R027",
+      "type": "depends_on",
+      "meaning": "Q-R027 requires Q-R081"
+    },
+    {
+      "from": "Q-R027",
+      "to": "Q-R028",
+      "type": "depends_on",
+      "meaning": "Q-R028 requires Q-R027"
+    },
+    {
+      "from": "Q-R028",
+      "to": "Q-R029",
+      "type": "depends_on",
+      "meaning": "Q-R029 requires Q-R028"
+    },
+    {
+      "from": "Q-R056",
+      "to": "Q-R029",
+      "type": "depends_on",
+      "meaning": "Q-R029 requires Q-R056"
+    },
+    {
+      "from": "Q-R029",
+      "to": "Q-R030",
+      "type": "depends_on",
+      "meaning": "Q-R030 requires Q-R029"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R031",
+      "type": "depends_on",
+      "meaning": "Q-R031 requires Q-R030"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R032",
+      "type": "depends_on",
+      "meaning": "Q-R032 requires Q-R008"
+    },
+    {
+      "from": "Q-R027",
+      "to": "Q-R033",
+      "type": "depends_on",
+      "meaning": "Q-R033 requires Q-R027"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R034",
+      "type": "depends_on",
+      "meaning": "Q-R034 requires Q-R030"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R035",
+      "type": "depends_on",
+      "meaning": "Q-R035 requires Q-R020"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R035",
+      "type": "depends_on",
+      "meaning": "Q-R035 requires Q-R030"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R036",
+      "type": "depends_on",
+      "meaning": "Q-R036 requires Q-R020"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R036",
+      "type": "depends_on",
+      "meaning": "Q-R036 requires Q-R030"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R037",
+      "type": "depends_on",
+      "meaning": "Q-R037 requires Q-R020"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R037",
+      "type": "depends_on",
+      "meaning": "Q-R037 requires Q-R030"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R038",
+      "type": "depends_on",
+      "meaning": "Q-R038 requires Q-R020"
+    },
+    {
+      "from": "Q-R036",
+      "to": "Q-R038",
+      "type": "depends_on",
+      "meaning": "Q-R038 requires Q-R036"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R039",
+      "type": "depends_on",
+      "meaning": "Q-R039 requires Q-R020"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R039",
+      "type": "depends_on",
+      "meaning": "Q-R039 requires Q-R030"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R040",
+      "type": "depends_on",
+      "meaning": "Q-R040 requires Q-R020"
+    },
+    {
+      "from": "Q-R035",
+      "to": "Q-R040",
+      "type": "depends_on",
+      "meaning": "Q-R040 requires Q-R035"
+    },
+    {
+      "from": "Q-R036",
+      "to": "Q-R040",
+      "type": "depends_on",
+      "meaning": "Q-R040 requires Q-R036"
+    },
+    {
+      "from": "Q-R038",
+      "to": "Q-R040",
+      "type": "depends_on",
+      "meaning": "Q-R040 requires Q-R038"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-R040",
+      "type": "depends_on",
+      "meaning": "Q-R040 requires Q-R039"
+    },
+    {
+      "from": "Q-R045",
+      "to": "Q-R040",
+      "type": "depends_on",
+      "meaning": "Q-R040 requires Q-R045"
+    },
+    {
+      "from": "Q-R021",
+      "to": "Q-R041",
+      "type": "depends_on",
+      "meaning": "Q-R041 requires Q-R021"
+    },
+    {
+      "from": "Q-R040",
+      "to": "Q-R041",
+      "type": "depends_on",
+      "meaning": "Q-R041 requires Q-R040"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-R041",
+      "type": "depends_on",
+      "meaning": "Q-R041 requires Q-R039"
+    },
+    {
+      "from": "Q-R038",
+      "to": "Q-R041",
+      "type": "depends_on",
+      "meaning": "Q-R041 requires Q-R038"
+    },
+    {
+      "from": "Q-R014",
+      "to": "Q-R041",
+      "type": "depends_on",
+      "meaning": "Q-R041 requires Q-R014"
+    },
+    {
+      "from": "Q-R002",
+      "to": "Q-R041",
+      "type": "depends_on",
+      "meaning": "Q-R041 requires Q-R002"
+    },
+    {
+      "from": "Q-R040",
+      "to": "Q-R042",
+      "type": "depends_on",
+      "meaning": "Q-R042 requires Q-R040"
+    },
+    {
+      "from": "Q-R041",
+      "to": "Q-R042",
+      "type": "depends_on",
+      "meaning": "Q-R042 requires Q-R041"
+    },
+    {
+      "from": "Q-R046",
+      "to": "Q-R042",
+      "type": "depends_on",
+      "meaning": "Q-R042 requires Q-R046"
+    },
+    {
+      "from": "Q-R014",
+      "to": "Q-R042",
+      "type": "depends_on",
+      "meaning": "Q-R042 requires Q-R014"
+    },
+    {
+      "from": "Q-R040",
+      "to": "Q-R043",
+      "type": "depends_on",
+      "meaning": "Q-R043 requires Q-R040"
+    },
+    {
+      "from": "Q-R041",
+      "to": "Q-R043",
+      "type": "depends_on",
+      "meaning": "Q-R043 requires Q-R041"
+    },
+    {
+      "from": "Q-R042",
+      "to": "Q-R043",
+      "type": "depends_on",
+      "meaning": "Q-R043 requires Q-R042"
+    },
+    {
+      "from": "Q-R041",
+      "to": "Q-R044",
+      "type": "depends_on",
+      "meaning": "Q-R044 requires Q-R041"
+    },
+    {
+      "from": "Q-R023",
+      "to": "Q-R044",
+      "type": "depends_on",
+      "meaning": "Q-R044 requires Q-R023"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R045",
+      "type": "depends_on",
+      "meaning": "Q-R045 requires Q-R008"
+    },
+    {
+      "from": "Q-R011",
+      "to": "Q-R045",
+      "type": "depends_on",
+      "meaning": "Q-R045 requires Q-R011"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R046",
+      "type": "depends_on",
+      "meaning": "Q-R046 requires Q-R003"
+    },
+    {
+      "from": "Q-R007",
+      "to": "Q-R046",
+      "type": "depends_on",
+      "meaning": "Q-R046 requires Q-R007"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R046",
+      "type": "depends_on",
+      "meaning": "Q-R046 requires Q-R020"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R046",
+      "type": "depends_on",
+      "meaning": "Q-R046 requires Q-R030"
+    },
+    {
+      "from": "Q-R014",
+      "to": "Q-R047",
+      "type": "depends_on",
+      "meaning": "Q-R047 requires Q-R014"
+    },
+    {
+      "from": "Q-R035",
+      "to": "Q-R047",
+      "type": "depends_on",
+      "meaning": "Q-R047 requires Q-R035"
+    },
+    {
+      "from": "Q-R036",
+      "to": "Q-R047",
+      "type": "depends_on",
+      "meaning": "Q-R047 requires Q-R036"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-R047",
+      "type": "depends_on",
+      "meaning": "Q-R047 requires Q-R039"
+    },
+    {
+      "from": "Q-R046",
+      "to": "Q-R047",
+      "type": "depends_on",
+      "meaning": "Q-R047 requires Q-R046"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R048",
+      "type": "depends_on",
+      "meaning": "Q-R048 requires Q-R001"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R048",
+      "type": "depends_on",
+      "meaning": "Q-R048 requires Q-R020"
+    },
+    {
+      "from": "Q-R038",
+      "to": "Q-R048",
+      "type": "depends_on",
+      "meaning": "Q-R048 requires Q-R038"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R049",
+      "type": "depends_on",
+      "meaning": "Q-R049 requires Q-R003"
+    },
+    {
+      "from": "Q-R007",
+      "to": "Q-R049",
+      "type": "depends_on",
+      "meaning": "Q-R049 requires Q-R007"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R049",
+      "type": "depends_on",
+      "meaning": "Q-R049 requires Q-R020"
+    },
+    {
+      "from": "Q-R007",
+      "to": "Q-R050",
+      "type": "depends_on",
+      "meaning": "Q-R050 requires Q-R007"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-R050",
+      "type": "depends_on",
+      "meaning": "Q-R050 requires Q-R039"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R050",
+      "type": "depends_on",
+      "meaning": "Q-R050 requires Q-R020"
+    },
+    {
+      "from": "Q-R066",
+      "to": "Q-R051",
+      "type": "depends_on",
+      "meaning": "Q-R051 requires Q-R066"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R052",
+      "type": "depends_on",
+      "meaning": "Q-R052 requires Q-R008"
+    },
+    {
+      "from": "Q-R040",
+      "to": "Q-R052",
+      "type": "depends_on",
+      "meaning": "Q-R052 requires Q-R040"
+    },
+    {
+      "from": "Q-R042",
+      "to": "Q-R052",
+      "type": "depends_on",
+      "meaning": "Q-R052 requires Q-R042"
+    },
+    {
+      "from": "Q-R050",
+      "to": "Q-R052",
+      "type": "depends_on",
+      "meaning": "Q-R052 requires Q-R050"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R053",
+      "type": "depends_on",
+      "meaning": "Q-R053 requires Q-R008"
+    },
+    {
+      "from": "Q-R070",
+      "to": "Q-R053",
+      "type": "depends_on",
+      "meaning": "Q-R053 requires Q-R070"
+    },
+    {
+      "from": "Q-R045",
+      "to": "Q-R054",
+      "type": "depends_on",
+      "meaning": "Q-R054 requires Q-R045"
+    },
+    {
+      "from": "Q-R052",
+      "to": "Q-R054",
+      "type": "depends_on",
+      "meaning": "Q-R054 requires Q-R052"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R055",
+      "type": "depends_on",
+      "meaning": "Q-R055 requires Q-R001"
+    },
+    {
+      "from": "Q-R002",
+      "to": "Q-R055",
+      "type": "depends_on",
+      "meaning": "Q-R055 requires Q-R002"
+    },
+    {
+      "from": "Q-R004",
+      "to": "Q-R055",
+      "type": "depends_on",
+      "meaning": "Q-R055 requires Q-R004"
+    },
+    {
+      "from": "Q-R066",
+      "to": "Q-R055",
+      "type": "depends_on",
+      "meaning": "Q-R055 requires Q-R066"
+    },
+    {
+      "from": "Q-R052",
+      "to": "Q-R057",
+      "type": "depends_on",
+      "meaning": "Q-R057 requires Q-R052"
+    },
+    {
+      "from": "Q-R009",
+      "to": "Q-R058",
+      "type": "depends_on",
+      "meaning": "Q-R058 requires Q-R009"
+    },
+    {
+      "from": "Q-R052",
+      "to": "Q-R058",
+      "type": "depends_on",
+      "meaning": "Q-R058 requires Q-R052"
+    },
+    {
+      "from": "Q-R031",
+      "to": "Q-R058",
+      "type": "depends_on",
+      "meaning": "Q-R058 requires Q-R031"
+    },
+    {
+      "from": "Q-R052",
+      "to": "Q-R059",
+      "type": "depends_on",
+      "meaning": "Q-R059 requires Q-R052"
+    },
+    {
+      "from": "Q-R058",
+      "to": "Q-R059",
+      "type": "depends_on",
+      "meaning": "Q-R059 requires Q-R058"
+    },
+    {
+      "from": "Q-R024",
+      "to": "Q-R060",
+      "type": "depends_on",
+      "meaning": "Q-R060 requires Q-R024"
+    },
+    {
+      "from": "Q-R059",
+      "to": "Q-R060",
+      "type": "depends_on",
+      "meaning": "Q-R060 requires Q-R059"
+    },
+    {
+      "from": "Q-R083",
+      "to": "Q-R060",
+      "type": "depends_on",
+      "meaning": "Q-R060 requires Q-R083"
+    },
+    {
+      "from": "Q-R044",
+      "to": "Q-R061",
+      "type": "depends_on",
+      "meaning": "Q-R061 requires Q-R044"
+    },
+    {
+      "from": "Q-R047",
+      "to": "Q-R061",
+      "type": "depends_on",
+      "meaning": "Q-R061 requires Q-R047"
+    },
+    {
+      "from": "Q-R048",
+      "to": "Q-R061",
+      "type": "depends_on",
+      "meaning": "Q-R061 requires Q-R048"
+    },
+    {
+      "from": "Q-R049",
+      "to": "Q-R061",
+      "type": "depends_on",
+      "meaning": "Q-R061 requires Q-R049"
+    },
+    {
+      "from": "Q-R050",
+      "to": "Q-R061",
+      "type": "depends_on",
+      "meaning": "Q-R061 requires Q-R050"
+    },
+    {
+      "from": "Q-R009",
+      "to": "Q-R061",
+      "type": "depends_on",
+      "meaning": "Q-R061 requires Q-R009"
+    },
+    {
+      "from": "Q-R061",
+      "to": "Q-R062",
+      "type": "depends_on",
+      "meaning": "Q-R062 requires Q-R061"
+    },
+    {
+      "from": "Q-R052",
+      "to": "Q-R062",
+      "type": "depends_on",
+      "meaning": "Q-R062 requires Q-R052"
+    },
+    {
+      "from": "Q-R062",
+      "to": "Q-R063",
+      "type": "depends_on",
+      "meaning": "Q-R063 requires Q-R062"
+    },
+    {
+      "from": "Q-R045",
+      "to": "Q-R063",
+      "type": "depends_on",
+      "meaning": "Q-R063 requires Q-R045"
+    },
+    {
+      "from": "Q-R056",
+      "to": "Q-R064",
+      "type": "depends_on",
+      "meaning": "Q-R064 requires Q-R056"
+    },
+    {
+      "from": "Q-R083",
+      "to": "Q-R064",
+      "type": "depends_on",
+      "meaning": "Q-R064 requires Q-R083"
+    },
+    {
+      "from": "Q-R061",
+      "to": "Q-R065",
+      "type": "depends_on",
+      "meaning": "Q-R065 requires Q-R061"
+    },
+    {
+      "from": "Q-R068",
+      "to": "Q-R065",
+      "type": "depends_on",
+      "meaning": "Q-R065 requires Q-R068"
+    },
+    {
+      "from": "Q-R062",
+      "to": "Q-R066",
+      "type": "depends_on",
+      "meaning": "Q-R066 requires Q-R062"
+    },
+    {
+      "from": "Q-R047",
+      "to": "Q-R066",
+      "type": "depends_on",
+      "meaning": "Q-R066 requires Q-R047"
+    },
+    {
+      "from": "Q-R066",
+      "to": "Q-R067",
+      "type": "depends_on",
+      "meaning": "Q-R067 requires Q-R066"
+    },
+    {
+      "from": "Q-R041",
+      "to": "Q-R068",
+      "type": "depends_on",
+      "meaning": "Q-R068 requires Q-R041"
+    },
+    {
+      "from": "Q-R026",
+      "to": "Q-R068",
+      "type": "depends_on",
+      "meaning": "Q-R068 requires Q-R026"
+    },
+    {
+      "from": "Q-R042",
+      "to": "Q-R069",
+      "type": "depends_on",
+      "meaning": "Q-R069 requires Q-R042"
+    },
+    {
+      "from": "Q-R066",
+      "to": "Q-R069",
+      "type": "depends_on",
+      "meaning": "Q-R069 requires Q-R066"
+    },
+    {
+      "from": "Q-R066",
+      "to": "Q-R070",
+      "type": "depends_on",
+      "meaning": "Q-R070 requires Q-R066"
+    },
+    {
+      "from": "Q-R067",
+      "to": "Q-R070",
+      "type": "depends_on",
+      "meaning": "Q-R070 requires Q-R067"
+    },
+    {
+      "from": "Q-R068",
+      "to": "Q-R070",
+      "type": "depends_on",
+      "meaning": "Q-R070 requires Q-R068"
+    },
+    {
+      "from": "Q-R069",
+      "to": "Q-R070",
+      "type": "depends_on",
+      "meaning": "Q-R070 requires Q-R069"
+    },
+    {
+      "from": "Q-R043",
+      "to": "Q-R070",
+      "type": "depends_on",
+      "meaning": "Q-R070 requires Q-R043"
+    },
+    {
+      "from": "Q-R063",
+      "to": "Q-R070",
+      "type": "depends_on",
+      "meaning": "Q-R070 requires Q-R063"
+    },
+    {
+      "from": "Q-R070",
+      "to": "Q-R071",
+      "type": "depends_on",
+      "meaning": "Q-R071 requires Q-R070"
+    },
+    {
+      "from": "Q-R053",
+      "to": "Q-R071",
+      "type": "depends_on",
+      "meaning": "Q-R071 requires Q-R053"
+    },
+    {
+      "from": "Q-R055",
+      "to": "Q-R071",
+      "type": "depends_on",
+      "meaning": "Q-R071 requires Q-R055"
+    },
+    {
+      "from": "Q-R071",
+      "to": "Q-R072",
+      "type": "depends_on",
+      "meaning": "Q-R072 requires Q-R071"
+    },
+    {
+      "from": "Q-R069",
+      "to": "Q-R072",
+      "type": "depends_on",
+      "meaning": "Q-R072 requires Q-R069"
+    },
+    {
+      "from": "Q-R044",
+      "to": "Q-R073",
+      "type": "depends_on",
+      "meaning": "Q-R073 requires Q-R044"
+    },
+    {
+      "from": "Q-R026",
+      "to": "Q-R073",
+      "type": "depends_on",
+      "meaning": "Q-R073 requires Q-R026"
+    },
+    {
+      "from": "Q-R071",
+      "to": "Q-R073",
+      "type": "depends_on",
+      "meaning": "Q-R073 requires Q-R071"
+    },
+    {
+      "from": "Q-R068",
+      "to": "Q-R074",
+      "type": "depends_on",
+      "meaning": "Q-R074 requires Q-R068"
+    },
+    {
+      "from": "Q-R074",
+      "to": "Q-R075",
+      "type": "depends_on",
+      "meaning": "Q-R075 requires Q-R074"
+    },
+    {
+      "from": "Q-R011",
+      "to": "Q-R075",
+      "type": "depends_on",
+      "meaning": "Q-R075 requires Q-R011"
+    },
+    {
+      "from": "Q-R075",
+      "to": "Q-R076",
+      "type": "depends_on",
+      "meaning": "Q-R076 requires Q-R075"
+    },
+    {
+      "from": "Q-R010",
+      "to": "Q-R076",
+      "type": "depends_on",
+      "meaning": "Q-R076 requires Q-R010"
+    },
+    {
+      "from": "Q-R087",
+      "to": "Q-R077",
+      "type": "depends_on",
+      "meaning": "Q-R077 requires Q-R087"
+    },
+    {
+      "from": "Q-R052",
+      "to": "Q-R077",
+      "type": "depends_on",
+      "meaning": "Q-R077 requires Q-R052"
+    },
+    {
+      "from": "Q-R072",
+      "to": "Q-R078",
+      "type": "depends_on",
+      "meaning": "Q-R078 requires Q-R072"
+    },
+    {
+      "from": "Q-R012",
+      "to": "Q-R078",
+      "type": "depends_on",
+      "meaning": "Q-R078 requires Q-R012"
+    },
+    {
+      "from": "Q-R056",
+      "to": "Q-R079",
+      "type": "depends_on",
+      "meaning": "Q-R079 requires Q-R056"
+    },
+    {
+      "from": "Q-R012",
+      "to": "Q-R079",
+      "type": "depends_on",
+      "meaning": "Q-R079 requires Q-R012"
+    },
+    {
+      "from": "Q-R027",
+      "to": "Q-R080",
+      "type": "depends_on",
+      "meaning": "Q-R080 requires Q-R027"
+    },
+    {
+      "from": "Q-R026",
+      "to": "Q-R080",
+      "type": "depends_on",
+      "meaning": "Q-R080 requires Q-R026"
+    },
+    {
+      "from": "Q-R012",
+      "to": "Q-R081",
+      "type": "depends_on",
+      "meaning": "Q-R081 requires Q-R012"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R082",
+      "type": "depends_on",
+      "meaning": "Q-R082 requires Q-R008"
+    },
+    {
+      "from": "Q-R012",
+      "to": "Q-R082",
+      "type": "depends_on",
+      "meaning": "Q-R082 requires Q-R012"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-R084",
+      "type": "depends_on",
+      "meaning": "Q-R084 requires Q-R008"
+    },
+    {
+      "from": "Q-R084",
+      "to": "Q-R085",
+      "type": "depends_on",
+      "meaning": "Q-R085 requires Q-R084"
+    },
+    {
+      "from": "Q-R086",
+      "to": "Q-R087",
+      "type": "depends_on",
+      "meaning": "Q-R087 requires Q-R086"
+    },
+    {
+      "from": "Q-R087",
+      "to": "Q-R088",
+      "type": "depends_on",
+      "meaning": "Q-R088 requires Q-R087"
+    },
+    {
+      "from": "Q-R085",
+      "to": "Q-R088",
+      "type": "depends_on",
+      "meaning": "Q-R088 requires Q-R085"
+    },
+    {
+      "from": "Q-R087",
+      "to": "Q-R089",
+      "type": "depends_on",
+      "meaning": "Q-R089 requires Q-R087"
+    },
+    {
+      "from": "Q-R084",
+      "to": "Q-R089",
+      "type": "depends_on",
+      "meaning": "Q-R089 requires Q-R084"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-R008",
+      "type": "handoff",
+      "handoff": "Q-H01"
+    },
+    {
+      "from": "Q-R002",
+      "to": "Q-R041",
+      "type": "handoff",
+      "handoff": "Q-H02"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-R049",
+      "type": "handoff",
+      "handoff": "Q-H03"
+    },
+    {
+      "from": "Q-R004",
+      "to": "Q-R017",
+      "type": "handoff",
+      "handoff": "Q-H04"
+    },
+    {
+      "from": "Q-R015",
+      "to": "Q-R016",
+      "type": "handoff",
+      "handoff": "Q-H05"
+    },
+    {
+      "from": "Q-R017",
+      "to": "Q-R019",
+      "type": "handoff",
+      "handoff": "Q-H06"
+    },
+    {
+      "from": "Q-R020",
+      "to": "Q-R023",
+      "type": "handoff",
+      "handoff": "Q-H07"
+    },
+    {
+      "from": "Q-R023",
+      "to": "Q-R024",
+      "type": "handoff",
+      "handoff": "Q-H08"
+    },
+    {
+      "from": "Q-R024",
+      "to": "Q-R027",
+      "type": "handoff",
+      "handoff": "Q-H09"
+    },
+    {
+      "from": "Q-R028",
+      "to": "Q-R029",
+      "type": "handoff",
+      "handoff": "Q-H10"
+    },
+    {
+      "from": "Q-R029",
+      "to": "Q-R030",
+      "type": "handoff",
+      "handoff": "Q-H11"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-R040",
+      "type": "handoff",
+      "handoff": "Q-H12"
+    },
+    {
+      "from": "Q-R031",
+      "to": "Q-R058",
+      "type": "handoff",
+      "handoff": "Q-H13"
+    },
+    {
+      "from": "Q-R035",
+      "to": "Q-R041",
+      "type": "handoff",
+      "handoff": "Q-H14"
+    },
+    {
+      "from": "Q-R036",
+      "to": "Q-R042",
+      "type": "handoff",
+      "handoff": "Q-H15"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-R047",
+      "type": "handoff",
+      "handoff": "Q-H16"
+    },
+    {
+      "from": "Q-R046",
+      "to": "Q-R042",
+      "type": "handoff",
+      "handoff": "Q-H17"
+    },
+    {
+      "from": "Q-R042",
+      "to": "Q-R069",
+      "type": "handoff",
+      "handoff": "Q-H18"
+    },
+    {
+      "from": "Q-R044",
+      "to": "Q-R061",
+      "type": "handoff",
+      "handoff": "Q-H19"
+    },
+    {
+      "from": "Q-R052",
+      "to": "Q-R058",
+      "type": "handoff",
+      "handoff": "Q-H20"
+    },
+    {
+      "from": "Q-R056",
+      "to": "Q-R008",
+      "type": "handoff",
+      "handoff": "Q-H21"
+    },
+    {
+      "from": "Q-R061",
+      "to": "Q-R062",
+      "type": "handoff",
+      "handoff": "Q-H22"
+    },
+    {
+      "from": "Q-R062",
+      "to": "Q-R066",
+      "type": "handoff",
+      "handoff": "Q-H23"
+    },
+    {
+      "from": "Q-R047",
+      "to": "Q-R066",
+      "type": "handoff",
+      "handoff": "Q-H24"
+    },
+    {
+      "from": "Q-R026",
+      "to": "Q-R068",
+      "type": "handoff",
+      "handoff": "Q-H25"
+    },
+    {
+      "from": "Q-R071",
+      "to": "Q-R072",
+      "type": "handoff",
+      "handoff": "Q-H26"
+    },
+    {
+      "from": "Q-R072",
+      "to": "Q-R078",
+      "type": "handoff",
+      "handoff": "Q-H27"
+    },
+    {
+      "from": "Q-R074",
+      "to": "Q-R075",
+      "type": "handoff",
+      "handoff": "Q-H28"
+    },
+    {
+      "from": "Q-R076",
+      "to": "Q-R016",
+      "type": "handoff",
+      "handoff": "Q-H29"
+    },
+    {
+      "from": "Q-R076",
+      "to": "Q-R064",
+      "type": "handoff",
+      "handoff": "Q-H30"
+    },
+    {
+      "from": "Q-R080",
+      "to": "Q-R026",
+      "type": "handoff",
+      "handoff": "Q-H31"
+    },
+    {
+      "from": "Q-R009",
+      "to": "Q-R061",
+      "type": "handoff",
+      "handoff": "Q-H32"
+    },
+    {
+      "from": "Q-R021",
+      "to": "Q-CM01",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R040",
+      "to": "Q-CM01",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R041",
+      "to": "Q-CM01",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R043",
+      "to": "Q-CM01",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R044",
+      "to": "Q-CM01",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-CM02",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R002",
+      "to": "Q-CM02",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R041",
+      "to": "Q-CM02",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R055",
+      "to": "Q-CM02",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R002",
+      "to": "Q-CM03",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R014",
+      "to": "Q-CM03",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R041",
+      "to": "Q-CM03",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R046",
+      "to": "Q-CM03",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R047",
+      "to": "Q-CM03",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R036",
+      "to": "Q-CM04",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R042",
+      "to": "Q-CM04",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R069",
+      "to": "Q-CM04",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R046",
+      "to": "Q-CM04",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R035",
+      "to": "Q-CM05",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R029",
+      "to": "Q-CM05",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-CM05",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-CM05",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R028",
+      "to": "Q-CM06",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R029",
+      "to": "Q-CM06",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R030",
+      "to": "Q-CM06",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R034",
+      "to": "Q-CM06",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R045",
+      "to": "Q-CM06",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R054",
+      "to": "Q-CM06",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R026",
+      "to": "Q-CM06",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R003",
+      "to": "Q-CM07",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R049",
+      "to": "Q-CM07",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R007",
+      "to": "Q-CM07",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R051",
+      "to": "Q-CM07",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-CM08",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R048",
+      "to": "Q-CM08",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R038",
+      "to": "Q-CM08",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R001",
+      "to": "Q-CM09",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R004",
+      "to": "Q-CM09",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R017",
+      "to": "Q-CM09",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R055",
+      "to": "Q-CM09",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R010",
+      "to": "Q-CM09",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R007",
+      "to": "Q-CM10",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R050",
+      "to": "Q-CM10",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-CM10",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R066",
+      "to": "Q-CM11",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R067",
+      "to": "Q-CM11",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R051",
+      "to": "Q-CM11",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R014",
+      "to": "Q-CM12",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R039",
+      "to": "Q-CM12",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R047",
+      "to": "Q-CM12",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R036",
+      "to": "Q-CM12",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R035",
+      "to": "Q-CM12",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R008",
+      "to": "Q-CM13",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R009",
+      "to": "Q-CM13",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R053",
+      "to": "Q-CM13",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R062",
+      "to": "Q-CM13",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R070",
+      "to": "Q-CM13",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R036",
+      "to": "Q-CM14",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R038",
+      "to": "Q-CM14",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R040",
+      "to": "Q-CM14",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R069",
+      "to": "Q-CM15",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R072",
+      "to": "Q-CM15",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R078",
+      "to": "Q-CM15",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R009",
+      "to": "Q-CM16",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R031",
+      "to": "Q-CM16",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R058",
+      "to": "Q-CM16",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R045",
+      "to": "Q-CM16",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R040",
+      "to": "Q-CM17",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R046",
+      "to": "Q-CM17",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R038",
+      "to": "Q-CM17",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R023",
+      "to": "Q-CM18",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R026",
+      "to": "Q-CM18",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R044",
+      "to": "Q-CM18",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R068",
+      "to": "Q-CM18",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R073",
+      "to": "Q-CM18",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R080",
+      "to": "Q-CM18",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R010",
+      "to": "Q-CM19",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R056",
+      "to": "Q-CM19",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R070",
+      "to": "Q-CM19",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R071",
+      "to": "Q-CM19",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R079",
+      "to": "Q-CM19",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R082",
+      "to": "Q-CM19",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R006",
+      "to": "Q-CM20",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R016",
+      "to": "Q-CM20",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R018",
+      "to": "Q-CM20",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R019",
+      "to": "Q-CM20",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R060",
+      "to": "Q-CM20",
+      "type": "causes_critical_mistake"
+    },
+    {
+      "from": "Q-R083",
+      "to": "Q-CM20",
+      "type": "causes_critical_mistake"
+    }
+  ]
+}

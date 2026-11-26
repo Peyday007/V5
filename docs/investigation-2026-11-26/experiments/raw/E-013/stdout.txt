@@ -1,0 +1,84 @@
+dec1125c       {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | I have a DJI Mavic 3 and my FAA Part 107 license, I'm in Phoenix. I wa | {"kind":"CASH","amount":4500,"recurring":null,"deadline":"2027-01-25T06:00:00.000Z","windowDays":60,"capitalCeiling":1500,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":171,"hoursPerWeek":20,"unread":[]}
+dec1125c       {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | Seattle. I have zero money to invest and I need $500 within 7 days. I  | {"kind":"CASH","amount":500,"recurring":null,"deadline":"2026-12-03T06:00:00.000Z","windowDays":7,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":0,"hoursCeiling":15,"hoursPerWeek":null,"unread":[]}
+dec1125c       {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | I want a business that does $20,000 in the next 90 days and keeps goin | {"kind":"CASH","amount":20000,"recurring":null,"deadline":"2027-02-24T06:00:00.000Z","windowDays":90,"capitalCeiling":5000,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":0,"hoursPerWeek":null,"unread":[]}
+fm1126a-recon  {"amount":"OK","monthly":"OK","window":"OK"} | I want to go from nothing to $3,500 a month within 4 months. | {"kind":"CASH","amount":3500,"recurring":"MONTHLY","deadline":"2027-03-26T06:00:00.000Z","windowDays":120,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+fm1126a-recon  {"amount":"OK","window":"OK","capital":"OK"} | I need $2,500 in about two weeks and I can spend $300. | {"kind":"CASH","amount":2500,"recurring":null,"deadline":"2026-12-10T06:00:00.000Z","windowDays":14,"capitalCeiling":300,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+fm1126a-recon  {"amount":"OK","window":"OK","capital":"OK"} | Make $4,000 in 60 days without spending more than $1,000. | {"kind":"CASH","amount":4000,"recurring":null,"deadline":"2027-01-25T06:00:00.000Z","windowDays":60,"capitalCeiling":1000,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+fm1126a-recon  {"amount":"OK","window":"OK","hours":"OK"} | I want $3,000 within 10 weeks; 3 hours a week at most. | {"kind":"CASH","amount":3000,"recurring":null,"deadline":"2027-02-04T06:00:00.000Z","windowDays":70,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":30,"hoursPerWeek":3,"unread":[]}
+fm1126a-recon  {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | I have $6,000 and zero time. I want $2,000 within 2 months. | {"kind":"CASH","amount":2000,"recurring":null,"deadline":"2027-01-26T06:00:00.000Z","windowDays":61,"capitalCeiling":6000,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":0,"hoursPerWeek":null,"unread":[]}
+fm1126a-recon  {"amount":"OK","monthly":"OK","window":"OK","capital":"OK"} | We want an extra $1,000 a month starting in March and can spend $250. | {"kind":"CASH","amount":1000,"recurring":"MONTHLY","deadline":"2027-03-31T23:59:59.000Z","windowDays":null,"capitalCeiling":250,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+fm1126a-recon  {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | I'm in Tulsa with a pickup truck and my weekends are free. I want to m | {"kind":"CASH","amount":200,"recurring":null,"deadline":"2026-11-30T23:59:59.000Z","windowDays":null,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":0,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+control        {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | Make $10,000 in 30 days with a $2,000 budget and 10 hours a week. | {"kind":"CASH","amount":10000,"recurring":null,"deadline":"2026-12-26T06:00:00.000Z","windowDays":30,"capitalCeiling":2000,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":43,"hoursPerWeek":10,"unread":[]}
+control        {"amount":"OK","window":"OK","capital":"OK"} | I want $5,000 in 90 days. I can invest $500. | {"kind":"CASH","amount":5000,"recurring":null,"deadline":"2027-02-24T06:00:00.000Z","windowDays":90,"capitalCeiling":500,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"OK","window":"OK","capital":"UNREAD","hours":"OK"} | I can only spare a couple of evenings a week. I'd like to make $1,500  | {"kind":"CASH","amount":1500,"recurring":null,"deadline":"2027-01-31T23:59:59.000Z","windowDays":null,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"REFUSED","window":"OK","capital":"OK","hours":"OK"} | Help me earn ten thousand bucks in the next three months; I won't do a | {"kind":"OTHER","amount":null,"recurring":null,"deadline":"2027-02-26T06:00:00.000Z","windowDays":92,"capitalCeiling":3000,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"OK","window":"UNREAD","capital":"UNREAD","hours":"WRONG(hpw null, total null)"} | I need 2k fast, within a fortnight. Zero budget. Maybe 6 hrs a week. | {"kind":"CASH","amount":2000,"recurring":null,"deadline":null,"windowDays":null,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":["\"fast\": not a deadline","\"6 hrs a week\": an hours rate, not a total","currency: \"2k\" names no currency","deadline: none stated"]}
+new            {"amount":"OK","monthly":"OK","window":"OK","capital":"OK","hours":"WRONG(hpw null, total null)"} | Target: $750/mo recurring by March 1st. Max spend $250. I work full ti | {"kind":"CASH","amount":750,"recurring":"MONTHLY","deadline":"2027-03-01T23:59:59.000Z","windowDays":null,"capitalCeiling":250,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | I'd like to bring in about $8,000 before Christmas. I can put $1,200 t | {"kind":"CASH","amount":8000,"recurring":null,"deadline":"2026-12-24T23:59:59.000Z","windowDays":null,"capitalCeiling":1200,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":0,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"OK","window":"UNREAD","capital":"OK","hours":"OK"} | Looking to net $600 this weekend. I have no money but plenty of time. | {"kind":"CASH","amount":600,"recurring":null,"deadline":null,"windowDays":null,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":0,"hoursCeiling":null,"hoursPerWeek":null,"unread":["deadline: none stated"]}
+new            {"amount":"OK","window":"OK","capital":"UNREAD","hours":"WRONG(hpw null, total null)"} | Can you get me to $12k in revenue over the next 6 weeks? Budget is cap | {"kind":"CASH","amount":12000,"recurring":null,"deadline":"2027-01-07T06:00:00.000Z","windowDays":42,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"OK","window":"OK","capital":"UNREAD"} | I want $3,000 in 45 days. I'm not putting a cent in. | {"kind":"CASH","amount":3000,"recurring":null,"deadline":"2027-01-10T06:00:00.000Z","windowDays":45,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"OK","window":"OK","capital":"OK","hours":"OK"} | Earn $5k within 30 days, spending under $800, working no more than 2 h | {"kind":"CASH","amount":5000,"recurring":null,"deadline":"2026-12-26T06:00:00.000Z","windowDays":30,"capitalCeiling":800,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":60,"hoursPerWeek":14,"unread":[]}
+new            {"amount":"REFUSED","window":"OK","capital":"UNREAD","hours":"OK"} | Half a grand in ten days, no upfront money, I'm free weekends only. | {"kind":"OTHER","amount":null,"recurring":null,"deadline":"2026-12-06T06:00:00.000Z","windowDays":10,"capitalCeiling":null,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"REFUSED","window":"OK","capital":"OK"} | I want twenty-five hundred dollars by New Year's Eve with a $300 budge | {"kind":"OTHER","amount":null,"recurring":null,"deadline":"2026-12-31T23:59:59.000Z","windowDays":null,"capitalCeiling":300,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+new            {"amount":"OK","window":"OK","capital":"OK","hours":"WRONG(total null, hpw null)"} | I can't spend more than $1k and can't work more than 8 hours total; go | {"kind":"CASH","amount":2000,"recurring":null,"deadline":"2026-12-17T06:00:00.000Z","windowDays":21,"capitalCeiling":1000,"beforeProof":null,"capitalAssumed":null,"hoursCeiling":null,"hoursPerWeek":null,"unread":[]}
+{
+ "dec1125c:amount": {
+  "OK": 3
+ },
+ "dec1125c:window": {
+  "OK": 3
+ },
+ "dec1125c:capital": {
+  "OK": 3
+ },
+ "dec1125c:hours": {
+  "OK": 3
+ },
+ "fm1126a-recon:amount": {
+  "OK": 7
+ },
+ "fm1126a-recon:monthly": {
+  "OK": 2
+ },
+ "fm1126a-recon:window": {
+  "OK": 7
+ },
+ "fm1126a-recon:capital": {
+  "OK": 5
+ },
+ "fm1126a-recon:hours": {
+  "OK": 3
+ },
+ "control:amount": {
+  "OK": 2
+ },
+ "control:window": {
+  "OK": 2
+ },
+ "control:capital": {
+  "OK": 2
+ },
+ "control:hours": {
+  "OK": 1
+ },
+ "new:amount": {
+  "OK": 9,
+  "REFUSED": 3
+ },
+ "new:window": {
+  "OK": 10,
+  "UNREAD": 2
+ },
+ "new:capital": {
+  "UNREAD": 5,
+  "OK": 7
+ },
+ "new:hours": {
+  "OK": 6,
+  "WRONG": 4
+ },
+ "new:monthly": {
+  "OK": 1
+ }
+}
