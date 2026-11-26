@@ -1,2 +1,5 @@
 # label|endpoint|model|concurrency  (discovery only while no target lines)
 pod y7us619p8bi0to
+gptoss120b|gpu|openai/gpt-oss-120b|4
+qwen38_27b|sw|groq/qwen/qwen3.8-27b|2
+fallback_auto|sw|auto/best-coding|3
