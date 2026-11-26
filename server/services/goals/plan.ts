@@ -2981,8 +2981,13 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     rounds,
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
-    // The designs the model neither priced nor considered are kept and marked, never dropped (S-0061).
-    partial: inGoalScope(arrangements, model),
+    /*
+     * A goal whose model priced or considered nothing still reads its constructed designs as
+     * marked pathways, never as none (S-0061, production r01.opp-04 2026-11-26). A goal that
+     * already has modelled pathways reads exactly what it read before: its plan, plan set and
+     * committee rest on them, and its unpriced designs are asked through `unpriced` already.
+     */
+    partial: model.considered.length + (model.estimates?.length ?? 0) === 0 ? inGoalScope(arrangements, model) : [],
   });
   trace('pathways');
   /*
