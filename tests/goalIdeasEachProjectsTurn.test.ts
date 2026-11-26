@@ -120,4 +120,18 @@ describe('a fresh goal beside an older goal’s backlog', () => {
     expect(picked).toHaveLength(GOAL_JUDGMENTS_PER_TICK);
     expect(picked).toContain(dive);
   });
+
+  it("holds no cancelled or paused goal's backlog in the goal queue ahead of a live goal (fresh batch, 2026-11-26)", async () => {
+    const stopped = await goalProject('cancelled goal', 5);
+    const paused = await goalProject('paused goal', 5);
+    const live = await goalProject('live goal', 5);
+    for (let i = 0; i < 6; i += 1) await goalIdea(stopped, `stopped ${i}`, hoursAgo(5, i), null);
+    for (let i = 0; i < 6; i += 1) await goalIdea(paused, `paused ${i}`, hoursAgo(5, i), null);
+    const first = await goalIdea(live, 'live dive', hoursAgo(1), null);
+    await getDb().run(`UPDATE workstreams SET cancelled_at = ? WHERE id = ?`, [hoursAgo(2), stopped.goalId]);
+    await getDb().run(`UPDATE workstreams SET paused_at = ? WHERE id = ?`, [hoursAgo(2), paused.goalId]);
+
+    const queue = (await unjudgedGoalIdeas(40)).map((one) => one.id);
+    expect(queue).toEqual([first]);
+  });
 });

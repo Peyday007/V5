@@ -91,6 +91,13 @@ let projectId = '';
 
 beforeEach(async () => {
   projectId = (await freshProject()).project.id;
+  // A live goal targets the project: a goal's ideas are the goal's work only while its goal runs (goalIdeaSql).
+  const now = new Date().toISOString();
+  await getDb().run(
+    `INSERT INTO workstreams (id, project_id, title, intent, purpose, target_metric, target_amount_cents, target_currency, created_at, updated_at)
+     VALUES (?, ?, 'Earn', 'Earn', 'REVENUE_DIRECT', 'SETTLED_CASH', 1000000, 'USD', ?, ?)`,
+    [`wst_price_${projectId.slice(-8)}`, projectId, now, now],
+  );
 });
 
 afterAll(async () => {

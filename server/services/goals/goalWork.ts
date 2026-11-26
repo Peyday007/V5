@@ -77,6 +77,11 @@ export function goalPriceQuestionOf(idea: { title: string; statement: string }):
  * goal's research drops back into the ordinary order by the same decision that
  * holds its bins. No parameters.
  */
+/** The projects a live goal targets, as SQL — the same reading of "live" as `LIVE_GOAL_IDS_SQL`. */
+export const LIVE_GOAL_PROJECT_IDS_SQL =
+  'SELECT COALESCE(lgp.target_project_id, lgp.project_id) FROM workstreams lgp WHERE lgp.target_metric IS NOT NULL AND COALESCE(lgp.target_project_id, lgp.project_id) IS NOT NULL' +
+  ' AND lgp.archived_at IS NULL AND lgp.paused_at IS NULL AND lgp.cancelled_at IS NULL';
+
 export const LIVE_GOAL_IDS_SQL =
   'SELECT lg.id FROM workstreams lg WHERE lg.target_metric IS NOT NULL' +
   ' AND lg.archived_at IS NULL AND lg.paused_at IS NULL AND lg.cancelled_at IS NULL';
@@ -190,7 +195,15 @@ export function liveGoalWorkItemSql(): string {
 
 /** A boolean SQL expression over a `russell_candidates` row aliased `c`; true for the goal's own ideas. No parameters. */
 export function goalIdeaSql(c: string): string {
-  return `(${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
+  /*
+   * Only a live goal's project (fresh batch fm1126b, 2026-11-26): the clauses
+   * below named ideas by how they were made, never by whether the goal behind
+   * them still runs, so a cancelled run's 600 ideas and the paused goals'
+   * backlog stood at the head of the judge's goal queue, untouched, while 30
+   * live goals' first ideas waited behind them. A paused or cancelled goal's
+   * ideas drop to the ordinary order, as `LIVE_GOAL_IDS_SQL` already says.
+   */
+  return `(${c}.project_id IN (${LIVE_GOAL_PROJECT_IDS_SQL}) AND (${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
                       WHERE gr.bucket_id LIKE 'goal-%' AND gr.candidate_id IS NOT NULL)
     OR ${c}.id IN (SELECT gop.candidate_id FROM cash_opportunities gop
                      JOIN cash_discovery_rounds gr2 ON gr2.id = gop.discovery_round_id
@@ -206,7 +219,7 @@ export function goalIdeaSql(c: string): string {
     OR ${c}.id IN (SELECT gn4.candidate_id FROM cash_needs gn4
                     WHERE gn4.state = 'OPEN' AND gn4.candidate_id IS NOT NULL
                       AND gn4.opportunity_id IN (${liveGoalOpeningIdsSql()}))
-    OR ${c}.id IN (${liveGoalCandidateIdsSql()}))`;
+    OR ${c}.id IN (${liveGoalCandidateIdsSql()})))`;
 }
 
 /**

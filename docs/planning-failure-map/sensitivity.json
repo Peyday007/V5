@@ -1,5 +1,5 @@
 {
- "at": "2026-11-26T07:19:44.972Z",
+ "at": "2026-11-26T07:53:19.683Z",
  "results": [
   {
    "id": "C01-F",
@@ -136,6 +136,19 @@
     "× tests/planningFailureMapWave1.test.ts > RC4: every distinct verified finding can reach the planner > past its budget takes every lane in turn, so the newest round cannot crowd the rest out"
    ],
    "at": "2026-11-26T07:18:58.628Z"
+  },
+  {
+   "id": "C14-I",
+   "rc": "RC19",
+   "why": "historical: a cancelled run and paused goals held the head of the judge queue; 30 live goals waited",
+   "test": "tests/goalIdeasEachProjectsTurn.test.ts",
+   "title": "holds no cancelled or paused goal's backlog",
+   "knownBadDetected": false,
+   "causeNamed": false,
+   "knownGoodAccepted": true,
+   "verified": false,
+   "failing": [],
+   "at": "2026-11-26T07:53:19.683Z"
   },
   {
    "id": "C19-I",
