@@ -890,6 +890,29 @@ async function judging(): Promise<void> {
 }
 
 /**
+ * judge-one --run R: the experiment that settles why a run's ideas sit unjudged —
+ * Brain's own judgment of the run's oldest unjudged idea, exactly as the tick's
+ * judge pass makes it (`judgeCandidate`), with the archive read timed apart.
+ * Judging spends nothing; it is the decision the tick would record.
+ */
+async function judgeOne(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const projects = (await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id);
+  const marks = projects.map(() => '?').join(',') || "''";
+  const rows = await getDb().all<{ id: string; title: string }>(`SELECT id, title FROM russell_candidates WHERE project_id IN (${marks}) AND priority IS NULL AND state = 'CAPTURED' ORDER BY created_at LIMIT 1`, projects);
+  if (!rows[0]) fail('no unjudged idea in this run');
+  const { getCandidate } = await import('../server/repos/russellCandidates.ts');
+  const { askArchive, judgeCandidate } = await import('../server/services/russell/planning.ts');
+  const candidate = await getCandidate(rows[0].id);
+  let t = Date.now();
+  const archive = await askArchive(candidate!).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error) }));
+  console.log(`JUDGE archive ${JSON.stringify({ ms: Date.now() - t, claimsConsidered: (archive as { claimsConsidered?: number }).claimsConsidered ?? null, error: (archive as { error?: string }).error ?? null })}`);
+  t = Date.now();
+  const outcome = await judgeCandidate(rows[0].id).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error) }));
+  console.log(`JUDGE judged ${JSON.stringify({ id: rows[0].id, title: rows[0].title.slice(0, 100), ms: Date.now() - t, outcome })}`);
+}
+
+/**
  * focus --run R / unfocus: the owner's priority override (2026-11-26, "PRIORITY
  * OVERRIDE — BRAIN INTELLIGENCE COMPLETION MISSION"): every live goal outside
  * evaluation run R is paused so its bins stop taking research slots and model
@@ -949,6 +972,7 @@ try {
   else if (command === 'questions') await questions();
   else if (command === 'focus') await focus();
   else if (command === 'judging') await judging();
+  else if (command === 'judge-one') await judgeOne();
   else if (command === 'unfocus') await unfocus();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
