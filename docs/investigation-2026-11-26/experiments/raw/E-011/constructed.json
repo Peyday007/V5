@@ -1,0 +1,167 @@
+{
+ "snowRoute": {
+  "key": "97d32728b684f627",
+  "title": "Commercial snow-plow contracts brokered to plow operators",
+  "buyerKind": null,
+  "mechanism": "EXISTING_BUYING_SIGNAL",
+  "industry": "snow removal",
+  "payer": "Minneapolis commercial property managers",
+  "offer": "monthly snow-plow contract fulfilled by a subcontracted plow operator",
+  "price": 700,
+  "priceAnchor": "",
+  "monthly": false,
+  "channel": "direct email to property managers",
+  "performer": "SUBCONTRACTOR",
+  "fulfiller": "local plow operator",
+  "brainDeliverable": null,
+  "directCost": 450,
+  "capital": 1000,
+  "ownerHoursPerDeal": 0,
+  "acquisitionCostPerSale": 50,
+  "daysToFirstCash": 35,
+  "buyerCount": 400,
+  "volumeBasis": "",
+  "assumptions": "",
+  "ownerFit": "capital only, no owner hours",
+  "searches": {
+   "price": [],
+   "demand": [],
+   "volume": []
+  },
+  "grounds": {
+   "claims": {},
+   "demandScope": null
+  }
+ },
+ "constructed": {
+  "knownBad_snowWindowOnly": {
+   "failed": [
+    "WINDOW"
+   ],
+   "verdict": "DROP",
+   "ranked": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "score": -100,
+     "days": 35,
+     "why": "kept against the critique, which objected only on WINDOW — limits the code checked on the route's own figures: first snow events typically occur in December, well after the 90-day window ends"
+    }
+   ],
+   "dropped": []
+  },
+  "knownBad_falseWindowPlusChannel": {
+   "failed": [
+    "WINDOW",
+    "CHANNEL"
+   ],
+   "verdict": "DROP",
+   "ranked": [],
+   "dropped": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "why": "the critique dropped it (fails WINDOW, CHANNEL): Printful's Dec 3-7 delivery falls after the 90-day window; Meta ads at $44 CPA not guaranteed",
+     "rule": "CRITIQUE"
+    }
+   ]
+  },
+  "controlTrueWindow_noRepair": {
+   "failed": [
+    "WINDOW"
+   ],
+   "verdict": "DROP",
+   "ranked": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "score": -100,
+     "days": 35,
+     "why": "kept against the critique, which objected only on WINDOW — limits the code checked on the route's own figures: F12 shows these property managers pay subcontract invoices on net-120 terms, after the wi"
+    }
+   ],
+   "dropped": []
+  },
+  "controlTrueWindow_repair": {
+   "failed": [
+    "WINDOW"
+   ],
+   "verdict": "REPAIR",
+   "ranked": [],
+   "dropped": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "why": "its repair (fails WINDOW) broke a limit: the first money settles after 120 day(s), beyond the 90 left",
+     "rule": "CRITIQUE"
+    }
+   ]
+  },
+  "controlTrueCapital_noRepair": {
+   "failed": [
+    "CAPITAL"
+   ],
+   "verdict": "DROP",
+   "ranked": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "score": -100,
+     "days": 35,
+     "why": "kept against the critique, which objected only on CAPITAL — limits the code checked on the route's own figures: requires a $1,500 plow-operator deposit before the first contract; route states $1,000 a"
+    }
+   ],
+   "dropped": []
+  },
+  "controlLawful": {
+   "failed": [
+    "LAWFUL"
+   ],
+   "verdict": "DROP",
+   "ranked": [],
+   "dropped": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "why": "the critique dropped it (fails LAWFUL): brokering snow removal requires a licence the owner does not hold (F7)",
+     "rule": "CRITIQUE"
+    }
+   ]
+  },
+  "fault_inventedFinding": {
+   "failed": [
+    "MARKET"
+   ],
+   "verdict": "DROP",
+   "ranked": [],
+   "dropped": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "why": "the critique dropped it (fails MARKET): F999 shows no Minneapolis property manager buys plow contracts",
+     "rule": "CRITIQUE"
+    }
+   ]
+  },
+  "fault_noRule": {
+   "failed": [],
+   "verdict": "DROP",
+   "ranked": [],
+   "dropped": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "why": "the critique dropped it: not convinced",
+     "rule": "CRITIQUE"
+    }
+   ]
+  },
+  "fault_keepButScore1": {
+   "failed": [
+    "WINDOW"
+   ],
+   "verdict": "KEEP",
+   "ranked": [],
+   "dropped": [
+    {
+     "title": "Commercial snow-plow contracts brokered to plow operators",
+     "why": "the critique dropped it (fails WINDOW): fine",
+     "rule": "CRITIQUE"
+    }
+   ]
+  }
+ },
+ "critiquePromptChars": 17189
+}

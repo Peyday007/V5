@@ -1,0 +1,126 @@
+CONTROLS {
+ "hours_oneSaleOver15h": {
+  "kept": [],
+  "rejected": [
+   "HOURS: one sale needs about 20 owner hour(s) in the window, more than the 15 allowed in the window (the target would take 1, about 20 hours)"
+  ]
+ },
+ "hours_wholeTargetOver15h_oneSaleFits": {
+  "kept": [
+   "Recorded class: 2 h a sale, 13 sales"
+  ],
+  "rejected": []
+ },
+ "margin_costEqualsPrice": {
+  "kept": [],
+  "rejected": [
+   "MARGIN: its direct cost is not below its price"
+  ]
+ },
+ "deadline_8days": {
+  "kept": [],
+  "rejected": [
+   "DEADLINE: the first money settles after 8 day(s), beyond the 7 left"
+  ]
+ },
+ "capital_5dollars": {
+  "kept": [],
+  "rejected": [
+   "CAPITAL: ties up $5, more than the $0 allowed"
+  ]
+ }
+}
+{"case":"final_p02_all","reply":0,"model":"gpu:openai/gpt-oss-120b","empty":true}
+{"case":"final_p02_all","reply":1,"model":"free:auto/best-coding","chars":3237,"rec":{"kept":["ARMLS Preferred Photographer Real Estate Aerials"],"rejected":[]},"refKept":["ARMLS Preferred Photographer Real Estate Aerials"],"refRej":[]}
+{"case":"final_p02_cap","reply":0,"model":"gpu:openai/gpt-oss-120b","empty":true}
+{"case":"final_p02_cap","reply":1,"model":"free:auto/best-coding","chars":9000,"rec":{"kept":["Phoenix Real Estate Aerial Photography","Construction Site Progress Mapping","Zeitview Mission Brokerage","ARMLS Preferred Photographer Program","Land Survey Data Processing","Arizona Aerial Stock Footage"],"rejected":[]},"refKept":["Phoenix Real Estate Aerial Photography","Construction Site Progress Mapping","Zeitview Mission Brokerage","ARMLS Preferred Photographer Program"],"refRej":[]}
+{"case":"final_p06_all","reply":0,"model":"gpu:openai/gpt-oss-120b","chars":4228,"rec":{"kept":["Contra CSV Data Cleanup Brokerage"],"rejected":["HOURS: TaskRabbit VA Email Triage Brokerage"]},"refKept":["TaskRabbit VA Email Triage Brokerage","Contra CSV Data Cleanup Brokerage"],"refRej":[]}
+{"case":"final_p06_cap","reply":0,"model":"gpu:openai/gpt-oss-120b","empty":true}
+{"case":"final_p06_cap","reply":1,"model":"free:auto/best-coding","chars":2505,"rec":{"kept":[],"rejected":["MARGIN: TaskRabbit Virtual Assistant Booking"]},"refKept":[],"refRej":["MARGIN: TaskRabbit Virtual Assistant Booking — its direct cost is not below its price"]}
+{"case":"final_p10_all","reply":0,"model":"gpu:openai/gpt-oss-120b","empty":true}
+{"case":"final_p10_all","reply":1,"model":"free:auto/best-coding","chars":2774,"rec":{"kept":["Holiday Beanie Dropshipping Store"],"rejected":[]},"refKept":["Holiday Beanie Dropshipping Store"],"refRej":[]}
+{"case":"final_p10_cap","reply":0,"model":"gpu:openai/gpt-oss-120b","chars":3997,"rec":{"kept":["Local Retail Meta Ads Management"],"rejected":["BRAIN_DELIVERABLE: E‑commerce Meta Campaign Launch"]},"refKept":["Local Retail Meta Ads Management"],"refRej":["BRAIN_DELIVERABLE: E‑commerce Meta Campaign Launch — Brain performs it, but it is none of the deliverables Brain has proved"]}
+{"case":"probe1_p02_all","reply":0,"model":"gpu:openai/gpt-oss-120b","chars":4972,"rec":{"kept":["ARMLS Real Estate Aerial Photos","Construction Drone Survey Maps","Zeitview Real Estate Missions"],"rejected":[]},"refKept":["ARMLS Real Estate Aerial Photos","Construction Drone Survey Maps","Zeitview Real Estate Missions"],"refRej":[]}
+{"case":"probe1_p02_cap","reply":0,"model":"gpu:openai/gpt-oss-120b","chars":3722,"rec":{"kept":["ARMLS Real Estate Aerial Package","Construction Site Drone Survey"],"rejected":[]},"refKept":["ARMLS Real Estate Aerial Package","Construction Site Drone Survey"],"refRej":[]}
+{"case":"probe1_p06_all","reply":0,"model":"gpu:openai/gpt-oss-120b","empty":true}
+{"case":"probe1_p06_all","reply":1,"model":"free:auto/best-coding","chars":2945,"rec":{"kept":["Upwork Virtual Assistant Email Management"],"rejected":[]},"refKept":["Upwork Virtual Assistant Email Management"],"refRej":[]}
+{"case":"probe1_p06_cap","reply":0,"model":"gpu:openai/gpt-oss-120b","chars":4301,"rec":{"kept":["24‑Hour Logo Design Brokerage"],"rejected":["HOURS: Fast Email Inbox Triage for Seattle SMBs"]},"refKept":["Fast Email Inbox Triage for Seattle SMBs","24‑Hour Logo Design Brokerage"],"refRej":[]}
+{"case":"probe1_p10_all","reply":0,"model":"gpu:openai/gpt-oss-120b","chars":4393,"rec":{"kept":[],"rejected":["OWNER_FIT: Local Business Facebook Ads Management Resell","OWNER_FIT: Holiday Dropshipping Store – Winter Accessories"]},"refKept":["Local Business Facebook Ads Management Resell","Holiday Dropshipping Store – Winter Accessories"],"refRej":[]}
+{"case":"probe1_p10_cap","reply":0,"model":"gpu:openai/gpt-oss-120b","empty":true}
+{"case":"probe1_p10_cap","reply":1,"model":"free:auto/best-coding","chars":2959,"rec":{"kept":["Minnesota Holiday Gift Beanie Dropship"],"rejected":[]},"refKept":["Minnesota Holiday Gift Beanie Dropship"],"refRej":[]}
+{"case":"E-002_eval_p02_cap","reply":0,"model":"gpu:openai/gpt-oss-120b","chars":2103,"rec":{"kept":[],"rejected":[]},"refKept":[],"refRej":[]}
+CONSTRUCTED {
+ "knownBad_cpaAboveMargin": {
+  "kept": [],
+  "rejected": [
+   {
+    "title": "Beanie dropship (recorded figures)",
+    "why": "winning a buyer costs $39, at least the $20 a sale earns after its direct cost",
+    "rule": "ACQUISITION"
+   }
+  ],
+  "economics": null
+ },
+ "knownBad_cpaOmitted": {
+  "kept": [
+   "Beanie dropship (no CPA field)"
+  ],
+  "rejected": [],
+  "economics": {
+   "marginPerSale": 19.57,
+   "salesNeeded": 1022,
+   "acquisitionSpend": null,
+   "ownerHours": 0,
+   "firstCashBy": "6 December 2026",
+   "buyersShort": true,
+   "line": "COMPUTED (exact): each sale earns $20 after its direct cost; alone it needs 1022 sale(s) for the $20,000 still needed; it states no cost to win a buyer; 0 owner hour(s); first money by 6 December 2026 (the window ends 24 February 2027); it counts only 445 such buyers, fewer than it needs alone."
+  }
+ },
+ "knownBad_spendOverCapital": {
+  "kept": [
+   "Beanie dropship (CPA 15, spend over capital)"
+  ],
+  "rejected": [],
+  "economics": {
+   "marginPerSale": 4.57,
+   "salesNeeded": 4377,
+   "acquisitionSpend": 65655,
+   "ownerHours": 0,
+   "firstCashBy": "6 December 2026",
+   "buyersShort": false,
+   "line": "COMPUTED (exact): each sale earns $5 after its direct cost and $15 to win the buyer; alone it needs 4377 sale(s) for the $20,000 still needed; winning them costs $65,655 in total; 0 owner hour(s); first money by 6 December 2026 (the window ends 24 February 2027)."
+  }
+ },
+ "control_sound": {
+  "kept": [
+   "Sound control route"
+  ],
+  "rejected": [],
+  "economics": {
+   "marginPerSale": 250,
+   "salesNeeded": 80,
+   "acquisitionSpend": 4000,
+   "ownerHours": 0,
+   "firstCashBy": "6 December 2026",
+   "buyersShort": false,
+   "line": "COMPUTED (exact): each sale earns $250 after its direct cost and $50 to win the buyer; alone it needs 80 sale(s) for the $20,000 still needed; winning them costs $4,000 in total; 0 owner hour(s); first money by 6 December 2026 (the window ends 24 February 2027)."
+  }
+ }
+}
+LEAD_A {
+ "chars": 2103,
+ "error": null,
+ "routesJson": null,
+ "parse": {
+  "routes": [],
+  "rejected": []
+ },
+ "recordedParsed": {
+  "routes": [],
+  "rejected": []
+ },
+ "recordedCritique": {
+  "error": "unreadable"
+ },
+ "tail": " Arizona drone photo pricing\",\n        \"demand\": \"ARMLS Preferred Photographer program agent demand\",\n        \"volume\": \"Metro Phoenix active listings F27\"\n      },\n      \"grounds\": {\n        \"channel"
+}

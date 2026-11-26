@@ -1,0 +1,233 @@
+{
+  "map": "C",
+  "investigation": "2026-11-26",
+  "derived_from": "outcome definition only (no Brain code or docs read)",
+  "brain_implements_note": "every requirement's brain_implements is TO BE RECONCILED by the code investigator",
+  "count": 32,
+  "handoffs": [
+    {
+      "id": "Q-H01",
+      "producer": "Q-R001",
+      "consumer": "Q-R008",
+      "information": "Structured objective spec with verbatim spans and UNSTATED markers",
+      "lost_if_missing": "Faculties re-read the raw text differently; metric, window or capital drift."
+    },
+    {
+      "id": "Q-H02",
+      "producer": "Q-R002",
+      "consumer": "Q-R041",
+      "information": "Single metric recognition rule (when cash counts)",
+      "lost_if_missing": "Forecast counts uncollected or unsettled revenue."
+    },
+    {
+      "id": "Q-H03",
+      "producer": "Q-R003",
+      "consumer": "Q-R049",
+      "information": "Owner profile with per-item status (held/unknown/absent) and source",
+      "lost_if_missing": "Unknown capabilities treated as held; licence/account gaps."
+    },
+    {
+      "id": "Q-H04",
+      "producer": "Q-R004",
+      "consumer": "Q-R017",
+      "information": "Constraint register with provenance and scope",
+      "lost_if_missing": "System policy silently excludes strategies as if owner-stated; previous goal's constraints leak."
+    },
+    {
+      "id": "Q-H05",
+      "producer": "Q-R015",
+      "consumer": "Q-R016",
+      "information": "Owner advantages (held only)",
+      "lost_if_missing": "Generic or infeasible candidate set."
+    },
+    {
+      "id": "Q-H06",
+      "producer": "Q-R017",
+      "consumer": "Q-R019",
+      "information": "Screened candidates plus rejected/deferred ones with reasons",
+      "lost_if_missing": "Revision cannot revisit good candidates; deferred-on-unknown becomes permanent rejection."
+    },
+    {
+      "id": "Q-H07",
+      "producer": "Q-R020",
+      "consumer": "Q-R023",
+      "information": "Full strategy specs with assumptions and UNKNOWN legs",
+      "lost_if_missing": "Decisive unknowns not identified; incomplete strategies reach economics."
+    },
+    {
+      "id": "Q-H08",
+      "producer": "Q-R023",
+      "consumer": "Q-R024",
+      "information": "Decisive unknowns with the decision each affects and its range",
+      "lost_if_missing": "Research not bounded by decision value; trivia researched, decisive questions starved."
+    },
+    {
+      "id": "Q-H09",
+      "producer": "Q-R024",
+      "consumer": "Q-R027",
+      "information": "Research brief: quantity, scope, acceptance criteria, decision link, stop rule",
+      "lost_if_missing": "Vague results; tasks continue after decision settled."
+    },
+    {
+      "id": "Q-H10",
+      "producer": "Q-R028",
+      "consumer": "Q-R029",
+      "information": "Captured source with snapshot and retrieval state",
+      "lost_if_missing": "Claims attributed to unread pages; unreadable sources inferred."
+    },
+    {
+      "id": "Q-H11",
+      "producer": "Q-R029",
+      "consumer": "Q-R030",
+      "information": "Extracted claims with passage, unit, date, geography, segment",
+      "lost_if_missing": "Context lost; inapplicable figures used."
+    },
+    {
+      "id": "Q-H12",
+      "producer": "Q-R030",
+      "consumer": "Q-R040",
+      "information": "Graded, applicable evidence with ids",
+      "lost_if_missing": "Economics uses ungraded or inapplicable figures without provenance."
+    },
+    {
+      "id": "Q-H13",
+      "producer": "Q-R031",
+      "consumer": "Q-R058",
+      "information": "Conflict records and reconciled values",
+      "lost_if_missing": "New evidence silently overwrites; revision never triggered."
+    },
+    {
+      "id": "Q-H14",
+      "producer": "Q-R035",
+      "consumer": "Q-R041",
+      "information": "Buyer counts, reachability, price evidence, purchase-cycle length",
+      "lost_if_missing": "Funnel assumes demand that does not exist or buys too slowly."
+    },
+    {
+      "id": "Q-H15",
+      "producer": "Q-R036",
+      "consumer": "Q-R042",
+      "information": "Supplier cost, MOQ, lead time, payment terms",
+      "lost_if_missing": "Cash-flow ignores prepayments; capital exceeded."
+    },
+    {
+      "id": "Q-H16",
+      "producer": "Q-R039",
+      "consumer": "Q-R047",
+      "information": "Channel prerequisites with durations",
+      "lost_if_missing": "Critical path omits warm-up/approval; timeline infeasible."
+    },
+    {
+      "id": "Q-H17",
+      "producer": "Q-R046",
+      "consumer": "Q-R042",
+      "information": "Sale-to-available-funds lag, holds, reserves per payment rail",
+      "lost_if_missing": "Cash assumed available before it is."
+    },
+    {
+      "id": "Q-H18",
+      "producer": "Q-R042",
+      "consumer": "Q-R069",
+      "information": "Dated cash-flow schedule and peak capital",
+      "lost_if_missing": "Commitment schedule exceeds capital."
+    },
+    {
+      "id": "Q-H19",
+      "producer": "Q-R044",
+      "consumer": "Q-R061",
+      "information": "Uncertainty distributions computed identically per strategy",
+      "lost_if_missing": "Comparison biased by unequal optimism."
+    },
+    {
+      "id": "Q-H20",
+      "producer": "Q-R052",
+      "consumer": "Q-R058",
+      "information": "Structured critique findings (category, location, evidence)",
+      "lost_if_missing": "Findings in prose are never acted on."
+    },
+    {
+      "id": "Q-H21",
+      "producer": "Q-R056",
+      "consumer": "Q-R008",
+      "information": "Validated outputs only; failure records for invalid ones",
+      "lost_if_missing": "Empty/invalid model answers enter shared state as facts."
+    },
+    {
+      "id": "Q-H22",
+      "producer": "Q-R061",
+      "consumer": "Q-R062",
+      "information": "Comparison table on one goal-model version",
+      "lost_if_missing": "Arbiter decides on mixed-vintage scores."
+    },
+    {
+      "id": "Q-H23",
+      "producer": "Q-R062",
+      "consumer": "Q-R066",
+      "information": "Single selected strategy with rationale and runner-ups",
+      "lost_if_missing": "Plan built from a mix of strategies; contradictions."
+    },
+    {
+      "id": "Q-H24",
+      "producer": "Q-R047",
+      "consumer": "Q-R066",
+      "information": "Critical path with dependencies and durations",
+      "lost_if_missing": "Steps out of order; first action has unmet prerequisites."
+    },
+    {
+      "id": "Q-H25",
+      "producer": "Q-R026",
+      "consumer": "Q-R068",
+      "information": "Unresolved decisive unknowns needing in-plan tests",
+      "lost_if_missing": "No early checkpoint; failure discovered at window end."
+    },
+    {
+      "id": "Q-H26",
+      "producer": "Q-R071",
+      "consumer": "Q-R072",
+      "information": "Validation verdict (complete/blocked)",
+      "lost_if_missing": "Incomplete plan marked ready, or ready plan blocked behind spend approval."
+    },
+    {
+      "id": "Q-H27",
+      "producer": "Q-R072",
+      "consumer": "Q-R078",
+      "information": "Owner approval with ceiling per commitment",
+      "lost_if_missing": "Spend executed without approval or twice."
+    },
+    {
+      "id": "Q-H28",
+      "producer": "Q-R074",
+      "consumer": "Q-R075",
+      "information": "Actuals per checkpoint and step",
+      "lost_if_missing": "Learning has nothing to attribute."
+    },
+    {
+      "id": "Q-H29",
+      "producer": "Q-R076",
+      "consumer": "Q-R016",
+      "information": "Scoped learned priors (strategy-class success, rates, lead times)",
+      "lost_if_missing": "Learning written but never changes discovery/economics."
+    },
+    {
+      "id": "Q-H30",
+      "producer": "Q-R076",
+      "consumer": "Q-R064",
+      "information": "Measured model quality per task type",
+      "lost_if_missing": "Routing never improves; weak model keeps deciding."
+    },
+    {
+      "id": "Q-H31",
+      "producer": "Q-R080",
+      "consumer": "Q-R026",
+      "information": "Infrastructure failure state (not 'no evidence')",
+      "lost_if_missing": "Outage read as a negative or favourable finding."
+    },
+    {
+      "id": "Q-H32",
+      "producer": "Q-R009",
+      "consumer": "Q-R061",
+      "information": "Stale flags on dependents after a change",
+      "lost_if_missing": "Selection made on superseded values."
+    }
+  ]
+}

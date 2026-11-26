@@ -1,0 +1,327 @@
+{
+ "i_emptyOnceThenAnswer": {
+  "chatForOnce": {
+   "content": "",
+   "error": null,
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\",\"offer\":\"O\",\"channel\":\"C\",\"price\":100,\"directCost\":10,\"daysToFirstCash\":5}]}",
+   "error": null,
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   },
+   {
+    "max_tokens": 8000,
+    "stream": true
+   }
+  ],
+  "routesKept": [
+   "A"
+  ],
+  "routesRejected": []
+ },
+ "ii_emptyTwice": {
+  "chatForOnce": {
+   "content": "",
+   "error": null,
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "",
+   "error": "an empty reply twice (no content and no error), the second with twice the token budget",
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   },
+   {
+    "max_tokens": 8000,
+    "stream": true
+   }
+  ],
+  "routesKept": null,
+  "routesRejected": null
+ },
+ "iii_http524": {
+  "chatForOnce": {
+   "content": "",
+   "error": "HTTP 524 <html>A timeout occurred</html>",
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "",
+   "error": "HTTP 524 <html>A timeout occurred</html>",
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   }
+  ],
+  "routesKept": null,
+  "routesRejected": null
+ },
+ "iv_unclosedThink_withDraftJson": {
+  "chatForOnce": {
+   "content": "<think>The owner wants... draft: {\"routes\":[{\"title\":\"DRAFT-FROM-REASONING\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\",\"offer\":\"O\",\"channel\":\"C\",\"price\":1",
+   "error": null,
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "<think>The owner wants... draft: {\"routes\":[{\"title\":\"DRAFT-FROM-REASONING\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\",\"offer\":\"O\",\"channel\":\"C\",\"price\":1",
+   "error": null,
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   }
+  ],
+  "routesKept": [
+   "DRAFT-FROM-REASONING"
+  ],
+  "routesRejected": []
+ },
+ "v_reasoningContentOnly": {
+  "chatForOnce": {
+   "content": "",
+   "error": null,
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "",
+   "error": "an empty reply twice (no content and no error), the second with twice the token budget",
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   },
+   {
+    "max_tokens": 8000,
+    "stream": true
+   }
+  ],
+  "routesKept": null,
+  "routesRejected": null
+ },
+ "vi_partialThenStreamErrorEvent": {
+  "chatForOnce": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\"",
+   "error": null,
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\"",
+   "error": null,
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   }
+  ],
+  "routesKept": [],
+  "routesRejected": []
+ },
+ "vii_partialThenConnectionReset": {
+  "chatForOnce": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\"",
+   "error": null,
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\"",
+   "error": null,
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   }
+  ],
+  "routesKept": [],
+  "routesRejected": []
+ },
+ "viii_lastLineNoTrailingNewline": {
+  "chatForOnce": {
+   "content": "{\"routes\":[{\"title\":\"A\",",
+   "error": null,
+   "completionTokens": 0,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "{\"routes\":[{\"title\":\"A\",",
+   "error": null,
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   }
+  ],
+  "routesKept": [],
+  "routesRejected": []
+ },
+ "ix_nonStreamed_finishLength_truncated": {
+  "chatForOnce": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\",\"offer\":\"O\",\"channel\":\"C\",\"price\":100,\"directCost\":10,\"daysToFirstCash\":5},{\"title\":\"B\"",
+   "error": null,
+   "completionTokens": 4000,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\",\"offer\":\"O\",\"channel\":\"C\",\"price\":100,\"directCost\":10,\"daysToFirstCash\":5},{\"title\":\"B\"",
+   "error": null,
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   }
+  ],
+  "routesKept": [
+   "A"
+  ],
+  "routesRejected": []
+ },
+ "x_streamed_finishLength_withUsage": {
+  "chatForOnce": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\",\"offer\":\"O\",\"channel\":\"C\",\"price\":100,\"directCost\":10,\"daysToFirstCash\":5},{\"title\":\"B\"",
+   "error": null,
+   "completionTokens": 4000,
+   "resultKeys": [
+    "content",
+    "toolCalls",
+    "ms",
+    "completionTokens",
+    "error"
+   ]
+  },
+  "askModel": {
+   "content": "{\"routes\":[{\"title\":\"A\",\"mechanism\":\"EXISTING_BUYING_SIGNAL\",\"payer\":\"P\",\"offer\":\"O\",\"channel\":\"C\",\"price\":100,\"directCost\":10,\"daysToFirstCash\":5},{\"title\":\"B\"",
+   "error": null,
+   "returnedKeys": [
+    "content",
+    "error"
+   ]
+  },
+  "requests": [
+   {
+    "max_tokens": 4000,
+    "stream": true
+   }
+  ],
+  "routesKept": [
+   "A"
+  ],
+  "routesRejected": []
+ },
+ "stripThink": {
+  "closed": "{\"x\":1}",
+  "unclosed": "<think>still reasoning {\"x\":1}",
+  "closeOnly": "{\"x\":1}"
+ }
+}
