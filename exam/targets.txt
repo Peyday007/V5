@@ -1,5 +1,6 @@
-# label|endpoint|model|concurrency  (discovery only while no target lines)
+# label|endpoint|model|concurrency|extra args  (discovery only while no target lines)
+# Pass 2 (serving repair only): re-ask the items whose first pass was a serving failure, under identical
+# prompts and budget. gpt-oss streams (the pod proxy's 100 s idle cut); Qwen accepts only replies Qwen served.
 pod y7us619p8bi0to
-gptoss120b|gpu|openai/gpt-oss-120b|4
-qwen38_27b|sw|groq/qwen/qwen3.8-27b|2
-fallback_auto|sw|auto/best-coding|3
+gptoss120b_p2|gpu|openai/gpt-oss-120b|4|--stream --tries 3 --only Q02,Q05,Q08,Q11,Q12,Q17
+qwen38_27b_p2|sw|groq/qwen/qwen3.8-27b|2|--accept-model qwen --tries 4 --only Q01,Q03,Q05,Q06,Q07,Q09,Q10,Q13,Q14,Q16,Q17,Q18,Q19,Q20,Q21,Q22,Q23,Q25,Q26,Q27,Q28

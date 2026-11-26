@@ -29,10 +29,10 @@ jobs:
           [ -z "$GPU" ] || node exam/run.mjs --discover --url "$GPU" --key-env RUNPOD_VLLM_KEY | tee -a out/discover.txt
           [ -z "${RUNPOD_VLLM_URL:-}" ] || node exam/run.mjs --discover --url "$RUNPOD_VLLM_URL" --key-env RUNPOD_VLLM_KEY | sed 's#https://[^ ]*#<secret-url>#' | tee -a out/discover.txt
           pids=""
-          while IFS='|' read -r label ep model conc; do
+          while IFS='|' read -r label ep model conc extra; do
             case "$label" in ''|\#*|pod*) continue ;; esac
             if [ "$ep" = gpu ]; then u="$GPU"; k=RUNPOD_VLLM_KEY; else u="$SW"; k=OMNIROUTE_API_KEY; fi
-            node exam/run.mjs --label "$label" --url "$u" --key-env "$k" --model "$model" --out "out/$label.json" --concurrency "${conc:-4}" > "out/$label.log" 2>&1 &
+            node exam/run.mjs --label "$label" --url "$u" --key-env "$k" --model "$model" --out "out/$label.json" --concurrency "${conc:-4}" ${extra:-} > "out/$label.log" 2>&1 &
             pids="$pids $!"
           done < exam/targets.txt
           for p in $pids; do wait $p || true; done
