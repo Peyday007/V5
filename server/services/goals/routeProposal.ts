@@ -1130,15 +1130,36 @@ function objectsIn(text: string): Record<string, unknown>[] {
   return out;
 }
 
-/** The owner profile a reply carries under `owner`, or null when it carries none that says anything. Pure. */
-export function ownerProfileOf(text: string): OwnerProfile | null {
+const PROFILE_FILLER = new Set(['with', 'have', 'owns', 'owner', 'their', 'they', 'from', 'that', 'this', 'some', 'good', 'basic', 'strong', 'experience', 'skills', 'skill', 'able', 'access', 'about', 'very', 'into', 'also']);
+const profileWords = (text: string): string[] =>
+  (text.toLowerCase().match(/[a-z0-9][a-z0-9'+-]{2,}/g) ?? []).map((w) => w.replace(/'s$/, '').replace(/(ing|ed|es|s)$/, '')).filter((w) => w.length >= 3 && !PROFILE_FILLER.has(w));
+
+/**
+ * Whether a skill or asset the reply lists is something the owner's words say
+ * (planning failure map C02-F, 2026-11-26): the reader dropped only what its own
+ * reply marked "not stated", so a skill the model invented ("photography",
+ * "an Etsy audience") was kept and every later ask built routes on it. An item
+ * is kept when one of its content words appears in the owner's words; the
+ * words themselves stay in every prompt, so nothing the owner said is lost.
+ */
+export function groundedInWords(item: string, words: string): boolean {
+  const said = new Set(profileWords(words));
+  return profileWords(item).some((w) => said.has(w));
+}
+
+/**
+ * The owner profile a reply carries under `owner`, or null when it carries none
+ * that says anything. Given the owner's `words`, the skills and assets it lists
+ * are only those the words support. Pure.
+ */
+export function ownerProfileOf(text: string, words?: string | null): OwnerProfile | null {
   for (const obj of objectsIn(text)) {
     const raw = obj['owner'];
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const o = raw as Record<string, unknown>;
     const profile: OwnerProfile = {
-      skills: statedList(o['skills']),
-      assets: statedList(o['assets']),
+      skills: statedList(o['skills']).filter((one) => !words || groundedInWords(one, words)),
+      assets: statedList(o['assets']).filter((one) => !words || groundedInWords(one, words)),
       location: stated(o['location'], 160),
       hours: stated(o['hours'], 160),
       capital: stated(o['capital'], 160),
@@ -1147,6 +1168,11 @@ export function ownerProfileOf(text: string): OwnerProfile | null {
     if (profile.skills.length || profile.assets.length || profile.location || profile.hours || profile.capital || profile.refusals.length) return profile;
   }
   return null;
+}
+
+/** The owner's own words a route context carries: the objective and what they said they have. */
+export function ownerWordsOf(ctx: Pick<RouteContext, 'objective' | 'resources'>): string {
+  return [ctx.objective, ctx.resources].filter(Boolean).join(' ');
 }
 
 /** "skills: Spanish; assets: a van; location: Columbus, Ohio". Pure. */
@@ -2073,7 +2099,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
         failures.push(`${label}: no parseable directions`);
         continue;
       }
-      got = { ...one, model: label, owner: ownerProfileOf(r.content) };
+      got = { ...one, model: label, owner: ownerProfileOf(r.content, ownerWordsOf(read.ctx)) };
       break;
     }
     if (!got) {
@@ -2133,7 +2159,7 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
       failures.push(`${label}: no parseable routes`);
       continue;
     }
-    parsed = { ...one, model: label, owner: ownerProfileOf(r.content), rethink: rethinkOf(r.content) };
+    parsed = { ...one, model: label, owner: ownerProfileOf(r.content, ownerWordsOf(read.ctx)), rethink: rethinkOf(r.content) };
     break;
   }
   if (!parsed) {
