@@ -302,10 +302,10 @@
    "id": "W3a",
    "rc": "RC13",
    "what": "The owner's plan must not be built from constructed arrangements that read nothing of the owner: route the owner's words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.",
-   "owner": "cash/construct.ts; goals/plan.ts",
+   "owner": "cash/construct.ts; goals/plan.ts (integration owner session_01QF5Tk7etm6MGmaFuHMd6eZ)",
    "depends": "",
-   "state": "OPEN",
-   "evidence": ""
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "PR #1345 (8a2c568): a constructed design reaches a goal plan only if its precedent is one of that goal's own route openings; tests/ownerRoutesLeadConstruction.test.ts. Motivating production read: dev6 0/12 usable on a8c4699 (6 QUANT critical on generic arrangements, 6 no-candidate)."
   },
   {
    "id": "W3b",
