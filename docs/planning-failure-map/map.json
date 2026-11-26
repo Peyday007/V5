@@ -413,6 +413,15 @@
    "depends": "W2i",
    "state": "DEPLOYED_VERIFIED",
    "evidence": "Deploy 45807923254 (baa7192) success. planningEval launching 11:3xZ on baa7192: run ideas first in the launch window at position 0 (was 33), 168 fitting the run's free slots, 12 fm1126b missions RUNNING (was 0 for 3 h). Two releases before it were refused only by pre-existing test timeouts (routeCritique 31.8 s, calebDurability 34.2 s), now bounded by their measured time."
+  },
+  {
+   "id": "W2k",
+   "rc": "RC17",
+   "what": "The owner profile holds only skills and assets the owner's own words support (ownerProfileOf with the words; groundedInWords), so a skill or asset the model invents never reaches the route ask, the critic or discovery.",
+   "owner": "goals/routeProposal.ts",
+   "depends": "",
+   "state": "BRANCH_PENDING_DEPLOY",
+   "evidence": "tests/planningFailureMapWave2 'C02-F: the owner profile holds only what the owner said' fails without the grounding, passes with it; test:impacted 200 passed"
   }
  ],
  "progress": [

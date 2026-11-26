@@ -50,3 +50,19 @@ describe("an owner who gives the goal hours has offered their work, and the prom
     expect(operatingModelSentenceFor(ownerLabourWithHours(ownerLabourOffer('I want $20,000 in 90 days with $5,000.'), { perWeek: null, total: null }))).toBe(OPERATING_MODEL_SENTENCE);
   });
 });
+
+describe('C02-F: the owner profile holds only what the owner said', () => {
+  it('drops a skill and an asset the model invented, and keeps what the words state', async () => {
+    const { ownerProfileOf, groundedInWords } = await import('../server/services/goals/routeProposal.ts');
+    const words = "I'm in Tulsa with a pickup truck and my weekends free, maybe 16 hours a week. I need to make $1,200 by the end of December and I only have about $200.";
+    const reply = JSON.stringify({ owner: { skills: ['Professional photography', 'Driving'], assets: ['Pickup truck', 'An Etsy shop with 2,000 followers'], location: 'Tulsa', hours: '16 per week', capital: '$200', refusals: 'not stated' }, routes: [] });
+    const profile = ownerProfileOf(reply, words)!;
+    expect(profile.assets).toEqual(['Pickup truck']);
+    expect(profile.skills).toEqual([]);
+    expect(profile.location).toBe('Tulsa');
+    // Inflected and lower-cased forms still count as the owner's words.
+    expect(groundedInWords('trucks', words)).toBe(true);
+    // Without the owner's words the reader is unchanged.
+    expect(ownerProfileOf(reply)!.skills).toEqual(['Professional photography', 'Driving']);
+  });
+});
