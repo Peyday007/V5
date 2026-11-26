@@ -6,7 +6,7 @@
  * rendered record states the counts the data holds, and — with --accept — the
  * latest measured progress meets the owner's bar (27 of 30 fresh goals usable).
  *
- *   node scripts/planningFailureMapCheck.mjs [structure|repairs|coverage|accept|all]
+ *   node scripts/planningFailureMapCheck.mjs [structure|repairs|reviews|sensitivity|priority|validity|coverage|accept|all]
  */
 import { readFileSync } from 'node:fs';
 
@@ -40,6 +40,26 @@ if (which === 'repairs' || which === 'all') {
 if (which === 'validity') {
   const unproven = data.questions.filter((q) => !/^(CONTROLLED_FAILURE:|HISTORICAL_FAILURE_DETECTED)/.test(q.proof));
   ok(unproven.length === 0, `every diagnostic is proven able to detect its failure (${unproven.length} not yet: ${unproven.slice(0, 10).map((q) => q.id).join(', ')}${unproven.length > 10 ? ', …' : ''})`);
+}
+if (which === 'reviews' || which === 'all') {
+  for (const k of ['coverage', 'validity', 'causes']) {
+    let r = null;
+    try { r = JSON.parse(readFileSync(`docs/planning-failure-map/review_${k}.json`, 'utf8')); } catch { r = null; }
+    ok(!!r, `independent review "${k}" is recorded`);
+  }
+  ok(data.capabilities.some((c) => c.stage === 'Reviewer-1 coverage'), "Reviewer 1's uncovered components are capabilities in the map");
+  ok(Object.values(data.rootCauses).some((rc) => /SYMPTOM|CONTRADICTED/.test(rc.kind)), "Reviewer 3's regrouping (symptoms, contradicted causes) is applied");
+  ok(data.questions.some((q) => /REVIEW 2/.test(q.evidence ?? '')), "Reviewer 2's status disputes are applied");
+}
+if (which === 'sensitivity' || which === 'all') {
+  const sens = JSON.parse(readFileSync('docs/planning-failure-map/sensitivity.json', 'utf8')).results;
+  ok(sens.length >= 20, `at least 20 controlled failures are recorded (${sens.length})`);
+  for (const r of sens) ok(r.verified === true, `controlled failure ${r.id} (${r.why}) is detected by its named test and the good code is accepted`);
+}
+if (which === 'priority' || which === 'all') {
+  const log = readFileSync('docs/planning-failure-map/priority-focus-2026-11-26.log', 'utf8');
+  ok(/EVAL focus: \d+ goal\(s\) paused; run \S+ keeps its capacity/.test(log), "the owner's priority override was applied at the queue (goals outside the mission paused through the ordinary decision)");
+  ok(!/paused.*owed to a customer/.test(log), 'no goal owed to a customer was paused');
 }
 if (which === 'coverage') {
   const open = data.questions.filter((q) => q.status === 'UNKNOWN');
