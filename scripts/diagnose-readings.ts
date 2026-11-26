@@ -478,7 +478,7 @@ async function liveness(): Promise<void> {
     } catch {
       console.log('    readings unreadable');
     }
-    for (const key of ['memory', 'pools', 'eventLoop', 'stalls', 'pressure', 'statements', 'holds']) {
+    for (const key of ['memory', 'pools', 'checkouts', 'infraFailures', 'databaseFailures', 'eventLoop', 'stalls', 'pressure', 'statements', 'holds']) {
       if (readings[key] !== undefined) console.log(`    ${key}: ${JSON.stringify(readings[key]).slice(0, 1500)}`);
     }
   }
