@@ -170,7 +170,7 @@
    "owner": "routeProposal.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests/planningFailureMapWave1.test.ts RC1"
+   "evidence": "tests/planningFailureMapWave1.test.ts RC1 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1b",
@@ -179,7 +179,7 @@
    "owner": "routeProposal.ts critiquePrompt/applyCritique",
    "depends": "W1c",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC2"
+   "evidence": "tests RC2 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1c",
@@ -188,7 +188,7 @@
    "owner": "routeProposal.ts parseRoutes",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC8"
+   "evidence": "tests RC8 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1d",
@@ -197,7 +197,7 @@
    "owner": "routeProposal.ts parseRoutes",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC9; routeProposal.test.ts updated"
+   "evidence": "tests RC9; routeProposal.test.ts updated | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1e",
@@ -206,7 +206,7 @@
    "owner": "routeProposal.ts findingsOf; repos/research.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC4"
+   "evidence": "tests RC4 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1f",
@@ -215,7 +215,7 @@
    "owner": "routeProposal.ts directionPrompt/routePrompt",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC5"
+   "evidence": "tests RC5 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1g",
@@ -224,7 +224,7 @@
    "owner": "cash/discovery.ts discoveryFocusFor",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC3"
+   "evidence": "tests RC3 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1h",
@@ -233,7 +233,7 @@
    "owner": "routeProposal.ts proposeGoalRoutes/evidenceSections",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "code; production pending"
+   "evidence": "code; production pending | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W2a",
@@ -287,7 +287,7 @@
    "owner": "intent.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally"
+   "evidence": "tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1j",
@@ -296,7 +296,7 @@
    "owner": "cheap/modelBench.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests/chatStreaming.test.ts; model exam pass 2"
+   "evidence": "tests/chatStreaming.test.ts; model exam pass 2 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W3a",
@@ -322,8 +322,8 @@
    "what": "Route asks, critiques and direction asks never use a model measured unfit (ROUTE_UNFIT_MODEL_LABELS: the fallback combo); with no fit model left the ask records NO_ANSWER and retries on the failure interval.",
    "owner": "routeProposal.ts operatorChats; planningEval probe parity",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "tests/planningFailureMapWave2.test.ts; sensitivity C41-F"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "tests/planningFailureMapWave2.test.ts; sensitivity C41-F | PR #1346"
   },
   {
    "id": "W2b",
@@ -331,8 +331,8 @@
    "what": "Output budgets 14,000 / 12,000 / 10,000 (route / direction / critique); attempt bound 300 s, ask budget 720 s.",
    "owner": "routeProposal.ts ROUTE_TOKENS",
    "depends": "W1j streaming",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C23-R"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C23-R | PR #1346"
   },
   {
    "id": "W2c",
@@ -340,8 +340,8 @@
    "what": "An owner who gives the goal hours has offered their work (ownerLabourWithHours), in route asks and discovery; \"I can work all day / full time\" read as an offer.",
    "owner": "domain/operatingModel.ts; routeProposal routeContext; discovery",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C03-P; blind fixture 30/30"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C03-P; blind fixture 30/30 | PR #1346"
   },
   {
    "id": "W2d",
@@ -349,8 +349,8 @@
    "what": "Reader: negated \"spend more than\" only (own regression removed); a floor (\"more than $600\") never a ceiling; a named break is the window; a job's hours are not time given, the extra hours are.",
    "owner": "intent.ts",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "tests/objectiveFreshBatchBlind.test.ts (blind readings, 30/30); sensitivity C01-*"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "tests/objectiveFreshBatchBlind.test.ts (blind readings, 30/30); sensitivity C01-* | PR #1346"
   },
   {
    "id": "W2e",
@@ -358,8 +358,8 @@
    "what": "A stream that ends without a finish reason or [DONE] is an error, not an answer.",
    "owner": "modelBench.ts readStream",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C23-I"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C23-I | PR #1346"
   },
   {
    "id": "W2f",
@@ -367,8 +367,8 @@
    "what": "A route kept against the critic ranks after every route the critic kept (the earlier fixture hid that it did not).",
    "owner": "routeProposal.ts applyCritique",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C31-X"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C31-X | PR #1346"
   },
   {
    "id": "W2g",
@@ -376,8 +376,8 @@
    "what": "Capital plus the first buyer's cost must fit the limit; the critic is told when the target needs reinvested proceeds; the critique prompt is tested to carry the computed line.",
    "owner": "routeProposal.ts parseRoutes/economicsLine",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C25-X, C25-R"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C25-X, C25-R | PR #1346"
   },
   {
    "id": "W2h",
@@ -394,8 +394,8 @@
    "what": "Goal ideas are goal work only while their goal is live (goalIdeaSql: LIVE_GOAL_PROJECT_IDS_SQL); the judge pass judges up to 40 goal ideas a tick until a 45 s budget, halved under pressure instead of falling to 5.",
    "owner": "goals/goalWork.ts; russell/loop.ts",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I | PR #1346"
   }
  ],
  "progress": [

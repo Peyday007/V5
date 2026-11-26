@@ -607,3 +607,8 @@ setq('C07','P','RECHECK','fm1126b f01 (production, revision a8c46995 with wave 1
 setq('C42','P','FAIL','fm1126b f01: the plan the owner is handed is still the constructed estimates ("No found opening is far enough along to model"), because the owner-fit directions have no research yet (RC19) and constructed arrangements read nothing of the owner (RC13).','RC19,RC13')
 REPAIRS.append(dict(id='W2i', rc='RC19', what="Goal ideas are goal work only while their goal is live (goalIdeaSql: LIVE_GOAL_PROJECT_IDS_SQL); the judge pass judges up to 40 goal ideas a tick until a 45 s budget, halved under pressure instead of falling to 5.", owner='goals/goalWork.ts; russell/loop.ts', depends='', state='BRANCH_PENDING_DEPLOY', evidence='tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I'))
 PROGRESS.append(dict(at='2026-11-26 08:10Z', measure='fm1126b mid-run: research never started on any of 30 goals (RC19); the batch measures RC19, not planning. Acceptance restarts on a new frozen revision after wave 2 deploys.', usable='n/a', note='judging, judge-one and judge-pass probes'))
+
+# ---- wave 2 merged (PR #1346, dcc34fed), deploy 45783978454 ----
+for r in REPAIRS:
+    if r['state']=='BRANCH_PENDING_DEPLOY': r['state']='MERGED_PENDING_PRODUCTION'; r['evidence']+=' | PR #1346'
+    if r['state']=='MERGED_PENDING_PRODUCTION' and r['id'].startswith('W1'): r['evidence']+=' | PRs #1339/#1341 deployed; production verification pending the next batch'
