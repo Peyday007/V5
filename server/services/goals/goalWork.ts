@@ -235,8 +235,24 @@ export function goalDiveSql(c: string): string {
 
 /** A boolean SQL expression: this idea is one of a goal's own search rounds (`goal-…` bucket). No parameters. */
 export function goalRoundSql(c: string): string {
-  return `${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
-                      WHERE gr.bucket_id LIKE 'goal-%' AND gr.candidate_id IS NOT NULL)`;
+  return `(${liveGoalProjectSql(c)} AND ${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
+                      WHERE gr.bucket_id LIKE 'goal-%' AND gr.candidate_id IS NOT NULL))`;
+}
+
+/**
+ * A boolean SQL expression: this idea's project is one a live goal targets. No parameters.
+ *
+ * Every goal tier is a live goal's own work (fresh batch fm1126b, 2026-11-26,
+ * read-only probe `planningEval launching`): the price and round tiers named
+ * ideas by how they were made, never by whether the goal behind them still
+ * runs. 30 live goals held 143 judged ideas, each with a compiled mission and
+ * 6 free grant slots, and launched none in three hours, while 50-70 missions an
+ * hour went to the price questions and rounds of paused and ended goals ranked
+ * above them as "goal" work. The dive and idea tiers were already gated; these
+ * two were not.
+ */
+export function liveGoalProjectSql(c: string): string {
+  return `${c}.project_id IN (${LIVE_GOAL_PROJECT_IDS_SQL})`;
 }
 
 /**
@@ -266,9 +282,9 @@ export function goalRoundSql(c: string): string {
  * the slots forever.
  */
 export function goalPriceSql(c: string): string {
-  return `${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
+  return `(${liveGoalProjectSql(c)} AND ${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
                     WHERE gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL
-                      AND (gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' OR ${planQuestionSql('gp')}))`;
+                      AND (gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' OR ${planQuestionSql('gp')})))`;
 }
 
 /**
@@ -310,7 +326,8 @@ export async function goalRoundsAwaitingLaunch(projectId: string): Promise<numbe
   const rows = await getDb().all<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM russell_candidates c
       WHERE c.project_id = ?
-        AND ${goalRoundSql('c')}
+        AND c.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
+                      WHERE gr.bucket_id LIKE 'goal-%' AND gr.candidate_id IS NOT NULL)
         AND c.state NOT IN ('REJECTED', 'PARKED', 'MERGED', 'DONE')
         AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id)`,
     [projectId],

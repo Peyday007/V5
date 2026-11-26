@@ -160,6 +160,14 @@
    "owner": "russell/loop.ts judge-unjudged pass; goals/goalWork.ts goalIdeaSql",
    "proof": "On a fresh batch, each live goal's first ideas are judged within one tick and its first research fragments are queued within the hour.",
    "evidence": "planningEval judging (08:00Z): run ideas 605 CAPTURED unjudged, head of the goal queue created 05:56\u201306:08Z by the retired fm1126a and paused goals, updated_at = created_at; judge-one: one judgment 1.75 s; judge-pass: the pass body judged 18 in 20 s \u2014 so the pass works and is starved by budget and queue, not broken."
+  },
+  "RC20": {
+   "name": "A live goal's judged ideas never launch: the launch window ranks paused and ended goals' price questions and rounds as goal work",
+   "kind": "coordination+software",
+   "wrong": "goalPriceSql and goalRoundSql (goals/goalWork.ts) named ideas as goal work by how they were made, never by whether their goal still runs, so in nextLaunchable's order (fits, goal tier, per-project turn, tier) paused and ended goals' price questions (tier 0) and rounds (tier 1) stood ahead of a live goal's dives and ideas (tiers 2-3). A tick fills 5-30 launches inside a 30 s budget and ticks run ~17 min, so the head was refilled from other projects every tick. The packet runner's plan-read boost used the same ungated predicate.",
+   "owner": "goals/goalWork.ts goalPriceSql, goalRoundSql (read by russell/loop.ts nextLaunchable and research/packetRunner.ts servesGoalPlanRead)",
+   "proof": "On a fresh batch, each live goal's judged ideas launch missions within a tick or two of being judged, and its first fragments run within the hour.",
+   "evidence": "planningEval launching (09:45-09:55Z, dcc34fe): run 143 judged ideas, all with missionSpec, 30 grants at 6 free slots each, run ideas first at launch-window position 33, 0 run missions in 3 h; Brain-wide 31-86 missions an hour across 22-41 projects; 152 projects with 2483 launchable ideas. Isolated: tests/goalIdeasEachProjectsTurn 'launches a live goal's judged idea before a paused goal's judged price questions' fails on the unfixed predicate (paused price question first) and passes with the gate."
   }
  },
  "repairs": [
@@ -394,8 +402,17 @@
    "what": "Goal ideas are goal work only while their goal is live (goalIdeaSql: LIVE_GOAL_PROJECT_IDS_SQL); the judge pass judges up to 40 goal ideas a tick until a 45 s budget, halved under pressure instead of falling to 5.",
    "owner": "goals/goalWork.ts; russell/loop.ts",
    "depends": "",
-   "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I | PR #1346"
+   "state": "DEPLOYED_PARTIAL",
+   "evidence": "Deploy 45788180566 (dcc34fe) success. Judging on production: fm1126b 143 ideas judged WORTH_DOING with compiled missions by 09:40Z (was 0 at 08:00Z); 944 still unjudged behind other live eval goals. Judging works; launch does not (RC20)."
+  },
+  {
+   "id": "W2j",
+   "rc": "RC20",
+   "what": "Every goal tier is a live goal's work: goalPriceSql and goalRoundSql are gated on liveGoalProjectSql (LIVE_GOAL_PROJECT_IDS_SQL), as goalIdeaSql and goalDiveSql already were; goalRoundsAwaitingLaunch keeps its reading.",
+   "owner": "goals/goalWork.ts",
+   "depends": "W2i",
+   "state": "BRANCH_PENDING_DEPLOY",
+   "evidence": "tests/goalIdeasEachProjectsTurn.test.ts known-bad fails without the gate, passes with it; test:impacted 117 passed; launch-window and price-priority suites 264 passed"
   }
  ],
  "progress": [
@@ -422,6 +439,12 @@
    "measure": "fm1126b mid-run: research never started on any of 30 goals (RC19); the batch measures RC19, not planning. Acceptance restarts on a new frozen revision after wave 2 deploys.",
    "usable": "n/a",
    "note": "judging, judge-one and judge-pass probes"
+  },
+  {
+   "at": "2026-11-26 09:30Z",
+   "measure": "fm1126b read on dcc34fe: 30/30 NO_CANDIDATE. Every goal holds 1-4 owner-fit openings (89 total, e.g. Tulsa truck: junk haul, delivery partner, holiday setup), all unpriced; 0 missions, 0 fragments, 0 claims for the run.",
+   "usable": "0/30",
+   "note": "read_fm1126b_0926, stall, judging and launching probes; the blocker is launch, not planning (RC20)"
   }
  ],
  "capabilities": [
@@ -1936,11 +1959,11 @@
    "dim": "R",
    "test": "Completed fragments file claims.",
    "expected": "Yes.",
-   "status": "RECHECK",
-   "evidence": "p06 3 claims filed. | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
+   "status": "FAIL",
+   "evidence": "fm1126b on dcc34fe: ideas judged, missions 0 \u2014 the launch window ranked paused and ended goals' price questions and rounds as goal work (launching probe 09:45Z).",
    "component": "gate",
-   "rc": "",
-   "proof": "UNPROVEN"
+   "rc": "RC20",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C14-I",
