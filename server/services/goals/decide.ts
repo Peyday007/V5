@@ -36,6 +36,7 @@ import { getProject } from '../../repos/projects.ts';
 import { readObjective, type ObjectiveReading } from '../industry/construction/intent.ts';
 import { assistObjective, assistReason, operatorInterpreter, type ObjectiveInterpreter } from './objectiveAssist.ts';
 import { liveTargetOn, setTarget, sharedLedgerReason } from './target.ts';
+import { restoreGoalResearch, yieldStoppedGoalResearch } from './goalWork.ts';
 
 
 /** An `unread` entry about a money figure the objective reader could not place (review F4). */
@@ -302,7 +303,8 @@ export async function cancel(goalId: string, reason: string, actorRef: string): 
   if (!moved) {
     return { ok: false, reason: 'It is already cancelled or archived.', consequence: 'Nothing changed.' };
   }
-  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_CANCELLED', summary: reason, actorRef });
+  const yielded = await yieldStoppedGoalResearch(goalId);
+  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_CANCELLED', summary: reason, detail: { researchYielded: yielded }, actorRef });
   const owed = goal?.commitment === 'CUSTOMER';
   return {
     ok: true,
@@ -316,7 +318,9 @@ export async function cancel(goalId: string, reason: string, actorRef: string): 
 export async function reinstate(goalId: string, actorRef: string): Promise<DecisionResult> {
   const moved = await reinstateGoal(goalId);
   if (!moved) return { ok: false, reason: 'It is not cancelled.', consequence: 'Nothing changed.' };
-  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_REINSTATED', summary: 'Reinstated.', actorRef });
+  const { GOAL_PRIORITY_BOOST } = await import('../research/packetRunner.ts');
+  const restored = await restoreGoalResearch(goalId, GOAL_PRIORITY_BOOST);
+  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_REINSTATED', summary: 'Reinstated.', detail: { researchRestored: restored }, actorRef });
   return {
     ok: true,
     reason: null,
