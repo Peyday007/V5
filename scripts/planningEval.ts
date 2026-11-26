@@ -253,6 +253,7 @@ async function read(): Promise<void> {
         ? clip({
             verdict: plan.verdict, summary: plan.summary, chosen: plan.chosen, refusal: plan.refusal, bestReach: plan.bestReach,
             acceptance: plan.acceptance, strategies: plan.strategies, nextTest: plan.nextTest, considered: plan.considered,
+            excluded: (plan as unknown as { excluded?: unknown }).excluded ?? null,
             marketTests: plan.marketTests, sales: plan.sales, executionPolicy: plan.executionPolicy,
             steps: (plan as unknown as Record<string, unknown>)['steps'] ?? (plan as unknown as Record<string, unknown>)['planSteps'] ?? null,
           })
