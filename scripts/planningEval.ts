@@ -543,6 +543,150 @@ async function statedPriceProbe(like: string): Promise<void> {
   }
 }
 
+/**
+ * trace --run R --case C: the information flow of one evaluation goal, read
+ * only — the pages its research found and read (the free lane's per-item
+ * measures), the claims extracted and accepted, the EVIDENCE that reached its
+ * openings, what its route asks were shown, the findings a route ask would be
+ * shown now (verbatim) and the links its plan still lacks. Brain-wide: the
+ * searches sent in the last day, by provider and outcome.
+ */
+async function trace(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const kase = safeId(flag('case'), '--case');
+  const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
+  if (!project) fail(`no project for ${run} ${kase}`);
+  const goal = (await listWorkstreams()).find((one) => one.projectId === project.id && !one.archivedAt);
+  const out = (label: string, value: unknown) => console.log(`TRACE ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[]): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  out('goal', { project: project.id, goal: goal?.id ?? null, createdAt: goal?.createdAt ?? null });
+  // 1–2. Pages: every free-lane research item this project ran, with what it searched and read.
+  const items = await q(`SELECT outcome, reason, measures, at FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND project_id = ? ORDER BY at`, [project.id]);
+  const tally = { items: items.length, submitted: 0, failed: 0, released: 0, searched: 0, readFromSearch: 0, readFromModel: 0, itemsWithDiscovery: 0 };
+  const reasons = new Map<string, number>();
+  for (const row of items) {
+    const outcome = String(row['outcome'] ?? '');
+    if (outcome === 'SUBMITTED') tally.submitted += 1;
+    else if (outcome.startsWith('RELEASED')) tally.released += 1;
+    else tally.failed += 1;
+    let m: Record<string, unknown> = {};
+    try {
+      m = JSON.parse(String(row['measures'] ?? '{}')) as Record<string, unknown>;
+    } catch {
+      m = {};
+    }
+    const d = m['discovery'] as { searched?: number; readFromSearch?: number; readFromModel?: number } | undefined;
+    if (d) {
+      tally.itemsWithDiscovery += 1;
+      tally.searched += d.searched ?? 0;
+      tally.readFromSearch += d.readFromSearch ?? 0;
+      tally.readFromModel += d.readFromModel ?? 0;
+    }
+    if (outcome !== 'SUBMITTED') {
+      const why = String(row['reason'] ?? '').replace(/^model [^:]+: /, '').replace(/\d+/g, 'N').slice(0, 140);
+      reasons.set(why, (reasons.get(why) ?? 0) + 1);
+    }
+  }
+  out('pages', tally);
+  out('item_failures', [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([why, n]) => ({ why, n })));
+  // Routines and other workers' submissions on this project, by type.
+  out('work_items', await q(`SELECT work_type, state, COUNT(*) AS n FROM work_items WHERE project_id = ? GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [project.id]));
+  out('fragments', await q(`SELECT status, block_cause, COUNT(*) AS n FROM research_fragments WHERE project_id = ? GROUP BY 1, 2 ORDER BY n DESC`, [project.id]));
+  // 3–4. Claims extracted, and those the gate accepted, with their sources.
+  out('claims', await q(`SELECT c.accepted, COALESCE(c.retrieval_state, 'RETRIEVED') AS retrieval, COUNT(*) AS n, COUNT(DISTINCT c.source_url) AS sources FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id WHERE o.project_id = ? GROUP BY 1, 2 ORDER BY n DESC`, [project.id]));
+  out('claims_by_lane', await q(`SELECT c.evidence_lane AS lane, c.accepted, COUNT(*) AS n FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id WHERE o.project_id = ? GROUP BY 1, 2 ORDER BY n DESC LIMIT 30`, [project.id]));
+  out('claims_rejected_sample', await q(`SELECT c.evidence_lane AS lane, SUBSTR(c.claim, 1, 200) AS claim, c.source_url AS url, SUBSTR(COALESCE(c.validation_state, ''), 1, 40) AS state FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id WHERE o.project_id = ? AND c.accepted = 0 ORDER BY c.created_at DESC LIMIT 8`, [project.id]));
+  out('claims_accepted', await q(`SELECT c.id, c.evidence_lane AS lane, SUBSTR(c.claim, 1, 240) AS claim, c.source_url AS url, c.source_date AS date FROM research_claims c JOIN research_orchestrations o ON o.id = c.orchestration_id WHERE o.project_id = ? AND c.accepted = 1 ORDER BY c.created_at DESC LIMIT 40`, [project.id]));
+  // 5. What reached the openings: card facts by kind, and every EVIDENCE fact with the claim it rests on.
+  out('card_facts', await q(`SELECT f.kind, COUNT(*) AS n FROM cash_card_facts f WHERE f.project_id = ? GROUP BY 1`, [project.id]));
+  out('evidence_facts', await q(`SELECT f.opportunity_id AS opening, f.field, SUBSTR(f.value, 1, 200) AS value, f.claim_id AS claim FROM cash_card_facts f WHERE f.project_id = ? AND f.kind = 'EVIDENCE' ORDER BY f.created_at`, [project.id]));
+  // 6. What the route asks were shown, and what one would be shown now, verbatim.
+  if (goal) {
+    const asks = await q(`SELECT created_at AS at, summary, detail FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_ROUTES_PROPOSED' ORDER BY created_at`, [goal.id]);
+    out('route_asks', asks.map((row) => {
+      let d: Record<string, unknown> = {};
+      try {
+        d = JSON.parse(String(row['detail'] ?? '{}')) as Record<string, unknown>;
+      } catch {
+        d = {};
+      }
+      return { at: row['at'], stage: d['stage'] ?? null, findingsSeen: d['findingsSeen'] ?? null, findingsShown: d['findingsShown'] ?? null, outcome: d['outcome'] ?? null, summary: String(row['summary'] ?? '').slice(0, 200) };
+    }));
+    const proposal = await import('../server/services/goals/routeProposal.ts');
+    const { projectEvidenceClaims } = await import('../server/repos/research.ts');
+    const findingsOf = (proposal as Record<string, unknown>)['findingsOf'] as ((claims: unknown[]) => { ref: string; lane: string | null; text: string; source: string; date: string | null }[]) | undefined;
+    if (findingsOf) out('findings_now', findingsOf(await projectEvidenceClaims(project.id, 200)).map((one) => `${one.ref} [${one.lane}] ${one.text} (${one.source}, ${one.date ?? ''})`));
+    // 7. The plan's own reading: what its best strategy still lacks.
+    const { readGoalPlan } = await import('../server/services/goals/plan.ts');
+    const reading = await readGoalPlan({ goalId: goal.id, persist: false }).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error) }));
+    if (reading && !('error' in reading)) {
+      const r = reading as unknown as { verdict: string; chosen: string | null; strategies: { key: string; label: string; verdict: string; links: { link: string; ok: boolean; basis: string }[] }[] };
+      const best = r.strategies.find((one) => one.key === r.chosen) ?? r.strategies[0];
+      out('plan', { verdict: r.verdict, chosen: best?.label ?? null, missing: (best?.links ?? []).filter((one) => !one.ok).map((one) => `${one.link}: ${one.basis.slice(0, 140)}`) });
+    } else out('plan', reading);
+  }
+  out('searches_24h', await q(`SELECT provider, outcome, COUNT(*) AS n FROM bin_events WHERE event_type = 'SOURCE_SEARCH' AND at > ? GROUP BY 1, 2 ORDER BY n DESC`, [new Date(Date.now() - 86_400_000).toISOString()]));
+}
+
+/**
+ * probe --run R --case C [--batch-b64 facts]: one route ask for an evaluation
+ * goal through Brain's own proposer code and production models, writing
+ * nothing. Without facts it is shown the findings production holds (A); with
+ * facts — sourced claims only, never a route — it is shown those through the
+ * same findings interface (B). Prints the prompt's findings, each model's
+ * reply and the routes the proposer's own parser and critic keep.
+ */
+async function probe(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const kase = safeId(flag('case'), '--case');
+  const factsB64 = flag('batch-b64');
+  const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
+  if (!project) fail(`no project for ${run} ${kase}`);
+  const goal = (await listWorkstreams()).find((one) => one.projectId === project.id && !one.archivedAt);
+  if (!goal) fail('no goal');
+  const out = (label: string, value: unknown) => console.log(`PROBE ${label} ${JSON.stringify(value)}`);
+  const P = (await import('../server/services/goals/routeProposal.ts')) as unknown as Record<string, (...args: unknown[]) => unknown>;
+  const { readTarget } = await import('../server/services/goals/target.ts');
+  const target = await readTarget(goal, new Date());
+  if (!target) fail('no target');
+  let supplied: unknown[] | null = null;
+  if (factsB64) {
+    const facts = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    supplied = facts.map((one, i) => ({ id: `probe_${i + 1}`, claim: one.claim, sourceUrl: one.sourceUrl, sourceTitle: one.sourceTitle ?? null, sourcePublisher: null, sourceDate: one.sourceDate ?? null, evidenceLane: one.lane ?? null, retrievedAt: new Date().toISOString() }));
+  }
+  const deps = supplied ? { claims: async () => supplied } : {};
+  const read = (await P['routeContext']!(goal, target, [], deps)) as { ctx: Record<string, unknown>; routes: unknown[] } | null;
+  if (!read) fail('no context');
+  const ctx = read.ctx;
+  ctx['today'] = new Date().toISOString().slice(0, 10);
+  const findings = (ctx['findings'] as unknown[] | undefined) ?? [];
+  const scout = findings.length < 3;
+  out('mode', { supplied: !!supplied, findings: findings.length, stage: scout ? 'SCOUT' : 'ROUTE' });
+  out('findings', findings);
+  const { modelsFor } = await import('../server/services/operator/run.ts');
+  const { challengerModels } = await import('../server/services/operator/decisions.ts');
+  const { chatFor } = await import('../server/services/cheap/modelBench.ts');
+  const models = challengerModels(await modelsFor());
+  out('models', models.map((m) => m.label));
+  const prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
+  const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
+  for (const model of models) {
+    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
+    const r = await chat([{ role: 'system', content: system }, { role: 'user', content: prompt }], undefined, 4000);
+    out('reply', { model: model.label, error: r.error ?? null, ms: r.ms, content: String(r.content ?? '').slice(0, 9000) });
+    if (r.error || !r.content) continue;
+    const parsed = scout ? P['parseDirections']!(r.content, ctx) : P['parseRoutes']!(P['routesJson']!(r.content), ctx);
+    out('parsed', parsed);
+    if (!scout) {
+      const routes = (parsed as { routes: unknown[] }).routes;
+      const critic = await chat([{ role: 'system', content: "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object." }, { role: 'user', content: String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))) }], undefined, 3000);
+      const critique = critic.content ? P['critiqueJson']!(critic.content, routes.length) : null;
+      out('critique', critique ? P['applyCritique']!(routes, critique, ctx) : { error: critic.error ?? 'unreadable' });
+    }
+    break;
+  }
+}
+
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
@@ -551,6 +695,8 @@ try {
   else if (command === 'update') await update();
   else if (command === 'stall') await stall();
   else if (command === 'retire') await retire();
+  else if (command === 'trace') await trace();
+  else if (command === 'probe') await probe();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
 } finally {

@@ -905,16 +905,41 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
  * the prompt actually showed survive, so a model cannot cite a source nobody
  * read. Pure.
  */
+/**
+ * The research lanes whose claims can stand behind each figure. Measured
+ * (production probe, 2026-11-25, Brain's own models given verified facts): a
+ * labour-gig listing was cited as a route's channel, buyer count and demand at
+ * once, a building-permit count as demand for site mapping, and a platform's
+ * billing timing as when a homeowner pays — and every citation is filed as
+ * that figure's EVIDENCE. A finding whose lane answered another question stays
+ * shown but cannot be cited for this figure; one with no lane is the critic's
+ * to judge.
+ */
+export const GROUND_LANES: Readonly<Record<GroundKey, readonly string[]>> = {
+  channel: ['contact_mode', 'acquisition_access', 'payer'],
+  price: ['price_evidence'],
+  volume: ['buyer_volume'],
+  cost: ['cost_evidence'],
+  settlement: ['timing'],
+  fulfiller: ['fulfiller', 'delivery_requirements', 'effort'],
+  demand: ['current_demand', 'comparable_demand'],
+};
+/** Whether a finding of this lane may be cited for this figure. Pure. */
+export function groundFits(key: GroundKey, lane: string | null): boolean {
+  return !lane || GROUND_LANES[key].includes(lane);
+}
+
 export function groundsOf(value: unknown, findings: readonly RouteFinding[]): RouteGrounds {
   const out: RouteGrounds = { claims: {}, demandScope: null };
   if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
   const raw = value as Record<string, unknown>;
-  const byRef = new Map(findings.map((one) => [one.ref.toUpperCase(), one.claimId] as const));
+  const byRef = new Map(findings.map((one) => [one.ref.toUpperCase(), one] as const));
   for (const key of Object.keys(GROUND_FIELDS) as GroundKey[]) {
     const cited = str(raw[key], 40);
     const ref = cited ? /F\d+/i.exec(cited)?.[0]?.toUpperCase() : undefined;
-    const claimId = ref ? byRef.get(ref) : undefined;
-    if (claimId) out.claims[key] = claimId;
+    const finding = ref ? byRef.get(ref) : undefined;
+    // A finding researched for another question is not evidence for this figure (`GROUND_LANES`).
+    if (finding && groundFits(key, finding.lane)) out.claims[key] = finding.claimId;
   }
   const scope = str(raw['demandScope'], 20)?.toUpperCase();
   if (out.claims.demand) out.demandScope = scope === 'EXACT' ? 'EXACT' : 'COMPARABLE';
@@ -1305,6 +1330,13 @@ export function findingsOf(claims: readonly ResearchClaim[], max: number = FINDI
   for (const claim of claims) {
     const text = claim.claim.replace(/\s+/g, ' ').trim();
     if (text.length < 25 || !claim.sourceUrl) continue;
+    /*
+     * A statement that something was not found is not a finding about the
+     * market (production trace, 2026-11-25: the only "finding" shown for a
+     * Seattle $500-in-7-days goal was that no county forestry department buys
+     * timber slots — an absence from an unrelated round).
+     */
+    if (claim.claimType === 'NEGATIVE_EXISTENCE' || /absence|disqualif|ruled_out/i.test(claim.evidenceLane ?? '')) continue;
     const norm = text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 160);
     if (seen.has(norm)) continue;
     seen.add(norm);
