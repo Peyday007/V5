@@ -252,6 +252,15 @@ async function laneCapacity(): Promise<void> {
     [since],
   );
   console.log(`DIAGNOSE: lane-capacity process restarts ${restarts.length}: ${restarts.map((r) => r.ended_at.slice(11, 16)).join(' ')}`);
+  // The lane's "database saturated" reads any infrastructure failure felt in the last minute,
+  // whatever its surface: these are the minutes and the surfaces that could have tripped it.
+  const incidents = await getDb().all<{ kind: string; surface: string; minutes: number | string; occurrences: number | string }>(
+    `SELECT kind, surface, COUNT(*) AS minutes, SUM(occurrences) AS occurrences FROM infra_incidents
+      WHERE started_at >= ? AND kind <> 'PROCESS_RESTART' GROUP BY kind, surface ORDER BY COUNT(*) DESC LIMIT 40`,
+    [since],
+  );
+  console.log('DIAGNOSE: lane-capacity infra incidents (minutes with one, occurrences) by kind and surface');
+  for (const row of incidents) console.log(`  ${String(Number(row.minutes)).padStart(5)} min ${String(Number(row.occurrences)).padStart(6)}x ${row.kind} ${row.surface}`);
 }
 
 /**
