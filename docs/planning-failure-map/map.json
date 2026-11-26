@@ -55,7 +55,7 @@
    "wrong": "Fragments are not executed, 69% of searches are refused, no keyed search provider is configured, Firecrawl is held to 15 credits/day, and the read-capable routine workers are not members of evaluation projects.",
    "owner": "research coordinator/queue; server/services/sources/*; owner items (keyed search key)",
    "proof": "A fresh goal's research completes its planned fragments and its plan reads >=20 relevant verified facts within the goal window.",
-   "evidence": "RESEARCH-STARVATION-DIAGNOSIS: 1/16 fragments completed; 30Q traces: 0/1/0 completions after ~6 h; searches 785/1142 refused."
+   "evidence": "RESEARCH-STARVATION-DIAGNOSIS: 1/16 fragments completed; 30Q traces: 0/1/0 completions after ~6 h; searches 785/1142 refused. Operator capacity 06:20-07:00Z (RC6 owner session_01QF5Tk5NBNTchKMwPJPQFEc): about 20 research fragments SUCCEEDED per hour Brain-wide; the GPU lane is held below its slot target (inFlight 3 of 8) by \"database connections contended\"; each restart holds the free lane at START_TARGET=2 for 10 min and resumes at half the saved target (16 restarts/24h, about 160 min/day); fragmentSearchRoom is 2 Brain-wide once Firecrawl hits its ceiling (34 CEILING vs 7 ANSWERED/24h; DDG 817 refused vs 416 answered). The free-lane database-saturation brake fired 253 times/24h while checkouts waited 0 ms p95, a false brake, corrected by #1342 (queue session). Projection: 30 goals x about 6 fragments = about 9 h for a first round."
   },
   "RC7": {
    "name": "No shared per-goal working state",
@@ -160,6 +160,14 @@
    "owner": "russell/loop.ts judge-unjudged pass; goals/goalWork.ts goalIdeaSql",
    "proof": "On a fresh batch, each live goal's first ideas are judged within one tick and its first research fragments are queued within the hour.",
    "evidence": "planningEval judging (08:00Z): run ideas 605 CAPTURED unjudged, head of the goal queue created 05:56\u201306:08Z by the retired fm1126a and paused goals, updated_at = created_at; judge-one: one judgment 1.75 s; judge-pass: the pass body judged 18 in 20 s \u2014 so the pass works and is starved by budget and queue, not broken."
+  },
+  "RC20": {
+   "name": "A live goal's judged ideas never launch: the launch window ranks paused and ended goals' price questions and rounds as goal work",
+   "kind": "coordination+software",
+   "wrong": "goalPriceSql and goalRoundSql (goals/goalWork.ts) named ideas as goal work by how they were made, never by whether their goal still runs, so in nextLaunchable's order (fits, goal tier, per-project turn, tier) paused and ended goals' price questions (tier 0) and rounds (tier 1) stood ahead of a live goal's dives and ideas (tiers 2-3). A tick fills 5-30 launches inside a 30 s budget and ticks run ~17 min, so the head was refilled from other projects every tick. The packet runner's plan-read boost used the same ungated predicate.",
+   "owner": "goals/goalWork.ts goalPriceSql, goalRoundSql (read by russell/loop.ts nextLaunchable and research/packetRunner.ts servesGoalPlanRead)",
+   "proof": "On a fresh batch, each live goal's judged ideas launch missions within a tick or two of being judged, and its first fragments run within the hour.",
+   "evidence": "planningEval launching (09:45-09:55Z, dcc34fe): run 143 judged ideas, all with missionSpec, 30 grants at 6 free slots each, run ideas first at launch-window position 33, 0 run missions in 3 h; Brain-wide 31-86 missions an hour across 22-41 projects; 152 projects with 2483 launchable ideas. Isolated: tests/goalIdeasEachProjectsTurn 'launches a live goal's judged idea before a paused goal's judged price questions' fails on the unfixed predicate (paused price question first) and passes with the gate."
   }
  },
  "repairs": [
@@ -170,7 +178,7 @@
    "owner": "routeProposal.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests/planningFailureMapWave1.test.ts RC1"
+   "evidence": "tests/planningFailureMapWave1.test.ts RC1 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1b",
@@ -179,7 +187,7 @@
    "owner": "routeProposal.ts critiquePrompt/applyCritique",
    "depends": "W1c",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC2"
+   "evidence": "tests RC2 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1c",
@@ -188,7 +196,7 @@
    "owner": "routeProposal.ts parseRoutes",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC8"
+   "evidence": "tests RC8 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1d",
@@ -197,7 +205,7 @@
    "owner": "routeProposal.ts parseRoutes",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC9; routeProposal.test.ts updated"
+   "evidence": "tests RC9; routeProposal.test.ts updated | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1e",
@@ -206,7 +214,7 @@
    "owner": "routeProposal.ts findingsOf; repos/research.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC4"
+   "evidence": "tests RC4 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1f",
@@ -215,7 +223,7 @@
    "owner": "routeProposal.ts directionPrompt/routePrompt",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC5"
+   "evidence": "tests RC5 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1g",
@@ -224,7 +232,7 @@
    "owner": "cash/discovery.ts discoveryFocusFor",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests RC3"
+   "evidence": "tests RC3 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1h",
@@ -233,7 +241,7 @@
    "owner": "routeProposal.ts proposeGoalRoutes/evidenceSections",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "code; production pending"
+   "evidence": "code; production pending | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W2a",
@@ -287,7 +295,7 @@
    "owner": "intent.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally"
+   "evidence": "tests/objectiveFreshPhrasings.test.ts; all 30 fm1126a goals read locally | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W1j",
@@ -296,16 +304,16 @@
    "owner": "cheap/modelBench.ts",
    "depends": "",
    "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "tests/chatStreaming.test.ts; model exam pass 2"
+   "evidence": "tests/chatStreaming.test.ts; model exam pass 2 | PRs #1339/#1341 deployed; production verification pending the next batch"
   },
   {
    "id": "W3a",
    "rc": "RC13",
    "what": "The owner's plan must not be built from constructed arrangements that read nothing of the owner: route the owner's words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.",
-   "owner": "cash/construct.ts; goals/plan.ts",
+   "owner": "cash/construct.ts; goals/plan.ts (integration owner session_01QF5Tk7etm6MGmaFuHMd6eZ)",
    "depends": "",
-   "state": "OPEN",
-   "evidence": ""
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "PR #1345 (8a2c568): a constructed design reaches a goal plan only if its precedent is one of that goal's own route openings; tests/ownerRoutesLeadConstruction.test.ts. Motivating production read: dev6 0/12 usable on a8c4699 (6 QUANT critical on generic arrangements, 6 no-candidate)."
   },
   {
    "id": "W3b",
@@ -322,8 +330,8 @@
    "what": "Route asks, critiques and direction asks never use a model measured unfit (ROUTE_UNFIT_MODEL_LABELS: the fallback combo); with no fit model left the ask records NO_ANSWER and retries on the failure interval.",
    "owner": "routeProposal.ts operatorChats; planningEval probe parity",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "tests/planningFailureMapWave2.test.ts; sensitivity C41-F"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "tests/planningFailureMapWave2.test.ts; sensitivity C41-F | PR #1346"
   },
   {
    "id": "W2b",
@@ -331,8 +339,8 @@
    "what": "Output budgets 14,000 / 12,000 / 10,000 (route / direction / critique); attempt bound 300 s, ask budget 720 s.",
    "owner": "routeProposal.ts ROUTE_TOKENS",
    "depends": "W1j streaming",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C23-R"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C23-R | PR #1346"
   },
   {
    "id": "W2c",
@@ -340,8 +348,8 @@
    "what": "An owner who gives the goal hours has offered their work (ownerLabourWithHours), in route asks and discovery; \"I can work all day / full time\" read as an offer.",
    "owner": "domain/operatingModel.ts; routeProposal routeContext; discovery",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C03-P; blind fixture 30/30"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C03-P; blind fixture 30/30 | PR #1346"
   },
   {
    "id": "W2d",
@@ -349,8 +357,8 @@
    "what": "Reader: negated \"spend more than\" only (own regression removed); a floor (\"more than $600\") never a ceiling; a named break is the window; a job's hours are not time given, the extra hours are.",
    "owner": "intent.ts",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "tests/objectiveFreshBatchBlind.test.ts (blind readings, 30/30); sensitivity C01-*"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "tests/objectiveFreshBatchBlind.test.ts (blind readings, 30/30); sensitivity C01-* | PR #1346"
   },
   {
    "id": "W2e",
@@ -358,8 +366,8 @@
    "what": "A stream that ends without a finish reason or [DONE] is an error, not an answer.",
    "owner": "modelBench.ts readStream",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C23-I"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C23-I | PR #1346"
   },
   {
    "id": "W2f",
@@ -367,8 +375,8 @@
    "what": "A route kept against the critic ranks after every route the critic kept (the earlier fixture hid that it did not).",
    "owner": "routeProposal.ts applyCritique",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C31-X"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C31-X | PR #1346"
   },
   {
    "id": "W2g",
@@ -376,8 +384,8 @@
    "what": "Capital plus the first buyer's cost must fit the limit; the critic is told when the target needs reinvested proceeds; the critique prompt is tested to carry the computed line.",
    "owner": "routeProposal.ts parseRoutes/economicsLine",
    "depends": "",
-   "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "sensitivity C25-X, C25-R"
+   "state": "MERGED_PENDING_PRODUCTION",
+   "evidence": "sensitivity C25-X, C25-R | PR #1346"
   },
   {
    "id": "W2h",
@@ -394,8 +402,17 @@
    "what": "Goal ideas are goal work only while their goal is live (goalIdeaSql: LIVE_GOAL_PROJECT_IDS_SQL); the judge pass judges up to 40 goal ideas a tick until a 45 s budget, halved under pressure instead of falling to 5.",
    "owner": "goals/goalWork.ts; russell/loop.ts",
    "depends": "",
+   "state": "DEPLOYED_PARTIAL",
+   "evidence": "Deploy 45788180566 (dcc34fe) success. Judging on production: fm1126b 143 ideas judged WORTH_DOING with compiled missions by 09:40Z (was 0 at 08:00Z); 944 still unjudged behind other live eval goals. Judging works; launch does not (RC20)."
+  },
+  {
+   "id": "W2j",
+   "rc": "RC20",
+   "what": "Every goal tier is a live goal's work: goalPriceSql and goalRoundSql are gated on liveGoalProjectSql (LIVE_GOAL_PROJECT_IDS_SQL), as goalIdeaSql and goalDiveSql already were; goalRoundsAwaitingLaunch keeps its reading.",
+   "owner": "goals/goalWork.ts",
+   "depends": "W2i",
    "state": "BRANCH_PENDING_DEPLOY",
-   "evidence": "tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I"
+   "evidence": "tests/goalIdeasEachProjectsTurn.test.ts known-bad fails without the gate, passes with it; test:impacted 117 passed; launch-window and price-priority suites 264 passed"
   }
  ],
  "progress": [
@@ -422,6 +439,12 @@
    "measure": "fm1126b mid-run: research never started on any of 30 goals (RC19); the batch measures RC19, not planning. Acceptance restarts on a new frozen revision after wave 2 deploys.",
    "usable": "n/a",
    "note": "judging, judge-one and judge-pass probes"
+  },
+  {
+   "at": "2026-11-26 09:30Z",
+   "measure": "fm1126b read on dcc34fe: 30/30 NO_CANDIDATE. Every goal holds 1-4 owner-fit openings (89 total, e.g. Tulsa truck: junk haul, delivery partner, holiday setup), all unpriced; 0 missions, 0 fragments, 0 claims for the run.",
+   "usable": "0/30",
+   "note": "read_fm1126b_0926, stall, judging and launching probes; the blocker is launch, not planning (RC20)"
   }
  ],
  "capabilities": [
@@ -1936,11 +1959,11 @@
    "dim": "R",
    "test": "Completed fragments file claims.",
    "expected": "Yes.",
-   "status": "RECHECK",
-   "evidence": "p06 3 claims filed. | REVIEW 2: test-validity review: rests on one example, a field existing, or a contract \u2014 not a demonstration.",
+   "status": "FAIL",
+   "evidence": "fm1126b on dcc34fe: ideas judged, missions 0 \u2014 the launch window ranked paused and ended goals' price questions and rounds as goal work (launching probe 09:45Z).",
    "component": "gate",
-   "rc": "",
-   "proof": "UNPROVEN"
+   "rc": "RC20",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C14-I",

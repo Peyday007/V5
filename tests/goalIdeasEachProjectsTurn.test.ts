@@ -141,4 +141,26 @@ describe('a fresh goal beside an older goal’s backlog', () => {
     expect(queue).toContain(first);
     expect(queue.filter((id) => stoppedIdeas.includes(id))).toEqual([]);
   });
+
+  it("launches a live goal's judged idea before a paused goal's judged price questions (fresh batch launch window, 2026-11-26)", async () => {
+    // Production shape (planningEval launching, 09:45Z): 30 live goals' 143 judged ideas with free slots launched none in 3 h,
+    // while paused and ended goals' price questions and rounds, ranked as goal work, took every tick's fill.
+    const { sendPortfolioNeeds } = await import('../server/services/goals/portfolioNeeds.ts');
+    const unpriced = [1, 2, 3].map((k) => ({ population: `pop_${k}`, buyer: `buyers number ${k}`, designs: 3, arrangementKey: `k${k}`, label: `Design ${k}`, question: `What does one buyer described as "buyers number ${k}" pay, in USD, for one purchase? Look for published price lists.` }));
+    const portfolio = { best: null, causal: null, marketHistory: [], unpriced } as never;
+    const paused = await goalProject('paused goal', 5);
+    const live = await goalProject('live goal', 5);
+    await sendPortfolioNeeds({ goalId: paused.goalId, projectId: paused.projectId, portfolio });
+    const pausedIdeas = (await getDb().all<{ id: string }>(`SELECT id FROM russell_candidates WHERE project_id = ?`, [paused.projectId])).map((one) => one.id);
+    expect(pausedIdeas.length).toBeGreaterThan(0);
+    for (const id of pausedIdeas) {
+      await recordJudgment({ candidateId: id, state: 'QUEUED', priority: 'MUST_DO', reason: 'test', judgment: { missionSpec: { projectId: paused.projectId, objective: id } } });
+    }
+    const liveIdea = await goalIdea(live, 'live dive', hoursAgo(1), 'WORTH_DOING');
+    await getDb().run(`UPDATE workstreams SET paused_at = ? WHERE id = ?`, [hoursAgo(2), paused.goalId]);
+
+    const window = (await nextLaunchable(50)).filter((entry) => entry.fitsFreeSlot).map((entry) => entry.candidateId);
+    expect(window).toContain(liveIdea);
+    expect(window[0]).toBe(liveIdea);
+  });
 });

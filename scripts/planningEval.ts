@@ -890,6 +890,43 @@ async function judging(): Promise<void> {
 }
 
 /**
+ * launching --run R: why a run's judged ideas do or do not become missions, read
+ * only — each project's launchable ideas beside its research grant's slots
+ * (`launchableByProject`, the reading the launch pass and the capacity reader
+ * share), where the run's ideas fall in the launch window (`nextLaunchable`),
+ * and the run's queued ideas that carry no compiled specification.
+ */
+async function launching(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const out = (label: string, value: unknown) => console.log(`LAUNCHING ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[] = []): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  const projects = (await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id);
+  const runSet = new Set(projects);
+  const marks = projects.map(() => '?').join(',') || "''";
+  const loop = await import('../server/services/russell/loop.ts');
+  const { researchMissionSlots } = await import('../server/services/russell/launch.ts');
+  const byProject = await loop.launchableByProject().catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as unknown as Awaited<ReturnType<typeof loop.launchableByProject>>);
+  const mine = byProject.filter((one) => runSet.has(one.projectId));
+  out('brain_wide', { projects: byProject.length, waiting: byProject.reduce((n, one) => n + (one.waiting ?? 0), 0), free: byProject.reduce((n, one) => n + (one.free ?? 0), 0) });
+  out('run_launchable', { projects: mine.length, waiting: mine.reduce((n, one) => n + one.waiting, 0), free: mine.reduce((n, one) => n + one.free, 0), noGrant: mine.filter((one) => !one.slots).length });
+  const slots: Record<string, unknown>[] = [];
+  for (const id of projects.slice(0, 30)) slots.push({ project: id, slots: await researchMissionSlots(id).catch((error: unknown) => ({ error: String((error as Error)?.message ?? error).slice(0, 200) })) });
+  out('run_slots', slots);
+  const window = await loop.nextLaunchable(200).catch(() => []);
+  const ids = window.map((one) => one.candidateId);
+  const owners = new Map((await q(`SELECT id, project_id FROM russell_candidates WHERE id IN (${ids.map(() => '?').join(',') || "''"})`, ids)).map((row) => [String(row['id']), String(row['project_id'])]));
+  out('launch_window', { length: window.length, runIdeas: window.filter((one) => runSet.has(owners.get(one.candidateId) ?? '')).length, firstRunAt: window.findIndex((one) => runSet.has(owners.get(one.candidateId) ?? '')), fitting: window.filter((one) => one.fitsFreeSlot).length });
+  out('run_queued', await q(`SELECT CASE WHEN judgment LIKE '%"missionSpec"%' THEN 'spec' ELSE 'no_spec' END AS spec, COUNT(*) AS n FROM russell_candidates WHERE project_id IN (${marks}) AND state = 'QUEUED' GROUP BY 1`, projects));
+  out('run_missions', await q(`SELECT state, COUNT(*) AS n, MAX(created_at) AS last FROM russell_missions WHERE project_id IN (${marks}) GROUP BY 1`, projects));
+  out('grants', await q(`SELECT project_id, purpose, state, max_concurrent FROM russell_goals WHERE project_id IN (${marks}) LIMIT 40`, projects));
+  const since = new Date(Date.now() - 12 * 3_600_000).toISOString();
+  out('missions_by_hour', await q(`SELECT SUBSTR(created_at, 1, 13) AS hour, COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM russell_missions WHERE created_at > ? GROUP BY 1 ORDER BY 1`, [since]));
+  out('cycle', await q(`SELECT state, last_ran_at, lease_expires_at, SUBSTR(COALESCE(last_error, ''), 1, 1500) AS last_error FROM russell_cycle`));
+  out('launch_events', await q(`SELECT event_type AS kind, COUNT(*) AS n, MAX(created_at) AS last FROM project_events WHERE created_at > ? AND (event_type LIKE '%LAUNCH%' OR event_type LIKE 'RUSSELL_MISSION%') GROUP BY 1 ORDER BY n DESC LIMIT 20`, [since]));
+  out('run_events', await q(`SELECT event_type AS kind, COUNT(*) AS n, MAX(created_at) AS last FROM project_events WHERE project_id IN (${marks}) AND created_at > ? AND (event_type LIKE '%LAUNCH%' OR event_type LIKE '%MISSION%' OR event_type LIKE '%REFUS%' OR event_type LIKE '%PARK%') GROUP BY 1 ORDER BY n DESC LIMIT 20`, [...projects, since]));
+}
+
+/**
  * judge-one --run R: the experiment that settles why a run's ideas sit unjudged —
  * Brain's own judgment of the run's oldest unjudged idea, exactly as the tick's
  * judge pass makes it (`judgeCandidate`), with the archive read timed apart.
@@ -998,6 +1035,7 @@ try {
   else if (command === 'questions') await questions();
   else if (command === 'focus') await focus();
   else if (command === 'judging') await judging();
+  else if (command === 'launching') await launching();
   else if (command === 'judge-one') await judgeOne();
   else if (command === 'judge-pass') await judgePass();
   else if (command === 'unfocus') await unfocus();
