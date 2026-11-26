@@ -188,6 +188,34 @@ export function liveGoalWorkItemSql(): string {
   return `(orchestration_id IS NOT NULL AND orchestration_id IN (${liveGoalPacketIdsSql()}))`;
 }
 
+/** Goals a person cancelled: kept with every attempt, pursued no longer. */
+const CANCELLED_GOAL_IDS_SQL =
+  'SELECT cg.id FROM workstreams cg WHERE cg.target_metric IS NOT NULL AND cg.archived_at IS NULL AND cg.cancelled_at IS NOT NULL';
+
+/**
+ * A boolean over a `work_items` row (no alias): it serves only goals that were
+ * cancelled — its packet is a cancelled goal's and no live goal's, or its
+ * project is one only cancelled goals target. The shared queue hands such work
+ * out after everything else, at any priority, so it still runs on idle
+ * capacity and a reinstated goal's work returns to its place (nothing is
+ * deleted or rewritten). No parameters.
+ *
+ * Production 2026-11-26 (research-starvation diagnosis): of 840 queued
+ * research items in the evaluation projects, ~690 belonged to retired runs
+ * whose goals were cancelled — cancelling holds a goal's bins, and these
+ * items had none — and, older and at priority 9, they were claimed first-in
+ * first-out ahead of the live runs' work, which waited 20 hours or more; one
+ * live goal's research had not run a single search 4.5 hours after it was set.
+ */
+export function stoppedGoalWorkItemSql(): string {
+  const liveProjects = `SELECT lg.target_project_id FROM workstreams lg WHERE lg.id IN (${LIVE_GOAL_IDS_SQL}) AND lg.target_project_id IS NOT NULL`;
+  const cancelledProjects = `SELECT cg2.target_project_id FROM workstreams cg2 WHERE cg2.id IN (${CANCELLED_GOAL_IDS_SQL}) AND cg2.target_project_id IS NOT NULL`;
+  return (
+    `((orchestration_id IS NOT NULL AND orchestration_id IN (${goalPacketIdsSql(CANCELLED_GOAL_IDS_SQL)}) AND orchestration_id NOT IN (${liveGoalPacketIdsSql()}))` +
+    ` OR (project_id IN (${cancelledProjects}) AND project_id NOT IN (${liveProjects})))`
+  );
+}
+
 /** A boolean SQL expression over a `russell_candidates` row aliased `c`; true for the goal's own ideas. No parameters. */
 export function goalIdeaSql(c: string): string {
   return `(${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr

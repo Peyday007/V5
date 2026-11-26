@@ -43,7 +43,7 @@ import { findTool } from '../../mcp/tools.ts';
 import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
-import { liveGoalWorkItemSql } from '../goals/goalWork.ts';
+import { liveGoalWorkItemSql, stoppedGoalWorkItemSql } from '../goals/goalWork.ts';
 import { laneFitFailure } from '../research/gate.ts';
 import { fragmentSearchRoom, isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, servedRoute, type Completer, type LaneConfig } from '../cheap/lane.ts';
@@ -2918,12 +2918,12 @@ export function asksByPriority(
 async function waitingPackets(projectIds: string[], types: readonly string[]): Promise<string[]> {
   const now = queueNow();
   const rows = await getDb().all<{ orchestration_id: string }>(
-    `SELECT orchestration_id, MAX(priority) AS top FROM work_items
+    `SELECT orchestration_id, MAX(priority) AS top, MIN(CASE WHEN ${stoppedGoalWorkItemSql()} THEN 1 ELSE 0 END) AS stopped FROM work_items
       WHERE ${CLAIMABLE_SQL} AND orchestration_id IS NOT NULL
         AND project_id IN (${projectIds.map(() => '?').join(', ')})
         AND work_type IN (${types.map(() => '?').join(', ')})
       GROUP BY orchestration_id
-      ORDER BY MAX(priority) DESC, CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END, orchestration_id LIMIT 10`,
+      ORDER BY stopped, MAX(priority) DESC, CASE WHEN ${liveGoalWorkItemSql()} THEN 0 ELSE 1 END, orchestration_id LIMIT 10`,
     [now, now, ...projectIds, ...types],
   );
   return rows.map((row) => row.orchestration_id);
@@ -2991,6 +2991,7 @@ async function allocatedPackets(projectIds: string[], types: readonly string[], 
       WHERE ${CLAIMABLE_SQL} AND orchestration_id IS NOT NULL
         AND project_id IN (${projectIds.map(() => '?').join(', ')})
         AND work_type IN (${types.map(() => '?').join(', ')})
+        AND NOT ${stoppedGoalWorkItemSql()}
       GROUP BY orchestration_id ORDER BY MAX(priority) DESC, orchestration_id LIMIT 50`,
     [now, now, ...projectIds, ...types],
   );

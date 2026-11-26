@@ -325,10 +325,17 @@ export function calendarLine(today: string): string {
   return `Today is ${today.slice(0, 10)} (${part} ${MONTHS[d.getUTCMonth()]}). Use the season and the calendar where the owner and the buyers are — weather, holidays, school terms, year-end budgets and closures — when choosing buyers, channels and timing, and keep any constraint the owner set for part of the window.`;
 }
 
+/** The window's last day, "24 February 2027", from today and the days left. Pure. */
+export function windowEnd(today: string, daysLeft: number): string {
+  const end = new Date(Date.parse(`${today.slice(0, 10)}T00:00:00.000Z`) + Math.max(0, Math.round(daysLeft)) * 86_400_000);
+  return `${end.getUTCDate()} ${MONTHS[end.getUTCMonth()]} ${end.getUTCFullYear()}`;
+}
+
 /** The owner's limits, stated as hard rules. Pure. */
 function limitLines(ctx: RouteContext): string[] {
   return [
-    `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s).`,
+    // The window's last day, written out (dec1125c p10): told only "90 day(s)" on 25 November, the critic dropped a snow route because "first snow is in December, after the window ends".
+    `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s)${ctx.today ? `, by ${windowEnd(ctx.today, ctx.daysLeft)}` : ''}.`,
     ctx.capitalLimit !== null ? `Capital: at most ${money(ctx.capitalLimit, ctx.currency)} may be tied up before money comes back. A route needing more is not allowed.` : 'Capital: the owner set no figure; prefer routes that tie up little.',
     ctx.hoursPerWeek
       ? `Owner's time: at most ${ctx.hoursPerWeek} hour(s) a week of the owner's own work (about ${Math.round(weeklyToMonthly(ctx.hoursPerWeek))} a month), every route's work together. Routes must fit inside it.`

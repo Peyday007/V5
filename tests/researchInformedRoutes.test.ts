@@ -50,6 +50,7 @@ import {
   routeAskDue,
   routePrompt,
   critiquePrompt,
+  windowEnd,
   settleRouteAsks,
   type RouteContext,
   type RouteDeps,
@@ -109,6 +110,11 @@ describe('scouting: directions before anything is priced', () => {
     expect(offered).toMatch(/I can put in 15 hours/);
     expect(offered).toMatch(/work that needs no particular skill/);
     expect(offered).toMatch(/deliveries, shifts, gigs and services included/);
+  });
+
+  it('writes out the last day of the window, so a model never guesses which months it covers (dec1125c p10)', () => {
+    expect(windowEnd('2026-11-26', 90)).toMatch(/^24 [A-Z]?[a-z]+ 2027$/);
+    expect(routePrompt(ctx({ today: '2026-11-26', daysLeft: 90 }))).toMatch(/collected within 90 day\(s\), by 24 [A-Za-z]+ 2027/);
   });
 
   it('tells the critic the plan adds routes up, so a route that collects part of the money is not dropped for that alone', () => {

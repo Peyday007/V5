@@ -20,7 +20,7 @@ import { createWorker } from '../server/repos/identity.ts';
 import { createBin, listDispatchableBins } from '../server/repos/bins.ts';
 import { createCandidate } from '../server/repos/russellCandidates.ts';
 import { pauseGoal } from '../server/repos/goals.ts';
-import { goalFirstSql } from '../server/services/goals/goalWork.ts';
+import { goalFirstSql, stoppedGoalWorkItemSql } from '../server/services/goals/goalWork.ts';
 import { GOAL_PLAN_READ_BOOST, GOAL_PRIORITY_BOOST, goalResearchBoost, servesGoalSearch } from '../server/services/research/packetRunner.ts';
 import { judgeParkedPacketIds } from '../server/services/research/judgeRound.ts';
 
@@ -143,6 +143,36 @@ describe('a live goal’s linked research', () => {
     // Within ceilings: a higher priority still wins, the goal key is only an order inside one.
     expect(await servesGoalSearch(goalPacket)).toBe(true);
     expect(await servesGoalSearch(backlogPacket)).toBe(false);
+  });
+
+  it('a cancelled goal\'s research is claimed after everything else, at any priority, and returns when the goal is reinstated', async () => {
+    const goal = await liveGoal();
+    const goalPacket = await packet('cancelled goal');
+    const backlogPacket = await packet('backlog');
+    await link(goal, 'PACKET', goalPacket);
+    // Older and at a higher priority: first-in first-out handed it out ahead of every live goal's work.
+    const stale = await enqueueWork({ projectId: t.project.id, workType: 'RESEARCH_FRAGMENT', payload: {}, requiredScopes: ['queue:claim'], orchestrationId: goalPacket, priority: 9, createdByType: 'SYSTEM' });
+    await getDb().run(`UPDATE work_items SET available_at = '2026-11-01T00:00:00.000Z', created_at = '2026-11-01T00:00:00.000Z' WHERE id = ?`, [stale.id]);
+    const backlog = await enqueueWork({ projectId: t.project.id, workType: 'RESEARCH_FRAGMENT', payload: {}, requiredScopes: ['queue:claim'], orchestrationId: backlogPacket, priority: 6, createdByType: 'SYSTEM' });
+    await getDb().run('UPDATE workstreams SET cancelled_at = ? WHERE id = ?', [new Date().toISOString(), goal]);
+    const stopped = async (id: string) => Number((await getDb().get<{ k: number }>(`SELECT CASE WHEN ${stoppedGoalWorkItemSql()} THEN 1 ELSE 0 END AS k FROM work_items WHERE id = ?`, [id]))!.k);
+    expect(await stopped(stale.id)).toBe(1);
+    expect(await stopped(backlog.id)).toBe(0);
+
+    const worker = await createWorker({ name: `goal-stopped-${++n}`, displayName: 'w', createdByType: 'SYSTEM', createdById: 'test' });
+    const scopes = [{ projectId: t.project.id, scopes: ['queue:claim' as const] }];
+    const [first] = await claimWork({ workerId: worker.id, scopes, workTypes: ['RESEARCH_FRAGMENT'] });
+    expect(first?.workItemId).toBe(backlog.id);
+    // Nothing else waiting: idle capacity still takes it; it was never deleted.
+    const [second] = await claimWork({ workerId: worker.id, scopes, workTypes: ['RESEARCH_FRAGMENT'] });
+    expect(second?.workItemId).toBe(stale.id);
+
+    // A project only cancelled goals target is stopped work too; a live goal on it lifts that.
+    await getDb().run('UPDATE workstreams SET target_project_id = ? WHERE id = ?', [t.project.id, goal]);
+    expect(await stopped(backlog.id)).toBe(1);
+    await getDb().run('UPDATE workstreams SET cancelled_at = NULL WHERE id = ?', [goal]);
+    expect(await stopped(backlog.id)).toBe(0);
+    expect(await stopped(stale.id)).toBe(0);
   });
 
   it('is offered as a bin ahead of older backlog bins at the same priority', async () => {
