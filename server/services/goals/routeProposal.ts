@@ -48,7 +48,7 @@ import { createHash } from 'node:crypto';
 import type { OperatorModel } from '../../domain/operator.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { CASH_MECHANISMS, type CashMechanism, type CashOpportunity } from '../../domain/types.ts';
-import { breaksOperatingModel, OPERATING_MODEL_SENTENCE, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, operatingModelSentenceFor, operatingFactsOf, operatingFit, ownerLabourOffer, type OwnerLabour } from '../../domain/operatingModel.ts';
 import {
   BUYER_PROBLEM_FIELD,
   COMPARABLE_DEMAND_FIELD,
@@ -136,6 +136,8 @@ export interface ProposedRoute {
   directCost: number;
   capital: number;
   ownerHoursPerDeal: number;
+  /** What winning one paying buyer costs in money (ads, leads, listing or platform fees, outreach tools), null when the reply gave none. */
+  acquisitionCostPerSale: number | null;
   daysToFirstCash: number;
   buyerCount: number | null;
   volumeBasis: string;
@@ -188,8 +190,15 @@ export interface RouteFinding {
   source: string;
   date: string | null;
 }
-/** Findings shown to one proposal, newest first. */
-export const FINDINGS_SHOWN = 40;
+/**
+ * Findings shown to one proposal. Measured (intelligence test, 2026-11-26): at 40,
+ * newest first, the proposer saw 40 of 111, 111 and 135 verified facts, and the
+ * graders traced three of twelve failed plans to decisive facts that were verified
+ * and never shown (an insurance requirement and its cost, cold-email cost per
+ * client, agency pricing). A route ask of 120 findings is about 40 KB, inside every
+ * model's context; past it, findings are chosen across lanes (`findingsOf`).
+ */
+export const FINDINGS_SHOWN = 120;
 /** A goal with fewer findings than this scouts directions before it proposes priced routes. */
 export const FINDINGS_FOR_ROUTES = 3;
 /** New findings since the last ask that make a fresh, grounded ask due without waiting the ordinary interval. */
@@ -237,6 +246,8 @@ export interface RouteContext {
   today?: string;
   /** Whether this goal's own words offer the requester's labour or assets (`ownerLabourOffer`); absent reads as not offered. */
   ownerLabour?: OwnerLabour | null;
+  /** What earlier asks for this goal said the evidence taught them ("rethink"), newest first; read, not only recorded. */
+  lessons?: string[];
   /** What research has established for this goal so far (`routeFindings`); absent or empty before any. */
   findings?: RouteFinding[];
   /** The directions scouted for this goal and what their research found. */
@@ -325,10 +336,17 @@ export function calendarLine(today: string): string {
   return `Today is ${today.slice(0, 10)} (${part} ${MONTHS[d.getUTCMonth()]}). Use the season and the calendar where the owner and the buyers are — weather, holidays, school terms, year-end budgets and closures — when choosing buyers, channels and timing, and keep any constraint the owner set for part of the window.`;
 }
 
+/** The window's last day, "24 February 2027", from today and the days left. Pure. */
+export function windowEnd(today: string, daysLeft: number): string {
+  const end = new Date(Date.parse(`${today.slice(0, 10)}T00:00:00.000Z`) + Math.max(0, Math.round(daysLeft)) * 86_400_000);
+  return `${end.getUTCDate()} ${MONTHS[end.getUTCMonth()]} ${end.getUTCFullYear()}`;
+}
+
 /** The owner's limits, stated as hard rules. Pure. */
 function limitLines(ctx: RouteContext): string[] {
   return [
-    `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s).`,
+    // The window's last day, written out (dec1125c p10): told only "90 day(s)" on 25 November, the critic dropped a snow route because "first snow is in December, after the window ends".
+    `The money still needed: ${money(ctx.remaining, ctx.currency)} (${ctx.currency}), collected within ${ctx.daysLeft} day(s)${ctx.today ? `, by ${windowEnd(ctx.today, ctx.daysLeft)}` : ''}.`,
     ctx.capitalLimit !== null ? `Capital: at most ${money(ctx.capitalLimit, ctx.currency)} may be tied up before money comes back. A route needing more is not allowed.` : 'Capital: the owner set no figure; prefer routes that tie up little.',
     ctx.hoursPerWeek
       ? `Owner's time: at most ${ctx.hoursPerWeek} hour(s) a week of the owner's own work (about ${Math.round(weeklyToMonthly(ctx.hoursPerWeek))} a month), every route's work together. Routes must fit inside it.`
@@ -340,10 +358,7 @@ function limitLines(ctx: RouteContext): string[] {
     ctx.industry ? `The owner confined this goal to: ${ctx.industry}. Every route must be in it.` : 'No industry is excluded: choose on economics, time to cash and whether it can be done.',
     ctx.recurring ? 'The target is monthly recurring revenue: every route must be billed monthly.' : '',
     ctx.exclusions.length ? `The owner excluded: ${ctx.exclusions.join('; ')}.` : '',
-    OPERATING_MODEL_SENTENCE,
-    ctx.ownerLabour?.offered
-      ? `For this goal only, the owner offered their own work ("${ctx.ownerLabour.evidence}"): routes the owner personally performs — in person included — are allowed, using only the skills and assets their words state and inside their stated hours. Set performer OWNER and count every one of those hours.`
-      : '',
+    operatingModelSentenceFor(ctx.ownerLabour ?? null),
   ].filter(Boolean);
 }
 
@@ -363,12 +378,33 @@ export function scoutedLines(scouted: readonly ScoutedDirection[]): string[] {
   );
 }
 
+/**
+ * When the owner offers their own work, the direct ways of being paid for it
+ * come first (intelligence test, 2026-11-26): for "Seattle, $0, $500 in 7 days,
+ * 15 hours", Brain's 60 questions and every route were about brokering email
+ * triage, logos and spreadsheet cleanup to businesses — routes the platforms'
+ * own payout holds and prepayment rules ruled out — and none asked whether the
+ * owner could simply be booked and paid for work, which is what the verified
+ * facts supported. A broker earns a margin only after buyers are found; the
+ * owner's own paid work earns the whole price and settles on the platform's or
+ * buyer's terms. Pure.
+ */
+export function directMeansLine(ctx: Pick<RouteContext, 'ownerLabour'>): string {
+  return ctx.ownerLabour?.offered
+    ? "The owner offers their own work, so first consider how they are paid directly for work they can do now with what they have — tasks, shifts, gigs and local services buyers book and pay for through a platform or directly, settling inside the window — before any route that brokers or resells other people's work or sells a digital product; brokering earns only a margin and needs buyers first."
+    : '';
+}
+/** Directions and routes differ in kind, not wording. */
+export const DIFFERENT_IN_KIND = 'Where more than one is named, they must differ in who pays, for what, and through which channel — never the same route reworded.';
+
 /** The research-informed part of a route ask: what was found, what was scouted, and how to use both. Pure. */
 function evidenceSections(ctx: RouteContext): string[] {
   const findings = ctx.findings ?? [];
   const scouted = ctx.scouted ?? [];
-  if (findings.length === 0 && scouted.length === 0) return [];
+  const lessons = ctx.lessons ?? [];
+  if (findings.length === 0 && scouted.length === 0 && lessons.length === 0) return [];
   return [
+    lessons.length ? `WHAT EARLIER ASKS FOR THIS GOAL LEARNED FROM THE EVIDENCE (build on it; do not repeat what it rules out):\n- ${lessons.join('\n- ')}` : '',
     findings.length
       ? `FINDINGS — what research has established for this goal, each from a source that was read (cite by ref; they are the only facts here):\n- ${findingLines(findings).join('\n- ')}`
       : '',
@@ -378,7 +414,7 @@ function evidenceSections(ctx: RouteContext): string[] {
 }
 
 const ROUTE_SHAPE = (currency: string) =>
-  `{"title":"short name","buyerKind":one of ${JSON.stringify(BUYER_KINDS)},"mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${currency} (per month when billed monthly),"priceAnchor":"what this kind of buyer typically pays for this today, and where that is seen","monthly":true|false,"channel":"how buyers are reached, and why it yields paying buyers inside the window on the stated budget","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it, named, and what they cost","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"capital":number tied up before the first payment,"ownerHoursPerDeal":number of the owner's own hours per sale (for a route billed monthly, per buyer per month),"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"how that count was built, from the bottom up","assumptions":"what this route assumes that research must check","ownerFit":"which of the owner's stated skills, assets, location, time or refusals it uses or respects","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]},"grounds":{"channel":"F#"|null,"price":"F#"|null,"volume":"F#"|null,"cost":"F#"|null,"settlement":"F#"|null,"fulfiller":"F#"|null,"demand":"F#"|null,"demandScope":"EXACT"|"COMPARABLE"|null}}`;
+  `{"title":"short name","buyerKind":one of ${JSON.stringify(BUYER_KINDS)},"mechanism":one of ${JSON.stringify(CASH_MECHANISMS)},"industry":"industry","payer":"the buyer segment who pays","offer":"what is sold","price":number per sale in ${currency} (per month when billed monthly),"priceAnchor":"what this kind of buyer typically pays for this today, and where that is seen","monthly":true|false,"channel":"how buyers are reached, and why it yields paying buyers inside the window on the stated budget","performer":"BRAIN"|"SUBCONTRACTOR"|"OWNER","fulfiller":"who delivers it, named, and what they cost","brainDeliverable":"one of the proved deliverables when performer is BRAIN, else null","directCost":number per sale,"acquisitionCostPerSale":number — the money it costs to win one paying buyer (ads, leads, listing or platform fees, outreach tools; 0 when buyers come free),"capital":number tied up before the first payment,"ownerHoursPerDeal":number of the owner's own hours per sale, selling and delivering both (for a route billed monthly, per buyer per month),"daysToFirstCash":number,"buyerCount":number of such buyers that exist,"volumeBasis":"how that count was built, from the bottom up","assumptions":"what this route assumes that research must check","ownerFit":"which of the owner's stated skills, assets, location, time or refusals it uses or respects","searches":{"price":["search terms or sources that would show the price"],"demand":["... a dated sign of current demand"],"volume":["... how many such buyers exist"]},"grounds":{"channel":"F#"|null,"price":"F#"|null,"volume":"F#"|null,"cost":"F#"|null,"settlement":"F#"|null,"fulfiller":"F#"|null,"demand":"F#"|null,"demandScope":"EXACT"|"COMPARABLE"|null}}`;
 
 /**
  * The prompt. The owner's own words lead, and the model reads them first into
@@ -397,7 +433,7 @@ export function routePrompt(ctx: RouteContext, k: number = ROUTES_PER_ASK): stri
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `FEASIBILITY (every route must pass every one):\n- ${Object.values(ROUTE_RULES).join('\n- ')}`,
     ...evidenceSections(ctx),
-    `STEP 2 — ROUTES. Propose up to ${k} concrete commercial routes built from the owner profile${(ctx.findings ?? []).length ? ' and the findings' : ''}, each able to collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers pay today, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and how many such buyers exist. Propose only as many as are genuinely worth researching: one well-founded route is better than several weak ones, routes differ where the owner's means and the evidence point different ways, and no count of buyer kinds (${BUYER_KINDS.join(', ')}) or mechanisms is required. When the owner names a place, an asset or a hands-on skill, and the target is small or the window short, buyers near them (households and local businesses, reached directly) are usually the fastest money — the in-person work done by the owner where this goal's words offer it, otherwise by a local provider the owner books and pays, as the operating rule above allows: consider them before anything sold to the whole internet. A route that would fit any request equally — a report, an audit, a template, a dashboard, a course or an "AI" product offered to everyone — is a poor route unless the owner's own words point to it. Each route says in ownerFit which of the owner's stated facts it uses.`,
+    `STEP 2 — ROUTES. Propose up to ${k} concrete commercial routes built from the owner profile${(ctx.findings ?? []).length ? ' and the findings' : ''}, each able to collect real money for this objective inside every limit above. Each is one whole transaction: a specific kind of buyer who pays, a specific offer, a price such buyers pay today, how they are reached, who delivers it and at what direct cost, how long until the first money settles, and how many such buyers exist. Propose only as many as are genuinely worth researching: one well-founded route is better than several weak ones, routes differ where the owner's means and the evidence point different ways, and no count of buyer kinds (${BUYER_KINDS.join(', ')}) or mechanisms is required. When the owner names a place, an asset or a hands-on skill, and the target is small or the window short, buyers near them (households and local businesses, reached directly) are usually the fastest money — the in-person work done by the owner where this goal's words offer it, otherwise by a local provider the owner books and pays, as the operating rule above allows: consider them before anything sold to the whole internet. A route that would fit any request equally — a report, an audit, a template, a dashboard, a course or an "AI" product offered to everyone — is a poor route unless the owner's own words point to it. Each route says in ownerFit which of the owner's stated facts it uses. ${directMeansLine(ctx)} ${DIFFERENT_IN_KIND}`,
     `WHAT BRAIN ITSELF PROVABLY PRODUCES (one possible fulfilment, never the reason for a route; performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use OWNER or SUBCONTRACTOR routes'}.`,
     ctx.held.length ? `ALREADY HELD for this goal (propose different routes): ${ctx.held.slice(0, 20).join(' | ')}` : '',
     ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not propose these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
@@ -453,7 +489,7 @@ export function directionPrompt(ctx: RouteContext, k: number = DIRECTIONS_PER_AS
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `FEASIBILITY (a direction must be able to pass these once researched):\n- ${RULE_KEYS.filter((rule) => rule !== 'PRICE' && rule !== 'EVIDENCE').map((rule) => ROUTE_RULES[rule]).join('\n- ')}`,
     ...evidenceSections(ctx),
-    `STEP 2 — DIRECTIONS TO CHECK. Nothing has been researched for this goal yet, so do not price anything. Name up to ${k} directions worth one short piece of research each: a kind of buyer with a real problem or need they already spend money on, the offer that would answer it from the owner's own means, what such buyers already pay for comparable things (your expectation, to be checked — never a figure stated as known), how they could be reached inside the window, who could deliver it, and the single unknown most likely to rule it out. Name fewer when fewer are genuinely different; no spread of buyer kinds or business models is required. A direction that would fit any request equally (a report, an audit, a template, a course or an "AI" product offered to everyone) is a poor one unless the owner's words point to it. When the owner states a licence, certification or trade, at least one direction sells that licensed or trade work itself to the buyers who pay for it. When the owner states no skill or asset, their capital, time and place are the means: consider work buyers already pay for that the owner can arrange and stand behind — a local service delivered by a provider the owner books and pays, goods bought and resold where a price gap is published, or a service resold through a programme that publishes its terms — before any digital product.`,
+    `STEP 2 — DIRECTIONS TO CHECK. Nothing has been researched for this goal yet, so do not price anything. Name up to ${k} directions worth one short piece of research each: a kind of buyer with a real problem or need they already spend money on, the offer that would answer it from the owner's own means, what such buyers already pay for comparable things (your expectation, to be checked — never a figure stated as known), how they could be reached inside the window, who could deliver it, and the single unknown most likely to rule it out. Name fewer when fewer are genuinely different; no spread of buyer kinds or business models is required. A direction that would fit any request equally (a report, an audit, a template, a course or an "AI" product offered to everyone) is a poor one unless the owner's words point to it. When the owner states a licence, certification or trade, at least one direction sells that licensed or trade work itself to the buyers who pay for it. When the owner states no skill or asset, their capital, time and place are the means: consider work buyers already pay for that the owner can arrange and stand behind — a local service delivered by a provider the owner books and pays, goods bought and resold where a price gap is published, or a service resold through a programme that publishes its terms — before any digital product. ${directMeansLine(ctx)} ${DIFFERENT_IN_KIND}`,
     `WHAT BRAIN ITSELF PROVABLY PRODUCES (one possible fulfilment, never the reason for a direction; performer BRAIN may only sell one of these): ${ctx.delivers.length ? ctx.delivers.join(', ') : 'nothing proved yet — use OWNER or SUBCONTRACTOR directions'}.`,
     ctx.held.length ? `ALREADY HELD for this goal (name different directions): ${ctx.held.slice(0, 20).join(' | ')}` : '',
     ctx.refuted.length ? `REFUTED OR STOPPED by research or a person (do not name these again or near-copies; reason about why they failed):\n- ${ctx.refuted.slice(0, 12).map((one) => `${one.title}: ${one.why}`).join('\n- ')}` : '',
@@ -720,6 +756,7 @@ export const ROUTE_REJECTION_RULES = {
   CAPITAL: 'over the capital limit',
   NOT_MONTHLY: 'not billed monthly',
   MARGIN: 'cost not below price',
+  ACQUISITION: 'buyers cost more to win than a sale earns',
   HOURS: 'over the owner hours',
   PHYSICAL: "owner's physical work",
   EXCLUDED: 'excluded by the owner',
@@ -768,6 +805,65 @@ export function routeHours(
   const months = Math.max(1, ctx.daysLeft / DAYS_PER_MONTH);
   if (route.monthly) return { needed, allowed: perWeek !== null ? weeklyToMonthly(perWeek) : ctx.hoursLimit! / months, unit: 'a month', deals };
   return { needed, allowed: ctx.hoursLimit ?? weeklyToMonthly(perWeek!) * months, unit: 'in the window', deals };
+}
+
+/** A route's money, sales, buyer cost, hours and first-cash date, computed by code. */
+export interface RouteEconomics {
+  /** What one sale (or one buyer-month) earns after its direct cost and what winning the buyer costs. */
+  marginPerSale: number;
+  /** Sales (or, billed monthly, buyers) the money still needed takes from this route alone. */
+  salesNeeded: number;
+  /** Money spent winning those buyers, or null when the route gave no cost per buyer. */
+  acquisitionSpend: number | null;
+  /** Owner hours those sales take in the window. */
+  ownerHours: number;
+  /** The day the first money settles, or null without today's date. */
+  firstCashBy: string | null;
+  /** The route's own buyer count is smaller than the sales it needs. */
+  buyersShort: boolean;
+}
+
+/**
+ * The arithmetic of a route, done by code so no model's sum decides it
+ * (intelligence test, 2026-11-26: a proposer planned 445 sales from $3,000 of
+ * ads at $38.99 a sale; a critic priced 230 buyers' worth of leads for a route
+ * needing about 23 and dropped it; another read net-30 as outside a 60-day
+ * window). Pure.
+ */
+export function routeEconomics(
+  route: Pick<ProposedRoute, 'price' | 'directCost' | 'acquisitionCostPerSale' | 'ownerHoursPerDeal' | 'monthly' | 'daysToFirstCash' | 'buyerCount'>,
+  ctx: Pick<RouteContext, 'remaining' | 'daysLeft' | 'today'>,
+): RouteEconomics {
+  const marginPerSale = route.price - route.directCost - (route.acquisitionCostPerSale ?? 0);
+  // Billed monthly, a buyer pays once a month from first cash to the window's end.
+  const months = route.monthly ? Math.max(1, Math.floor((ctx.daysLeft - route.daysToFirstCash) / DAYS_PER_MONTH) + 1) : 1;
+  const salesNeeded = marginPerSale > 0 ? Math.max(1, Math.ceil(ctx.remaining / (marginPerSale * months))) : Number.POSITIVE_INFINITY;
+  const finite = Number.isFinite(salesNeeded);
+  return {
+    marginPerSale,
+    salesNeeded,
+    acquisitionSpend: route.acquisitionCostPerSale === null || !finite ? null : route.acquisitionCostPerSale * salesNeeded,
+    ownerHours: finite ? route.ownerHoursPerDeal * salesNeeded * months : Number.POSITIVE_INFINITY,
+    firstCashBy: ctx.today ? windowEnd(ctx.today, route.daysToFirstCash) : null,
+    buyersShort: route.buyerCount !== null && finite && route.buyerCount < salesNeeded,
+  };
+}
+
+/** The computed line the critic and the record read for a route. Pure. */
+export function economicsLine(route: ProposedRoute, ctx: RouteContext): string {
+  const e = routeEconomics(route, ctx);
+  const unit = route.monthly ? 'buyer-month' : 'sale';
+  if (!Number.isFinite(e.salesNeeded)) return `COMPUTED: each ${unit} earns nothing after its costs.`;
+  return [
+    `COMPUTED (exact): each ${unit} earns ${money(e.marginPerSale, ctx.currency)} after its direct cost${route.acquisitionCostPerSale !== null ? ` and ${money(route.acquisitionCostPerSale, ctx.currency)} to win the buyer` : ''}`,
+    `alone it needs ${e.salesNeeded} ${route.monthly ? 'paying buyer(s)' : 'sale(s)'} for the ${money(ctx.remaining, ctx.currency)} still needed`,
+    e.acquisitionSpend !== null ? `winning them costs ${money(e.acquisitionSpend, ctx.currency)} in total` : 'it states no cost to win a buyer',
+    `${Math.round(e.ownerHours * 10) / 10} owner hour(s)`,
+    e.firstCashBy ? `first money by ${e.firstCashBy}${ctx.today ? ` (the window ends ${windowEnd(ctx.today, ctx.daysLeft)})` : ''}` : '',
+    e.buyersShort ? `it counts only ${route.buyerCount} such buyers, fewer than it needs alone` : '',
+  ]
+    .filter(Boolean)
+    .join('; ') + '.';
 }
 
 /**
@@ -838,10 +934,33 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       reject('its direct cost is not below its price', 'MARGIN');
       continue;
     }
+    /*
+     * The arithmetic is the code's, not the model's (intelligence test,
+     * 2026-11-26): a proposer cited a $38.99 cost per sale from paid ads and a
+     * $45 beanie costing $25.43 to make, and planned 445 sales from $3,000 of
+     * ads — every sale loses money before the first one is made. A route whose
+     * buyers cost more to win than a sale earns cannot reach any target.
+     */
+    const acquisitionRaw = amount(r['acquisitionCostPerSale']);
+    const acquisitionCostPerSale = acquisitionRaw === null ? null : Math.max(0, acquisitionRaw);
+    if (acquisitionCostPerSale !== null && acquisitionCostPerSale >= price - directCost) {
+      reject(`winning a buyer costs ${money(acquisitionCostPerSale, ctx.currency)}, at least the ${money(price - directCost, ctx.currency)} a sale earns after its direct cost`, 'ACQUISITION');
+      continue;
+    }
+    /*
+     * A route is refused on hours only when not even one sale fits the owner's
+     * time (dec1125c p06, 2026-11-26). It used to be refused when it could not
+     * carry the whole target alone inside the hours — but a plan is a set of
+     * routes whose hours the plan adds up and trims (`withoutSpareOwnerWork`),
+     * so two plasma donations, a five-hour labour shift and four hours of
+     * deliveries, each a third of $500 inside 15 hours together, were each
+     * refused for not being all of it. What the route alone would need is kept
+     * in the reason when it does break, and the plan holds the sum.
+     */
     const hours = routeHours({ price, directCost, ownerHoursPerDeal, monthly }, ctx);
-    if (hours && hours.needed > hours.allowed) {
+    if (hours && ownerHoursPerDeal > hours.allowed + 1e-9) {
       reject(
-        `needs about ${Math.round(hours.needed)} owner hour(s) ${hours.unit} for the ${hours.deals} ${monthly ? 'buyer(s)' : 'sale(s)'} the target takes, more than the ${Math.round(hours.allowed)} allowed ${hours.unit}`,
+        `one ${monthly ? 'buyer' : 'sale'} needs about ${Math.round(ownerHoursPerDeal * 10) / 10} owner hour(s) ${hours.unit}, more than the ${Math.round(hours.allowed)} allowed ${hours.unit} (the target would take ${hours.deals}, about ${Math.round(hours.needed)} hours)`,
         'HOURS',
       );
       continue;
@@ -858,11 +977,14 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       reject(`the owner excluded ${exclusionLabel(excluded)}`, 'EXCLUDED');
       continue;
     }
-    const ownerFit = str(r['ownerFit'], 300);
-    if (!ownerFit) {
-      reject("it does not say how it uses or respects the owner's stated skills, assets, location and refusals", 'OWNER_FIT');
-      continue;
-    }
+    /*
+     * A missing owner-fit sentence is a gap in the description, not a failed
+     * route (intelligence test, 2026-11-26: both routes of one answer — one of
+     * them the strongest direction the evidence held — were refused for it and
+     * the owner was handed nothing). The critic judges OWNER_FIT on the route
+     * itself; the gap is said, never invented.
+     */
+    const ownerFit = str(r['ownerFit'], 300) ?? 'not stated by the proposer — judge it from the route against the owner\'s words';
     const key = routeKey(payer, offer);
     if (routes.some((one) => one.key === key)) {
       reject('the same buyer and offer as another route in this answer', 'DUPLICATE');
@@ -888,6 +1010,7 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
       directCost,
       capital,
       ownerHoursPerDeal,
+      acquisitionCostPerSale,
       daysToFirstCash: Math.round(days),
       buyerCount: buyerCount !== null && buyerCount > 0 ? Math.round(buyerCount) : null,
       volumeBasis: str(r['volumeBasis'], 240) ?? '',
@@ -1071,12 +1194,19 @@ export function critiqueJson(text: string, routeCount: number): RouteCritique | 
 }
 
 /** The critic's prompt: the owner's words, their profile, the limits and rules, and the routes, numbered. Pure. */
+/*
+ * The critic is told the plan adds routes up (dec1125c p06, 2026-11-26): with
+ * the facts supplied it dropped two plasma donations "far below the required
+ * $500" although the proposer had combined them with a labour shift and
+ * deliveries inside the owner's 15 hours — the same one-route-is-the-plan
+ * reading the hours rule had (`parseRoutes`).
+ */
 export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute[], owner: OwnerProfile | null): string {
   const refOf = new Map((ctx.findings ?? []).map((one) => [one.claimId, one.ref] as const));
   const listed = routes.map((route, i) => {
     const { key: _key, searches: _searches, grounds, ...rest } = route;
     const cited = Object.entries(grounds.claims).map(([field, claimId]) => `${field}: ${refOf.get(claimId) ?? '?'}`);
-    return `${i + 1}. ${JSON.stringify(rest)}${cited.length ? ` — cites ${cited.join(', ')}${grounds.demandScope ? ` (demand ${grounds.demandScope})` : ''}` : ' — cites no finding'}`;
+    return `${i + 1}. ${JSON.stringify(rest)}${cited.length ? ` — cites ${cited.join(', ')}${grounds.demandScope ? ` (demand ${grounds.demandScope})` : ''}` : ' — cites no finding'}\n   ${economicsLine(route, ctx)}`;
   });
   return [
     `THE OWNER'S OWN WORDS (verbatim): ${ctx.objective}`,
@@ -1087,13 +1217,16 @@ export function critiquePrompt(ctx: RouteContext, routes: readonly ProposedRoute
     `LIMITS (hard rules):\n- ${limitLines(ctx).join('\n- ')}`,
     `RULES (score each route 0–5 on each; ${CRITIQUE_FAIL_SCORE} or less is a failure):\n${RULE_KEYS.map((rule) => `- ${rule}: ${ROUTE_RULES[rule]}`).join('\n')}`,
     `ROUTES PROPOSED:\n${listed.join('\n')}`,
-    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first, and between two close ones, the one more of whose figures rest on findings.",
+    "Judge each route as a sceptical operator who must make it pay inside the window. KEEP a route that passes every rule; REPAIR one that fails a rule a changed field fixes (a market price, a channel that works in time, a named fulfiller with a cost) and give only the changed fields in \"repair\", using the route's own field names; DROP one that cannot be made to pass, or that ignores the owner's stated skills, assets and location for a product that would fit any request. The plan combines the routes you keep and holds their hours, capital and money together, so never drop a route only because it alone collects part of the money still needed; judge whether it pays inside the window. The COMPUTED line under each route is exact arithmetic from its own figures and the dates: never redo it, and never drop a route on a date, a sum or a limit that line shows it meets. When you dispute one of the route's own figures (its price, days to first cash, direct cost, cost to win a buyer, capital or buyer count), REPAIR it to the figure the findings show and name that finding in \"why\"; the code re-checks every limit on the repaired figures. DROP only for what no changed figure can fix: it is unlawful or breaks a platform's terms, no such buyers are buying, the owner cannot do or arrange it, or a finding contradicts the route itself — and name the finding or the owner's words that show it. Then rank the routes you keep or repair, best first: the one most likely to put the owner's first money in their hand inside the window ranks first, and between two close ones, the one more of whose figures rest on findings.",
     'Reply with exactly one JSON object and nothing else:',
     `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"reviews":[{"index":1,"verdict":"KEEP"|"REPAIR"|"DROP","scores":{${RULE_KEYS.map((rule) => `"${rule}":0-5`).join(',')}},"failed":["rule names it fails"],"why":"one sentence","repair":{"field":"new value"}|null}],"ranking":[indices of kept or repaired routes, best first]}`,
   ]
     .filter(Boolean)
     .join('\n\n');
 }
+
+/** The rules whose sums and dates the code checks on a route's own figures (`parseRoutes`, `routeEconomics`). */
+export const NUMERIC_RULES: readonly RouteRule[] = ['WINDOW', 'CAPITAL'];
 
 /** A route that survived its critique, with the place the critique gave it. */
 export interface RankedRoute {
@@ -1122,12 +1255,29 @@ export function applyCritique(routes: readonly ProposedRoute[], critique: RouteC
       return;
     }
     const failing = review.failed.length ? ` (fails ${review.failed.join(', ')})` : '';
-    if (review.verdict === 'DROP' || (review.verdict === 'KEEP' && review.failed.length > 0)) {
+    /*
+     * A drop that rests only on the window or the capital is a claim about
+     * figures the code has already checked on this route's own numbers
+     * (intelligence test, 2026-11-26: "net 30 is outside a 60-day window",
+     * "Dec 3–7 falls after a window ending in February", and every route of
+     * one answer dropped on such sums, leaving the owner no plan). With a
+     * repair, the repaired figures are re-checked like any repair; without one
+     * the route stands, ranked after the routes the critic kept, and the
+     * objection stays on the record.
+     */
+    const numericOnly = review.verdict === 'DROP' && review.failed.length > 0 && review.failed.every((rule) => (NUMERIC_RULES as readonly string[]).includes(rule));
+    if (numericOnly && !review.repair) {
+      const score = RULE_KEYS.reduce((sum, rule) => sum + (review.scores[rule] ?? 0), 0);
+      survivors.push({ route, index: i + 1, score: score - 100, why: `kept against the critique, which objected only on ${review.failed.join(', ')} — limits the code checked on the route's own figures: ${review.why}`.slice(0, 400), repaired: false });
+      return;
+    }
+    const verdict = numericOnly && review.repair ? 'REPAIR' : review.verdict;
+    if (verdict === 'DROP' || (verdict === 'KEEP' && review.failed.length > 0)) {
       dropped.push({ title: route.title, why: `the critique dropped it${failing}: ${review.why}`.slice(0, 400), rule: 'CRITIQUE' });
       return;
     }
     let kept = route;
-    if (review.verdict === 'REPAIR' && review.repair) {
+    if (verdict === 'REPAIR' && review.repair) {
       const { key: _key, ...raw } = route;
       const again = parseRoutes({ routes: [{ ...raw, ...review.repair }] }, ctx);
       if (!again.routes[0]) {
@@ -1274,6 +1424,27 @@ export function strongRouteModels(env: NodeJS.ProcessEnv): OperatorModel[] {
   return [{ label: `anthropic:${model}`, baseUrl: ANTHROPIC_COMPAT_URL, apiKey: key, model } as OperatorModel];
 }
 
+/**
+ * One model turn, checked before it counts. An empty reply with no error is a
+ * failed turn, not an answer: a reasoning model that spends its whole token
+ * budget thinking returns content "" (production, 2026-11-26: gpt-oss-120b on 6
+ * of 12 route asks), and the ask used to fall through to a weaker model that
+ * invented the owner's refusals. It is asked once more with twice the budget,
+ * and is an error if it is empty again, so the next model is tried for a
+ * reason the record names.
+ */
+export async function askModel(chat: ChatFn, system: string, content: string, maxTokens: number): Promise<{ content: string; error?: string | null }> {
+  const once = (tokens: number) =>
+    chat([{ role: 'system', content: system }, { role: 'user', content }], undefined, tokens)
+      .then((r) => ({ content: String(r.content ?? ''), error: r.error ?? null }))
+      .catch((error: unknown) => ({ content: '', error: String((error as Error)?.message ?? error) }));
+  const first = await once(maxTokens);
+  if (first.error || first.content.trim()) return first;
+  const second = await once(maxTokens * 2);
+  if (second.error || second.content.trim()) return second;
+  return { content: '', error: 'an empty reply twice (no content and no error), the second with twice the token budget' };
+}
+
 async function operatorChats(deps: RouteDeps, timeoutMs: () => number): Promise<{ label: string; chat: ChatFn }[]> {
   const operator = await (deps.models ?? (async () => (await import('../operator/run.ts')).modelsFor()))().catch(() => [] as OperatorModel[]);
   const models = [...strongRouteModels(deps.env ?? process.env), ...challengerModels(operator)];
@@ -1338,7 +1509,7 @@ async function goalRoutes(
  */
 export function findingsOf(claims: readonly ResearchClaim[], max: number = FINDINGS_SHOWN): RouteFinding[] {
   const seen = new Set<string>();
-  const out: RouteFinding[] = [];
+  const eligible: { claim: ResearchClaim; text: string; source: string }[] = [];
   for (const claim of claims) {
     const text = claim.claim.replace(/\s+/g, ' ').trim();
     if (text.length < 25 || !claim.sourceUrl) continue;
@@ -1349,7 +1520,14 @@ export function findingsOf(claims: readonly ResearchClaim[], max: number = FINDI
      * timber slots — an absence from an unrelated round).
      */
     if (claim.claimType === 'NEGATIVE_EXISTENCE' || /absence|disqualif|ruled_out/i.test(claim.evidenceLane ?? '')) continue;
-    const norm = text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 160);
+    // A refuted claim is not a finding (it is filtered where it is read too; this keeps a supplied list honest).
+    if ((claim as { contradictionState?: string }).contradictionState === 'REFUTED') continue;
+    /*
+     * Near-duplicates are judged on the whole statement, not its opening: two
+     * verified facts from one source that differ only after 160 characters (a
+     * price and a payout term on the same platform page) were once one finding.
+     */
+    const norm = text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     if (seen.has(norm)) continue;
     seen.add(norm);
     let source = claim.sourcePublisher ?? claim.sourceTitle ?? '';
@@ -1360,10 +1538,38 @@ export function findingsOf(claims: readonly ResearchClaim[], max: number = FINDI
         source = claim.sourceUrl.slice(0, 60);
       }
     }
-    out.push({ ref: `F${out.length + 1}`, claimId: claim.id, lane: claim.evidenceLane, text: text.slice(0, 280), source: source.slice(0, 80), date: claim.sourceDate ?? claim.retrievedAt ?? null });
-    if (out.length >= max) break;
+    eligible.push({ claim, text, source });
   }
-  return out;
+  /*
+   * Past the budget, newest-first alone fills every slot with the latest round's
+   * lane (2026-11-26: follow-ups on e-commerce displaced every agency-pricing and
+   * acquisition-cost fact on a goal whose best route needed them). Take lanes in
+   * turn, newest first within each, so every kind of evidence the routes rest on
+   * is represented; the order shown stays newest first.
+   */
+  let chosen = eligible;
+  if (eligible.length > max) {
+    const byLane = new Map<string, number[]>();
+    eligible.forEach((one, i) => {
+      const lane = one.claim.evidenceLane ?? '';
+      byLane.set(lane, [...(byLane.get(lane) ?? []), i]);
+    });
+    const queues = [...byLane.values()];
+    const picked = new Set<number>();
+    for (let round = 0; picked.size < max; round += 1) {
+      let any = false;
+      for (const queue of queues) {
+        const at = queue[round];
+        if (at === undefined) continue;
+        any = true;
+        picked.add(at);
+        if (picked.size >= max) break;
+      }
+      if (!any) break;
+    }
+    chosen = eligible.filter((_, i) => picked.has(i));
+  }
+  return chosen.map((one, i) => ({ ref: `F${i + 1}`, claimId: one.claim.id, lane: one.claim.evidenceLane, text: one.text.slice(0, 280), source: one.source.slice(0, 80), date: one.claim.sourceDate ?? one.claim.retrievedAt ?? null }));
 }
 
 /**
@@ -1813,9 +2019,11 @@ export async function proposeGoalRoutes(input: { goalId: string; now?: Date; hel
   // What the last ask's review dropped is not offered again as if new: the next ask sees why.
   const reviewDropped = ((asks[0]?.detail['rejected'] as RejectedRoute[] | undefined) ?? []).filter((one) => one && one.rule === 'CRITIQUE');
   if (reviewDropped.length) read.ctx.refuted = [...read.ctx.refuted, ...reviewDropped.slice(0, 8).map((one) => ({ title: one.title, why: one.why }))];
+  // What earlier asks learned is an input to this one (integration diagnosis, 2026-11-26: rethinks were written to operator_learnings and read by nothing on the goal path).
+  const lessons = asks.map((one) => (typeof one.detail['rethink'] === 'string' ? (one.detail['rethink'] as string).trim() : '')).filter(Boolean);
+  if (lessons.length) read.ctx.lessons = [...new Set(lessons)].slice(0, 4);
   const failures: string[] = [];
-  const ask = (chat: ChatFn, system: string, content: string, maxTokens: number) =>
-    chat([{ role: 'system', content: system }, { role: 'user', content }], undefined, maxTokens).catch((error: unknown) => ({ content: '', error: String((error as Error)?.message ?? error) }));
+  const ask = (chat: ChatFn, system: string, content: string, maxTokens: number) => askModel(chat, system, content, maxTokens);
   const startDives = async (): Promise<string[]> => {
     const start = deps.startDives ?? (async (projectId: string) => (await import('../cash/validation.ts')).startValidations({ projectId }));
     return (await start(target.projectId).catch(() => [])).map((one) => one.opportunityId);

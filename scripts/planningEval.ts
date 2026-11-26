@@ -694,14 +694,16 @@ async function probe(): Promise<void> {
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
     const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
-    const r = await chat([{ role: 'system', content: system }, { role: 'user', content: prompt }], undefined, 4000);
-    out('reply', { model: model.label, error: r.error ?? null, ms: r.ms, content: String(r.content ?? '').slice(0, 9000) });
+    const started = Date.now();
+    // The production turn: an empty reply is retried with twice the budget, then an error (`askModel`).
+    const r = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, system, prompt, 4000);
+    out('reply', { model: model.label, error: r.error ?? null, ms: Date.now() - started, content: String(r.content ?? '').slice(0, 9000) });
     if (r.error || !r.content) continue;
     const parsed = scout ? P['parseDirections']!(r.content, ctx) : P['parseRoutes']!(P['routesJson']!(r.content), ctx);
     out('parsed', parsed);
     if (!scout) {
       const routes = (parsed as { routes: unknown[] }).routes;
-      const critic = await chat([{ role: 'system', content: "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object." }, { role: 'user', content: String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))) }], undefined, 3000);
+      const critic = await (P['askModel'] as unknown as (c: unknown, sys: string, content: string, max: number) => Promise<{ content: string; error?: string | null }>)(chat, "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object.", String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))), 3000);
       const critique = critic.content ? P['critiqueJson']!(critic.content, routes.length) : null;
       out('critique', critique ? P['applyCritique']!(routes, critique, ctx) : { error: critic.error ?? 'unreadable' });
     }
@@ -840,6 +842,24 @@ async function questions(): Promise<void> {
   fail('no model answered with questions');
 }
 
+/** Read-only: why a goal's queued research is or is not claimable by the free lane — its bins, items and the lane's memberships. */
+async function items(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const kase = safeId(flag('case'), '--case');
+  const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
+  if (!project) fail(`no project for ${run} ${kase}`);
+  const out = (label: string, value: unknown) => console.log(`ITEMS ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[]): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  const now = new Date().toISOString();
+  out('project', project.id);
+  out('bins', await q(`SELECT id, purpose, state, orchestration_id, created_at FROM bins WHERE project_id = ? ORDER BY created_at`, [project.id]));
+  out('orchestrations', await q(`SELECT id, status, created_at FROM research_orchestrations WHERE project_id = ? ORDER BY created_at`, [project.id]));
+  out('work_items', await q(`SELECT id, work_type, state, priority, available_at, attempt_count, max_attempts, orchestration_id, bin_id, target_worker_id, required_scopes, created_at FROM work_items WHERE project_id = ? AND state IN ('QUEUED', 'LEASED') ORDER BY created_at LIMIT 20`, [project.id]));
+  out('lane_memberships', await q(`SELECT k.name, m.revoked_at, m.granted_at FROM workers k LEFT JOIN project_memberships m ON m.principal_type = 'WORKER' AND m.principal_id = k.id AND m.project_id = ? WHERE k.name IN ('free-lane-a', 'free-lane-b')`, [project.id]));
+  out('claimable_ahead', await q(`SELECT priority, COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM work_items WHERE state = 'QUEUED' AND available_at <= ? AND attempt_count < max_attempts AND work_type = 'RESEARCH_FRAGMENT' GROUP BY priority ORDER BY priority DESC`, [now]));
+  out('fragment_starts_6h', await q(`SELECT COUNT(*) AS n, COUNT(DISTINCT project_id) AS projects FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at > ? AND reason LIKE '%RESEARCH_FRAGMENT%'`, [new Date(Date.now() - 6 * 3_600_000).toISOString()]));
+}
+
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
@@ -850,6 +870,7 @@ try {
   else if (command === 'retire') await retire();
   else if (command === 'trace') await trace();
   else if (command === 'probe') await probe();
+  else if (command === 'items') await items();
   else if (command === 'questions') await questions();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');

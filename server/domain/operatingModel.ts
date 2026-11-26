@@ -373,6 +373,29 @@ export function breaksOperatingModel(fit: OperatingFit, labour: OwnerLabour | nu
 }
 
 /**
+ * The standing rule as one goal's prompt must state it (dec1125c p06 probe,
+ * 2026-11-26). A goal whose words offer the requester's own work lifts the
+ * owner-physical-work refusal for that goal (`breaksOperatingModel`), but the
+ * route prompt still opened with the standing sentence — "no deliveries, no
+ * performing a service" — and named the lift only afterwards. The model read
+ * the standing sentence as the owner's own refusals ("refusals": ["no physical
+ * work", "no deliveries", …]) and proposed online-only routes for a person who
+ * had offered 15 hours of their own work. The prompt now says what the code
+ * enforces: the offer replaces the refusal instead of contradicting it, and
+ * work that needs no stated skill or asset is the owner's to do. Pure.
+ */
+export function operatingModelSentenceFor(labour: OwnerLabour | null): string {
+  if (!labour?.offered) return OPERATING_MODEL_SENTENCE;
+  return (
+    `For this goal the owner offered their own work ("${labour.evidence}"), so the standing rule that the owner does no physical work does not apply to it: ` +
+    'routes the owner personally performs — in person, deliveries, shifts, gigs and services included — are allowed, inside their stated hours, ' +
+    'using the skills and assets their words state or work that needs no particular skill, licence or equipment they did not state. ' +
+    'Set performer OWNER and count every one of those hours. Work can also be done by an independent supplier or subcontractor that this operation coordinates, ' +
+    'and AI and software should do as much of the remaining work as possible.'
+  );
+}
+
+/**
  * The line every kernel's research question opens its context with, carrying the
  * standing rule — one place, so no kernel can ask a question without it.
  */

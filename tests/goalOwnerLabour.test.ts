@@ -67,8 +67,8 @@ const haul = {
   directCost: 30, capital: 0, ownerHoursPerDeal: 3, daysToFirstCash: 3, buyerCount: 5000, volumeBasis: 'households in the town', assumptions: 'Households pay on the day.',
   ownerFit: 'Uses the owner\'s pickup truck and free weekends', searches: { price: ['junk removal price'], demand: ['junk removal wanted'], volume: ['households'] },
 };
-/** Ten loads at 12 hours each is far more than 10 hours a week. */
-const tooLong = { ...haul, title: 'Full house clear-outs', payer: 'Estate executors', offer: 'A whole house cleared', price: 150, ownerHoursPerDeal: 12 };
+/** One clear-out at 60 hours is more than 10 hours a week give over the 30 days. */
+const tooLong = { ...haul, title: 'Full house clear-outs', payer: 'Estate executors', offer: 'A whole house cleared', price: 150, ownerHoursPerDeal: 60 };
 
 let projectId = '';
 
