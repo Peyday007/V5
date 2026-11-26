@@ -430,6 +430,15 @@
    "depends": "",
    "state": "DEPLOYED",
    "evidence": "tests/planningFailureMapWave2 'C02-F: the owner profile holds only what the owner said' fails without the grounding, passes with it; test:impacted 200 passed; Deploy 45815287394 (59ddcc8) success. Production effect to be read on the next route asks."
+  },
+  {
+   "id": "W3c",
+   "rc": "RC21",
+   "what": "Before an opening reaches the owner: a proposed figure that contradicts the goal's own shown facts is refused or repaired by code; the critic's LAWFUL rule judges platform terms and licensed-practice limits; a named platform or service the research has not confirmed is carried as an ASSUMPTION to verify, never as a fact. The model-quality share of the cause is distinguished by re-running the batch on a stronger route model.",
+   "owner": "goals/routeProposal.ts (parseRoutes, critiquePrompt LAWFUL); model choice is the owner's (RC14)",
+   "depends": "RC14 model decision for the distinguishing test",
+   "state": "OPEN",
+   "evidence": "fm1126b blind grades f12, f24, f25, f26"
   }
  ],
  "progress": [
