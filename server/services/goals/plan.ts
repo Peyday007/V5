@@ -2238,7 +2238,9 @@ export function composeGoalReadings(input: {
   const remaining = Math.max(0, target.remainingCents / 100);
   const held = target.achievedCents / 100;
 
-  const timelines = readTimelines({ target, pathways: input.pathways?.pathways ?? [], portfolio, acceptance });
+  // A partial pathway (a design nothing priced) counts toward nothing: it is already a candidate as its arrangement.
+  const countedPathways = (input.pathways?.pathways ?? []).filter((p) => !p.partial);
+  const timelines = readTimelines({ target, pathways: countedPathways, portfolio, acceptance });
 
   // Expected, upper and adverse outcomes of the strongest combination and each alternative (S-0199/S-0200).
   /*
@@ -2319,7 +2321,7 @@ export function composeGoalReadings(input: {
 
   // The candidate plans, proven distinct (GOAL-23).
   // Observed money and executed sales come from the opening's own ledger rows, never from its model (GOAL-23 clause 5).
-  const fromPathways = (input.pathways?.pathways ?? []).map((p) => {
+  const fromPathways = countedPathways.map((p) => {
     const own = input.ledger?.get(p.opportunityId) ?? null;
     return candidateFromPathway(p, {
       enforceableCommitments: committedTo([p.opportunityId]),
@@ -2532,6 +2534,27 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const refusedSteps = target.achieved || refusedInfeasible
       ? []
       : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory() });
+    /*
+     * A refused model still holds what was found and constructed (production 2026-11-26:
+     * 30 live goals read, no pathway on any — this branch returned none). A live goal's
+     * openings and designs are read as pathways, each input marked, so a partial
+     * arrangement is kept rather than abandoned (OPP-04, S-0061). The readings below are
+     * composed as before, without them: a refusal is not made into a plan by a reading.
+     */
+    const refusedPathways: PathwayReading | null =
+      !target.achieved && target.daysLeft !== null && target.daysLeft > 0
+        ? readPathways({
+            modelled: [...model.considered, ...(model.estimates ?? [])],
+            considered: [],
+            target,
+            portfolio: model.portfolio,
+            permissionsMissing: permissions,
+            rounds: await recentGoalRounds(target.projectId, goal.id),
+            now,
+            capabilities: await brainCapabilities(target.projectId, target.currency),
+            partial: inGoalScope(arrangements, model),
+          })
+        : null;
     const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
@@ -2589,7 +2612,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
           remaining: target.remainingCents / 100,
         }),
       ],
-      pathways: null,
+      pathways: refusedPathways,
       reconstruction: refusedReconstruction,
       adoption: refusedPlan.adoption,
       steps: refusedSteps,
@@ -2959,6 +2982,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     rounds,
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
+    // Constructed designs the model neither considered nor priced are kept as partial pathways, never dropped (OPP-04, S-0061).
+    partial: inGoalScope(arrangements, model),
   });
   trace('pathways');
   /*

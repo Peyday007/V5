@@ -60,6 +60,8 @@
 import { commercialRealityOf } from './commercialReality.ts';
 import { fulfillerParty } from '../../domain/operatingModel.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import type { ConstructedArrangement } from '../cash/construct.ts';
+import { designFacts } from '../cash/properties.ts';
 import { payerNounWords } from '../cash/volume.ts';
 import type { VariableProvenance } from '../../domain/scenario.ts';
 import type { GoalPortfolio } from './portfolio.ts';
@@ -448,6 +450,12 @@ export interface TransactionPathway {
   correlationGroup: string;
   /** Tally of the fourteen commercial facts; `rights` and `capacity` are marked on their own and read beside it. */
   counts: { proven: number; estimated: number; unknown: number };
+  /**
+   * A constructed arrangement the cash model neither considered nor priced, kept
+   * as a partial transaction rather than abandoned (S-0061, `partialPathwayOf`).
+   * Its unknowns contribute nothing, so it never enters a combination.
+   */
+  partial?: true;
 }
 
 function statusOf(input: ModelInput): FactStatus {
@@ -869,6 +877,165 @@ export function publishedFacts(p: TransactionPathway): PathFact[] {
     p.conversion, p.volume, p.frequency, p.daysToCash, p.capital, p.rights, p.capacity,
     ...p.moves.flatMap((m) => (m.variant ? [m.variant.revenuePerDeal, m.variant.costPerDeal, m.variant.net] : [])),
   ];
+}
+
+/** A range nothing established, as a fact. */
+const unknownFact = (basis: string): PathFact => ({ value: null, low: null, high: null, status: 'UNKNOWN', basis });
+/** A reconstructed figure is a usable range only when its tier names these buyers and its bounds are ordered (`estimatedFromArrangement`). */
+function usableRange(r: { tier: string; p10: number; p50: number; p90: number } | undefined): boolean {
+  return (
+    !!r && r.tier !== 'UNKNOWN' && r.tier !== 'MECHANISM' && Number.isFinite(r.p50) && r.p50 > 0 && r.p90 >= r.p10
+  );
+}
+
+/**
+ * A constructed arrangement that never reached the cash model's considered openings
+ * or its priced estimates, as a transaction pathway (OPP-04, S-0061: "an unknown is
+ * not ... a reason to abandon a partial arrangement"). Production 2026-11-26 read 30
+ * live goals and no pathway on any of them: every design the model could not price
+ * was dropped from the reading, so nothing said what each one lacked or how to get it.
+ *
+ * Each of the fourteen commercial facts, rights and capacity is marked from what the
+ * construction itself established: ESTIMATED with its reconstructed range and basis,
+ * or UNKNOWN with no value and a basis naming what is missing — never PROVEN, since no
+ * buyer of this design has been found. Every gap names its missing component and a
+ * move that supplies (CONSTRUCT) or learns (RESEARCH) it the cheapest way. Its
+ * contribution is zero: with no channel and no volume established, any number would be
+ * an unknown read as a favourable assumption. Pure; no category or industry is consulted.
+ */
+export function partialPathwayOf(
+  a: ConstructedArrangement,
+  input: { remaining: number; daysLeft: number; currency: string; perArrangement: number | null; outreachPerDay: number; permissionsMissing: string[] },
+): TransactionPathway {
+  const who = a.demand.name.trim() || 'these buyers';
+  const facts = designFacts(a.design);
+  const buyer: PathFact = { value: who.slice(0, 240), low: null, high: null, status: 'ESTIMATED', basis: a.demand.claimId ? `the construction names this buyer population from claim ${a.demand.claimId}; no buyer of the design has been found yet` : 'the construction names this buyer population; no buyer of the design has been found yet' };
+  const motivation: PathFact = a.need?.name?.trim()
+    ? { value: a.need.name.trim().slice(0, 240), low: null, high: null, status: 'ESTIMATED', basis: a.need.claimId ? `the need the design answers, from claim ${a.need.claimId}; no dated buying signal yet` : 'the need the design answers; no dated buying signal yet' }
+    : unknownFact('no need or dated buying signal is established for these buyers');
+  const channel = unknownFact('no route to these buyers is established yet');
+  const offer: PathFact = { value: a.label.slice(0, 240), low: null, high: null, status: 'ESTIMATED', basis: `the constructed design (${a.design.base}, ${a.design.funding}, ${a.design.aggregation}, ${a.design.repeat}); no buyer has accepted it yet` };
+  const fulfiller: PathFact =
+    facts.fulfiller === 'BRAIN'
+      ? { value: 'Brain produces it under the design', low: null, high: null, status: 'ESTIMATED', basis: 'the design needs no outside supply; whether Brain meets these buyers\' bar is not established' }
+      : a.supply?.name?.trim()
+        ? { value: a.supply.name.trim().slice(0, 240), low: null, high: null, status: 'ESTIMATED', basis: a.supply.claimId ? `the supply the design engages, from claim ${a.supply.claimId}; its terms are not agreed` : 'the supply the design engages; its terms are not agreed' }
+        : unknownFact('the design needs a supplier and none is named');
+  const v = a.value;
+  const priced = usableRange(v);
+  const revenuePerDeal: PathFact = priced
+    ? { value: v.p50, low: v.p10, high: v.p90, status: 'ESTIMATED', basis: `${v.tier} reconstruction from ${v.observations} observation(s) of these buyers${v.notEvidence ? `, swept as an assumption: ${v.notEvidence}` : ''}`.slice(0, 200) }
+    : unknownFact(v.tier === 'MECHANISM' ? 'only other buyers\' prices are filed: nothing establishes what these buyers pay' : 'nothing filed establishes what these buyers pay');
+  const acquisitionCost = unknownFact('no channel yet, so no cost to reach a buyer');
+  const supplyCost = a.supplyCost && usableRange(a.supplyCost) ? a.supplyCost : null;
+  const fulfilmentCost: PathFact = supplyCost
+    ? { value: supplyCost.p50, low: supplyCost.p10, high: supplyCost.p90, status: 'ESTIMATED', basis: `${supplyCost.tier} reconstruction of what one deal pays its supplier, from ${supplyCost.observations} observation(s)` }
+    : unknownFact(facts.fulfiller === 'BRAIN' ? 'what delivering one deal costs Brain is not established' : 'what one deal pays its supplier is not established');
+  const net: PathFact =
+    revenuePerDeal.status === 'ESTIMATED' && fulfilmentCost.status === 'ESTIMATED'
+      ? {
+          value: (revenuePerDeal.value as number) - (fulfilmentCost.value as number),
+          low: revenuePerDeal.low! - fulfilmentCost.high!,
+          high: revenuePerDeal.high! - fulfilmentCost.low!,
+          status: 'ESTIMATED',
+          basis: 'the reconstructed price less the reconstructed supply cost; acquisition cost not yet known',
+        }
+      : unknownFact(revenuePerDeal.status === 'UNKNOWN' ? 'no price is established, so no net' : 'the cost of a deal is not established, so no net');
+  const conversion: PathFact = a.conversion && usableRange(a.conversion)
+    ? { value: a.conversion.p50, low: a.conversion.p10, high: a.conversion.p90, status: 'ESTIMATED', basis: `${a.conversion.tier} reconstruction of these buyers' close rate from ${a.conversion.observations} observation(s)` }
+    : unknownFact('no close rate is filed for these buyers; a universal cold-outreach rate is not assumed');
+  const volume = unknownFact('how many of these buyers exist and buy inside the window is not counted');
+  const repeats = a.design.repeat !== 'ONE_OFF';
+  const frequency: PathFact = { value: repeats ? 'repeats' : 'one-off', low: null, high: null, status: 'ESTIMATED', basis: `the design's repeat (${a.design.repeat}); no buyer has repeated yet` };
+  const daysToCash = unknownFact(`when money arrives under ${a.design.funding} is not established for these buyers`);
+  const worst = a.stress.worstCaseCents;
+  const capital: PathFact =
+    a.stress.exposure === 'SAFE'
+      ? { value: 0, low: 0, high: 0, status: 'ESTIMATED', basis: 'the design spends nothing of ours before buyers pay (stress: SAFE)' }
+      : worst !== null && (a.stress.exposure === 'BOUNDED' || a.stress.exposure === 'EXCEEDS')
+        ? { value: worst / 100, low: 0, high: worst / 100, status: 'ESTIMATED', basis: `the design's worst case before buyers pay (stress: ${a.stress.exposure})` }
+        : unknownFact('the worst case before buyers pay rests on a part nobody established');
+  const rights: PathFact = input.permissionsMissing.length === 0
+    ? { value: 'every permission this transaction depends on is granted', low: null, high: null, status: 'PROVEN', basis: 'the project\'s authority grants every action the transaction needs' }
+    : { value: `not yet granted: ${input.permissionsMissing.join(', ')}`, low: null, high: null, status: 'DENIED', basis: 'each missing permission blocks only its own action; none is assumed granted' };
+  const capacity = unknownFact(fulfiller.status === 'UNKNOWN' ? 'nobody is named to fulfil it, so no delivery capacity is established' : 'the volume its fulfiller can deliver is not measured, so no range can be justified');
+
+  const gaps: GapKind[] = ['NO_CHANNEL'];
+  if (revenuePerDeal.status === 'UNKNOWN') gaps.push('NO_PRICE');
+  if (fulfiller.status === 'UNKNOWN') gaps.push('NO_SUPPLIER');
+  if (net.status === 'ESTIMATED' && net.high! <= 0) gaps.push('NO_MARGIN');
+  gaps.push('SLOW_OR_UNKNOWN_CASH');
+  if (input.perArrangement !== null && capital.status === 'ESTIMATED' && (capital.value as number) > input.perArrangement) gaps.push('OVER_CAPITAL');
+  if (repeats) gaps.push('VOLUME_UNEVIDENCED');
+  // The quantity shapes the search (§93): an estimated net and close rate say how many buyers a day its share needs.
+  const fit = fitOf({ net, conversion, volume, daysToCash, repeatable: repeats, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: false, outreachBound: true });
+  if (fit.lever.variable === 'CHANNEL') gaps.push('REACH_SHORTFALL');
+
+  const netMid = typeof net.value === 'number' ? net.value : null;
+  const share = input.remaining * MATERIAL_SHARE;
+  const dealsForShare = netMid !== null && netMid > 0 ? Math.ceil(share / netMid) : null;
+  const moves: ConstructionMove[] = [];
+  const move = (m: Omit<ConstructionMove, 'variant'>) => moves.push({ ...m, variant: null });
+  // The cheapest way to supply or learn each missing component, in that order: one question or one listing, never a campaign.
+  move({
+    gap: 'NO_CHANNEL',
+    construct: `a route to ${who}: a marketplace listing, a partner who already sells to them, a directory of them, or a page they find`,
+    mustHit: dealsForShare !== null ? `${dealsForShare} buyer(s) reached and closed before the deadline for a tenth of the gap` : null,
+    field: 'access',
+    ask: `Where do ${who} already look for or buy "${a.label.slice(0, 120)}", and how many of them can be reached there?`,
+    action: 'CONSTRUCT',
+  });
+  if (gaps.includes('NO_PRICE')) {
+    move({ gap: 'NO_PRICE', construct: `what ${who} pay for this`, mustHit: input.remaining > 0 ? `a net that ${money(input.remaining)} ${input.currency} can be reached with at the buyers this channel can close` : null, field: 'revenueRange', ask: `What do ${who} publicly pay for "${a.label.slice(0, 120)}" or its nearest equivalent?`, action: 'RESEARCH' });
+  }
+  if (gaps.includes('NO_SUPPLIER')) {
+    move({ gap: 'NO_SUPPLIER', construct: `a supplier who delivers "${a.label.slice(0, 100)}" to ${who} at a cost below their price`, mustHit: revenuePerDeal.status === 'ESTIMATED' ? `a supply cost under ${money(revenuePerDeal.low!)} ${input.currency} a deal` : null, field: 'fulfillment', ask: `Who supplies this to ${who}, and what do they charge per deal?`, action: 'CONSTRUCT' });
+  }
+  if (gaps.includes('NO_MARGIN')) {
+    move({ gap: 'NO_MARGIN', construct: 'a different role over the same evidence: refer instead of resell, bundle, or a higher-value offer', mustHit: 'a positive net per deal', field: 'directCosts', ask: null, action: 'CONSTRUCT' });
+  }
+  move({ gap: 'SLOW_OR_UNKNOWN_CASH', construct: 'a deposit or card payment at order, so money arrives inside the window', mustHit: `settlement within ${Math.max(0, input.daysLeft - MIN_SALES_CYCLE_DAYS)} days`, field: 'timeToFirstCash', ask: `How and when do ${who} pay for this kind of purchase?`, action: 'RESEARCH' });
+  if (gaps.includes('OVER_CAPITAL')) {
+    move({ gap: 'OVER_CAPITAL', construct: 'a presale or buyer deposit so the buyer funds the deal before anything is spent', mustHit: input.perArrangement !== null ? `at most ${money(input.perArrangement)} ${input.currency} tied up` : null, field: 'requiredCapital', ask: null, action: 'CONSTRUCT' });
+  }
+  if (gaps.includes('VOLUME_UNEVIDENCED')) {
+    move({ gap: 'VOLUME_UNEVIDENCED', construct: `a count of ${who} and how often each buys`, mustHit: dealsForShare !== null ? `${dealsForShare} deal(s) inside the window` : null, field: 'buyerVolume', ask: `How many ${who} are there, and how often does each buy this?`, action: 'RESEARCH' });
+  }
+  if (gaps.includes('REACH_SHORTFALL')) {
+    move({ gap: 'REACH_SHORTFALL', construct: `a channel that brings ${who} to the offer instead of cold outreach: a marketplace, a partner's list, or buyers who publish requests`, mustHit: fit.prospectsPerDay !== null ? `${money(fit.prospectsPerDay)} prospects a day` : null, field: 'access', ask: null, action: 'CONSTRUCT' });
+  }
+
+  const notExecutable = gaps.filter((g) => ['NO_CHANNEL', 'NO_PRICE', 'NO_SUPPLIER', 'NO_MARGIN', 'OVER_CAPITAL'].includes(g)).map((g) => GAP_LABEL[g]);
+  notExecutable.push('constructed: no buyer of this kind has been found yet');
+  const commercial = [buyer, motivation, channel, offer, fulfiller, revenuePerDeal, acquisitionCost, fulfilmentCost, net, conversion, volume, frequency, daysToCash, capital];
+  const counts = { proven: 0, estimated: 0, unknown: 0 };
+  for (const fact of commercial) counts[fact.status === 'PROVEN' ? 'proven' : fact.status === 'ESTIMATED' ? 'estimated' : 'unknown'] += 1;
+  const zero = { p10: 0, p50: 0, p90: 0 };
+  const words = who.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 3 && !STOP.has(w));
+  const pathway: TransactionPathway = {
+    opportunityId: `arr_${a.key}`,
+    title: `Constructed: ${a.label}`.slice(0, 200),
+    origin: 'CONSTRUCTED',
+    buyer, motivation, channel, offer, fulfiller, revenuePerDeal, acquisitionCost, fulfilmentCost, net, conversion, volume, frequency, daysToCash, capital, rights, capacity,
+    acquisition: { method: 'UNKNOWN', basis: 'a constructed design: its buyers are not found yet' },
+    producedBy: null,
+    dependencies: ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT'],
+    permissionsMissing: input.permissionsMissing,
+    failurePoints: [],
+    gaps,
+    moves,
+    fit,
+    // Nothing is counted toward the goal on unknowns: no channel, no volume (an unknown is never a favourable number).
+    contribution: zero,
+    gross: { ...zero },
+    executable: false,
+    notExecutable,
+    correlationGroup: words.slice(0, 2).join(' ') || 'unnamed',
+    counts,
+    partial: true,
+  };
+  for (const fact of publishedFacts(pathway)) if (fact.status === 'UNKNOWN' && fact.value !== null) fact.value = null;
+  return pathway;
 }
 
 export const GAP_LABEL: Record<GapKind, string> = {
@@ -1578,6 +1745,13 @@ export function readPathways(input: {
   rounds: GoalRoundOutcome[];
   now: Date;
   capabilities?: BrainCapabilities | null;
+  /**
+   * The goal's in-scope constructed arrangements. Those that reached neither the
+   * modelled openings nor the priced estimates are read as partial pathways
+   * (`partialPathwayOf`) after the rest, so none is abandoned for an unknown
+   * (S-0061). They contribute nothing and so never enter the portfolio.
+   */
+  partial?: readonly ConstructedArrangement[];
 }): PathwayReading {
   const remaining = input.target.remainingCents / 100;
   const daysLeft = Math.max(0, input.target.daysLeft ?? 0);
@@ -1592,9 +1766,11 @@ export function readPathways(input: {
     return Math.max(c?.supportedReach ?? 0, c?.potentialReach ?? 0, one.price.high ?? one.price.value ?? 0);
   };
   const chosen = [...input.modelled].sort((a, b) => potential(b) - potential(a)).slice(0, MAX_PATHWAYS);
-  const pathways = chosen.map((one) =>
+  const modelledPathways = chosen.map((one) =>
     pathwayOf(one, judged.get(one.opportunity.id) ?? null, { remaining, daysLeft, currency: input.target.currency, perArrangement, outreachPerDay: outreach.high, permissionsMissing: input.permissionsMissing, now: input.now, capabilities: input.capabilities ?? null }),
   );
+  // The portfolio, its information value and its failures read the modelled pathways only, exactly as before.
+  const pathways = modelledPathways;
   const portfolio = livingPortfolio(pathways, { remaining, capitalCeiling: ceiling });
   const leaders = new Set(portfolio.leading?.members ?? []);
   const byId = new Map(pathways.map((p) => [p.opportunityId, p]));
@@ -1618,35 +1794,47 @@ export function readPathways(input: {
     if (p && m) push(p, m);
   }
   for (const p of order) for (const m of p.moves) if (m.action === 'RESEARCH') push(p, m);
+  // Partial arrangements: kept and marked, after every modelled pathway and its actions, so they change nothing read before them.
+  const held = new Set(modelledPathways.map((p) => p.opportunityId));
+  const partials: TransactionPathway[] = [];
+  for (const a of input.partial ?? []) {
+    if (partials.length >= MAX_PATHWAYS) break;
+    const id = `arr_${a.key}`;
+    if (held.has(id)) continue;
+    held.add(id);
+    partials.push(partialPathwayOf(a, { remaining, daysLeft, currency: input.target.currency, perArrangement, outreachPerDay: outreach.high, permissionsMissing: input.permissionsMissing }));
+  }
+  for (const action of ['CONSTRUCT', 'RESEARCH'] as const) for (const p of partials) for (const m of p.moves) if (m.action === action) push(p, m);
+  const all = [...modelledPathways, ...partials];
   const facts = { proven: 0, estimated: 0, unknown: 0 };
-  for (const p of pathways) {
+  for (const p of all) {
     facts.proven += p.counts.proven;
     facts.estimated += p.counts.estimated;
     facts.unknown += p.counts.unknown;
   }
-  const constructionMoves = pathways.reduce((n, p) => n + p.moves.filter((m) => m.action === 'CONSTRUCT').length, 0);
+  const constructionMoves = all.reduce((n, p) => n + p.moves.filter((m) => m.action === 'CONSTRUCT').length, 0);
   return {
     structures,
-    pathways,
+    pathways: all,
     portfolio,
     informationValue: information,
     failures,
     nextActions: nextActions.slice(0, MAX_NEXT_ACTIONS),
     measures: {
-      pathways: pathways.length,
-      found: pathways.filter((p) => p.origin === 'FOUND').length,
-      constructed: pathways.filter((p) => p.origin === 'CONSTRUCTED').length,
-      executable: pathways.filter((p) => p.executable).length,
-      proceedWithoutEngineering: pathways.filter((p) => p.executable || p.moves.some((m) => m.action === 'SELL')).length,
-      withReachableBuyer: pathways.filter((p) => p.channel.status !== 'UNKNOWN' && p.buyer.status !== 'UNKNOWN' && !p.gaps.includes('SUPPLY_WITHOUT_BUYER')).length,
-      withFulfiller: pathways.filter((p) => p.fulfiller.status !== 'UNKNOWN').length,
-      withRightsGranted: pathways.filter((p) => p.rights.status === 'PROVEN').length,
-      withCapacity: pathways.filter((p) => p.capacity.status !== 'UNKNOWN').length,
-      producedByBrain: pathways.filter((p) => p.producedBy !== null).length,
-      acquisition: Object.fromEntries(ACQUISITION_METHODS.map((m) => [m, pathways.filter((p) => p.acquisition.method === m).length])) as Record<AcquisitionMethod, number>,
+      pathways: all.length,
+      found: all.filter((p) => p.origin === 'FOUND').length,
+      constructed: all.filter((p) => p.origin === 'CONSTRUCTED').length,
+      executable: all.filter((p) => p.executable).length,
+      proceedWithoutEngineering: all.filter((p) => p.executable || p.moves.some((m) => m.action === 'SELL')).length,
+      withReachableBuyer: all.filter((p) => p.channel.status !== 'UNKNOWN' && p.buyer.status !== 'UNKNOWN' && !p.gaps.includes('SUPPLY_WITHOUT_BUYER')).length,
+      withFulfiller: all.filter((p) => p.fulfiller.status !== 'UNKNOWN').length,
+      withRightsGranted: all.filter((p) => p.rights.status === 'PROVEN').length,
+      withCapacity: all.filter((p) => p.capacity.status !== 'UNKNOWN').length,
+      producedByBrain: all.filter((p) => p.producedBy !== null).length,
+      acquisition: Object.fromEntries(ACQUISITION_METHODS.map((m) => [m, all.filter((p) => p.acquisition.method === m).length])) as Record<AcquisitionMethod, number>,
       facts,
       constructionMoves,
-      variants: pathways.reduce((n, p) => n + p.moves.filter((m) => m.variant).length, 0),
+      variants: all.reduce((n, p) => n + p.moves.filter((m) => m.variant).length, 0),
       leadingNetP50: portfolio.leading?.net.p50 ?? 0,
       leadingCoverage: portfolio.leading?.coverage ?? 0,
     },
