@@ -312,8 +312,8 @@
    "what": "The owner's plan must not be built from constructed arrangements that read nothing of the owner: route the owner's words and means into construction, or hold generic arrangements out of the owner plan until owner-fit is shown.",
    "owner": "cash/construct.ts; goals/plan.ts (integration owner session_01QF5Tk7etm6MGmaFuHMd6eZ)",
    "depends": "",
-   "state": "MERGED_PENDING_PRODUCTION",
-   "evidence": "PR #1345 (8a2c568): a constructed design reaches a goal plan only if its precedent is one of that goal's own route openings; tests/ownerRoutesLeadConstruction.test.ts. Motivating production read: dev6 0/12 usable on a8c4699 (6 QUANT critical on generic arrangements, 6 no-candidate)."
+   "state": "DEPLOYED_EFFECTIVE_PARTIAL",
+   "evidence": "PR #1345 (8a2c568): a constructed design reaches a goal plan only if its precedent is one of that goal's own route openings; tests/ownerRoutesLeadConstruction.test.ts. Motivating production read: dev6 0/12 usable on a8c4699 (6 QUANT critical on generic arrangements, 6 no-candidate). Production dev6 09:59Z on dcc34fe: the generic constructed readings are gone in 10/12 cases; plans now wait on pricing the owner-fit openings (RC20/RC6)."
   },
   {
    "id": "W3b",
@@ -445,6 +445,12 @@
    "measure": "fm1126b read on dcc34fe: 30/30 NO_CANDIDATE. Every goal holds 1-4 owner-fit openings (89 total, e.g. Tulsa truck: junk haul, delivery partner, holiday setup), all unpriced; 0 missions, 0 fragments, 0 claims for the run.",
    "usable": "0/30",
    "note": "read_fm1126b_0926, stall, judging and launching probes; the blocker is launch, not planning (RC20)"
+  },
+  {
+   "at": "2026-11-26 09:59Z",
+   "measure": "dev6 (12 goals, integration owner's read) on dcc34fe vs 442a657: still 0/12. 10/12 moved from QUANT-critical or no-candidate on generic constructed arrangements (RC13, #1345 effective: no $18M-$30M readings) to 'no live opportunity far enough along to model' (unpriced openings); d06 and d07 now lead with found openings. Research 7-10 RESEARCHING packets per goal, before RC20.",
+   "usable": "0/12",
+   "note": "reported by session_01QF5Tk7etm6MGmaFuHMd6eZ; next read about 60 min after 2f91d08 is live"
   }
  ],
  "capabilities": [
