@@ -58,7 +58,7 @@ import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints 
 import { reconstruct } from '../quant/reconstruct.ts';
 import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
 import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
-import { claimSources, claimsByIds } from '../../repos/research.ts';
+import { claimSources, claimsByIds, patternStatesBuying } from '../../repos/research.ts';
 import type { CashCardFact, CashOpportunity, ConstructedArrangementRecord, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
@@ -3082,6 +3082,27 @@ export function positionDecomposition(questions: readonly PositionResearchQuesti
 }
 
 /**
+ * What a repeating-buyer claim must say on its own, said in the question
+ * (CONSTRUCTION.ROUNDS_FILE, "pattern claims with no payer"). Production read
+ * 0 of 27 constructed rounds filing an opening: the rounds returned gated
+ * demand_pattern claims such as "Agencies repeatedly commission monthly
+ * reports (examples March 2026, May 2026)", untagged, and `signalledClaims`
+ * reads an untagged pattern only where its own text says buyers pay
+ * (`PATTERN_BUYING_WORDS`, repos/research.ts) — so every one stayed context
+ * and the round filed nothing. The consumer's contract is the payer, so the
+ * producer is asked for it in the claim itself: who pays, that they pay, and
+ * what. `patternStatesPayer` is that same rule, read from the same word list,
+ * so the question and the harvest cannot drift apart. No bar is lowered: the
+ * claim still passes the gate and the lane's two-example floor, and a pattern
+ * that names no payer still files nothing. It carries no double quotes: the
+ * free lane reads a quoted phrase in a question as a search query.
+ */
+export const PATTERN_PAYER_SENTENCE =
+  'Write each repeating-buyer (demand_pattern) claim so that the claim itself names who pays and says that they pay, ' +
+  'for what, and at what price where a source shows one (these buyers pay this kind of supplier this price for this work), ' +
+  'never only that buyers commission the work: a pattern that does not say its buyers pay is kept as context and never becomes an opening. ';
+
+/**
  * How a constructed round's answer becomes an opening, said in the question.
  *
  * The harvest files only a claim whose reader set `opportunity_signal`
@@ -3102,7 +3123,17 @@ export const OPENING_SENTENCE =
   'RECURRING_OUTSOURCED_WORK where such buyers repeatedly commission the same brief, ' +
   'ACTIVE_BUYER_DEMAND where a named buyer is published as paying for it now, or ' +
   'SUPPLY_DEMAND_MISMATCH where published demand and a published supply are not yet connected. ' +
-  'A claim with no opportunity_signal is kept as evidence and never becomes an opening. ';
+  'A claim with no opportunity_signal is kept as evidence and never becomes an opening. ' +
+  PATTERN_PAYER_SENTENCE;
+
+/**
+ * Whether a repeating-buyer claim's own text says its buyers pay — the rule
+ * `signalledClaims` applies to an untagged demand_pattern claim, for a reader
+ * holding the text. Pure.
+ */
+export function patternStatesPayer(claim: string | null | undefined): boolean {
+  return patternStatesBuying(claim ?? '');
+}
 
 /**
  * How a confirm-or-refute round's price and cost answers reach the plan.
