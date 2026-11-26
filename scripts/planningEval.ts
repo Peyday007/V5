@@ -33,6 +33,7 @@
  * in the repository: an evaluator holds them, so no implementing agent can fit
  * Brain to them.
  */
+import { readFileSync } from 'node:fs';
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import type { SqlParam } from '../server/db/driver.ts';
 import { createProject, listProjects } from '../server/repos/projects.ts';
@@ -59,6 +60,15 @@ const words = (b64: string | undefined): string => {
   const text = Buffer.from(b64, 'base64').toString('utf8').replace(/\s+/g, ' ').trim();
   if (!text) fail('the objective is empty');
   return text;
+};
+/** A batch, inline or (for one too large for a single command argument) from the file the workflow wrote it to. */
+const batchB64 = (): string | undefined => {
+  const file = flag('batch-file');
+  if (file) {
+    if (!/^\/tmp\/planning-eval-batch-[A-Za-z0-9_-]+\.b64$/.test(file)) fail('--batch-file must be a /tmp/planning-eval-batch-*.b64 file');
+    return readFileSync(file, 'utf8').trim();
+  }
+  return flag('batch-b64');
 };
 const projectName = (run: string, kase: string) => `Planning evaluation ${run} ${kase}`;
 
@@ -639,7 +649,7 @@ async function trace(): Promise<void> {
 async function probe(): Promise<void> {
   const run = safeId(flag('run'), '--run');
   const kase = safeId(flag('case'), '--case');
-  const factsB64 = flag('batch-b64');
+  const factsB64 = batchB64();
   const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
   if (!project) fail(`no project for ${run} ${kase}`);
   const goal = (await listWorkstreams()).find((one) => one.projectId === project.id && !one.archivedAt);
@@ -707,7 +717,7 @@ async function questions(): Promise<void> {
   const run = safeId(flag('run'), '--run');
   const kase = safeId(flag('case'), '--case');
   const count = Math.max(1, Math.min(40, Number(flag('count') ?? '30') || 30));
-  const factsB64 = flag('batch-b64');
+  const factsB64 = batchB64();
   const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
   if (!project) fail(`no project for ${run} ${kase}`);
   const goal = (await listWorkstreams()).find((one) => one.projectId === project.id && !one.archivedAt);
