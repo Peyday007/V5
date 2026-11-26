@@ -737,7 +737,7 @@ async function probe(): Promise<void> {
           out('critique_unreadable', { model: judge.label, error: critic.error ?? null, chars: String(critic.content ?? '').length });
           continue;
         }
-        out('critique', { model: judge.label, ...P['applyCritique']!(routes, critique, parseCtx) });
+        out('critique', { model: judge.label, ...(P['applyCritique']!(routes, critique, parseCtx) as object) });
         done = true;
         break;
       }
