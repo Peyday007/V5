@@ -163,3 +163,41 @@ if __name__ == "__main__":
         print(f"\nT3 $10k threshold WITH the $1,000 AILA week at $120/plan review: REFUSED by the ledger -> {err}")
     T3 = run("T3", T2o, 40.0, refund_ids={"A7"}, ad=True)
     statement("T3' $10k threshold with the AILA week", T3, "only possible if per-plan review falls to a $40 spot-check")
+
+
+# ------------------------------------------------------------------------------------------------
+# Committed obligations (2026-11-26, owner request): money is reserved against both caps when an
+# order is ACCEPTED at intake, not when it is spent. A pay-after-approval first case commits the
+# API run and the reviewer fee before any payment; every delivered plan keeps a revision allowance
+# committed until its 30-day window closes.
+API_PER_REVISION = 3.00          # ASSUMED: a revision pass re-runs part of the draft on the API
+FIXED_PROOF_STAGE = 57.00        # domain 12 + data 30 + sample API 15 (PRE_ITEMS)
+
+def proof_stage_exposure(review_fee, recheck_fee, rechecks, orders=2, ach_fee=5.00):
+    """Worst-case cash plus commitment before proof for the two pay-after-approval proof orders."""
+    per_order = API_PER_PLAN + review_fee + rechecks * (recheck_fee + API_PER_REVISION) + ach_fee
+    return FIXED_PROOF_STAGE + orders * per_order
+
+def committed_open(n_open_plans, recheck_fee, rechecks):
+    """Revision allowance still committed for plans inside their 30-day window."""
+    return n_open_plans * rechecks * (recheck_fee + API_PER_REVISION)
+
+if __name__ == "__main__":
+    print("\nCOMMITTED OBLIGATIONS: affordability of 'unlimited revisions' and 'pay after approval'")
+    print("Proof stage (2 first-case orders, pay after approval) must keep cash + commitments <= $300:")
+    print(f"  {'review fee':>10} {'re-check fee':>12} {'re-checks committed':>20} {'exposure':>9}  fits $300?")
+    for rf in (75.0, 95.0, 120.0):
+        for rc in (0.0, 25.0, 40.0):
+            for n in (1, 2, 3):
+                x = proof_stage_exposure(rf, rc, n)
+                print(f"  {rf:>10.0f} {rc:>12.0f} {n:>20} {x:>9.2f}  {'yes' if x <= PRE_CAP else 'NO'}")
+    print("  'Unlimited' re-checks have no finite commitment, so they cannot be shown to fit any cap:")
+    print("  the promise is affordable only if the reviewer's fixed fee includes every re-check in 30 days")
+    print("  (re-check fee 0), or if the promise is capped (e.g. 2 included rounds, then $X a round).")
+    print("If an approved first case is never paid, its spend is a loss and the receivable is not revenue:")
+    for rf in (75.0, 95.0):
+        print(f"  review ${rf:.0f}: unrecovered cost per unpaid first case ${API_PER_PLAN + rf + 2 * API_PER_REVISION:.2f} (2 re-checks included in the fee)")
+    print("\nT2 ($10k threshold) with commitments: 8 plans inside their revision window on Dec 29")
+    for rc, n in ((0.0, 2), (25.0, 2), (40.0, 3)):
+        c = committed_open(8, rc, n)
+        print(f"  re-check fee ${rc:.0f} x {n} committed: open commitments ${c:,.2f}; spend $1,510.15 + commitments = ${1510.15 + c:,.2f} (cap 2,000)")

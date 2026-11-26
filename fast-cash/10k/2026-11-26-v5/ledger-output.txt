@@ -65,3 +65,45 @@ T3' $10k threshold with the AILA week  (only possible if per-plan review falls t
   settled to bank by Dec 29   10,311.85;  still in Stripe on Dec 29      0.00
   cash position Dec 29 = settled - all spending paid from the card = 8,449.85
   open obligations on Dec 29: 8 plan(s) inside their 30-day revision window (cost already counted)
+
+COMMITTED OBLIGATIONS: affordability of 'unlimited revisions' and 'pay after approval'
+Proof stage (2 first-case orders, pay after approval) must keep cash + commitments <= $300:
+  review fee re-check fee  re-checks committed  exposure  fits $300?
+          75            0                    1    253.00  yes
+          75            0                    2    259.00  yes
+          75            0                    3    265.00  yes
+          75           25                    1    303.00  NO
+          75           25                    2    359.00  NO
+          75           25                    3    415.00  NO
+          75           40                    1    333.00  NO
+          75           40                    2    419.00  NO
+          75           40                    3    505.00  NO
+          95            0                    1    293.00  yes
+          95            0                    2    299.00  yes
+          95            0                    3    305.00  NO
+          95           25                    1    343.00  NO
+          95           25                    2    399.00  NO
+          95           25                    3    455.00  NO
+          95           40                    1    373.00  NO
+          95           40                    2    459.00  NO
+          95           40                    3    545.00  NO
+         120            0                    1    343.00  NO
+         120            0                    2    349.00  NO
+         120            0                    3    355.00  NO
+         120           25                    1    393.00  NO
+         120           25                    2    449.00  NO
+         120           25                    3    505.00  NO
+         120           40                    1    423.00  NO
+         120           40                    2    509.00  NO
+         120           40                    3    595.00  NO
+  'Unlimited' re-checks have no finite commitment, so they cannot be shown to fit any cap:
+  the promise is affordable only if the reviewer's fixed fee includes every re-check in 30 days
+  (re-check fee 0), or if the promise is capped (e.g. 2 included rounds, then $X a round).
+If an approved first case is never paid, its spend is a loss and the receivable is not revenue:
+  review $75: unrecovered cost per unpaid first case $96.00 (2 re-checks included in the fee)
+  review $95: unrecovered cost per unpaid first case $116.00 (2 re-checks included in the fee)
+
+T2 ($10k threshold) with commitments: 8 plans inside their revision window on Dec 29
+  re-check fee $0 x 2 committed: open commitments $48.00; spend $1,510.15 + commitments = $1,558.15 (cap 2,000)
+  re-check fee $25 x 2 committed: open commitments $448.00; spend $1,510.15 + commitments = $1,958.15 (cap 2,000)
+  re-check fee $40 x 3 committed: open commitments $1,032.00; spend $1,510.15 + commitments = $2,542.15 (cap 2,000)
