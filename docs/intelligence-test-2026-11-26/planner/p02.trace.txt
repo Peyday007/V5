@@ -1,0 +1,17 @@
+SERVING_REVISION c52d6d3e1684df886742aafab405cfe7c01f97fa
+TRACE goal {"project":"prj_5b2e08eb38034b369350","goal":"wst_3e23e344ac2040fb900e","createdAt":"2026-11-25T19:28:18.105Z"}
+TRACE pages {"items":2,"submitted":0,"failed":0,"released":2,"searched":18,"readFromSearch":2,"readFromModel":0,"itemsWithDiscovery":2}
+TRACE item_failures [{"why":"the answer did not survive Brain's own checks: N claim(s) offered, dropped {} from N source(s) {\"reference\":N}; the reply was {\"claims\":[]}","n":1},{"why":"no readable source among N candidate page(s): {\"READ_BEFORE_NO_CLAIM\":N,\"OFF_TOPIC\":N,\"DNS_FAILED\":N,\"HTTP_ERROR\":N,\"EMPTY\":N} getaddrinfo E","n":1}]
+TRACE work_items [{"work_type":"RESEARCH_FRAGMENT","state":"QUEUED","n":6}]
+TRACE fragments [{"status":"QUEUED","block_cause":null,"n":6}]
+TRACE claims []
+TRACE claims_by_lane []
+TRACE claims_rejected_sample []
+TRACE claims_accepted []
+TRACE card_facts [{"kind":"RECOMMENDATION","n":32}]
+TRACE evidence_facts []
+TRACE route_asks [{"at":"2026-11-25T20:09:35.789Z","stage":"SCOUT","findingsSeen":0,"findingsShown":0,"outcome":"PROPOSED","summary":"Routes: 0 direction(s) named to scout before anything is priced, 5 rejected (4 no owner fit, 1 owner's physical work); each one's research asks its decisive unknown first."},{"at":"2026-11-25T20:48:20.130Z","stage":"SCOUT","findingsSeen":0,"findingsShown":0,"outcome":"PROPOSED","summary":"Routes: 4 direction(s) named to scout before anything is priced, 1 rejected (1 owner's physical work); each one's research asks its decisive unknown first."}]
+TRACE findings_now []
+TRACE plan {"verdict":"NEEDS_EVIDENCE","chosen":null,"missing":[]}
+TRACE searches_24h [{"provider":"lite","outcome":"REFUSED","n":396},{"provider":"html","outcome":"REFUSED","n":389},{"provider":"html","outcome":"ANSWERED","n":182},{"provider":"lite","outcome":"ANSWERED","n":175},{"provider":"firecrawl","outcome":"CEILING","n":29},{"provider":"firecrawl","outcome":"ANSWERED","n":7}]
+PLANNING_EVAL: OK

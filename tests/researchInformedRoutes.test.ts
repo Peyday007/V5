@@ -178,6 +178,18 @@ describe('routes from findings', () => {
     expect(directionPrompt(ctx())).toMatch(/When the owner states no skill or asset, their capital, time and place are the means/);
   });
 
+  it('refuses a citation whose finding answered another question, and shows no absence as a finding (production probe, 2026-11-25)', () => {
+    const mixed = findingsOf([
+      claim('Craigslist Seattle labor-gigs showed 227 entries including same-day cash helper jobs.', { evidenceLane: 'current_demand' }),
+      claim('No published evidence exists for a county forestry department paying for a slot in a shared production run.', { evidenceLane: 'demand_absence' }),
+      claim('Seattle population was 823,400 in the April 2026 state estimate of residents.', { evidenceLane: 'buyer_volume' }),
+    ]);
+    expect(mixed.map((one) => one.lane)).toEqual(['current_demand', 'buyer_volume']);
+    const g = groundsOf({ channel: 'F1', volume: 'F1', demand: 'F1', price: 'F2' }, mixed);
+    // The gig listing may stand for demand, never for a channel, a buyer count or a price.
+    expect(Object.keys(g.claims)).toEqual(['demand']);
+  });
+
   it('keeps only cited refs the prompt showed, and reads demand as comparable unless the reply says exact', () => {
     const grounds = groundsOf({ price: 'F1', volume: 'F2', demand: 'F3', cost: 'F9', channel: 'none' }, findings);
     expect(grounds.claims).toEqual({ price: findings[0]!.claimId, volume: findings[1]!.claimId, demand: findings[2]!.claimId });

@@ -64,7 +64,7 @@ jobs:
         run: |
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          case "$E_COMMAND" in create|read|update|stall|retire|trace|probe|capacity) ;; *) echo "::error::Refusing '$E_COMMAND'."; exit 1 ;; esac
+          case "$E_COMMAND" in create|read|update|stall|retire|trace|probe|capacity|questions) ;; *) echo "::error::Refusing '$E_COMMAND'."; exit 1 ;; esac
           for value in "$E_RUN" "$E_CASE" "$E_GOAL"; do
             case "$value" in '') ;; *[!A-Za-z0-9_-]*) echo "::error::Refusing an id that is not letters, digits, underscore or dash."; exit 1 ;; esac
           done
@@ -77,7 +77,14 @@ jobs:
           [ -n "$E_CASE" ] && args="$args --case $E_CASE"
           [ -n "$E_GOAL" ] && args="$args --goal $E_GOAL"
           [ -n "$E_OBJECTIVE" ] && args="$args --objective-b64 $E_OBJECTIVE"
-          [ -n "$E_BATCH" ] && args="$args --batch-b64 $E_BATCH"
+          if [ -n "$E_BATCH" ]; then
+            # The batch goes to a file on the machine first: the script and a large batch together
+            # exceed the kernel's limit on one command argument (`sh -c '…'`).
+            batch_file="/tmp/planning-eval-batch-${GITHUB_RUN_ID}.b64"
+            timeout 120 flyctl ssh console --app "$app" -C "sh -c 'echo $E_BATCH > $batch_file'" >/dev/null 2>&1 \
+              || { echo "PLANNING_EVAL: FAILED could not send the batch"; exit 1; }
+            args="$args --batch-file $batch_file"
+          fi
           echo "planningEval $E_COMMAND run=$E_RUN case=$E_CASE goal=$E_GOAL"
 
           script_b64=$(base64 -w0 scripts/planningEval.ts)
@@ -105,7 +112,7 @@ jobs:
             if [ "$(date +%s)" -ge "$deadline" ]; then echo "PLANNING_EVAL: FAILED timed out" >> eval.txt; break; fi
             sleep 20
           done
-          timeout 60 flyctl ssh console --app "$app" -C "rm -f /app/$file" >/dev/null 2>&1 || true
+          timeout 60 flyctl ssh console --app "$app" -C "rm -f /app/$file /tmp/planning-eval-batch-${GITHUB_RUN_ID}.b64" >/dev/null 2>&1 || true
           grep -q '^PLANNING_EVAL: OK' eval.txt
 
       - uses: actions/upload-artifact@v4

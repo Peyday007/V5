@@ -33,6 +33,7 @@
  * in the repository: an evaluator holds them, so no implementing agent can fit
  * Brain to them.
  */
+import { readFileSync } from 'node:fs';
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import type { SqlParam } from '../server/db/driver.ts';
 import { createProject, listProjects } from '../server/repos/projects.ts';
@@ -59,6 +60,15 @@ const words = (b64: string | undefined): string => {
   const text = Buffer.from(b64, 'base64').toString('utf8').replace(/\s+/g, ' ').trim();
   if (!text) fail('the objective is empty');
   return text;
+};
+/** A batch, inline or (for one too large for a single command argument) from the file the workflow wrote it to. */
+const batchB64 = (): string | undefined => {
+  const file = flag('batch-file');
+  if (file) {
+    if (!/^\/tmp\/planning-eval-batch-[A-Za-z0-9_-]+\.b64$/.test(file)) fail('--batch-file must be a /tmp/planning-eval-batch-*.b64 file');
+    return readFileSync(file, 'utf8').trim();
+  }
+  return flag('batch-b64');
 };
 const projectName = (run: string, kase: string) => `Planning evaluation ${run} ${kase}`;
 
@@ -132,6 +142,7 @@ async function update(): Promise<void> {
 async function retire(): Promise<void> {
   const run = safeId(flag('run'), '--run');
   const { cancel } = await import('../server/services/goals/decide.ts');
+  const { yieldStoppedGoalResearch } = await import('../server/services/goals/goalWork.ts');
   const prefix = `Planning evaluation ${run} `;
   const projects = new Set((await listProjects()).filter((one) => one.name.startsWith(prefix)).map((one) => one.id));
   let done = 0;
@@ -139,7 +150,9 @@ async function retire(): Promise<void> {
     if (!goal.projectId || !projects.has(goal.projectId)) continue;
     const result = await cancel(goal.id, `Evaluation run ${run} retired: its answers were used to develop Brain, so it no longer measures unfamiliar goals.`, `planning-evaluation:${run}`);
     if (result.ok) done += 1;
-    console.log(`EVAL retire ${run} ${goal.id}: ${result.ok ? 'cancelled' : result.reason}`);
+    // A goal retired before cancellation yielded its research still holds the boost.
+    const yielded = result.ok ? 0 : await yieldStoppedGoalResearch(goal.id);
+    console.log(`EVAL retire ${run} ${goal.id}: ${result.ok ? 'cancelled' : `${result.reason} (${yielded} queued item(s) yielded)`}`);
   }
   console.log(`EVAL retire ${run}: ${done} goal(s) cancelled across ${projects.size} project(s)`);
 }
@@ -639,7 +652,7 @@ async function trace(): Promise<void> {
 async function probe(): Promise<void> {
   const run = safeId(flag('run'), '--run');
   const kase = safeId(flag('case'), '--case');
-  const factsB64 = flag('batch-b64');
+  const factsB64 = batchB64();
   const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
   if (!project) fail(`no project for ${run} ${kase}`);
   const goal = (await listWorkstreams()).find((one) => one.projectId === project.id && !one.archivedAt);
@@ -650,8 +663,12 @@ async function probe(): Promise<void> {
   const target = await readTarget(goal, new Date());
   if (!target) fail('no target');
   let supplied: unknown[] | null = null;
+  // The batch is a list of facts, or {facts, maxFindings} to measure what the proposer's cap on findings shown (FINDINGS_SHOWN) loses.
+  let maxFindings: number | null = null;
   if (factsB64) {
-    const facts = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    const batch = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as unknown;
+    const facts = (Array.isArray(batch) ? batch : ((batch as { facts: unknown[] }).facts ?? [])) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    if (!Array.isArray(batch) && typeof (batch as { maxFindings?: unknown }).maxFindings === 'number') maxFindings = (batch as { maxFindings: number }).maxFindings;
     supplied = facts.map((one, i) => ({ id: `probe_${i + 1}`, claim: one.claim, sourceUrl: one.sourceUrl, sourceTitle: one.sourceTitle ?? null, sourcePublisher: null, sourceDate: one.sourceDate ?? null, evidenceLane: one.lane ?? null, retrievedAt: new Date().toISOString() }));
   }
   const deps = supplied ? { claims: async () => supplied } : {};
@@ -659,8 +676,11 @@ async function probe(): Promise<void> {
   if (!read) fail('no context');
   const ctx = read.ctx;
   ctx['today'] = new Date().toISOString().slice(0, 10);
+  if (supplied && maxFindings !== null) ctx['findings'] = P['findingsOf']!(supplied, maxFindings);
   const findings = (ctx['findings'] as unknown[] | undefined) ?? [];
+  out('delivery', { supplied: supplied?.length ?? 0, shown: findings.length, cap: maxFindings ?? 'FINDINGS_SHOWN' });
   const scout = findings.length < 3;
+  out('objective', { objective: ctx['objective'] ?? null, remaining: ctx['remaining'] ?? null, daysLeft: ctx['daysLeft'] ?? null, capitalLimit: ctx['capitalLimit'] ?? null, hoursLimit: ctx['hoursLimit'] ?? null, resources: ctx['resources'] ?? null });
   out('mode', { supplied: !!supplied, findings: findings.length, stage: scout ? 'SCOUT' : 'ROUTE' });
   out('findings', findings);
   const { modelsFor } = await import('../server/services/operator/run.ts');
@@ -726,6 +746,8 @@ async function probe(): Promise<void> {
       ? dated(consistent(text)).replace("for a product that would fit any request. Then rank", "for a product that would fit any request. The plan combines the routes you keep and holds their hours, capital and money together, so never drop a route only because it alone collects part of the money still needed; judge whether it pays inside the window. Then rank")
       : text;
   if (mode.includes('labour')) prompt = prompt.replace('using only the skills and assets their words state and inside their stated hours', 'using the skills and assets their words state, or work that needs none, inside their stated hours');
+  // The exact ask, so a control can put the identical prompt to another model.
+  out('prompt', prompt);
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
     const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
@@ -817,6 +839,8 @@ async function capacity(): Promise<void> {
   out('eval_fragments_by_run', await q(`SELECT SUBSTR(p.name, 1, 40) AS run, f.status, COUNT(*) AS n FROM research_fragments f JOIN projects p ON p.id = f.project_id WHERE p.name LIKE 'Planning evaluation %' GROUP BY 1, 2 ORDER BY 1, 2`));
   out('eval_queue_by_run', await q(`SELECT SUBSTR(p.name, 21, 9) AS run, CASE WHEN w.cancelled_at IS NOT NULL THEN 'cancelled' WHEN w.paused_at IS NOT NULL THEN 'paused' WHEN w.id IS NULL THEN 'no goal' ELSE 'live' END AS goal, b.state AS bin, wi.state, COUNT(*) AS n, MIN(wi.created_at) AS oldest FROM work_items wi JOIN projects p ON p.id = wi.project_id LEFT JOIN workstreams w ON w.project_id = p.id AND w.archived_at IS NULL LEFT JOIN bins b ON b.id = wi.bin_id WHERE p.name LIKE 'Planning evaluation %' AND wi.state IN ('QUEUED', 'LEASED') GROUP BY 1, 2, 3, 4 ORDER BY 1, 2`));
   out('fragments_done_24h', await q(`SELECT status, COUNT(*) AS n FROM research_fragments WHERE updated_at > ? AND status IN ('ACCEPTED', 'BLOCKED', 'REJECTED', 'NOTHING_SURVIVED') GROUP BY 1`, [day]));
+  // The exact ask, so a control can put the identical prompt to another model.
+  out('prompt', prompt);
 }
 
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
@@ -830,6 +854,7 @@ try {
   else if (command === 'trace') await trace();
   else if (command === 'probe') await probe();
   else if (command === 'capacity') await capacity();
+  else if (command === 'questions') await questions();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
 } finally {
