@@ -668,7 +668,25 @@ async function probe(): Promise<void> {
   const { chatFor } = await import('../server/services/cheap/modelBench.ts');
   const models = challengerModels(await modelsFor());
   out('models', models.map((m) => m.label));
-  const prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
+  /*
+   * Diagnostic variants, one variable at a time (passed in the `goal` input):
+   * `hours0` states the zero owner hours the objective's words give; `labour`
+   * lets offered labour use no stated skill; `clean` drops what earlier asks
+   * held, scouted or refuted, so the facts are not anchored on old guesses.
+   */
+  const mode = flag('goal') ?? '';
+  if (mode.includes('hours0')) {
+    ctx['hoursLimit'] = 0;
+    ctx['hoursPerWeek'] = null;
+  }
+  if (mode.includes('clean')) {
+    ctx['held'] = [];
+    ctx['scouted'] = [];
+    ctx['refuted'] = [];
+  }
+  out('variant', mode || 'none');
+  let prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
+  if (mode.includes('labour')) prompt = prompt.replace('using only the skills and assets their words state and inside their stated hours', 'using the skills and assets their words state, or work that needs none, inside their stated hours');
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
     const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
@@ -687,6 +705,64 @@ async function probe(): Promise<void> {
   }
 }
 
+/**
+ * capacity: what research capacity Brain actually has and uses, read only.
+ * Search providers and their ceilings (the configured value, never a key),
+ * Firecrawl's own credit balance (its usage endpoint bills nothing), what was
+ * searched and read over the last week, how often a ceiling was hit, and what
+ * research is queued, blocked, accepted or never delivered.
+ */
+async function capacity(): Promise<void> {
+  const out = (label: string, value: unknown) => console.log(`CAPACITY ${label} ${JSON.stringify(value)}`);
+  const q = (sql: string, params: SqlParam[] = []): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
+  const ks = await import('../server/services/sources/keyedSearch.ts');
+  out('providers', ks.KEYED_SEARCH_PROVIDERS.map((p) => ({ id: p.id, ceiling: ks.dailySearchCeiling(p, process.env), ceilingSetInEnv: /^\d+$/.test((process.env[p.ceilingEnv] ?? '').trim()), keyPresent: !!(process.env[p.id === 'firecrawl' ? 'FIRECRAWL_API_KEY' : 'BRAIN_SEARCH_API_KEY'] ?? '').trim() })));
+  const key = (process.env['FIRECRAWL_API_KEY'] ?? '').trim();
+  if (key) {
+    for (const path of ['/v1/team/credit-usage', '/v2/team/credit-usage']) {
+      try {
+        const res = await fetch(`https://api.firecrawl.dev${path}`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) });
+        const text = await res.text();
+        out('firecrawl_credits', { path, status: res.status, body: text.slice(0, 400) });
+        if (res.ok) break;
+      } catch (error) {
+        out('firecrawl_credits', { path, error: String((error as Error)?.message ?? error).slice(0, 200) });
+      }
+    }
+  }
+  const week = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const day = new Date(Date.now() - 86_400_000).toISOString();
+  out('searches_by_day', await q(`SELECT SUBSTR(at, 1, 10) AS day, provider, outcome, COUNT(*) AS n FROM bin_events WHERE event_type = 'SOURCE_SEARCH' AND at > ? GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`, [week]));
+  out('firecrawl_ceiling_first_hit', await q(`SELECT SUBSTR(at, 1, 10) AS day, MIN(at) AS first, COUNT(*) AS n FROM bin_events WHERE event_type = 'SOURCE_SEARCH' AND provider = 'firecrawl' AND outcome = 'CEILING' AND at > ? GROUP BY 1 ORDER BY 1`, [week]));
+  const items = await q(`SELECT outcome, reason, measures FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at > ?`, [day]);
+  const t = { items: items.length, submitted: 0, other: 0, searched: 0, readFromSearch: 0, readFromModel: 0 };
+  const why = new Map<string, number>();
+  for (const row of items) {
+    if (row['outcome'] === 'SUBMITTED') t.submitted += 1;
+    else {
+      t.other += 1;
+      const w = String(row['reason'] ?? '').replace(/^model [^:]+: /, '').replace(/\{[^}]*\}/g, '{…}').replace(/\d+/g, 'N').slice(0, 90);
+      why.set(w, (why.get(w) ?? 0) + 1);
+    }
+    try {
+      const d = (JSON.parse(String(row['measures'] ?? '{}')) as { discovery?: { searched?: number; readFromSearch?: number; readFromModel?: number } }).discovery;
+      if (d) {
+        t.searched += d.searched ?? 0;
+        t.readFromSearch += d.readFromSearch ?? 0;
+        t.readFromModel += d.readFromModel ?? 0;
+      }
+    } catch {
+      // unreadable measures: counted as an item, not as pages
+    }
+  }
+  out('free_lane_24h', t);
+  out('free_lane_24h_failures', [...why].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([w, n]) => ({ why: w, n })));
+  out('claims_by_day', await q(`SELECT SUBSTR(created_at, 1, 10) AS day, accepted, COUNT(*) AS n FROM research_claims WHERE created_at > ? GROUP BY 1, 2 ORDER BY 1, 2`, [week]));
+  out('fragments_all', await q(`SELECT status, COUNT(*) AS n, MIN(created_at) AS oldest FROM research_fragments GROUP BY 1 ORDER BY n DESC`));
+  out('fragments_eval', await q(`SELECT status, block_cause, COUNT(*) AS n, MIN(created_at) AS oldest FROM research_fragments WHERE project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') GROUP BY 1, 2 ORDER BY n DESC`));
+  out('fragments_done_24h', await q(`SELECT status, COUNT(*) AS n FROM research_fragments WHERE updated_at > ? AND status IN ('ACCEPTED', 'BLOCKED', 'REJECTED', 'NOTHING_SURVIVED') GROUP BY 1`, [day]));
+}
+
 console.log(`SERVING_REVISION ${process.env['BRAIN_REVISION'] ?? '<unstamped>'}`);
 await initDatabase();
 try {
@@ -697,6 +773,7 @@ try {
   else if (command === 'retire') await retire();
   else if (command === 'trace') await trace();
   else if (command === 'probe') await probe();
+  else if (command === 'capacity') await capacity();
   else fail('command must be create | read | update | stall');
   console.log('PLANNING_EVAL: OK');
 } finally {
