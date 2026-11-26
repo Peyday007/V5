@@ -746,7 +746,9 @@ async function questions(): Promise<void> {
   // A reply cut off mid-list still holds its complete questions; the rest are asked for in further rounds.
   const salvage = (text: string): Record<string, unknown>[] => {
     const found: Record<string, unknown>[] = [];
-    for (let i = text.indexOf('{"id"'); i >= 0; i = text.indexOf('{"id"', i + 1)) {
+    // Pretty-printed or compact: every object that opens with its "id".
+    for (const start of text.matchAll(/\{\s*"id"/g)) {
+      const i = start.index ?? 0;
       let depth = 0;
       let inString = false;
       for (let j = i; j < text.length; j += 1) {
