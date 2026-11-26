@@ -152,6 +152,14 @@
    "owner": "evaluation (planningEval, grading rubric)",
    "proof": "30 fresh goals on one frozen revision, graded blind with a fixed rubric that records a cause category per failure.",
    "evidence": "30Q report: \"Today's grader was stricter\"; validity review on GRADING.md / GRADING-E2E.md."
+  },
+  "RC19": {
+   "name": "A goal's research never starts: its ideas are not judged within the goal's window",
+   "kind": "coordination+software",
+   "wrong": "The tick's judge pass judged at most 5 goal ideas a tick under database pressure, ticks run many minutes when dozens of goal plans are read in sequence (30\u201340 s each), and the goal-idea queue held ideas of cancelled and paused goals (matched by how they were made, never by whether their goal still runs) ahead of live goals'. 30 fresh goals produced 605 ideas; none was judged in 1.5 h, so no mission, fragment or claim existed and every plan stayed on generic constructed estimates.",
+   "owner": "russell/loop.ts judge-unjudged pass; goals/goalWork.ts goalIdeaSql",
+   "proof": "On a fresh batch, each live goal's first ideas are judged within one tick and its first research fragments are queued within the hour.",
+   "evidence": "planningEval judging (08:00Z): run ideas 605 CAPTURED unjudged, head of the goal queue created 05:56\u201306:08Z by the retired fm1126a and paused goals, updated_at = created_at; judge-one: one judgment 1.75 s; judge-pass: the pass body judged 18 in 20 s \u2014 so the pass works and is starved by budget and queue, not broken."
   }
  },
  "repairs": [
@@ -379,6 +387,15 @@
    "depends": "",
    "state": "IN_PROGRESS",
    "evidence": "fm1126b created 06:24Z on a8c46995"
+  },
+  {
+   "id": "W2i",
+   "rc": "RC19",
+   "what": "Goal ideas are goal work only while their goal is live (goalIdeaSql: LIVE_GOAL_PROJECT_IDS_SQL); the judge pass judges up to 40 goal ideas a tick until a 45 s budget, halved under pressure instead of falling to 5.",
+   "owner": "goals/goalWork.ts; russell/loop.ts",
+   "depends": "",
+   "state": "BRANCH_PENDING_DEPLOY",
+   "evidence": "tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I"
   }
  ],
  "progress": [
@@ -399,6 +416,12 @@
    "measure": "fm1126b: 30 fresh goals created on frozen revision a8c46995; plans to be read and graded blind after research runs",
    "usable": "pending",
    "note": "create log in scratchpad; read and grade to follow"
+  },
+  {
+   "at": "2026-11-26 08:10Z",
+   "measure": "fm1126b mid-run: research never started on any of 30 goals (RC19); the batch measures RC19, not planning. Acceptance restarts on a new frozen revision after wave 2 deploys.",
+   "usable": "n/a",
+   "note": "judging, judge-one and judge-pass probes"
   }
  ],
  "capabilities": [
@@ -1343,11 +1366,11 @@
    "dim": "P",
    "test": "Directions for 30 fresh goals.",
    "expected": "Strongest evidence-supported path among those named in >=27/30.",
-   "status": "FAIL",
-   "evidence": "30Q: strongest path named in 1/3 goals (p02); none p06.",
+   "status": "RECHECK",
+   "evidence": "fm1126b f01 (production, revision a8c46995 with wave 1): the scout named 4 directions fitting the owner (gig grocery delivery, local business delivery partner, holiday decoration transport, weekend junk haul) where fm1126a's plan had led with fractional aircraft ownership. One goal; the batch read will decide.",
    "component": "directionPrompt/proposer",
-   "rc": "RC5",
-   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
+   "rc": "RC5,RC3",
+   "proof": "UNPROVEN"
   },
   {
    "id": "C07-R",
@@ -1598,11 +1621,11 @@
    "dim": "R",
    "test": "Unknown becomes the first research question.",
    "expected": "Yes.",
-   "status": "RECHECK",
-   "evidence": "routeValidationQuestion exists; execution starved.",
+   "status": "FAIL",
+   "evidence": "fm1126b f01: 4 owner-fit directions filed with decisive unknowns; their 4 validation dives sat CAPTURED, unjudged, so the unknowns never became research.",
    "component": "validation.ts",
-   "rc": "RC6",
-   "proof": "UNPROVEN"
+   "rc": "RC19",
+   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
    "id": "C10-I",
@@ -1899,9 +1922,9 @@
    "test": "Fragments completed in 6 h.",
    "expected": ">=80%.",
    "status": "FAIL",
-   "evidence": "1/18 (30Q traces).",
+   "evidence": "fm1126b: 0 research fragments, 0 work items, 0 claims for 30 fresh goals 1.5 h after creation (stall, items, judging probes).",
    "component": "research coordinator",
-   "rc": "RC6",
+   "rc": "RC19",
    "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {
@@ -1929,10 +1952,10 @@
    "test": "Queue ordered by decision value.",
    "expected": "Yes.",
    "status": "FAIL",
-   "evidence": "stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value.",
+   "evidence": "The goal-idea queue is not ordered by live goal or decision value: cancelled and paused goals' ideas head it (judging probe 08:00Z).",
    "component": "",
-   "rc": "RC6",
-   "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
+   "rc": "RC19",
+   "proof": "CONTROLLED_FAILURE: re-introduced \"historical: a cancelled run and paused goals held the head of the judge queue; 30 live goals waited\" \u2192 tests/goalIdeasEachProjectsTurn.test.ts failed naming RC19; unmutated code accepted"
   },
   {
    "id": "C14-F",
@@ -4059,9 +4082,9 @@
    "test": "Owner view shows chosen plan, economics, steps, risks.",
    "expected": "Yes.",
    "status": "FAIL",
-   "evidence": "fm1126a f01: chosen null; steps are research on generic arrangements.",
+   "evidence": "fm1126b f01: the plan the owner is handed is still the constructed estimates (\"No found opening is far enough along to model\"), because the owner-fit directions have no research yet (RC19) and constructed arrangements read nothing of the owner (RC13).",
    "component": "",
-   "rc": "RC13",
+   "rc": "RC19,RC13",
    "proof": "HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe"
   },
   {

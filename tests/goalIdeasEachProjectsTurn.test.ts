@@ -122,16 +122,23 @@ describe('a fresh goal beside an older goal’s backlog', () => {
   });
 
   it("holds no cancelled or paused goal's backlog in the goal queue ahead of a live goal (fresh batch, 2026-11-26)", async () => {
+    // The production shape: the backlog is the goal's price questions (`sendPortfolioNeeds`), matched as goal work by how they were made.
+    const { sendPortfolioNeeds } = await import('../server/services/goals/portfolioNeeds.ts');
+    const unpriced = [1, 2, 3].map((k) => ({ population: `pop_${k}`, buyer: `buyers number ${k}`, designs: 3, arrangementKey: `k${k}`, label: `Design ${k}`, question: `What does one buyer described as "buyers number ${k}" pay, in USD, for one purchase? Look for published price lists.` }));
+    const portfolio = { best: null, causal: null, marketHistory: [], unpriced } as never;
     const stopped = await goalProject('cancelled goal', 5);
     const paused = await goalProject('paused goal', 5);
     const live = await goalProject('live goal', 5);
-    for (let i = 0; i < 6; i += 1) await goalIdea(stopped, `stopped ${i}`, hoursAgo(5, i), null);
-    for (let i = 0; i < 6; i += 1) await goalIdea(paused, `paused ${i}`, hoursAgo(5, i), null);
+    await sendPortfolioNeeds({ goalId: stopped.goalId, projectId: stopped.projectId, portfolio });
+    await sendPortfolioNeeds({ goalId: paused.goalId, projectId: paused.projectId, portfolio });
     const first = await goalIdea(live, 'live dive', hoursAgo(1), null);
     await getDb().run(`UPDATE workstreams SET cancelled_at = ? WHERE id = ?`, [hoursAgo(2), stopped.goalId]);
     await getDb().run(`UPDATE workstreams SET paused_at = ? WHERE id = ?`, [hoursAgo(2), paused.goalId]);
+    const stoppedIdeas = (await getDb().all<{ id: string }>(`SELECT id FROM russell_candidates WHERE project_id IN (?, ?)`, [stopped.projectId, paused.projectId])).map((one) => one.id);
+    expect(stoppedIdeas.length).toBeGreaterThan(0);
 
     const queue = (await unjudgedGoalIdeas(40)).map((one) => one.id);
-    expect(queue).toEqual([first]);
+    expect(queue).toContain(first);
+    expect(queue.filter((id) => stoppedIdeas.includes(id))).toEqual([]);
   });
 });

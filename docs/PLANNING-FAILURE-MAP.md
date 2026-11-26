@@ -9,8 +9,8 @@ Rendered from `docs/planning-failure-map/map.py` by `render_md.py`; edit the dat
 - Capabilities required: **75**
 - Diagnostic questions (5 per capability, +1 model-isolation question for each of the 8 model-dependent ones): **383**
 - PASS 24 · FAIL 84 · RECHECK 76 · UNKNOWN 199
-- Diagnostic validity (Phase 3): CONTROLLED_FAILURE 24 · HISTORICAL_FAILURE_DETECTED 27 · KNOWN_GOOD_ONLY 12 · UNPROVEN 320
-- Root causes established: **18**
+- Diagnostic validity (Phase 3): CONTROLLED_FAILURE 25 · HISTORICAL_FAILURE_DETECTED 26 · KNOWN_GOOD_ONLY 12 · UNPROVEN 320
+- Root causes established: **19**
 
 ## A. What creating a successful plan requires (capability map)
 
@@ -162,7 +162,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 | id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
 |---|---|---|---|---|---|---|---|---|
-| C07-P | Can Brain perform it correctly? | Directions for 30 fresh goals. | Strongest evidence-supported path among those named in >=27/30. | **FAIL** | 30Q: strongest path named in 1/3 goals (p02); none p06. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | directionPrompt/proposer | RC5 |
+| C07-P | Can Brain perform it correctly? | Directions for 30 fresh goals. | Strongest evidence-supported path among those named in >=27/30. | **RECHECK** | fm1126b f01 (production, revision a8c46995 with wave 1): the scout named 4 directions fitting the owner (gig grocery delivery, local business delivery partner, holiday decoration transport, weekend junk haul) where fm1126a's plan had led with fractional aircraft ownership. One goal; the batch read will decide. | UNPROVEN | directionPrompt/proposer | RC5,RC3 |
 | C07-R | Does the result reach every component that needs it? | Do discovered directions reach research and the planner? | Each direction's decisive unknown is researched. | **FAIL** | Dives starved (RC6). | UNPROVEN | validation dives | RC6 |
 | C07-I | Does the result change later decisions correctly? | Research refutes a direction: replaced? | Replacement direction differs structurally. | **RECHECK** | Scout→refuted loop exists; starved. | UNPROVEN | scout loop | — |
 | C07-F | Does Brain recognise and recover when it fails? | All directions refuted. | New directions from a different mechanism. | **UNKNOWN** | — | UNPROVEN | — | — |
@@ -194,7 +194,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
 |---|---|---|---|---|---|---|---|---|
 | C10-P | Can Brain perform it correctly? | Each direction names its decisive unknown. | Specific, checkable, decision-bearing. | **RECHECK** | Directions carry decisiveUnknown (production SCOUT asks). / REVIEW 2: test-validity review: rests on one example, a field existing, or a contract — not a demonstration. | UNPROVEN | directionPrompt | — |
-| C10-R | Does the result reach every component that needs it? | Unknown becomes the first research question. | Yes. | **RECHECK** | routeValidationQuestion exists; execution starved. | UNPROVEN | validation.ts | RC6 |
+| C10-R | Does the result reach every component that needs it? | Unknown becomes the first research question. | Yes. | **FAIL** | fm1126b f01: 4 owner-fit directions filed with decisive unknowns; their 4 validation dives sat CAPTURED, unjudged, so the unknowns never became research. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | validation.ts | RC19 |
 | C10-I | Does the result change later decisions correctly? | Answer to unknown keeps/kills the direction. | Yes. | **RECHECK** | Loop starved. | UNPROVEN | scout loop | RC6 |
 | C10-F | Does Brain recognise and recover when it fails? | Unknown unanswerable: recognised? | Marked and replaced. | **UNKNOWN** | — | UNPROVEN | — | — |
 | C10-X | Does it still work combined with the other capabilities? | Unknowns across directions de-duplicated. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
@@ -234,9 +234,9 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 | id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
 |---|---|---|---|---|---|---|---|---|
-| C14-P | Can Brain perform it correctly? | Fragments completed in 6 h. | >=80%. | **FAIL** | 1/18 (30Q traces). | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | research coordinator | RC6 |
+| C14-P | Can Brain perform it correctly? | Fragments completed in 6 h. | >=80%. | **FAIL** | fm1126b: 0 research fragments, 0 work items, 0 claims for 30 fresh goals 1.5 h after creation (stall, items, judging probes). | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | research coordinator | RC19 |
 | C14-R | Does the result reach every component that needs it? | Completed fragments file claims. | Yes. | **RECHECK** | p06 3 claims filed. / REVIEW 2: test-validity review: rests on one example, a field existing, or a contract — not a demonstration. | UNPROVEN | gate | — |
-| C14-I | Does the result change later decisions correctly? | Queue ordered by decision value. | Yes. | **FAIL** | stall priority_hist: eval and non-eval fragments share priority 9; nothing orders by decision value. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC6 |
+| C14-I | Does the result change later decisions correctly? | Queue ordered by decision value. | Yes. | **FAIL** | The goal-idea queue is not ordered by live goal or decision value: cancelled and paused goals' ideas head it (judging probe 08:00Z). | CONTROLLED_FAILURE: re-introduced "historical: a cancelled run and paused goals held the head of the judge queue; 30 live goals waited" → tests/goalIdeasEachProjectsTurn.test.ts failed naming RC19; unmutated code accepted | — | RC19 |
 | C14-F | Does Brain recognise and recover when it fails? | Fragment faults: retried elsewhere. | Yes. | **RECHECK** | #1018 class fixes; unmeasured here. | UNPROVEN | — | — |
 | C14-X | Does it still work combined with the other capabilities? | Execution under contention with other goals. | Goal research not starved. | **FAIL** | 2,063 waiting beside 278 free slots. | UNPROVEN | — | RC6 |
 
@@ -518,7 +518,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 | id | dimension | test | expected (pass condition) | status | evidence | proof the test detects its failure | component | root cause |
 |---|---|---|---|---|---|---|---|---|
-| C42-P | Can Brain perform it correctly? | Owner view shows chosen plan, economics, steps, risks. | Yes. | **FAIL** | fm1126a f01: chosen null; steps are research on generic arrangements. | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC13 |
+| C42-P | Can Brain perform it correctly? | Owner view shows chosen plan, economics, steps, risks. | Yes. | **FAIL** | fm1126b f01: the plan the owner is handed is still the constructed estimates ("No found opening is far enough along to model"), because the owner-fit directions have no research yet (RC19) and constructed arrangements read nothing of the owner (RC13). | HISTORICAL_FAILURE_DETECTED: the measurement procedure cited in the evidence recorded the failure on production or in a recorded probe | — | RC19,RC13 |
 | C42-R | Does the result reach every component that needs it? | Plan reaches owner surface. | Yes. | **PASS** | fm1126a f01: the reading reaches the owner surface (read output). | KNOWN_GOOD_ONLY: correct behaviour observed; no known-bad case run yet | — | — |
 | C42-I | Does the result change later decisions correctly? | Owner decisions reach the work. | Yes. | **UNKNOWN** | — | UNPROVEN | — | — |
 | C42-F | Does Brain recognise and recover when it fails? | No plan: says why and what next. | Yes. | **RECHECK** | NOT_VIABLE/NEEDS_EVIDENCE readings. | UNPROVEN | — | — |
@@ -878,7 +878,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **Owner of the correction:** server/domain/operatingModel.ts; cash/discovery.ts (REMOTE_AI_FOCUS)
 - **How a correction is proved:** Owner profiles in replies carry no refusal the owner did not state; discovery questions for an owner with stated labour/equipment are not online-only.
 - **Evidence:** Integration diagnosis: 4/4 fallback replies invented refusals; 30Q p02 run 1 owner profile "no physical work" for a drone pilot. Partly repaired d5beaf6 (route prompt); discovery unchanged (code).
-- **Questions it explains (8):** C01-X, C02-P, C02-F, C03-P, C03-R, C03-I, C07-X, C11-P
+- **Questions it explains (9):** C01-X, C02-P, C02-F, C03-P, C03-R, C03-I, C07-P, C07-X, C11-P
 
 ### RC4 Verified findings are lost on the way to the planner (software)
 
@@ -902,7 +902,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **Owner of the correction:** research coordinator/queue; server/services/sources/*; owner items (keyed search key)
 - **How a correction is proved:** A fresh goal's research completes its planned fragments and its plan reads >=20 relevant verified facts within the goal window.
 - **Evidence:** RESEARCH-STARVATION-DIAGNOSIS: 1/16 fragments completed; 30Q traces: 0/1/0 completions after ~6 h; searches 785/1142 refused.
-- **Questions it explains (14):** C06-P, C06-F, C07-R, C10-R, C10-I, C11-R, C13-P, C13-I, C14-P, C14-I, C14-X, C15-P, C15-X, C34-R
+- **Questions it explains (11):** C06-P, C06-F, C07-R, C10-I, C11-R, C13-P, C13-I, C14-X, C15-P, C15-X, C34-R
 
 ### RC7 No shared per-goal working state (coordination)
 
@@ -1000,6 +1000,14 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **Evidence:** 30Q report: "Today's grader was stricter"; validity review on GRADING.md / GRADING-E2E.md.
 - **Questions it explains (0):** —
 
+### RC19 A goal's research never starts: its ideas are not judged within the goal's window (coordination+software)
+
+- **What is wrong:** The tick's judge pass judged at most 5 goal ideas a tick under database pressure, ticks run many minutes when dozens of goal plans are read in sequence (30–40 s each), and the goal-idea queue held ideas of cancelled and paused goals (matched by how they were made, never by whether their goal still runs) ahead of live goals'. 30 fresh goals produced 605 ideas; none was judged in 1.5 h, so no mission, fragment or claim existed and every plan stayed on generic constructed estimates.
+- **Owner of the correction:** russell/loop.ts judge-unjudged pass; goals/goalWork.ts goalIdeaSql
+- **How a correction is proved:** On a fresh batch, each live goal's first ideas are judged within one tick and its first research fragments are queued within the hour.
+- **Evidence:** planningEval judging (08:00Z): run ideas 605 CAPTURED unjudged, head of the goal queue created 05:56–06:08Z by the retired fm1126a and paused goals, updated_at = created_at; judge-one: one judgment 1.75 s; judge-pass: the pass body judged 18 in 20 s — so the pass works and is starved by budget and queue, not broken.
+- **Questions it explains (4):** C10-R, C14-P, C14-I, C42-P
+
 ## E. Repairs, owners and dependencies
 
 | id | root cause | repair | owner | depends on | state | evidence |
@@ -1029,6 +1037,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 | W2f | RC2 | A route kept against the critic ranks after every route the critic kept (the earlier fixture hid that it did not). | routeProposal.ts applyCritique | — | BRANCH_PENDING_DEPLOY | sensitivity C31-X |
 | W2g | RC8 | Capital plus the first buyer's cost must fit the limit; the critic is told when the target needs reinvested proceeds; the critique prompt is tested to carry the computed line. | routeProposal.ts parseRoutes/economicsLine | — | BRANCH_PENDING_DEPLOY | sensitivity C25-X, C25-R |
 | W2h | RC18 | Fresh 30-goal evaluation on one frozen revision; blind graders with a fixed rubric recording a cause category per failure. | planningEval; GRADING-E2E | — | IN_PROGRESS | fm1126b created 06:24Z on a8c46995 |
+| W2i | RC19 | Goal ideas are goal work only while their goal is live (goalIdeaSql: LIVE_GOAL_PROJECT_IDS_SQL); the judge pass judges up to 40 goal ideas a tick until a 45 s budget, halved under pressure instead of falling to 5. | goals/goalWork.ts; russell/loop.ts | — | BRANCH_PENDING_DEPLOY | tests/goalIdeasEachProjectsTurn.test.ts (production-shaped backlog); sensitivity C14-I |
 
 ## F. Production evidence of repairs
 
@@ -1036,7 +1045,7 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 
 ## G. Remaining untested or unresolved requirements
 
-C01-P, C01-I, C01-F, C01-X, C02-I, C02-M, C03-P, C03-I, C03-F, C04-I, C04-F, C05-I, C05-F, C06-P, C06-I, C06-F, C07-I, C07-F, C08-P, C08-I, C08-F, C09-P, C09-I, C09-F, C10-P, C10-R, C10-I, C10-F, C10-X, C11-F, C11-M, C12-X, C13-R, C13-F, C13-X, C14-R, C14-F, C15-I, C15-F, C16-F, C17-R, C17-X, C18-P, C18-X, C19-P, C19-I, C19-F, C19-X, C21-P, C21-F, C21-X, C23-F, C23-X, C24-I, C24-F, C25-R, C25-I, C25-F, C25-X, C26-R, C26-I, C26-F, C26-X, C27-I, C27-F, C27-X, C28-R, C28-I, C28-F, C29-I, C29-X, C30-P, C30-F, C30-X, C31-R, C31-F, C31-M, C32-P, C32-R, C32-I, C32-X, C34-P, C34-R, C34-I, C34-F, C34-X, C35-R, C35-I, C35-X, C36-R, C36-I, C36-F, C36-X, C37-P, C37-R, C37-I, C37-F, C37-X, C38-R, C38-I, C38-X, C39-I, C39-F, C39-X, C40-I, C40-F, C40-X, C41-X, C42-I, C42-F, C43-P, C43-R, C43-I, C43-F, C43-X, C44-P, C44-R, C44-I, C44-F, C44-X, C45-P, C45-R, C45-I, C45-F, C45-X, C46-P, C46-R, C46-I, C46-F, C46-X, C47-P, C47-R, C47-I, C47-F, C47-X, C48-P, C48-R, C48-I, C48-F, C48-X, C49-P, C49-R, C49-I, C49-F, C49-X, C50-P, C50-R, C50-I, C50-F, C50-X, C51-P, C51-R, C51-I, C51-F, C51-X, C52-P, C52-R, C52-I, C52-F, C52-X, C53-P, C53-R, C53-I, C53-F, C53-X, C54-P, C54-R, C54-I, C54-F, C54-X, C55-P, C55-R, C55-I, C55-F, C55-X, C56-P, C56-R, C56-I, C56-F, C56-X, C57-P, C57-R, C57-I, C57-F, C57-X, C58-P, C58-R, C58-I, C58-F, C58-X, C59-P, C59-R, C59-I, C59-F, C59-X, C60-P, C60-R, C60-I, C60-F, C60-X, C61-P, C61-R, C61-I, C61-F, C61-X, C62-P, C62-R, C62-I, C62-F, C62-X, C63-P, C63-R, C63-I, C63-F, C63-X, C64-P, C64-R, C64-I, C64-F, C64-X, C65-P, C65-R, C65-I, C65-F, C65-X, C66-P, C66-R, C66-I, C66-F, C66-X, C67-P, C67-R, C67-I, C67-F, C67-X, C68-P, C68-R, C68-I, C68-F, C68-X, C69-P, C69-R, C69-I, C69-F, C69-X, C70-P, C70-R, C70-I, C70-F, C70-X, C71-P, C71-R, C71-I, C71-F, C71-X, C72-P, C72-R, C72-I, C72-F, C72-X, C73-P, C73-R, C73-I, C73-F, C73-X, C74-P, C74-R, C74-I, C74-F, C74-X, C75-P, C75-R, C75-I, C75-F, C75-X
+C01-P, C01-I, C01-F, C01-X, C02-I, C02-M, C03-P, C03-I, C03-F, C04-I, C04-F, C05-I, C05-F, C06-P, C06-I, C06-F, C07-P, C07-I, C07-F, C08-P, C08-I, C08-F, C09-P, C09-I, C09-F, C10-P, C10-I, C10-F, C10-X, C11-F, C11-M, C12-X, C13-R, C13-F, C13-X, C14-R, C14-F, C15-I, C15-F, C16-F, C17-R, C17-X, C18-P, C18-X, C19-P, C19-I, C19-F, C19-X, C21-P, C21-F, C21-X, C23-F, C23-X, C24-I, C24-F, C25-R, C25-I, C25-F, C25-X, C26-R, C26-I, C26-F, C26-X, C27-I, C27-F, C27-X, C28-R, C28-I, C28-F, C29-I, C29-X, C30-P, C30-F, C30-X, C31-R, C31-F, C31-M, C32-P, C32-R, C32-I, C32-X, C34-P, C34-R, C34-I, C34-F, C34-X, C35-R, C35-I, C35-X, C36-R, C36-I, C36-F, C36-X, C37-P, C37-R, C37-I, C37-F, C37-X, C38-R, C38-I, C38-X, C39-I, C39-F, C39-X, C40-I, C40-F, C40-X, C41-X, C42-I, C42-F, C43-P, C43-R, C43-I, C43-F, C43-X, C44-P, C44-R, C44-I, C44-F, C44-X, C45-P, C45-R, C45-I, C45-F, C45-X, C46-P, C46-R, C46-I, C46-F, C46-X, C47-P, C47-R, C47-I, C47-F, C47-X, C48-P, C48-R, C48-I, C48-F, C48-X, C49-P, C49-R, C49-I, C49-F, C49-X, C50-P, C50-R, C50-I, C50-F, C50-X, C51-P, C51-R, C51-I, C51-F, C51-X, C52-P, C52-R, C52-I, C52-F, C52-X, C53-P, C53-R, C53-I, C53-F, C53-X, C54-P, C54-R, C54-I, C54-F, C54-X, C55-P, C55-R, C55-I, C55-F, C55-X, C56-P, C56-R, C56-I, C56-F, C56-X, C57-P, C57-R, C57-I, C57-F, C57-X, C58-P, C58-R, C58-I, C58-F, C58-X, C59-P, C59-R, C59-I, C59-F, C59-X, C60-P, C60-R, C60-I, C60-F, C60-X, C61-P, C61-R, C61-I, C61-F, C61-X, C62-P, C62-R, C62-I, C62-F, C62-X, C63-P, C63-R, C63-I, C63-F, C63-X, C64-P, C64-R, C64-I, C64-F, C64-X, C65-P, C65-R, C65-I, C65-F, C65-X, C66-P, C66-R, C66-I, C66-F, C66-X, C67-P, C67-R, C67-I, C67-F, C67-X, C68-P, C68-R, C68-I, C68-F, C68-X, C69-P, C69-R, C69-I, C69-F, C69-X, C70-P, C70-R, C70-I, C70-F, C70-X, C71-P, C71-R, C71-I, C71-F, C71-X, C72-P, C72-R, C72-I, C72-F, C72-X, C73-P, C73-R, C73-I, C73-F, C73-X, C74-P, C74-R, C74-I, C74-F, C74-X, C75-P, C75-R, C75-I, C75-F, C75-X
 
 ## H. Measured progress toward 27/30 usable plans
 
@@ -1045,3 +1054,4 @@ C01-P, C01-I, C01-F, C01-X, C02-I, C02-M, C03-P, C03-I, C03-F, C04-I, C04-F, C05
 | 2026-11-25 | dec1125c 10 goals, production | 0/10 | PLANNING-ROUTE-GENERATION-2026-11-25 |
 | 2026-11-26 | 30Q test p02/p06/p10, 12 Brain outputs, blind | 0/3 goals (0/12 outputs); 3/12 credible-incomplete | INTELLIGENCE-TEST-30Q-2026-11-26 |
 | 2026-11-26 06:24Z | fm1126b: 30 fresh goals created on frozen revision a8c46995; plans to be read and graded blind after research runs | pending | create log in scratchpad; read and grade to follow |
+| 2026-11-26 08:10Z | fm1126b mid-run: research never started on any of 30 goals (RC19); the batch measures RC19, not planning. Acceptance restarts on a new frozen revision after wave 2 deploys. | n/a | judging, judge-one and judge-pass probes |

@@ -1,5 +1,5 @@
 {
- "at": "2026-11-26T07:53:19.683Z",
+ "at": "2026-11-26T07:54:24.588Z",
  "results": [
   {
    "id": "C01-F",
@@ -143,12 +143,14 @@
    "why": "historical: a cancelled run and paused goals held the head of the judge queue; 30 live goals waited",
    "test": "tests/goalIdeasEachProjectsTurn.test.ts",
    "title": "holds no cancelled or paused goal's backlog",
-   "knownBadDetected": false,
-   "causeNamed": false,
+   "knownBadDetected": true,
+   "causeNamed": true,
    "knownGoodAccepted": true,
-   "verified": false,
-   "failing": [],
-   "at": "2026-11-26T07:53:19.683Z"
+   "verified": true,
+   "failing": [
+    "× tests/goalIdeasEachProjectsTurn.test.ts > a fresh goal beside an older goal’s backlog > holds no cancelled or paused goal's backlog in the goal queue ahead of a live goal (fresh batch, 2026-11-26) 1182ms"
+   ],
+   "at": "2026-11-26T07:54:24.588Z"
   },
   {
    "id": "C19-I",
