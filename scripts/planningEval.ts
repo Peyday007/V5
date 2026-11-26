@@ -875,7 +875,7 @@ async function judging(): Promise<void> {
   const q = (sql: string, params: SqlParam[] = []): Promise<Record<string, unknown>[]> => getDb().all<Record<string, unknown>>(sql, params).catch((error: unknown) => [{ error: String((error as Error)?.message ?? error).slice(0, 300) }] as Record<string, unknown>[]);
   const projects = (await listProjects()).filter((one) => one.name.startsWith(`Planning evaluation ${run} `)).map((one) => one.id);
   const marks = projects.map(() => '?').join(',') || "''";
-  out('cycle', await q(`SELECT state, pause_reason, last_ran_at, SUBSTR(COALESCE(last_error, ''), 1, 300) AS last_error, max_launches_per_cycle, lease_expires_at FROM russell_cycle`));
+  out('cycle', await q(`SELECT state, pause_reason, last_ran_at, SUBSTR(COALESCE(last_error, ''), 1, 4000) AS last_error, max_launches_per_cycle, lease_expires_at FROM russell_cycle`));
   const since = new Date(Date.now() - 6 * 3_600_000).toISOString();
   out('judged_by_hour', await q(`SELECT SUBSTR(updated_at, 1, 13) AS hour, COUNT(*) AS n FROM russell_candidates WHERE priority IS NOT NULL AND updated_at > ? GROUP BY 1 ORDER BY 1`, [since]));
   out('run_ideas', await q(`SELECT state, CASE WHEN priority IS NULL THEN 'unjudged' ELSE priority END AS judged, COUNT(*) AS n, MIN(created_at) AS oldest FROM russell_candidates WHERE project_id IN (${marks}) GROUP BY 1, 2 ORDER BY n DESC`, projects));
