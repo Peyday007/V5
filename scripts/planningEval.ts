@@ -885,6 +885,7 @@ async function judging(): Promise<void> {
   out('goal_queue', { ms: Date.now() - started, length: head.length, runIdeasInFirst40: head.slice(0, 40).filter((one) => projects.length && false).length });
   const ids = head.map((one) => one.id);
   const runSet = new Set((await q(`SELECT id FROM russell_candidates WHERE project_id IN (${marks})`, projects)).map((row) => String(row['id'])));
+  out('goal_queue_head', await q(`SELECT c.id, c.project_id, c.state, c.priority, c.created_at, c.updated_at, SUBSTR(c.title, 1, 80) AS title FROM russell_candidates c WHERE c.id IN (${ids.slice(0, 30).map(() => '?').join(',') || "''"})`, ids.slice(0, 30)));
   out('goal_queue_positions', { firstRunIdeaAt: ids.findIndex((id) => runSet.has(id)), runIdeasInQueue: ids.filter((id) => runSet.has(id)).length, queueProjects: (await q(`SELECT COUNT(DISTINCT project_id) AS n FROM russell_candidates WHERE id IN (${ids.slice(0, 200).map(() => '?').join(',') || "''"})`, ids.slice(0, 200)))[0] });
 }
 
