@@ -779,6 +779,137 @@ async function probe(): Promise<void> {
 }
 
 /**
+ * questions --run R --case C [--count N] [--batch-b64 facts]: Brain's own
+ * production models list the research questions a goal's planning needs
+ * answered, framed exactly as the scouting ask frames a goal (the owner's
+ * words, the date, the limits and the feasibility rules from `directionPrompt`),
+ * with no direction, route or strategy supplied. With facts (sourced claims,
+ * delivered through the same findings interface as `probe`) it lists only the
+ * follow-up questions whose answer could still change the plan. Writes nothing.
+ */
+async function questions(): Promise<void> {
+  const run = safeId(flag('run'), '--run');
+  const kase = safeId(flag('case'), '--case');
+  const count = Math.max(1, Math.min(40, Number(flag('count') ?? '30') || 30));
+  const factsB64 = batchB64();
+  const project = (await listProjects()).find((one) => one.name === projectName(run, kase));
+  if (!project) fail(`no project for ${run} ${kase}`);
+  const goal = (await listWorkstreams()).find((one) => one.projectId === project.id && !one.archivedAt);
+  if (!goal) fail('no goal');
+  const out = (label: string, value: unknown) => console.log(`QUESTIONS ${label} ${JSON.stringify(value)}`);
+  const P = (await import('../server/services/goals/routeProposal.ts')) as unknown as Record<string, (...args: unknown[]) => unknown>;
+  const { readTarget } = await import('../server/services/goals/target.ts');
+  const target = await readTarget(goal, new Date());
+  if (!target) fail('no target');
+  let supplied: unknown[] = [];
+  let maxFindings: number | null = null;
+  if (factsB64) {
+    const batch = JSON.parse(Buffer.from(factsB64, 'base64').toString('utf8')) as unknown;
+    const facts = (Array.isArray(batch) ? batch : ((batch as { facts: unknown[] }).facts ?? [])) as { claim: string; sourceUrl: string; sourceTitle?: string; sourceDate?: string | null; lane?: string }[];
+    if (!Array.isArray(batch) && typeof (batch as { maxFindings?: unknown }).maxFindings === 'number') maxFindings = (batch as { maxFindings: number }).maxFindings;
+    supplied = facts.map((one, i) => ({ id: `probe_${i + 1}`, claim: one.claim, sourceUrl: one.sourceUrl, sourceTitle: one.sourceTitle ?? null, sourcePublisher: null, sourceDate: one.sourceDate ?? null, evidenceLane: one.lane ?? null, retrievedAt: new Date().toISOString() }));
+  }
+  // Production's findings are deliberately not shown on a first pass: the questions come from the owner's words and limits alone.
+  const read = (await P['routeContext']!(goal, target, [], { claims: async () => supplied })) as { ctx: Record<string, unknown> } | null;
+  if (!read) fail('no context');
+  const ctx = read.ctx;
+  ctx['today'] = new Date().toISOString().slice(0, 10);
+  if (supplied.length && maxFindings !== null) ctx['findings'] = P['findingsOf']!(supplied, maxFindings);
+  const findings = (ctx['findings'] as unknown[] | undefined) ?? [];
+  // The scouting ask's own framing — owner's words, date, limits, feasibility, findings — up to where it asks for directions.
+  const framing = String(P['directionPrompt']!(ctx)).split('STEP 2 — DIRECTIONS TO CHECK.')[0]!.trim();
+  const followUp = findings.length > 0;
+  const ask = followUp
+    ? `STEP 2 — WHAT IS STILL UNKNOWN. Read the findings above. List up to ${count} research questions that are still unanswered and whose answer could materially change how this owner reaches this objective: choose between strategies, invalidate one, or fix a price, a buyer, a channel, a cost, a fulfiller or when the money settles. Do not ask what a finding already answers. Do not ask a question whose answer could not change the decision. Each question is distinct; no two ask the same thing in other words.`
+    : `STEP 2 — WHAT MUST BE LEARNED. Nothing has been researched for this goal yet, and no strategy has been chosen. Before choosing one, list ${count} distinct research questions whose answers this owner's planning needs from the real world — what you would have to find out to know which commercial routes can actually reach this objective inside the limits. Decide yourself which uncertainties matter for this owner; areas to consider (not a checklist) include who is buying now and why they pay, real prices and transaction values, channels that reach buyers in the window, competition, suppliers and subcontractors who could deliver, costs and capital, payment terms and time to collected cash, legal and operating constraints, alternative business models, financial feasibility, the owner's own constraints and capabilities, and risks that would invalidate an opportunity. Do not assume a strategy: cover several different possible ways of reaching the objective, including work the owner arranges or delegates rather than performs. No two questions ask the same thing in other words. Each must be answerable by reading public sources on the web.`;
+  const prompt = [
+    framing,
+    ask,
+    'Reply with exactly one JSON object and nothing else:',
+    `{"owner":{"skills":["..."],"assets":["..."],"location":"...","hours":"...","capital":"...","refusals":["..."]},"questions":[{"id":"Q1","question":"the question, specific to this owner, place and time","area":"the uncertainty it addresses, in a few words","decision":"which decision its answer changes","invalidates":"what answer would rule an opportunity out, or null","searches":["web searches or sources that would answer it"]}]}`,
+  ].join('\n\n');
+  out('objective', { objective: ctx['objective'] ?? null, remaining: ctx['remaining'] ?? null, daysLeft: ctx['daysLeft'] ?? null, capitalLimit: ctx['capitalLimit'] ?? null, hoursLimit: ctx['hoursLimit'] ?? null, hoursPerWeek: ctx['hoursPerWeek'] ?? null, resources: ctx['resources'] ?? null });
+  out('mode', { followUp, findings: findings.length, count });
+  out('prompt_chars', prompt.length);
+  const { modelsFor } = await import('../server/services/operator/run.ts');
+  const { challengerModels } = await import('../server/services/operator/decisions.ts');
+  const { chatFor } = await import('../server/services/cheap/modelBench.ts');
+  const models = challengerModels(await modelsFor());
+  out('models', models.map((m) => m.label));
+  const system = "You are Brain's research director. You decide what must be learned from the real world before a commercial plan can be trusted. Answer with exactly one JSON object.";
+  // A reply cut off mid-list still holds its complete questions; the rest are asked for in further rounds.
+  const salvage = (text: string): Record<string, unknown>[] => {
+    const found: Record<string, unknown>[] = [];
+    // Pretty-printed or compact: every object that opens with its "id".
+    for (const start of text.matchAll(/\{\s*"id"/g)) {
+      const i = start.index ?? 0;
+      let depth = 0;
+      let inString = false;
+      for (let j = i; j < text.length; j += 1) {
+        const ch = text[j];
+        if (inString) {
+          if (ch === '\\') j += 1;
+          else if (ch === '"') inString = false;
+        } else if (ch === '"') inString = true;
+        else if (ch === '{') depth += 1;
+        else if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            try {
+              const one = JSON.parse(text.slice(i, j + 1).replace(/[\u0000-\u001f]+/g, ' ')) as Record<string, unknown>;
+              if (typeof one['question'] === 'string') found.push(one);
+            } catch {
+              /* not a whole question */
+            }
+            break;
+          }
+        }
+      }
+    }
+    return found;
+  };
+  const ownerOf = (text: string): unknown => {
+    const m = /"owner"\s*:\s*(\{[^{}]*\})/.exec(text);
+    try {
+      return m ? JSON.parse(m[1]!.replace(/[\u0000-\u001f]+/g, ' ')) : null;
+    } catch {
+      return null;
+    }
+  };
+  for (const model of models) {
+    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetch, 240_000);
+    const got: Record<string, unknown>[] = [];
+    let owner: unknown = null;
+    for (let round = 1; round <= 4 && got.length < count; round += 1) {
+      const more = got.length
+        ? `\n\nALREADY LISTED (do not repeat these or ask them in other words; list only the remaining ${count - got.length}, numbered from Q${got.length + 1}):\n- ${got.map((one) => String(one['question'])).join('\n- ')}`
+        : '';
+      const r = await chat([{ role: 'system', content: system }, { role: 'user', content: prompt + more }], undefined, 8000);
+      if (r.error || !r.content) {
+        out('reply_error', { model: model.label, round, error: String(r.error ?? 'empty').slice(0, 200), ms: r.ms });
+        break;
+      }
+      const text = String(r.content);
+      owner = owner ?? ownerOf(text);
+      const fresh = salvage(text);
+      out('round', { model: model.label, round, ms: r.ms, chars: text.length, questions: fresh.length });
+      if (fresh.length === 0) {
+        out('reply_unparsed', { model: model.label, ms: r.ms, content: text.slice(0, 2000) });
+        break;
+      }
+      const seen = new Set(got.map((one) => String(one['question']).toLowerCase()));
+      for (const one of fresh) if (!seen.has(String(one['question']).toLowerCase()) && got.length < count) got.push(one);
+    }
+    if (got.length === 0) continue;
+    out('model', { label: model.label, questions: got.length });
+    out('owner', owner);
+    got.forEach((one, i) => out('q', { ...one, id: `Q${i + 1}` }));
+    return;
+  }
+  fail('no model answered with questions');
+}
+
+/**
  * capacity: what research capacity Brain actually has and uses, read only.
  * Search providers and their ceilings (the configured value, never a key),
  * Firecrawl's own credit balance (its usage endpoint bills nothing), what was
