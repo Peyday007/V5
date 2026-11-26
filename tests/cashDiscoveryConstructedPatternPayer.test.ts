@@ -1,14 +1,18 @@
 /**
  * GOAL_PLAN.CONSTRUCTION.ROUNDS_FILE#2: a constructed round's pattern files an
- * opening where its own fragment evidences who pays.
+ * opening when the claim itself says who pays — on the fragment shape
+ * production actually compiles for a constructed round.
  *
  * Production read 0 of 27 constructed rounds filing ("pattern claims with no
  * payer"; "round abandoned"): the worker described the repeating buyers in the
- * `demand_pattern` lane without a buying word, and filed who pays in the same
- * fragment's `payer` lane. `signalledClaims` needs a buying word on the pattern
- * itself, so nothing was filed and the round settled ABANDONED found 0. The
- * payer is required, never assumed: the same pattern with no payer claim files
- * nothing, and a seller's own page files nothing.
+ * `demand_pattern` lane without saying anybody pays, and `signalledClaims`
+ * reads an untagged pattern only where its own text says buyers pay, so the
+ * round filed nothing. The fix is in the question (`PATTERN_PAYER_SENTENCE`,
+ * construct.ts): the claim is asked to name who pays. The fragment here
+ * declares exactly the lanes `GOAL_MECHANISM` compiles for a goal round — the
+ * profile has no `payer` lane, so a payer can only reach the harvest inside
+ * the pattern claim — and a guard below fails if the fixture ever declares a
+ * lane that profile does not.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -23,6 +27,8 @@ import { setTarget } from '../server/services/goals/target.ts';
 import { forgetGoalReadings } from '../server/services/goals/plan.ts';
 import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { harvest, openConstructedRound } from '../server/services/cash/discovery.ts';
+import { PATTERN_PAYER_SENTENCE } from '../server/services/cash/construct.ts';
+import { goalMechanismProfile } from '../server/services/russell/compilerProfiles.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
 import type { Layer } from '../server/domain/types.ts';
@@ -57,17 +63,17 @@ async function goal() {
 
 type Claim = { claim: string; lane: string; sourceUrl: string; claimType?: 'SOURCED_FACT' | 'NEGATIVE_EXISTENCE' };
 
-/** A packet behind a constructed round's idea, with one fragment declaring the pattern and payer lanes. */
+/** The lanes production compiles for a goal's own round (compiler.ts, `goalMechanismProfile`). */
+const GOAL_LANES = goalMechanismProfile('RUSSELL_CASH_DISCOVERY_V1')!.lanes.map((lane) => ({ id: lane.id, description: lane.description, necessity: lane.necessity }));
+
+/** A packet behind a constructed round's idea, with one fragment declaring the lanes production compiles for it. */
 async function packet(candidateId: string) {
   const run = await createRun({ projectId, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
   const orchestration = await createOrchestration({ projectId, layerId: layer.id, runId: run.id, title: 'q', assignment: 'q', provider: 'WORKER', autoApprove: false });
   await createFragments([
     {
       orchestrationId: orchestration.id, projectId, layerId: layer.id, geography: 'any market',
-      requiredEvidence: [
-        { id: 'demand_pattern', description: 'buyers repeatedly paying', necessity: 'CONDITIONAL' },
-        { id: 'payer', description: 'who actually pays', necessity: 'CONDITIONAL' },
-      ],
+      requiredEvidence: GOAL_LANES,
       acceptableSourceTypes: ['a case study'], excludedSourceTypes: ['a forecast'], completionCriteria: ['two dated examples'],
       minIndependentSources: 1, maxRepairs: 2, fragmentIndex: 0, fragmentKey: 'market-signal', question: 'q', dependsOn: [], attempt: 1,
     },
@@ -94,12 +100,33 @@ async function packet(candidateId: string) {
 
 // A pattern with two dated examples and no buying word: the recorded class.
 const PATTERN = 'HVAC firms repeatedly use outside agencies to set up AI receptionists (examples March 2026 and May 2026).';
-const PAYER = 'Residential HVAC firm owners pay the setup agency directly, per the agency client list.';
+// The same pattern written as PATTERN_PAYER_SENTENCE asks: who pays, that they pay, for what, at what price.
+const ASKED = 'Residential HVAC firm owners repeatedly pay outside agencies $1,500 to set up AI receptionists (examples March 2026 and May 2026).';
 
 const roundOf = async (candidateId: string) => (await listRounds(projectId)).find((one) => one.candidateId === candidateId)!;
+const filedAs = async (text: string) => (await listOpportunities({ projectId })).filter((one) => (one.buyingSignal ?? '') === text);
 
-describe("a constructed round's pattern with its fragment's payer is filed (GOAL_PLAN.CONSTRUCTION.ROUNDS_FILE#2)", () => {
-  it('files one opening on a settled round, attributed to it, with the payer on its card', async () => {
+describe("a constructed round's pattern files when the claim says who pays (GOAL_PLAN.CONSTRUCTION.ROUNDS_FILE#2)", () => {
+  it('the fixture fragment is one production compiles: GOAL_MECHANISM lanes only, and no payer lane among them', () => {
+    const ids = GOAL_LANES.map((lane) => lane.id);
+    expect(ids).toContain('demand_pattern');
+    expect(ids).not.toContain('payer');
+  });
+
+  it('reproduces the recorded failure: a pattern that names no payer files nothing and the round finds 0', async () => {
+    const w = await goal();
+    const r = await openConstructedRound({ goal: w, projectId, key: 'hvac0', title: 'Constructed: AI receptionist setup for HVAC firms', question: 'Which HVAC firms pay for AI receptionist setup?' });
+    expect(r).not.toBeNull();
+    const p = await packet(r!.candidateId);
+    await p.gate([{ claim: PATTERN, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/case-studies' }]);
+    await p.end('DONE');
+    await harvest({ projectId });
+    expect(await filedAs(PATTERN)).toHaveLength(0);
+    expect(await roundOf(r!.candidateId)).toMatchObject({ state: 'HARVESTED', found: 0 });
+  });
+
+  it('files one opening, attributed to the round, for the pattern written as the question asks', async () => {
+    expect(PATTERN_PAYER_SENTENCE).toMatch(/names who pays and says that they pay/);
     const w = await goal();
     const r = await openConstructedRound({ goal: w, projectId, key: 'hvac1', title: 'Constructed: AI receptionist setup for HVAC firms', question: 'Which HVAC firms pay for AI receptionist setup?' });
     expect(r).not.toBeNull();
@@ -108,77 +135,60 @@ describe("a constructed round's pattern with its fragment's payer is filed (GOAL
     await p.end('NEEDS_HUMAN');
     await harvest({ projectId });
     expect(await roundOf(r!.candidateId)).toMatchObject({ state: 'ABANDONED', found: 0 });
-    await p.gate([
-      { claim: PATTERN, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/case-studies' },
-      { claim: PAYER, lane: 'payer', sourceUrl: 'https://example.test/hvac/clients' },
-    ]);
+    await p.gate([{ claim: ASKED, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/case-studies' }]);
     await p.end('DONE', 'NEEDS_HUMAN');
     await harvest({ projectId });
 
-    const filed = (await listOpportunities({ projectId })).filter((one) => (one.buyingSignal ?? '') === PATTERN);
+    const filed = await filedAs(ASKED);
     expect(filed).toHaveLength(1);
     const opening = filed[0]!;
     expect(opening.opportunitySignal).toBe('RECURRING_OUTSOURCED_WORK');
     expect(opening.discoveredByCandidateId).toBe(r!.candidateId);
     expect(opening.discoveryRoundId).toBe((await roundOf(r!.candidateId)).id);
-    expect(opening.payer).toBe(PAYER);
     expect(await roundOf(r!.candidateId)).toMatchObject({ state: 'ABANDONED', found: 1 });
 
     // A second pass files nothing more.
     await harvest({ projectId });
-    expect((await listOpportunities({ projectId })).filter((one) => (one.buyingSignal ?? '') === PATTERN)).toHaveLength(1);
+    expect(await filedAs(ASKED)).toHaveLength(1);
   });
 
-  it('files nothing for the same pattern when its fragment evidences no payer', async () => {
+  it('files nothing for a documented absence in the pattern lane', async () => {
     const w = await goal();
     const r = await openConstructedRound({ goal: w, projectId, key: 'hvac2', title: 'Constructed: AI receptionist setup for HVAC firms', question: 'Which HVAC firms pay for AI receptionist setup?' });
     const p = await packet(r!.candidateId);
-    await p.gate([
-      { claim: PATTERN, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/case-studies' },
-      // An absence is not a payer.
-      { claim: 'No published source names who pays for this setup.', lane: 'payer', sourceUrl: 'https://example.test/hvac/none', claimType: 'NEGATIVE_EXISTENCE' },
-    ]);
+    const ABSENCE = 'No published source shows HVAC firms paying anyone for this setup.';
+    await p.gate([{ claim: ABSENCE, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/none', claimType: 'NEGATIVE_EXISTENCE' }]);
     await p.end('DONE');
     await harvest({ projectId });
-    expect((await listOpportunities({ projectId })).some((one) => (one.buyingSignal ?? '') === PATTERN)).toBe(false);
+    expect(await filedAs(ABSENCE)).toHaveLength(0);
     expect(await roundOf(r!.candidateId)).toMatchObject({ state: 'HARVESTED', found: 0 });
   });
 
-  it("files nothing for a definition-style claim from a seller's own page, payer or not", async () => {
+  it("files nothing for a seller's own page, even worded as buyers paying", async () => {
     const w = await goal();
     const r = await openConstructedRound({ goal: w, projectId, key: 'hvac3', title: 'Constructed: AI receptionist setup for HVAC firms', question: 'Which HVAC firms pay for AI receptionist setup?' });
     const p = await packet(r!.candidateId);
-    const DEFINITION = 'An AI receptionist answers calls for HVAC firms around the clock.';
-    await p.gate([
-      { claim: DEFINITION, lane: 'demand_pattern', sourceUrl: 'https://receptionist.example.test/pricing' },
-      { claim: PAYER, lane: 'payer', sourceUrl: 'https://example.test/hvac/clients' },
-    ]);
+    const SELLER = 'HVAC firms pay us $1,500 to set up an AI receptionist that answers calls around the clock.';
+    await p.gate([{ claim: SELLER, lane: 'demand_pattern', sourceUrl: 'https://receptionist.example.test/pricing' }]);
     await p.end('DONE');
     await harvest({ projectId });
-    expect((await listOpportunities({ projectId })).some((one) => (one.buyingSignal ?? '') === DEFINITION)).toBe(false);
+    expect(await filedAs(SELLER)).toHaveLength(0);
     expect(await roundOf(r!.candidateId)).toMatchObject({ state: 'HARVESTED', found: 0 });
   });
-  it("files a newer pattern behind more than one window of seller's-own-page rows (F4: paged, not one oldest-first window)", async () => {
+
+  it("files the asked pattern behind more than one window of seller's-own-page patterns (F4's property, on the path production reaches)", async () => {
     const w = await goal();
     const r = await openConstructedRound({ goal: w, projectId, key: 'hvac4', title: 'Constructed: AI receptionist setup for HVAC firms', question: 'Which HVAC firms pay for AI receptionist setup?' });
     const p = await packet(r!.candidateId);
-    // harvest({ limit: 1 }) reads a window of 4; six dropped rows fill it and more, oldest first.
-    const dropped: Claim[] = Array.from({ length: 6 }, (_, i) => ({
-      claim: `An AI receptionist answers calls for HVAC firms around the clock, plan ${i + 1}.`,
-      lane: 'demand_pattern',
-      sourceUrl: `https://receptionist${i + 1}.example.test/pricing`,
-    }));
+    // harvest({ limit: 1 }) reads a window of 4; six seller's pages fill it and more, oldest first.
+    const sellers = Array.from({ length: 6 }, (_, i) => 'HVAC firms pay us $' + String(1500 + i) + ' to set up an AI receptionist that answers calls around the clock, plan ' + String(i + 1) + '.');
     await p.gate([
-      ...dropped,
-      { claim: PATTERN, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/case-studies' },
-      { claim: PAYER, lane: 'payer', sourceUrl: 'https://example.test/hvac/clients' },
+      ...sellers.map((claim, i) => ({ claim, lane: 'demand_pattern', sourceUrl: 'https://receptionist' + String(i + 1) + '.example.test/pricing' })),
+      { claim: ASKED, lane: 'demand_pattern', sourceUrl: 'https://example.test/hvac/case-studies' },
     ]);
     await p.end('DONE');
     await harvest({ projectId, limit: 1 });
-    const filed = (await listOpportunities({ projectId })).filter((one) => (one.buyingSignal ?? '') === PATTERN);
-    expect(filed).toHaveLength(1);
-    expect(filed[0]!.payer).toBe(PAYER);
-    // None of the seller's own pages was filed on the way.
-    for (const one of dropped) expect((await listOpportunities({ projectId })).some((o) => (o.buyingSignal ?? '') === one.claim)).toBe(false);
+    expect(await filedAs(ASKED)).toHaveLength(1);
+    for (const claim of sellers) expect(await filedAs(claim)).toHaveLength(0);
   });
 });
