@@ -686,25 +686,36 @@ async function probe(): Promise<void> {
   }
   out('variant', mode || 'none');
   let prompt = String(scout ? P['directionPrompt']!(ctx) : P['routePrompt']!(ctx));
-  if (mode.includes('consistent')) {
-    // The fix on claude/owner-labour-consistency (operatingModelSentenceFor), applied to the deployed prompt's text.
-    const labour = ctx['ownerLabour'] as { offered?: boolean; evidence?: string } | null | undefined;
-    const { OPERATING_MODEL_SENTENCE } = await import('../server/domain/operatingModel.ts');
-    const at = prompt.indexOf(OPERATING_MODEL_SENTENCE);
+  // The fix on claude/owner-labour-consistency (operatingModelSentenceFor), applied to a deployed prompt's text.
+  const { OPERATING_MODEL_SENTENCE } = await import('../server/domain/operatingModel.ts');
+  const labour = ctx['ownerLabour'] as { offered?: boolean; evidence?: string } | null | undefined;
+  const consistent = (text: string): string => {
+    const at = text.indexOf(OPERATING_MODEL_SENTENCE);
     const tail = 'count every one of those hours.';
-    const end = prompt.indexOf(tail, at);
-    if (labour?.offered && at >= 0 && end > at) {
-      prompt =
-        prompt.slice(0, at) +
-        `For this goal the owner offered their own work ("${labour.evidence}"), so the standing rule that the owner does no physical work does not apply to it: ` +
-        'routes the owner personally performs — in person, deliveries, shifts, gigs and services included — are allowed, inside their stated hours, ' +
-        'using the skills and assets their words state or work that needs no particular skill, licence or equipment they did not state. ' +
-        'Set performer OWNER and count every one of those hours. Work can also be done by an independent supplier or subcontractor that this operation coordinates, ' +
-        'and AI and software should do as much of the remaining work as possible.' +
-        prompt.slice(end + tail.length);
-      out('consistent', 'applied');
-    } else out('consistent', { offered: !!labour?.offered, at, end });
+    const end = text.indexOf(tail, at);
+    if (!labour?.offered || at < 0 || end <= at) return text;
+    return (
+      text.slice(0, at) +
+      `For this goal the owner offered their own work ("${labour.evidence}"), so the standing rule that the owner does no physical work does not apply to it: ` +
+      'routes the owner personally performs — in person, deliveries, shifts, gigs and services included — are allowed, inside their stated hours, ' +
+      'using the skills and assets their words state or work that needs no particular skill, licence or equipment they did not state. ' +
+      'Set performer OWNER and count every one of those hours. Work can also be done by an independent supplier or subcontractor that this operation coordinates, ' +
+      'and AI and software should do as much of the remaining work as possible.' +
+      text.slice(end + tail.length)
+    );
+  };
+  const fixed = mode.includes('fixed');
+  if (mode.includes('consistent') || fixed) {
+    const before = prompt;
+    prompt = consistent(prompt);
+    out('consistent', prompt !== before ? 'applied' : { offered: !!labour?.offered });
   }
+  // `fixed` also applies the branch's hours rule (one sale must fit: parsed against one sale's worth of target) and the critic's combining sentence.
+  const parseCtx = fixed ? { ...ctx, remaining: 1 } : ctx;
+  const criticText = (text: string): string =>
+    fixed
+      ? consistent(text).replace("for a product that would fit any request. Then rank", "for a product that would fit any request. The plan combines the routes you keep and holds their hours, capital and money together, so never drop a route only because it alone collects part of the money still needed; judge whether it pays inside the window. Then rank")
+      : text;
   if (mode.includes('labour')) prompt = prompt.replace('using only the skills and assets their words state and inside their stated hours', 'using the skills and assets their words state, or work that needs none, inside their stated hours');
   const system = "You are Brain's commercial strategist. You read the owner first and propose whole, concrete routes to money built from what they have, inside their limits. Answer with exactly one JSON object.";
   for (const model of models) {
@@ -712,13 +723,25 @@ async function probe(): Promise<void> {
     const r = await chat([{ role: 'system', content: system }, { role: 'user', content: prompt }], undefined, 4000);
     out('reply', { model: model.label, error: r.error ?? null, ms: r.ms, content: String(r.content ?? '').slice(0, 9000) });
     if (r.error || !r.content) continue;
-    const parsed = scout ? P['parseDirections']!(r.content, ctx) : P['parseRoutes']!(P['routesJson']!(r.content), ctx);
+    const parsed = scout ? P['parseDirections']!(r.content, ctx) : P['parseRoutes']!(P['routesJson']!(r.content), parseCtx);
     out('parsed', parsed);
     if (!scout) {
       const routes = (parsed as { routes: unknown[] }).routes;
-      const critic = await chat([{ role: 'system', content: "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object." }, { role: 'user', content: String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content))) }], undefined, 3000);
-      const critique = critic.content ? P['critiqueJson']!(critic.content, routes.length) : null;
-      out('critique', critique ? P['applyCritique']!(routes, critique, ctx) : { error: critic.error ?? 'unreadable' });
+      // As production does, the critique is asked of each model in turn until one is readable.
+      let done = false;
+      for (const judge of [model, ...models.filter((one) => one !== model)]) {
+        const judgeChat = chatFor({ label: judge.label, url: judge.baseUrl, key: judge.apiKey, model: judge.model, usdPerHour: null }, fetch, 240_000);
+        const critic = await judgeChat([{ role: 'system', content: "You are Brain's sceptical commercial reviewer. You judge whether each proposed route can really put money in this owner's hand inside their limits, repair what a changed field fixes, drop the rest and rank the survivors. Answer with exactly one JSON object." }, { role: 'user', content: criticText(String(P['critiquePrompt']!(ctx, routes, P['ownerProfileOf']!(r.content)))) }], undefined, 3000);
+        const critique = critic.content ? P['critiqueJson']!(critic.content, routes.length) : null;
+        if (!critique) {
+          out('critique_unreadable', { model: judge.label, error: critic.error ?? null, chars: String(critic.content ?? '').length });
+          continue;
+        }
+        out('critique', { model: judge.label, ...P['applyCritique']!(routes, critique, parseCtx) });
+        done = true;
+        break;
+      }
+      if (!done) out('critique', { error: 'unreadable from every model' });
     }
     break;
   }
