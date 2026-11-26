@@ -1,0 +1,86 @@
+{
+ "goals": [
+  {
+   "case": "f11",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Brain handed only a research step on a $5/month parents newsletter whose own modelled p50 is about $7 a month against a $500 target. There is no buyer evidence, no channel volume and no concrete first step the dad could take tomorrow.",
+   "firstBlocker": "No strategy beyond research; the chosen newsletter cannot plausibly reach $500/month at $5 per subscriber in the window."
+  },
+  {
+   "case": "f12",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [
+    "The chosen sponsored-post price of $1,000 is contradicted by Brain's own shown fact of $200-$500 per post for micro-influencers."
+   ],
+   "why": "The plan is a single research step on sponsored posts, with a guessed $1,000 price that a shown fact undercuts. No brand targets, outreach cadence or cash-collection timing are given.",
+   "firstBlocker": "Only a research step; price unsupported and contradicted, no buyer list or outreach plan."
+  },
+  {
+   "case": "f13",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Brain found no candidate and handed only a step to qualify an opening. The two openings (holiday web refresh, holiday lighting brokerage) are evidence-only with subcontractors unnamed and seasonal timing largely passed.",
+   "firstBlocker": "No plan at all: no qualified opening, offer, fulfiller or arithmetic for a hands-off owner."
+  },
+  {
+   "case": "f14",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "The plan is a research step on RN health-coaching at a guessed $100 per session, with no demand, channel volume or close rate. It does fit the nurse's skills and hours but gives nothing executable.",
+   "firstBlocker": "Only research; no evidence of paying buyers or a channel that can produce 30 sessions by February."
+  },
+  {
+   "case": "f15",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Brain produced no candidate; the single van-transport opening has no established buyer or price and the steps are research only. With a three-week window, a research-only answer gives the owner nothing to act on.",
+   "firstBlocker": "No plan: no qualified buyer, price or first steps inside a 3-week window."
+  },
+  {
+   "case": "f16",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "The chosen worksheet subscription has a modelled p50 of about $45 a month against $1,000, and the only step is research. No marketplace listing, pricing evidence for this offer or first steps are given.",
+   "firstBlocker": "Research-only step; the chosen strategy is modelled far below target."
+  },
+  {
+   "case": "f17",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "The chosen remote diagnostic call is modelled at p50 about $338 versus a $10,000 target, with 95% of sweeps infeasible, and the only step is research. Better-fitting in-shop winter inspections were not chosen or planned.",
+   "firstBlocker": "Only research; chosen strategy cannot reach the target and no executable marketing or service plan."
+  },
+  {
+   "case": "f18",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "The plan is a research step on $15 fabric ornaments with a modelled p50 of about $178 versus $700. No sales channel schedule, quantities or first steps are given.",
+   "firstBlocker": "Research-only; chosen ornaments modelled well short of $700 by mid-December."
+  },
+  {
+   "case": "f19",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "The chosen German translation retainer fits the owner's languages, but price is a guess, no buyer demand is shown and the only step is research. Reach is shown as only coverage-based ~56% without buyer evidence.",
+   "firstBlocker": "Only a research step; no evidenced buyers, outreach plan or conversion basis."
+  },
+  {
+   "case": "f20",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Brain produced no candidate and handed only a qualifying step for a $40,000 six-month goal. The workshop and freelance openings have no established buyers or plan.",
+   "firstBlocker": "No plan at all: no qualified opening, channel, arithmetic or first steps."
+  }
+ ]
+}

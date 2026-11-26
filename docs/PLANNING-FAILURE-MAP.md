@@ -10,7 +10,7 @@ Rendered from `docs/planning-failure-map/map.py` by `render_md.py`; edit the dat
 - Diagnostic questions (5 per capability, +1 model-isolation question for each of the 8 model-dependent ones): **383**
 - PASS 25 · FAIL 84 · RECHECK 75 · UNKNOWN 199
 - Diagnostic validity (Phase 3): CONTROLLED_FAILURE 118 · HISTORICAL_FAILURE_DETECTED 26 · KNOWN_GOOD_ONLY 13 · UNPROVEN 226
-- Root causes established: **20**
+- Root causes established: **21**
 
 ## A. What creating a successful plan requires (capability map)
 
@@ -1016,6 +1016,14 @@ Dimensions: **P** Can Brain perform it correctly?; **R** Does the result reach e
 - **Evidence:** planningEval launching (09:45-09:55Z, dcc34fe): run 143 judged ideas, all with missionSpec, 30 grants at 6 free slots each, run ideas first at launch-window position 33, 0 run missions in 3 h; Brain-wide 31-86 missions an hour across 22-41 projects; 152 projects with 2483 launchable ideas. Isolated: tests/goalIdeasEachProjectsTurn 'launches a live goal's judged idea before a paused goal's judged price questions' fails on the unfixed predicate (paused price question first) and passes with the gate.
 - **Questions it explains (1):** C14-R
 
+### RC21 A model-proposed opening can carry an invented fact or an unlawful or platform-breaking offer, and nothing checks it before the owner sees it (model+reasoning)
+
+- **What is wrong:** Route and discovery openings are filed with the proposer's own facts (platform names, lead-price figures, platform categories) and offers; the critic and the route rules check arithmetic, limits and owner fit, but no stage checks that a named platform or service exists, that a proposed figure agrees with the goal's own shown facts, or that the offer is lawful and within the platform's terms. Blind grading of fm1126b found 4/30 goals with such critical mistakes.
+- **Owner of the correction:** goals/routeProposal.ts critique (LAWFUL rule) and parseRoutes; the evidence gate that marks a figure ASSUMPTION
+- **How a correction is proved:** On a fresh batch, no graded goal shows a critical mistake from an opening's invented fact, a contradiction with its own shown facts, or an unlawful/platform-breaking offer.
+- **Evidence:** docs/planning-failure-map/grading/grades*.json (f12, f24, f25, f26). Distinguishing: the gpt-oss model exam (RC14) scored 4/11 planning; whether a stronger model removes these is the smallest distinguishing test, blocked on the owner's model decision.
+- **Questions it explains (0):** —
+
 ## E. Repairs, owners and dependencies
 
 | id | root cause | repair | owner | depends on | state | evidence |
@@ -1068,3 +1076,4 @@ C01-P, C01-I, C01-F, C01-X, C02-I, C02-M, C03-P, C03-I, C03-F, C04-I, C04-F, C05
 | 2026-11-26 09:30Z | fm1126b read on dcc34fe: 30/30 NO_CANDIDATE. Every goal holds 1-4 owner-fit openings (89 total, e.g. Tulsa truck: junk haul, delivery partner, holiday setup), all unpriced; 0 missions, 0 fragments, 0 claims for the run. | 0/30 | read_fm1126b_0926, stall, judging and launching probes; the blocker is launch, not planning (RC20) |
 | 2026-11-26 09:59Z | dev6 (12 goals, integration owner's read) on dcc34fe vs 442a657: still 0/12. 10/12 moved from QUANT-critical or no-candidate on generic constructed arrangements (RC13, #1345 effective: no $18M-$30M readings) to 'no live opportunity far enough along to model' (unpriced openings); d06 and d07 now lead with found openings. Research 7-10 RESEARCHING packets per goal, before RC20. | 0/12 | reported by session_01QF5Tk7etm6MGmaFuHMd6eZ; next read about 60 min after 2f91d08 is live |
 | 2026-11-26 11:35Z | RC20 verified on production: fm1126b research launches (12 missions RUNNING). Plans still unpriced; first research results expected over the next hours at about 20 fragments/h Brain-wide. | 0/30 (research in progress) | launching probe on baa7192 |
+| 2026-11-26 13:13Z | fm1126b (development set, 30 fresh goals) on 59ddcc8, blind-graded: 0/30 USABLE, 0 CREDIBLE_INCOMPLETE, 30 NOT_USABLE, first cause NO_PLAN_YET for all 30 (plans are research steps waiting on priced evidence); 4 goals carry CRITICAL mistakes in model-proposed openings (f12 price contradicted by its own fact; f24 a non-existent lead platform and renting the owner's only tool; f25 notary selling legal compliance advice; f26 digital sales through Airbnb Experiences). Up from 09:30Z: 18/30 now CANDIDATE_ONLY, 54/118 openings priced (route prices are the proposer's ASSUMPTION). | 0/30, 4 critical | docs/planning-failure-map/grading/grades{1,2,3}.json; development set, not acceptance |

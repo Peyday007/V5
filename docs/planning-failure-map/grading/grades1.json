@@ -1,0 +1,84 @@
+{
+ "goals": [
+  {
+   "case": "f01",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Brain handed only a research step and no chosen strategy; all four Tulsa truck openings (gig delivery, junk haul, decoration setup, business delivery) have no price. The opening first-steps are boilerplate about 're-reading a published request' that does not fit gig-app signup.",
+   "firstBlocker": "No strategy chosen: no priced opening, no arithmetic to $1,200 by Dec 31."
+  },
+  {
+   "case": "f02",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "The closest candidate (solo-entrepreneur bookkeeping at an assumed $100/month) is the right direction for a retired bookkeeper with no cold calling, but Brain handed only a research step and marks price, demand, conversion and fulfilment all unestablished. There is no executable plan, first-client channel timing, or January cash arithmetic.",
+   "firstBlocker": "Plan is still waiting on research; price $100 is an assumption and nothing past it is specified."
+  },
+  {
+   "case": "f03",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Brain handed only a research step for 'Columbus Quick Move Help' at a guessed $30/hour, with demand, conversion and volume unestablished, and the 5-day window is already running. No concrete day-by-day plan to $300 was given.",
+   "firstBlocker": "Only research step; no executable plan inside a 5-day window."
+  },
+  {
+   "case": "f04",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Kitchen rental to local food producers is the right direction for an idle Mon-Wed kitchen, but the $3,250/month price is a guess and Brain handed only a research step. No buyer list, pricing evidence, licensing/insurance steps or 60-day timeline are given.",
+   "firstBlocker": "Plan waiting on research; price and demand unestablished."
+  },
+  {
+   "case": "f05",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "No candidate at all: both bilingual openings (voice-over, translation) lack prices and Brain handed only a 'establish an offer and a price' research step. Nothing reaches $2,500 in 6 weeks.",
+   "firstBlocker": "No strategy chosen and no priced opening."
+  },
+  {
+   "case": "f06",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "No candidate: the two openings for a hands-off $2,000/month business have no price, and one was excluded as one-off. Brain handed only a research step.",
+   "firstBlocker": "No strategy; no priced, operator-run opening."
+  },
+  {
+   "case": "f07",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "No candidate: the three electrician openings (subcontract labor, inspections, emergency repairs) are sensible but unpriced, and Brain handed only a research step. No path to $6,000 by Jan 15 is shown.",
+   "firstBlocker": "No strategy chosen; electrician side work not priced or scheduled."
+  },
+  {
+   "case": "f08",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "Only one opening (stock photo sales) and it is unpriced; Brain handed only a research step. Stock sales are also an unlikely route to $1,500 vs local event/portrait photography, which was not considered.",
+   "firstBlocker": "No strategy; sole opening unpriced and weak."
+  },
+  {
+   "case": "f09",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "No candidate: the three Manchester openings (IT brokerage, lead-gen, lights installation brokerage) are unpriced and Brain handed only a research step. Nothing reaches GBP 1,000 in 30 days with GBP 50.",
+   "firstBlocker": "No strategy; no priced in-person work route."
+  },
+  {
+   "case": "f10",
+   "verdict": "NOT_USABLE",
+   "cause": "NO_PLAN_YET",
+   "critical": [],
+   "why": "The month-to-month furnished ADU lease at $1,800 is the right direction, but the price is an assumption and Brain handed only a research step with no fix-up budget breakdown, listing timeline or local-rule check. Not executable as handed.",
+   "firstBlocker": "Plan waiting on research; rent level and Asheville rental rules unestablished."
+  }
+ ]
+}
