@@ -132,6 +132,7 @@ async function update(): Promise<void> {
 async function retire(): Promise<void> {
   const run = safeId(flag('run'), '--run');
   const { cancel } = await import('../server/services/goals/decide.ts');
+  const { yieldStoppedGoalResearch } = await import('../server/services/goals/goalWork.ts');
   const prefix = `Planning evaluation ${run} `;
   const projects = new Set((await listProjects()).filter((one) => one.name.startsWith(prefix)).map((one) => one.id));
   let done = 0;
@@ -139,7 +140,9 @@ async function retire(): Promise<void> {
     if (!goal.projectId || !projects.has(goal.projectId)) continue;
     const result = await cancel(goal.id, `Evaluation run ${run} retired: its answers were used to develop Brain, so it no longer measures unfamiliar goals.`, `planning-evaluation:${run}`);
     if (result.ok) done += 1;
-    console.log(`EVAL retire ${run} ${goal.id}: ${result.ok ? 'cancelled' : result.reason}`);
+    // A goal retired before cancellation yielded its research still holds the boost.
+    const yielded = result.ok ? 0 : await yieldStoppedGoalResearch(goal.id);
+    console.log(`EVAL retire ${run} ${goal.id}: ${result.ok ? 'cancelled' : `${result.reason} (${yielded} queued item(s) yielded)`}`);
   }
   console.log(`EVAL retire ${run}: ${done} goal(s) cancelled across ${projects.size} project(s)`);
 }
