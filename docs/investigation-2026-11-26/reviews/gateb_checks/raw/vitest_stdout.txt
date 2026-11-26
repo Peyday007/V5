@@ -1,0 +1,17 @@
+
+ RUN  v2.1.9 /home/user/V5
+
+(node:11011) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ docs/investigation-2026-11-26/reviews/gateb_checks/harness/e015_e016.sandbox.test.ts (5 tests) 8105ms
+   ✓ E-015(b): truncated and empty replies in the real ask chain > truncated-only primary, valid fallback 1880ms
+   ✓ E-015(b): truncated and empty replies in the real ask chain > truncated reply from every model 1452ms
+   ✓ E-015(b): truncated and empty replies in the real ask chain > truncated reply that completed one route 1677ms
+   ✓ E-015(b): truncated and empty replies in the real ask chain > empty twice from primary, fallback answers 1428ms
+   ✓ E-016: does a rethink written by one ask reach the next? > second ask after the ordinary interval, and a third after a day 1665ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  06:57:27
+   Duration  16.01s (transform 5.22s, setup 44ms, collect 7.56s, tests 8.10s, environment 0ms, prepare 47ms)
+
