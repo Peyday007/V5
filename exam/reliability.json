@@ -1,0 +1,41 @@
+{
+ "gptoss120b": {
+  "questions": 30,
+  "first_attempt_answer": 19,
+  "first_attempt_failure_kinds": {
+   "http": 11
+  },
+  "served_by_other_model": 0,
+  "truncated_at_limit": 0,
+  "unanswered_after_all_attempts": [],
+  "attempts_total": 47
+ },
+ "qwen38_27b": {
+  "questions": 30,
+  "first_attempt_answer": 7,
+  "first_attempt_failure_kinds": {
+   "substituted": 8,
+   "empty": 15
+  },
+  "served_by_other_model": 44,
+  "truncated_at_limit": 0,
+  "unanswered_after_all_attempts": [
+   "Q23"
+  ],
+  "attempts_total": 99
+ },
+ "fallback_auto": {
+  "questions": 30,
+  "first_attempt_answer": 30,
+  "first_attempt_failure_kinds": {},
+  "served_by_other_model": 0,
+  "truncated_at_limit": 0,
+  "unanswered_after_all_attempts": [],
+  "attempts_total": 30
+ },
+ "claude_opus": {
+  "questions": 30,
+  "first_attempt_answer": 30,
+  "unanswered_after_all_attempts": []
+ }
+}
