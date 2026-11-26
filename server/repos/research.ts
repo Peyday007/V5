@@ -1974,6 +1974,15 @@ export async function signalledClaims(input: {
    * 2026-11-26: 0 of 138 goal rounds filed an opening).
    */
   skip?: (claim: ResearchClaim) => boolean;
+  /**
+   * Lower-cased substrings at least one of which every claim `skip` drops
+   * contains. A claim holding none of them is read before one that holds any,
+   * so the rows `skip` drops sit behind every row it cannot drop and never use
+   * up the bounded read in front of one (`MARKET_SIZE_MARKERS`). Without it a
+   * project holding more than `SIGNALLED_MAX_PAGES` windows of skipped figures
+   * hid every newer opening behind them.
+   */
+  skipMarkers?: readonly string[];
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
   const pointSignals = [...POINT_IN_TIME_SIGNALS];
   const staleSql = input.staleBefore
@@ -2016,7 +2025,7 @@ export async function signalledClaims(input: {
   const want = Math.max(1, input.limit ?? 50);
   const out: { claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[] = [];
   for (let page = 0; page < SIGNALLED_MAX_PAGES && out.length < want; page += 1) {
-    const rows = await signalledPage(input.projectId, staleSql, staleParams, want, page * want);
+    const rows = await signalledPage(input.projectId, staleSql, staleParams, want, page * want, input.skip ? (input.skipMarkers ?? []) : []);
     for (const one of keepSignalled(rows)) {
       if (out.length < want && !isStale(one.claim) && !input.skip?.(one.claim)) out.push(one);
     }
@@ -2034,7 +2043,13 @@ async function signalledPage(
   staleParams: readonly (string | number)[],
   limit: number,
   offset: number,
+  skipMarkers: readonly string[],
 ): Promise<(ResearchClaimRow & { fragment_required_evidence: string | null })[]> {
+  // Rows a caller's skip may drop are read last: 1 when the claim holds a marker, else 0.
+  const markers = skipMarkers.map((marker) => marker.toLowerCase());
+  const deferSql = markers.length
+    ? `CASE WHEN ${markers.map(() => "LOWER(COALESCE(c.claim, '')) LIKE ?").join(' OR ')} THEN 1 ELSE 0 END, `
+    : '';
   return getDb().all<ResearchClaimRow & { fragment_required_evidence: string | null }>(
     `SELECT c.*, f.required_evidence AS fragment_required_evidence FROM research_claims c
        JOIN research_fragments f ON f.id = c.fragment_id
@@ -2164,10 +2179,10 @@ async function signalledPage(
            WHERE filed.project_id = o.project_id AND filed.source_claim_id = c.id
         )
         ${staleSql}
-      ORDER BY c.created_at, c.rowid
+      ORDER BY ${deferSql}c.created_at, c.rowid
       LIMIT ? OFFSET ?`,
     [projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', GOAL_REQUEST_LANE, GOAL_REQUEST_LANE_DECLARED,
-      `%${GOAL_REQUEST_LANE_MEANS}%`, 'goal-%', ...staleParams, limit, offset],
+      `%${GOAL_REQUEST_LANE_MEANS}%`, 'goal-%', ...staleParams, ...markers.map((marker) => `%${marker}%`), limit, offset],
   );
 }
 

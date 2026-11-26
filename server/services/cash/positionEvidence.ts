@@ -68,6 +68,18 @@ function entryOf(bucketId: string | null | undefined): IntermediationBucket | nu
 // ── what a source established ────────────────────────────────────────────────
 
 const MARKET_SIZE = /\b(market (size|value|worth)|market (is|was) (worth|valued)|total addressable|TAM\b|industry (is|was) worth|(valued|worth) at)\b|\b\d[\d,.]*\s*(billion|bn|trillion)\b/i;
+/**
+ * Lower-cased substrings at least one of which every `MARKET_SIZE` match contains — its
+ * literal alternatives, with the word boundaries dropped, so the list is a superset of
+ * the regex and never narrower. `signalledClaims` orders a claim holding none of them
+ * ahead of one that might be a figure, because a bounded read can be filled by figures
+ * the harvest then drops (a test pins every alternative of the regex to a marker).
+ */
+export const MARKET_SIZE_MARKERS: readonly string[] = Object.freeze([
+  'market size', 'market value', 'market worth', 'market is worth', 'market was worth',
+  'market is valued', 'market was valued', 'total addressable', 'tam', 'industry is worth',
+  'industry was worth', 'valued at', 'worth at', 'billion', 'bn', 'trillion',
+]);
 const ASKING_PRICE = /\b(asking price|list(ed)? (price|at)|priced at|for sale (at|for)|sells? for|retail (price|for)|price list|rate card)\b/i;
 
 const BASIS_BY_SIGNAL: Readonly<Record<OpportunitySignal, EvidenceBasis>> = Object.freeze({

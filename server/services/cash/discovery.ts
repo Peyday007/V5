@@ -73,7 +73,7 @@ import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researc
 import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
 import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
 import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './intermediationPositions.ts';
-import { claimBasis, owesPositionEvidence, recordPositionEvidence } from './positionEvidence.ts';
+import { claimBasis, MARKET_SIZE_MARKERS, owesPositionEvidence, recordPositionEvidence } from './positionEvidence.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -2252,6 +2252,8 @@ export async function harvest(input: {
     staleBefore: new Date(now.getTime() - freshDays * 86_400_000).toISOString(),
     // Skipped below and never filed, so it must not use up the bounded read (ROUNDS_FILE, attempt 3).
     skip: isMarketSizeFigure,
+    // And read after every claim that cannot be one, so no number of them fills the read's page bound.
+    skipMarkers: MARKET_SIZE_MARKERS,
   });
 
   const out: Harvested[] = [];

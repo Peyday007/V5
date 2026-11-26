@@ -29,6 +29,7 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { SIGNAL_LANE, harvest, nextGoalRoundFor, openGoalDiscovery } from '../server/services/cash/discovery.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
+import { isMarketLevelFigure, MARKET_SIZE_MARKERS } from '../server/services/cash/positionEvidence.ts';
 import type { CashDiscoveryRound } from '../server/domain/types.ts';
 import type { Layer } from '../server/domain/types.ts';
 
@@ -299,5 +300,59 @@ describe('a backlog of market-size figures does not starve a goal round of its o
     const filed = await listOpportunities({ projectId });
     // The figures themselves are still never filed as openings.
     expect(filed.map((one) => one.discoveryRoundId)).toEqual([expect.any(String)]);
+  });
+});
+
+/*
+ * The same class past the read's page bound (repair-page-bound): the skip ran in
+ * code after the SQL read, so skipped figures still used up pages, and
+ * `signalledClaims` stops after SIGNALLED_MAX_PAGES (20) windows of limit*4 (80)
+ * rows. A project holding more than 1,600 older figures hid every newer opening
+ * again. A claim holding no market-size marker is now read before any that does,
+ * so no number of figures sits in front of one.
+ */
+describe('no number of market-size figures hides a newer opening behind the page bound', () => {
+  it('files and counts the round’s opening behind more figures than every page of the read holds', async () => {
+    const open = await goalRoundOpener();
+    const broad = await launchedPacket(null);
+    await broad.gate(Array.from({ length: 1_700 }, (_, i) => ({
+      claim: 'The global ecommerce market size reached ' + String(i) + ' billion dollars in 2026.',
+      signal: 'ACTIVE_BUYER_DEMAND' as const,
+      sourceUrl: 'https://stats.example.test/market/' + String(i),
+    })));
+    await broad.end('DONE');
+    const r = await open();
+    const p = await launchedPacket(r.candidateId);
+    await p.gate([opening('behind-every-page')]);
+    await p.end('FAILED');
+    await harvest({ projectId });
+    expect(await rounds(r.bucketId)).toEqual([['ABANDONED', 1]]);
+    const filed = await listOpportunities({ projectId });
+    expect(filed.map((one) => one.discoveryRoundId)).toEqual([expect.any(String)]);
+  }, 180_000);
+
+  it('the markers never miss a market-level figure: every one holds at least one', () => {
+    const phrases = [
+      'market size', 'market value', 'market worth', 'market is worth', 'market was worth', 'market is valued',
+      'market was valued', 'total addressable', 'TAM', 'industry is worth', 'industry was worth', 'valued at', 'worth at',
+      '3 billion', '4.5bn', '12,000 trillion', '7billion', '2 BN',
+    ];
+    const fillers = ['', 'The ', 'Our ', 'In 2026 the ', '(', 'dentists pay 400 USD; ', 'Supermarket '];
+    const tails = ['', '.', ' in 2026', ' per year', ')', ' USD'];
+    let checked = 0;
+    for (const phrase of phrases) {
+      for (const before of fillers) {
+        for (const after of tails) {
+          for (const text of [before + phrase + after, before + phrase.toUpperCase() + after]) {
+            if (!isMarketLevelFigure(text)) continue;
+            checked += 1;
+            expect(MARKET_SIZE_MARKERS.some((marker) => text.toLowerCase().includes(marker))).toBe(true);
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(phrases.length * 10);
+    // And an ordinary opening holds none, so it is read ahead of every figure.
+    expect(MARKET_SIZE_MARKERS.some((marker) => 'a county published a paid request for cleaning services.'.includes(marker))).toBe(false);
   });
 });
