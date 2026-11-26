@@ -760,6 +760,10 @@ async function capacity(): Promise<void> {
   out('claims_by_day', await q(`SELECT SUBSTR(created_at, 1, 10) AS day, accepted, COUNT(*) AS n FROM research_claims WHERE created_at > ? GROUP BY 1, 2 ORDER BY 1, 2`, [week]));
   out('fragments_all', await q(`SELECT status, COUNT(*) AS n, MIN(created_at) AS oldest FROM research_fragments GROUP BY 1 ORDER BY n DESC`));
   out('fragments_eval', await q(`SELECT status, block_cause, COUNT(*) AS n, MIN(created_at) AS oldest FROM research_fragments WHERE project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') GROUP BY 1, 2 ORDER BY n DESC`));
+  const evalSql = `CASE WHEN project_id IN (SELECT id FROM projects WHERE name LIKE 'Planning evaluation %') THEN 'eval' ELSE 'other' END`;
+  out('work_waiting', await q(`SELECT ${evalSql} AS kind, work_type, state, COUNT(*) AS n, MIN(priority) AS pmin, MAX(priority) AS pmax, ROUND(AVG(priority), 1) AS pavg, MIN(created_at) AS oldest, SUM(CASE WHEN available_at > ? THEN 1 ELSE 0 END) AS deferred, SUM(CASE WHEN attempt_count >= max_attempts THEN 1 ELSE 0 END) AS exhausted FROM work_items WHERE state IN ('QUEUED', 'LEASED') GROUP BY 1, 2, 3 ORDER BY 1, n DESC`, [new Date().toISOString()]));
+  out('work_done_24h', await q(`SELECT ${evalSql} AS kind, work_type, state, COUNT(*) AS n, ROUND(AVG(priority), 1) AS pavg FROM work_items WHERE updated_at > ? AND state NOT IN ('QUEUED', 'LEASED') GROUP BY 1, 2, 3 ORDER BY 1, n DESC`, [day]));
+  out('eval_fragments_by_run', await q(`SELECT SUBSTR(p.name, 1, 40) AS run, f.status, COUNT(*) AS n FROM research_fragments f JOIN projects p ON p.id = f.project_id WHERE p.name LIKE 'Planning evaluation %' GROUP BY 1, 2 ORDER BY 1, 2`));
   out('fragments_done_24h', await q(`SELECT status, COUNT(*) AS n FROM research_fragments WHERE updated_at > ? AND status IN ('ACCEPTED', 'BLOCKED', 'REJECTED', 'NOTHING_SURVIVED') GROUP BY 1`, [day]));
 }
 
