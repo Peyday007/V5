@@ -80,7 +80,7 @@ describe('P01: every input is marked', () => {
     const p = partialPathwayOf(arrangement(), ctx);
     expect(pathwayProblem(p)).toBeNull();
     expect(p.counts.proven + p.counts.estimated + p.counts.unknown).toBe(14);
-    expect(p.origin).toBe('CONSTRUCTED');
+    expect(p.origin).toBe('PARTIAL');
     expect(p.opportunityId).toBe('arr_k1');
     for (const fact of publishedFacts(p)) {
       if (fact.status === 'UNKNOWN') {
@@ -189,7 +189,7 @@ describe('P06: a live goal with a refused model still exposes its pathways', () 
     const pathways = reading!.pathways!.pathways;
     expect(pathways.length).toBeGreaterThan(0);
     for (const p of pathways) expect(pathwayProblem(p)).toBeNull();
-    expect(pathways.every((p) => p.origin === 'CONSTRUCTED' && p.contribution.p90 === 0)).toBe(true);
+    expect(pathways.every((p) => p.origin === 'PARTIAL' && p.contribution.p90 === 0)).toBe(true);
     expect(reading!.pathways!.portfolio.leading).toBeNull();
     const probe = await getProbe('r01.opp-04')!({});
     expect(probe.ok).toBe(true);

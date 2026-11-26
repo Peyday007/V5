@@ -406,7 +406,12 @@ export interface TransactionFit {
 export interface TransactionPathway {
   opportunityId: string;
   title: string;
-  origin: 'FOUND' | 'CONSTRUCTED';
+  /**
+   * FOUND: an opening research found. CONSTRUCTED: a design the goal's cash model priced and
+   * compares. PARTIAL: an in-scope constructed design the model neither priced nor considered,
+   * kept and marked so it is never abandoned (S-0061); it contributes nothing until a channel is built.
+   */
+  origin: 'FOUND' | 'CONSTRUCTED' | 'PARTIAL';
   buyer: PathFact;
   motivation: PathFact;
   channel: PathFact;
@@ -1433,7 +1438,7 @@ export function livingPortfolio(pathways: TransactionPathway[], input: { remaini
   const permissions = [...new Set(pathways.flatMap((p) => p.permissionsMissing))];
   return {
     executable: pathways.filter((p) => p.executable).map((p) => p.opportunityId),
-    constructed: pathways.filter((p) => p.origin === 'CONSTRUCTED' || p.moves.some((m) => m.variant)).map((p) => p.opportunityId),
+    constructed: pathways.filter((p) => p.origin !== 'FOUND' || p.moves.some((m) => m.variant)).map((p) => p.opportunityId),
     leading,
     fallback,
     gaps: [...counts.entries()].map(([gap, n]) => ({ gap, label: GAP_LABEL[gap], pathways: n })).sort((a, b) => b.pathways - a.pathways),
@@ -1712,7 +1717,7 @@ export function partialPathwayOf(
   return {
     opportunityId,
     title: a.label,
-    origin: 'CONSTRUCTED',
+    origin: 'PARTIAL',
     buyer,
     motivation,
     channel,
