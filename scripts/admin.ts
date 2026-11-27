@@ -46,6 +46,7 @@
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
  *   npm run admin -- access grant-planning <worker> <project> --admin someone@example.com   (adds operator:act for brain_planning_*)
  *   npm run admin -- access revoke <worker> <project> --admin someone@example.com
+ *   npm run admin -- goals own <goalId> --admin someone@example.com   (the administrator becomes the goal's owner, as PATCH /api/goals/:id/terms)
  *   npm run admin -- queue list <project>
  *   npm run admin -- packets list <project>
  *   npm run admin -- packets approve <orchestration> --admin someone@example.com
@@ -110,6 +111,7 @@ import {
   setWorkerRouting,
   createWorker,
   getWorkerByName,
+  getMembership,
   grantMembership,
   listMembershipsForPrincipal,
   listUsers,
@@ -121,6 +123,8 @@ import {
   revokeMembership,
   setWorkerStatus,
 } from '../server/repos/identity.ts';
+import { getWorkstream as getGoalRow } from '../server/repos/register.ts';
+import { setTerms as setGoalTermsDecision } from '../server/services/goals/decide.ts';
 import { PreparedDecisionError, prepareDecision, preparedDecisions } from '../server/services/cash/prepared.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../server/repos/projects.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
@@ -2424,6 +2428,23 @@ async function main(): Promise<void> {
         metadata: { scopes: scopes.join(','), kind: 'PLANNING' },
       });
       console.log(`  ${workerIdentity(worker)} may plan on ${project.name} (${scopes.join(', ')}).`);
+      break;
+    }
+    case 'goals own': {
+      /*
+       * A goal a connector session creates has no owner, and under brain-only mode routines take its review and
+       * verification items only once it is owner-directed (§118). This is the terminal form of the owner naming
+       * themselves on PATCH /api/goals/:id/terms: the same decision (`setTerms`), the same rule that the owner is a
+       * member of the goal's project, recorded against the administrator.
+       */
+      const actor = await administrator();
+      const goalId = rest[0] ?? fail('Name a goal.');
+      const goal = await getGoalRow(goalId);
+      if (!goal) fail(`No goal ${goalId}.`);
+      if (goal!.projectId && !(await getMembership(goal!.projectId, 'HUMAN', actor.id))) fail('The administrator is not a member of this goal’s project, so cannot own it.');
+      const made = await setGoalTermsDecision(goal!.id, { ownerUserId: actor.id }, `person:${actor.id}`);
+      if (!made.ok) fail(`${made.reason} ${made.consequence}`);
+      console.log(`  ${goal!.id} is owned by ${actor.email}.`);
       break;
     }
     case 'access revoke': {
