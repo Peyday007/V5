@@ -771,7 +771,9 @@ export async function requestReview(goalId: string, revision: Pick<PlanRevision,
       authorPrincipal: principalOf(revision.author.id),
       instructions:
         'Independent review of one plan revision. Read brain_planning_state and brain_planning_context for goalId; judge the current ' +
-        'revision skeptically from the evidence, recomputing the arithmetic; record brain_planning_review with verdict PASS or REVISE, ' +
+        'revision skeptically from the evidence, recomputing the arithmetic for every opening it weighs (deals at the evidenced price ' +
+        'against the target, capital per cycle against the limits, when the cash settles against the window) and checking that any ' +
+        'test does not take buyers’ orders before the opening’s fulfilment is shown possible; record brain_planning_review with verdict PASS or REVISE, ' +
         'reasons and findings — any condition (a link you judge unestablished) goes in `conditions` with the card fact or missing ' +
         'prerequisite it rests on — then brain_complete_work. The author of the revision may not review it: release the item if that is you.',
     },

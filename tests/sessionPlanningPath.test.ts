@@ -65,6 +65,9 @@ const route = (over: Record<string, unknown> = {}) => ({
   searches: { price: [], demand: [], volume: [] }, ...over,
 });
 
+/** The second route admitted below (its direct cost unknown), which every revision sets aside: each opening on the goal is accounted for. */
+let otherOpp = '';
+
 function revision(goalId: string, contractDigest: string, opp: string, over: Partial<PlanRevisionInput> = {}): PlanRevisionInput {
   return {
     goalId, contractDigest, parentRevisionId: null, stance: 'EXECUTABLE',
@@ -92,7 +95,9 @@ function revision(goalId: string, contractDigest: string, opp: string, over: Par
       { id: 's3', url: 'https://example.test/pilot', dated: '2026-11-15', claim: '4 paid from 200 emails', population: 'independent dental practices', matchesBuyer: true },
     ],
     validation: { proof: 'two paid orders', stop: ['no paid order by day 7'], continue: ['two paid orders'] },
-    noPlan: null, reach: null, answers: [], ...over,
+    noPlan: null, reach: null, answers: [],
+    ...(otherOpp ? { excluded: [{ opportunityId: otherOpp, why: 'its direct cost is unknown; not weighed in this plan' }] } : {}),
+    ...over,
   };
 }
 
@@ -118,6 +123,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(a.refused).toEqual([]);
     expect(a.filed.map((f) => f.directCostKnown)).toEqual([true, false]);
     opp = a.filed[0]!.id;
+    otherOpp = a.filed[1]!.id;
     // Idempotent on resume: the same route is never filed twice.
     const again = await svc.admitRoutes({ goalId, routes: [route()], actor: AUTHOR });
     expect(again.filed[0]).toMatchObject({ id: opp, existing: true });
@@ -327,7 +333,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     const brainLinks = (undecided.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []);
     const disagreements = brainLinks.filter((l) => !l.ok && l.link !== 'CONVERSION').map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s2' }))
       .concat(brainLinks.some((l) => l.link === 'CONVERSION' && l.ok) ? [{ opportunityId: opp, link: 'CONVERSION', reason: 'the 200-email rate is untested for this list' }] : []);
-    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown], chain: [{ opportunityId: opp, missing: ['CONVERSION'] }], resolves: ['CONVERSION'], disagreements, validation: { ...base.validation!, decides: ['CONVERSION'] } }, actor: AUTHOR, today: '2026-11-26' });
+    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown], chain: [{ opportunityId: opp, missing: ['CONVERSION'] }], members: [{ opportunityId: opp, deals: 4, price: 750, directCost: 100, capital: 0, settlesDay: 7 }], resolves: ['CONVERSION'], disagreements, validation: { ...base.validation!, decides: ['CONVERSION'] } }, actor: AUTHOR, today: '2026-11-26' });
     expect(cond.problems).toEqual([]);
   }, 120_000);
 

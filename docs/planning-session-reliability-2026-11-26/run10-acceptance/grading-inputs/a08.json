@@ -1,0 +1,438 @@
+{
+ "caseId": "al-08-forklift-objective-change",
+ "keys": {
+  "cop_d6133366fd04493bbf52": "bowling",
+  "cop_f94e1117139b4f6eb1bd": "forklift",
+  "cop_d216ae5fee8d4ed4ad80": "forkliftAudit"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: On-site OSHA forklift operator certification sessions for sm\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"On-site OSHA forklift operator certification sessions for sm\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 55720× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Forklift fleet inspection and operator-records audit for sma\" needs [figure withheld] and keeps [figure withheld], 1200× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"On-site OSHA forklift operator certification sessions for small manufa\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_f94e1117139b4f6eb1bd",
+   "cop_d216ae5fee8d4ed4ad80"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"On-site OSHA forklift operator certification sessions for small manufacturers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"On-site OSHA forklift operator certification sessions for small manufacturers\"",
+    "owner": "PERSON",
+    "cost": 520
+   },
+   {
+    "label": "Collect payment for \"On-site OSHA forklift operator certification sessions for small manufacturers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_f94e1117139b4f6eb1bd",
+    "title": "On-site OSHA forklift operator certification sessions for small manufacturers",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Plant managers and EHS coordinators at small manufacturers",
+     "reachableChannel": "The regional manufacturers' association member email list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:47.486Z",
+     "offerScope": "On-site OSHA forklift operator certification sessions for small manufacturers",
+     "priceCents": 95000,
+     "currency": "USD",
+     "fulfillmentOwner": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available weekly in December)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "forklift operator training",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 95000,
+      "currency": "USD",
+      "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 95000,
+      "currency": "USD",
+      "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 95000,
+      "currency": "USD",
+      "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 95000,
+      "currency": "USD",
+      "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The regional manufacturers' association member email list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3800 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3800 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available we (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 520, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "14 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell On-site OSHA forklift operator certification sessions for small manufacturers to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$520",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available weekly in December) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Plant managers and EHS coordinators at small manufacturers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+    "title": "Forklift fleet inspection and operator-records audit for small manufacturers",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Plant managers and EHS coordinators at small manufacturers",
+     "reachableChannel": "The regional manufacturers' association member email list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:47.486Z",
+     "offerScope": "Forklift fleet inspection and operator-records audit for small manufacturers",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $300 an audit)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "forklift operator training",
+     "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The regional manufacturers' association member email list | reach: The regional manufacturers' association member email list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "a buyer agreed to 3800 USD | price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3800 USD | measured on this offer's own sales: 3 accepted of 40 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer | 3 deal(s) needed, 260 available in the window (260 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available we (a source says so) | fulfilled by Dale Ruiz, OSHA-authorised forklift trainer (quoted $300 an audit) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 520, tied up 0 | cost 300, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "14 days to usable cash against 30 left | 14 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The regional manufacturers' association lists 260 member plants that run forklifts.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Forklift fleet inspection and operator-records audit for small manufacturers to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "3 agreements from 40 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$300",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $300 an audit) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Plant managers and EHS coordinators at small manufacturers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The owner says plants would pay about $1,500 for a fleet inspection and records audit.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_d6133366fd04493bbf52",
+    "title": "League standings and handicap workbook for bowling centers",
+    "reason": "left out by the goal's own terms: outside the one industry this goal names (forklift operator training): it is bowling centers",
+    "card": {
+     "payer": "League coordinators at independent bowling centers",
+     "reachableChannel": "Emails in the state bowling proprietors' association directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:47.486Z",
+     "offerScope": "League standings and handicap workbook for bowling centers",
+     "priceCents": 40000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "bowling centers",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "League standings and handicap workbook for bowling centers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell League standings and handicap workbook for bowling centers to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$3",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "League coordinators at independent bowling centers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Nine league coordinators signed $400 orders for the league workbook (signed orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": "forklift operator training",
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T13:45:33.378Z"
+ }
+}

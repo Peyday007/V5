@@ -1,0 +1,149 @@
+{
+ "caseId": "al-12-pickleball-counted-market",
+ "keys": {
+  "cop_0566e61b428a4796bd6d": "pickleball"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $25,500, so they cannot reach the $40,000 still needed. To make it supportable, target: lower the target to about $25,500, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_0566e61b428a4796bd6d"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_0566e61b428a4796bd6d",
+    "title": "Court-booking and league-ladder workbook for pickleball clubs",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 25500,
+    "potentialReach": 40000,
+    "card": {
+     "payer": "Club managers and league directors at pickleball clubs",
+     "reachableChannel": "Emails in the state pickleball association's member-club directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:10:09.713Z",
+     "offerScope": "Court-booking and league-ladder workbook for pickleball clubs",
+     "priceCents": 30000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "pickleball clubs",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Emails in the state pickleball association's member-club directory"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 300 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 10 accepted of 40 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "86 deal(s) needed but only 85 in the window (85 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state pickleball association's directory counts 85 member clubs in total; each needs one workbook.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Court-booking and league-ladder workbook for pickleball clubs to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "10 agreements from 40 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Club managers and league directors at pickleball clubs",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Pickleball club managers pay $300 for comparable court-booking workbooks (marketplace listings, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 4000000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:12:10.604Z"
+ }
+}

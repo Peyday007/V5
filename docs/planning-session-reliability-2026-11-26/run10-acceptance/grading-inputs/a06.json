@@ -1,0 +1,163 @@
+{
+ "caseId": "al-06-hospice-single-award",
+ "keys": {
+  "cop_ae1b8974f399461ea3ac": "hospice"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 10000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 3800). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6344× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 3400× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Bereavement follow-up mailing program for Cedar Valley Hospice\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_ae1b8974f399461ea3ac"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Bereavement follow-up mailing program for Cedar Valley Hospice\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Bereavement follow-up mailing program for Cedar Valley Hospice\"",
+    "owner": "PERSON",
+    "cost": 400
+   },
+   {
+    "label": "Collect payment for \"Bereavement follow-up mailing program for Cedar Valley Hospice\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 10000 USD still needed — the openings held reach at most 3800 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_ae1b8974f399461ea3ac",
+    "title": "Bereavement follow-up mailing program for Cedar Valley Hospice",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3800,
+    "potentialReach": 3800,
+    "card": {
+     "payer": "Cedar Valley Hospice (bereavement program coordinator)",
+     "reachableChannel": "The contact named in Cedar Valley Hospice's solicitation",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:36.205Z",
+     "offerScope": "Bereavement follow-up mailing program for Cedar Valley Hospice",
+     "priceCents": 380000,
+     "currency": "USD",
+     "fulfillmentOwner": "PrintPost Direct (quoted $400 for print and postage)",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "hospice care",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 380000,
+      "currency": "USD",
+      "deliverable": "Bereavement follow-up mailing program for Cedar Valley Hospice",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The contact named in Cedar Valley Hospice's solicitation"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3800 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3800 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by PrintPost Direct (quoted $400 for print and postage) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 400, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "30 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Bereavement follow-up mailing program for Cedar Valley Hospice to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$400",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "PrintPost Direct (quoted $400 for print and postage) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Cedar Valley Hospice (bereavement program coordinator)",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Cedar Valley Hospice awarded a single $3,800 contract for a 13-month bereavement mailing program (award letter, 2026-11-15).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "30 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_3f03335ce66341418fb4"
+  ],
+  "scope": {
+   "targetCents": 1000000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:10:58.051Z"
+ }
+}

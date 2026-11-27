@@ -1,0 +1,336 @@
+{
+ "caseId": "al-07-embroidery-net",
+ "keys": {
+  "cop_83c3b6efee7947639813": "polos",
+  "cop_47d173dc2e4f49e4a618": "jackets"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2880× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Brokered embroidered staff polos for independent fitness studios\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_83c3b6efee7947639813"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Brokered embroidered staff polos for independent fitness studios\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Brokered embroidered staff polos for independent fitness studios\"",
+    "owner": "PERSON",
+    "cost": 840
+   },
+   {
+    "label": "Collect payment for \"Brokered embroidered staff polos for independent fitness studios\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_83c3b6efee7947639813",
+    "title": "Brokered embroidered staff polos for independent fitness studios",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 2000,
+    "potentialReach": 2000,
+    "card": {
+     "payer": "Owners of independent fitness studios",
+     "reachableChannel": "Studio owners' emails from the regional fitness business association",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:42.053Z",
+     "offerScope": "Brokered embroidered staff polos for independent fitness studios",
+     "priceCents": 120000,
+     "currency": "USD",
+     "fulfillmentOwner": "Stitchline Embroidery Co. (quoted $840 per 40-polo order, net-15 terms)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "custom embroidery",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Studio owners' emails from the regional fitness business association"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 9600 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 9600 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Stitchline Embroidery Co. (quoted $840 per 40-polo order, net-15 terms) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 840, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "4 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brokered embroidered staff polos for independent fitness studios to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$840",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Stitchline Embroidery Co. (quoted $840 per 40-polo order, net-15 terms) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent fitness studios",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Eight studio owners signed $1,200 orders for 40 embroidered staff polos each, paid in full on proof approval (signed orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "4 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_47d173dc2e4f49e4a618",
+    "title": "Brokered embroidered winter jackets for independent fitness studios",
+    "missing": [
+     "ECONOMICS"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Owners of independent fitness studios",
+     "reachableChannel": "Studio owners' emails from the regional fitness business association",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:42.053Z",
+     "offerScope": "Brokered embroidered winter jackets for independent fitness studios",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "Stitchline Embroidery Co. (quoted $1,560 per 20-jacket order)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "custom embroidery",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brokered embroidered winter jackets for independent fitness studios to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1560",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Stitchline Embroidery Co. (quoted $1,560 per 20-jacket order) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent fitness studios",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six studio owners signed $1,500 orders for 20 embroidered winter jackets each (signed orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "4 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_d9308a3a6e634966b5a2",
+   "cnd_30c6997eb9f342dda1f1",
+   "cnd_1cc36f2dc3774b8f8085"
+  ],
+  "scope": {
+   "targetCents": 200000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:10:58.190Z"
+ }
+}

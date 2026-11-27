@@ -1,0 +1,343 @@
+{
+ "caseId": "al-04-pool-log-binder-owner-hours",
+ "keys": {
+  "cop_197df9a8d3a54fc78fe7": "poolLogs",
+  "cop_8970644e6d3a48baba64": "poolTech"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Inspection-ready chemical log binder for commercial pool ser\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Inspection-ready chemical log binder for commercial pool ser\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6034× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Owners of pool service companies that maintain \" needs [figure withheld] and keeps [figure withheld], 359× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Inspection-ready chemical log binder for commercial pool service compa\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_197df9a8d3a54fc78fe7",
+   "cop_8970644e6d3a48baba64"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Inspection-ready chemical log binder for commercial pool service companies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Inspection-ready chemical log binder for commercial pool service companies\"",
+    "owner": "PERSON",
+    "cost": 6
+   },
+   {
+    "label": "Collect payment for \"Inspection-ready chemical log binder for commercial pool service companies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_197df9a8d3a54fc78fe7",
+    "title": "Inspection-ready chemical log binder for commercial pool service companies",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Owners of pool service companies that maintain HOA and hotel pools",
+     "reachableChannel": "Emails in the county health department's licensed public-pool operator list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:25.512Z",
+     "offerScope": "Inspection-ready chemical log binder for commercial pool service companies",
+     "priceCents": 37500,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "commercial pool service",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 37500,
+      "currency": "USD",
+      "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Emails in the county health department's licensed public-pool operator list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3375 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3375 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 6, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 28 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Inspection-ready chemical log binder for commercial pool service companies to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$6",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of pool service companies that maintain HOA and hotel pools",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Nine pool service owners signed $375 orders for the inspection-ready log binder, payable on delivery (signed order forms, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_8970644e6d3a48baba64",
+    "title": "Seasonal pool technician shifts for a resort hotel group",
+    "missing": [
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 28,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Resort hotel group",
+     "reachableChannel": "The hotel group's careers page",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:25.512Z",
+     "offerScope": "Seasonal pool technician shifts for a resort hotel group",
+     "priceCents": 2800,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "commercial pool service",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Emails in the county health department's licensed public-pool operator list | reach: The hotel group's careers page"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3375 USD | price 28 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "buyers have agreed to 3375 USD | 200 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "no new deals needed | 50 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET | fulfilled by The owner, personally (a person says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 6, tied up 0 | cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 28 left | 14 days to usable cash against 28 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The posting lists 160 open technician hours this month.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Seasonal pool technician shifts for a resort hotel group to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Resort hotel group",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The resort hotel group's job posting pays seasonal pool technicians $28 an hour, paid biweekly.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_0f23ce9d71744e0d91d0",
+   "cnd_b3a1296675674364892c"
+  ],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 28,
+   "hoursCeiling": 8,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 2
+  },
+  "at": "2026-11-27T12:12:21.385Z"
+ }
+}
