@@ -111,8 +111,9 @@ async function opportunitiesNamingFulfillers(projectId: string, limit: number) {
 }
 
 /**
- * How long a probe pass's readings answer a default-options reading of the
- * same project. `r01.cp-31` reads every project through
+ * How long a probe pass stays open after its last project is read. While it
+ * is open, each project's reading answers one default-options reading of that
+ * project, once (see `OpenPass`). `r01.cp-31` reads every project through
  * `opportunityCounterpartyProbe` and then reads every project again through
  * `projectCounterparties`; the pass is one reading of the record, so its second
  * half reuses the first instead of re-querying it. A reading with any explicit
@@ -144,22 +145,41 @@ export const PROBE_PASS_TTL_MS = 60_000;
  */
 export const PROBE_PASS_PEAK_CONNECTIONS = 2;
 
-interface PassEntry { reading: ProjectCounterpartyReading; expiresAt: number }
-const probePass = new Map<string, PassEntry>();
+/**
+ * The one open probe pass, scoped to the pass that opened it (§61). Only a
+ * whole-Brain `opportunityCounterpartyProbe({})` opens one; a project-narrowed
+ * run (the `cash.counterparties.opportunities` probe) never writes it. The pass
+ * opens only once every project has been read, and its lifetime runs from that
+ * moment, so the first project's reading cannot expire before the second half
+ * reaches it. Each project's reading answers exactly one default-options
+ * `projectCounterparties` call and is then gone. The pass closes when every
+ * reading has been taken, when the TTL ends, or when the next pass starts. A
+ * caller can therefore never be served a reading a second time, and never one
+ * from a different pass. Any caller that decides on capacity passes `at` and
+ * reads the rows. Reserve and transfer judge the ledger under the lock in any
+ * case (`decideRecorded`), so a reading never commits capacity.
+ */
+interface OpenPass { readings: Map<string, ProjectCounterpartyReading>; expiresAt: number }
+let probePass: OpenPass | null = null;
 
-/** Forget the current probe pass (tests, and the start of every pass). */
+/** Close the current probe pass (tests, and the start of every pass). */
 export function clearProbePass(): void {
-  probePass.clear();
+  probePass = null;
 }
 
-function fromProbePass(projectId: string): ProjectCounterpartyReading | null {
-  const entry = probePass.get(projectId);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    probePass.delete(projectId);
+/** Take this project's reading from the open pass, once. */
+function takeFromProbePass(projectId: string): ProjectCounterpartyReading | null {
+  const pass = probePass;
+  if (!pass) return null;
+  if (pass.expiresAt <= Date.now()) {
+    probePass = null;
     return null;
   }
-  return entry.reading;
+  const reading = pass.readings.get(projectId) ?? null;
+  if (!reading) return null;
+  pass.readings.delete(projectId);
+  if (pass.readings.size === 0) probePass = null;
+  return reading;
 }
 
 /**
@@ -173,7 +193,7 @@ export async function projectCounterparties(
 ): Promise<ProjectCounterpartyReading> {
   const defaults = options.at === undefined && options.window === undefined && options.limit === undefined;
   if (defaults) {
-    const cached = fromProbePass(projectId);
+    const cached = takeFromProbePass(projectId);
     if (cached) return cached;
   }
   return readProjectCounterparties(projectId, options);
@@ -263,9 +283,9 @@ export async function poolRefusalDetail(message: string, read: number, of: numbe
 /**
  * The probe body: every project's opportunities that name a fulfiller, read
  * through the model, passing only when none breaches its refusals. `project`
- * narrows it to one. Read-only. The readings it makes answer a default-options
- * `projectCounterparties` of the same project for `PROBE_PASS_TTL_MS`, so a
- * caller that reads the pass again does not re-query it.
+ * narrows it to one and opens no pass. Read-only. A whole-Brain run opens a pass
+ * when it finishes (`OpenPass`): `r01.cp-31`'s second half takes each project's
+ * reading from it once, without re-querying.
  */
 export async function opportunityCounterpartyProbe(
   args: Record<string, string | number | boolean> = {},
@@ -277,10 +297,10 @@ export async function opportunityCounterpartyProbe(
   try {
     const { listProjects } = await import('../../../repos/projects.ts');
     projects = only ? [only] : (await listProjects()).map((p) => p.id);
-    for (const id of projects) {
-      const reading = await readProjectCounterparties(id, {});
-      probePass.set(id, { reading, expiresAt: Date.now() + PROBE_PASS_TTL_MS });
-      readings.push(reading);
+    for (const id of projects) readings.push(await readProjectCounterparties(id, {}));
+    if (!only) {
+      // Opened once the whole pass is read; its lifetime starts now, not at the first project.
+      probePass = { readings: new Map(projects.map((id, i) => [id, readings[i]!])), expiresAt: Date.now() + PROBE_PASS_TTL_MS };
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
