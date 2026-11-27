@@ -455,7 +455,7 @@ function skeptic(input: CommitteeInput): Bench {
       b.fail({ claim: `"${titleOf(leg)}" has one established price`, evidenceRef: refOf(leg, 'price', price), why: `the transaction model holds ${stated} a deal and the simulation draws ${Math.round(held)}: two readings of one price more than twofold apart`, critical: true, opportunityId: leg.opportunityId, fact: 'price' });
     }
     // An invented market: a constructed design counted in the plan with no buyer of its kind found.
-    if (leg.scope === 'COUNTED' && p.origin === 'CONSTRUCTED' && !EVIDENCED(p.buyer)) {
+    if (leg.scope === 'COUNTED' && p.origin !== 'FOUND' && !EVIDENCED(p.buyer)) {
       b.fail({ claim: `the plan counts "${titleOf(leg)}"`, evidenceRef: refOf(leg, 'buyer', p.buyer), why: 'it is a constructed design: no buyer of this kind has been found, so its market is an assumption', critical: false, opportunityId: leg.opportunityId, fact: 'buyer' });
     }
   }
@@ -630,7 +630,7 @@ function ownerProxy(input: CommitteeInput): Bench {
     if (OWNER.test(who) && dealsCounted(leg) > 1)
       b.fail({ claim: `"${titleOf(leg)}" is delivered ${Math.round(dealsCounted(leg))} times`, evidenceRef: refOf(leg, 'fulfilment', p.fulfiller), why: 'the owner delivers every one: routine owner work, not a business that runs without him', critical: false, opportunityId: leg.opportunityId, fact: 'fulfilment' });
   }
-  if (counted.length > 0 && counted.every((l) => l.pathway!.origin === 'CONSTRUCTED'))
+  if (counted.length > 0 && counted.every((l) => l.pathway!.origin !== 'FOUND'))
     b.fail({ claim: 'the plan rests on its counted legs', evidenceRef: counted.map((l) => `${l.opportunityId}#origin: constructed`).join('; ').slice(0, 300), why: 'every counted leg is a constructed design with no buyer found: speculation, not strong commercial evidence', critical: false, opportunityId: null, fact: 'mechanism' });
   // The goal reached at all, on what the evidence supports.
   const rebuilt = evidencedReach(counted);

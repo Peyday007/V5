@@ -109,6 +109,7 @@ import { sendCommitteeNeeds, sendPlanQuestions, sendPortfolioNeeds } from './por
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
+import { recalledGoalArrangements } from './arrangementRecall.ts';
 import { LEG_LABEL, legFeasibility, readPathways, requiredStructures, type BrainCapabilities, type GoalStructures, type LegFeasibility, type PathwayReading, type TransactionPathway } from './pathways.ts';
 import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Factor, type Reconstruction, type StrategyChange, type VariantReading } from './reconstruction.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -2481,7 +2482,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   // What failed while composing this reading: carried on it and recorded, never silently thinner (C-13).
   const degraded: string[] = [];
   // The goal's constructed arrangements compete in its model on their estimates (§82, owner 2026-11-06).
-  const arrangements = await goalArrangements(goal, target, now).catch((error: unknown) => {
+  const arrangements = await goalArrangements(goal, target, now, null, (note) => degraded.push(note)).catch((error: unknown) => {
     degraded.push(`construction: ${errorText(error)} (the plan was read without constructed arrangements)`);
     return [] as ConstructedArrangement[];
   });
@@ -2532,6 +2533,28 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const refusedSteps = target.achieved || refusedInfeasible
       ? []
       : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory() });
+    /*
+     * A refused model still has the goal's constructed arrangements (production r01.opp-04,
+     * 2026-11-26: 30 live goals read, none with a pathway). A live goal reads them as pathways —
+     * each input marked, unknowns stating no value — so a partial arrangement is kept and its
+     * cheapest next move named, never abandoned because the model could not price it (S-0061).
+     * The plan's own readings below are composed exactly as before.
+     */
+    const refusedRounds = await recentGoalRounds(target.projectId, goal.id);
+    const refusedPathways =
+      !target.achieved && (target.daysLeft ?? 0) > 0
+        ? readPathways({
+            modelled: [...model.considered, ...(model.estimates ?? [])],
+            considered: [],
+            target,
+            portfolio: model.portfolio,
+            permissionsMissing: permissions,
+            rounds: refusedRounds,
+            now,
+            capabilities: await brainCapabilities(target.projectId, target.currency),
+            partial: inGoalScope(arrangements, model),
+          })
+        : null;
     const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
@@ -2585,11 +2608,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         ...diagnoseGoalResearch({
           considered: [],
           excludedReasons: model.excluded.filter((one) => one.rule !== 'STOPPED').map((one) => one.reason),
-          rounds: await recentGoalRounds(target.projectId, goal.id),
+          rounds: refusedRounds,
           remaining: target.remainingCents / 100,
         }),
       ],
-      pathways: null,
+      pathways: refusedPathways,
       reconstruction: refusedReconstruction,
       adoption: refusedPlan.adoption,
       steps: refusedSteps,
@@ -2959,6 +2982,16 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     rounds,
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
+    /*
+     * Every in-scope constructed design the model neither priced nor considered is read as a
+     * marked PARTIAL pathway, exactly as the refused path reads them — whether or not the model
+     * priced something else (S-0061: an unknown is "not a reason to abandon a partial
+     * arrangement"). One modelled opening no longer drops a goal's other designs. A partial
+     * pathway contributes nothing and can never lead, so the portfolio, plan set and committee
+     * over the modelled pathways are unchanged; its origin keeps it apart from the priced
+     * CONSTRUCTED estimates the plan compares.
+     */
+    partial: inGoalScope(arrangements, model),
   });
   trace('pathways');
   /*
@@ -6161,9 +6194,31 @@ export function arrangementsFresh(held: { at: number; composedAt: number }, now:
 }
 
 /** The goal's constructed arrangements, composed at most once per ten minutes. */
-export async function goalArrangements(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<ConstructedArrangement[]> {
+export async function goalArrangements(
+  goal: Workstream,
+  target: TargetReading,
+  now: Date,
+  bestReachCents: number | null = null,
+  noteRecovery?: (note: string) => void,
+): Promise<ConstructedArrangement[]> {
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
-  return ownerFit(goal, target, await composedGoalArrangements(goal, target, now, bestReachCents));
+  let composed: ConstructedArrangement[];
+  try {
+    composed = await composedGoalArrangements(goal, target, now, bestReachCents);
+  } catch (error) {
+    /*
+     * A failed construction is not "this goal has no arrangements" (OPP-04 repair 2, F3):
+     * production r01.opp-04 read 30 live goals with no pathway, and a pass that could not
+     * compose degraded to none. The designs this goal composed before are durable
+     * (`rememberArrangements`); read them back, say so, and compose again next pass —
+     * nothing recovered is held as fresh. Only when the library holds none does the failure stand.
+     */
+    const recalled = await recalledGoalArrangements(target.projectId, goal.id).catch(() => [] as ConstructedArrangement[]);
+    if (recalled.length === 0) throw error;
+    noteRecovery?.(`construction: ${errorText(error)} (read ${recalled.length} arrangement(s) this goal composed earlier from the library instead)`);
+    composed = recalled;
+  }
+  return ownerFit(goal, target, composed);
 }
 
 /**
