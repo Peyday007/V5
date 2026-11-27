@@ -92,7 +92,7 @@ import { cashEngineCard, NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts
 import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
-import { seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
+import { positionNeedKey, seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
 import { assessOpportunityRole, type RegulatedActivity } from './exclusions.ts';
 import type { BlockerKey } from '../../domain/types.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
@@ -2205,17 +2205,21 @@ function replySyncDue(projectId: string, now = Date.now()): boolean {
 /**
  * The blocker key of one held-back opening's position need. Pure; exported for tests.
  *
- * The need's own next step is "name an authorized licensed partner and agree a contract", which is a
+ * A regulated opening's next step is "name an authorized licensed partner and agree a contract", which is a
  * supplier the piece lacks (`SUPPLIER`, routed to the commercial workflow, never to a person). Openings
  * that perform the same regulated activities need the same kind of licensed partner, so they share a
- * key and one partner genuinely serves them. An opening whose activity was not recognised shares
- * nothing with any other, so its key is its own and it can never form a false shared resource.
+ * key and one partner genuinely serves them.
+ *
+ * An opening that performs no recognised regulated activity is held back for a different reason: it is
+ * UNKNOWN, because no finding yet says what it performs (or that it performs nothing regulated) — the
+ * funnel will not count its settled cash until one does. Nothing in its record says it needs a licensed
+ * partner, so it is never given one. What it lacks is information about this one opening, so its key is
+ * `EVIDENCE:` named by the need's own request key (the precedent in services/quant/needs.ts): routed to
+ * research, and unique to the opening so it can never form a false shared resource.
  */
 export function regulatedPositionBlockerKey(opportunityId: string, activities: readonly RegulatedActivity[]): BlockerKey | null {
-  const kind = activities.length > 0
-    ? [...new Set(activities)].sort().join('+')
-    : `unrecognised:${opportunityId}`;
-  return parseBlockerKey(`SUPPLIER:licensed-partner/${kind}`);
+  if (activities.length === 0) return parseBlockerKey(`EVIDENCE:${positionNeedKey(opportunityId)}`);
+  return parseBlockerKey(`SUPPLIER:licensed-partner/${[...new Set(activities)].sort().join('+')}`);
 }
 
 /**
