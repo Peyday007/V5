@@ -155,6 +155,19 @@ describe('CP-31 repair: an unreachable database is UNKNOWN, a breach is still FA
     expect(r.ok).toBeNull();
     expect(r.detail).toMatch(/database unavailable/);
     expect(r.detail).toMatch(/no free connection/);
+    // The probe was a victim of the saturation, not its cause, and the record says so.
+    expect(r.detail).toMatch(/held by other callers/);
+    expect(r.detail).toContain(`at most ${ops.PROBE_PASS_PEAK_CONNECTIONS} pooled connection`);
+    expect(r.detail).not.toMatch(/probe (held|exhausted)/i);
+  });
+
+  it('the pool\'s other refusal (below its ceiling) is UNKNOWN too, and is not blamed on this pass', async () => {
+    state.projects = ['p1'];
+    state.fail = new Error('The database would not give this pool a connection within 10000ms: 3/3 connection(s) in use, 0 idle, 2 caller(s) waiting, ceiling 8.');
+    const r = await ops.opportunityCounterpartyProbe({});
+    expect(r.ok).toBeNull();
+    expect(r.detail).toMatch(/not this pass/);
+    expect(r.detail).toMatch(/database or the network/);
   });
 
   it('any other error still propagates', async () => {

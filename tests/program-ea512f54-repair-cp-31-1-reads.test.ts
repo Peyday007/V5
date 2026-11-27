@@ -51,6 +51,8 @@ import {
   transferOpportunityTransaction,
 } from '../server/services/labor/counterparties/transaction.ts';
 import { recordHoldOutcome, holdsFrom } from '../server/services/labor/counterparties/reservations.ts';
+import { clearProbePass, opportunityCounterpartyProbe, PROBE_PASS_PEAK_CONNECTIONS } from '../server/services/labor/counterparties/operations.ts';
+import { getDb } from '../server/db/database.ts';
 
 const W = { windowStart: '2031-03-01T00:00:00Z', windowEnd: '2031-03-08T00:00:00Z' };
 const reset = () => { calls.getOpportunity = 0; calls.checkCommercialAuthority = 0; calls.cashEventsOfKind = 0; };
@@ -214,6 +216,41 @@ describe('CP-31 repair: one opportunity reading costs fewer pooled queries and r
     expect(got.reading!.authority.action).toBe('CONTACT_BUYER');
     expect(got.negotiations.every((n) => n.terms.priceCeiling === 200_000)).toBe(true);
     expect(calls.checkCommercialAuthority).toBe(2);
+  });
+
+  it('the probe pass never has more than PROBE_PASS_PEAK_CONNECTIONS statements in flight, so it cannot be what held an 8-connection pool', async () => {
+    const { opportunityId, harbor } = await primaryAndAlternative();
+    await reserveOpportunityTransaction({ opportunityId, window: W, at: '2031-02-10T00:00:00Z' }, userId);
+    expect(harbor).toBeTruthy();
+    const db = getDb() as unknown as Record<'all' | 'get' | 'run', (...args: unknown[]) => Promise<unknown>>;
+    const original = { all: db.all, get: db.get, run: db.run };
+    let inFlight = 0;
+    let peak = 0;
+    let statements = 0;
+    for (const method of ['all', 'get', 'run'] as const) {
+      db[method] = async (...args: unknown[]) => {
+        inFlight += 1;
+        statements += 1;
+        peak = Math.max(peak, inFlight);
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          return await original[method].apply(db, args);
+        } finally {
+          inFlight -= 1;
+        }
+      };
+    }
+    try {
+      clearProbePass();
+      const r = await opportunityCounterpartyProbe({ project: projectId });
+      expect(r.ok).not.toBe(false);
+    } finally {
+      Object.assign(db, original);
+      clearProbePass();
+    }
+    expect(statements).toBeGreaterThan(0);
+    expect(peak).toBeGreaterThanOrEqual(1);
+    expect(peak).toBeLessThanOrEqual(PROBE_PASS_PEAK_CONNECTIONS);
   });
 
   it('recordedReservationEvents returns the same events in the same order for duplicate and unsorted ids, reading each ledger once', async () => {

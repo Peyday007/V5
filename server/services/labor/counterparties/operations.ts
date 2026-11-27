@@ -114,13 +114,35 @@ async function opportunitiesNamingFulfillers(projectId: string, limit: number) {
  * How long a probe pass's readings answer a default-options reading of the
  * same project. `r01.cp-31` reads every project through
  * `opportunityCounterpartyProbe` and then reads every project again through
- * `projectCounterparties`; on 2026-11-27 that second, identical pass of
- * sequential per-opportunity queries held the shared pool until an
- * acquisition timed out (§61). The pass is one reading of the record, so its
- * second half reuses the first instead of re-querying it. A reading with any
- * explicit option never uses it.
+ * `projectCounterparties`; the pass is one reading of the record, so its second
+ * half reuses the first instead of re-querying it. A reading with any explicit
+ * option never uses it.
+ *
+ * What this does and does not answer (§61, §88). On 2026-11-27 the probe failed
+ * with "8/8 connection(s) in use, 0 idle, 15 caller(s) waiting, ceiling 8". The
+ * pass did not hold those connections: it awaits one statement at a time, with
+ * at most `PROBE_PASS_PEAK_CONNECTIONS` in flight at once (the obligations and
+ * money reads of one opportunity), so it can never hold more than two of the
+ * eight. The other six or more were checked out by other callers in the same
+ * process, and the 15 waiters were queued behind them. The probe was a victim
+ * of that saturation, not its cause. Re-reading the record a second time only
+ * lengthened the window in which it could be refused. Cutting the probe's
+ * statement count shortens that window. Reading the refusal as UNKNOWN keeps a
+ * pool nobody measured from being recorded as a breach. Neither of them
+ * identifies who held the pool: the pool records counts, not holders. Every
+ * UNKNOWN this probe answers therefore says so on the record, with the pool's
+ * reading at that moment, so the next episode starts from the measurement
+ * rather than repeating this diagnosis.
  */
 export const PROBE_PASS_TTL_MS = 60_000;
+
+/**
+ * The most pooled statements one probe pass has in flight at once. A reading
+ * that exceeds it has stopped being the bounded, sequential pass the diagnosis
+ * above rests on; `tests/program-ea512f54-repair-cp-31-1-reads.test.ts`
+ * measures it on real rows.
+ */
+export const PROBE_PASS_PEAK_CONNECTIONS = 2;
 
 interface PassEntry { reading: ProjectCounterpartyReading; expiresAt: number }
 const probePass = new Map<string, PassEntry>();
@@ -219,7 +241,24 @@ export const OPPORTUNITY_COUNTERPARTY_PROBE = 'cash.counterparties.opportunities
  * reason instead of failing a model nobody judged. Matches the pool's own
  * refusal (`server/db/adapters/postgres.ts`).
  */
-export const DATABASE_UNAVAILABLE = /database pool had no free connection|Connection terminated due to connection timeout|too many clients|database did not answer in time/i;
+export const DATABASE_UNAVAILABLE = /database pool had no free connection|database would not give this pool a connection|Connection terminated due to connection timeout|too many clients|database did not answer in time/i;
+
+/**
+ * The record a pool refusal leaves: what the pass read before it, that the pass
+ * itself holds at most `PROBE_PASS_PEAK_CONNECTIONS`, and the pool's own
+ * reading now (Postgres only). The rest of the pool was held by other callers,
+ * and this says so instead of implying the probe exhausted it.
+ */
+export async function poolRefusalDetail(message: string, read: number, of: number): Promise<string> {
+  const { databasePoolReadings } = await import('../../../db/database.ts');
+  const pool = databasePoolReadings()?.workload ?? null;
+  const now = pool ? `; pool now ${pool.total - pool.idle}/${pool.total} in use, ${pool.idle} idle, ${pool.waiting} waiting, ceiling ${pool.max}` : '';
+  const bound = `this pass holds at most ${PROBE_PASS_PEAK_CONNECTIONS} pooled connection(s) at a time`;
+  const cause = /no free connection/i.test(message)
+    ? `— held by other callers: ${bound}`
+    : `— not this pass (${bound}): the database or the network refused the connection`;
+  return `database unavailable while reading counterparties (${read} of ${of || '?'} project(s) read): ${message} ${cause}${now}`;
+}
 
 /**
  * The probe body: every project's opportunities that name a fulfiller, read
@@ -246,7 +285,7 @@ export async function opportunityCounterpartyProbe(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!DATABASE_UNAVAILABLE.test(message)) throw error;
-    return { ok: null, detail: `database unavailable while reading counterparties (${readings.length} of ${projects.length || '?'} project(s) read): ${message}`.slice(0, 900) };
+    return { ok: null, detail: (await poolRefusalDetail(message, readings.length, projects.length)).slice(0, 900) };
   }
   const breaches = readings.flatMap((r) => r.breaches);
   if (breaches.length > 0) return { ok: false, detail: breaches.join('; ').slice(0, 900) };
