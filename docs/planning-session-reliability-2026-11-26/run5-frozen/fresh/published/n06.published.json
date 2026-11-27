@@ -1,0 +1,357 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_d0f49c43d37b_cafb1c",
+      "digest": "d0f49c43d37b8531ea7de14d",
+      "contractDigest": "b9e941fc6eec7b4ae679d43f",
+      "plan": {
+        "goalId": "wst_fb52790c8a80482db493",
+        "contractDigest": "b9e941fc6eec7b4ae679d43f",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Priced market test: annual preneed trust reconciliation at $600 to licensed funeral homes",
+          "opportunityIds": [
+            "cop_db36562529814c4ebdc0"
+          ],
+          "why": "Demand (dated request), 290 reachable licensed homes, Brain-produced spreadsheet fulfilment, $4 cost, $0 exposure and 5-day settlement are evidenced. The $600 price is only one director's word on a call and the close rate is unmeasured; both are measured by offering it at $600 to the first batch of homes at zero cost before scaling to the 4 sales the target needs."
+        },
+        "alternatives": [
+          {
+            "title": "Research published prices for preneed trust reconciliation before offering",
+            "why": "Would establish the price without a test, but cannot establish the close rate; the zero-cost offer measures both."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Email the $600 offer to 40 funeral homes on the state board licence list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reach",
+              "s_vol"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer the annual preneed trust reconciliation at $600, payable on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "t1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 60000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Close 4 homes at $600 (widen to more of the 290 if the first 40 close fewer)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "o1",
+            "evidence": [
+              "q_close"
+            ],
+            "priceCents": 60000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Produce 4 reconciliation spreadsheets from each home's contract ledger",
+            "performer": "BRAIN",
+            "costCents": 1600,
+            "day": 14,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_deliv",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $600 from each of the 4 homes",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "d1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 1600,
+            "label": "Direct cost of 4 reconciliations ($4 each), paid out of the settled fees (card: $0 exposure, $0 peak funding)",
+            "stepId": "d1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 240000,
+            "label": "4 x $600 reconciliation fees",
+            "settlesDay": 19,
+            "stepId": "c1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price buyers pay",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "Paid orders at $600 in the test (one director's verbal $600 is not a price buyers are shown to pay)"
+          },
+          {
+            "name": "close rate at $600",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "Paid orders / homes offered in the first 40"
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 290,
+            "unit": "homes",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per reconciliation",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_db36562529814c4ebdc0#price",
+            "dated": "2026-11-19",
+            "claim": "One funeral director said on a call he would pay $600",
+            "population": "One funeral director",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_db36562529814c4ebdc0#buyerVolume",
+            "dated": "2026-11-19",
+            "claim": "290 licensed funeral homes, one reconciliation a year each",
+            "population": "Funeral homes licensed by the state board",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_db36562529814c4ebdc0#reachableChannel",
+            "dated": "2026-11-19",
+            "claim": "Email to homes licensed by the state funeral service board",
+            "population": "Licensed funeral homes",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_deliv",
+            "url": "https://brain.local/card/cop_db36562529814c4ebdc0#delivery",
+            "dated": "2026-11-19",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_db36562529814c4ebdc0#directCosts",
+            "dated": "2026-11-19",
+            "claim": "$4 direct cost",
+            "population": "This offer",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_db36562529814c4ebdc0#timeToFirstCash",
+            "dated": "2026-11-19",
+            "claim": "5 days to first cash",
+            "population": "This offer",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 1 of the first 40 homes offered has paid $600 (or signed a written order at $600), establishing the price and a close rate that reaches 4 sales within the 290 homes.",
+          "stop": [
+            "No home of the first 40 agrees at $600 by day 10",
+            "Buyers only accept a price at which 4 sales of the remaining homes cannot reach $2,400 by day 25"
+          ],
+          "continue": [
+            "At least 1 paid order at $600 from the first 40: offer to further batches until 4 sales close",
+            "Settlement of the first payment within 5 days confirms the timing"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_db36562529814c4ebdc0",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_db36562529814c4ebdc0",
+            "deals": 4,
+            "price": 600,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d0f49c43d37b_cafb1c",
+        "digest": "d0f49c43d37b8531ea7de14d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_54ed59c520074724b036/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:31:56.550Z"
+      },
+      "review": {
+        "revisionId": "rev_d0f49c43d37b_cafb1c",
+        "revisionDigest": "d0f49c43d37b8531ea7de14d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_54ed59c520074724b036/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_98201806e64d4ee781a1/reviewer-theta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance. Reach (state licence list, 290 homes), current demand (signal 2026-11-19), Brain-produced spreadsheet fulfilment, $4 cost, $0 exposure and 5-day settlement are on the card as evidence. The $600 price is one director's word on a call (PERSON), so price and close rate are both unknown, and the plan says so. A zero-cost priced offer to 40 homes measures both. I recomputed: 4 x $600 = $2,400. Delivery costs $16, paid out of settled fees. The receipt invoiced on day 14 settles on day 19, inside the 30 days. If even 1 of 40 closes, 290 homes yield about 7 sales, which is at least the 4 needed, so the proof threshold is coherent. The stop rules come before the window closes.",
+        "findings": [
+          "Execution readiness, not a plan defect: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED, so the day-1 sending step cannot run until outreach and invoicing are connected",
+          "The card records 1 human hour per deal and no plan step accounts for it (owner hours are unstated, so it does not breach a limit)",
+          "The proof accepts 'a signed written order at $600' as establishing the price. Only a paid order is settled cash, and the continue rule should rest on payment"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:26.852Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:43.398Z"
+    }
+  }
+}

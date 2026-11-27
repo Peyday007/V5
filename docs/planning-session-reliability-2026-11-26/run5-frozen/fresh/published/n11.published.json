@@ -1,0 +1,177 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_8218a15dc9c8_9a34d3",
+      "digest": "8218a15dc9c892149a75e41f",
+      "contractDigest": "868eeae99e037e8a1c92ada7",
+      "plan": {
+        "goalId": "wst_b8223586b0fe4ef7a768",
+        "contractDigest": "868eeae99e037e8a1c92ada7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only held market cannot carry $12,000",
+          "opportunityIds": [],
+          "why": "The decal-pack opening sells to a counted, whole market of 30 operators who each buy once a year, at an evidenced $250. Every buyer buying at that price brings $7,500, and the measured 40% conversion (12 of 30) brings about $3,000; both are below $12,000 within 60 days."
+        },
+        "alternatives": [
+          {
+            "title": "Sell decal packs to the 30-operator register",
+            "why": "Economics, fulfilment, demand and settlement are all established, but the counted market caps revenue at $7,500 ($3,000 at measured conversion) — it is the plan to run if the target is lowered."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 30,
+            "unit": "operators",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 25000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.4,
+            "unit": "ratio",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum revenue in window",
+            "status": "EVIDENCED",
+            "value": 750000,
+            "unit": "cents",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_1b9e2b08ac9547efb582#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "30 operators on the county register, each renewing once a year",
+            "population": "county charter operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_1b9e2b08ac9547efb582#price",
+            "dated": "2026-11-24",
+            "claim": "price $250",
+            "population": "county charter operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_1b9e2b08ac9547efb582#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "12 agreements from 30 contacts",
+            "population": "county charter operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Market volume: the 30-operator register, buying once a year at $250, holds at most $7,500 of purchases in the window — $4,500 short of $12,000 even with every buyer agreeing.",
+          "resolution": "Lower the target to what the counted market supports ($3,000 at the measured 40% conversion, $7,500 ceiling), or have Brain research additional buyer populations (other counties' charter registers) for the same pack and re-plan once they are counted.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_1b9e2b08ac9547efb582",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_1b9e2b08ac9547efb582",
+            "why": "Counted market of 30 buyers × $250 = $7,500 < $12,000 target."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $7,500 at most (every counted buyer at $250); $3,000 is what the measured 12-of-30 conversion supports.",
+            "basis": [
+              {
+                "opportunityId": "cop_1b9e2b08ac9547efb582",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_1b9e2b08ac9547efb582",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_8218a15dc9c8_9a34d3",
+        "digest": "8218a15dc9c892149a75e41f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_31844b363f304d8c97b5/rel8-author-c",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:29:19.236Z"
+      },
+      "review": {
+        "revisionId": "rev_8218a15dc9c8_9a34d3",
+        "revisionDigest": "8218a15dc9c892149a75e41f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_31844b363f304d8c97b5/rel8-author-c",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_125e3d8de26646b6abed/reviewer-iota",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and the constraint is arithmetic on established figures: the card's EVIDENCE buyerVolume counts the whole market at 30 operators buying once a year, so at the evidenced $250 price the 60-day window holds at most 30 x $250 = $7,500 < $12,000 (48 deals needed, 30 exist). Every other link is established (conversion measured on this offer, $4 cost, 3-day settlement, Brain-proved spreadsheet fulfilment). Brain's MARKET_VOLUME judgement agrees. The TARGET constraint and resolution (lower to <= $7,500, ~$3,000 at measured 12/30 conversion, or count other counties' registers) follow from the figures.",
+        "findings": [
+          "Minor: if the 12 measured acceptances came from the same 30-operator register, those operators have already bought this year and the remaining in-window market is below $7,500; this only strengthens the no-plan and should be stated when the target is reset."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:11.808Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:45.877Z"
+    }
+  }
+}

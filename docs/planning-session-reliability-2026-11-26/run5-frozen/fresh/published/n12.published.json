@@ -1,0 +1,161 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_721d8fc863f9_863d2e",
+      "digest": "721d8fc863f97b044eb086db",
+      "contractDigest": "539e7c067af64baf81b062c3",
+      "plan": {
+        "goalId": "wst_bc08da146dc64a199b4e",
+        "contractDigest": "539e7c067af64baf81b062c3",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside $500: each case lot must be paid $1,400 with order",
+          "opportunityIds": [],
+          "why": "Three practices have accepted in writing at $2,000 a case lot, the supplier is quoted and cash settles in 12 days, but Coastal Dental Supply requires $1,400 payment with order. The smallest lot that earns anything needs $1,400 committed at once, nearly three times the $500 capital the goal allows, and the card records no buyer prepayment to fund it."
+        },
+        "alternatives": [
+          {
+            "title": "Resell case lots to the three signed practices",
+            "why": "Every chain link is established and three lots bring $6,000 ($1,800 margin) in 12 days — executable only if the capital limit is raised to $1,400 (one lot at a time) or a buyer deposit covering the supplier is secured."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "supplier cost per case lot, payment with order",
+            "status": "EVIDENCED",
+            "value": 140000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "capital tied up per lot",
+            "status": "EVIDENCED",
+            "value": 140000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per lot",
+            "status": "EVIDENCED",
+            "value": 200000,
+            "unit": "cents",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_6de74e70735b46d6b602#directCosts",
+            "dated": "2026-11-25",
+            "claim": "direct cost \\$1,400 per case lot (Coastal Dental Supply quote, payment with order)",
+            "population": "this opening's case-lot sales to orthodontic practices",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_6de74e70735b46d6b602#exposure",
+            "dated": "2026-11-25",
+            "claim": "exposure $1,400",
+            "population": "orthodontic practices",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_6de74e70735b46d6b602#price",
+            "dated": "2026-11-25",
+            "claim": "price $2,000",
+            "population": "orthodontic practices",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: one case lot needs $1,400 paid to the supplier with the order, which exceeds the goal's $500 capital limit; no plan that delivers any lot fits inside it.",
+          "resolution": "Raise the capital limit to $1,400 (order one lot at a time, recycling the $2,000 receipt 12 days later), or obtain a written buyer deposit of at least $900 per lot before ordering so the owner's capital stays within $500.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_6de74e70735b46d6b602",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_6de74e70735b46d6b602",
+            "why": "Needs $1,400 paid with order per lot, above the $500 capital limit."
+          }
+        ],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Allow $1,400 of capital (one case lot ordered at a time); three sequential lots then bring $6,000 within 30 days.",
+            "basis": [
+              {
+                "opportunityId": "cop_6de74e70735b46d6b602",
+                "field": "exposure"
+              },
+              {
+                "opportunityId": "cop_6de74e70735b46d6b602",
+                "field": "directCosts"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_721d8fc863f9_863d2e",
+        "digest": "721d8fc863f97b044eb086db",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_145b7a502fcb494b92a1/rel8-author-c",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:30:09.433Z"
+      },
+      "review": {
+        "revisionId": "rev_721d8fc863f9_863d2e",
+        "revisionDigest": "721d8fc863f97b044eb086db",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_145b7a502fcb494b92a1/rel8-author-c",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_904dd3c09f104fa1a92d/reviewer-iota",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN on CAPITAL is correct: the card's EVIDENCE directCosts/exposure show the supplier (Coastal Dental Supply, the recorded fulfiller) requires $1,400 with order per case lot, and no buyer prepayment is recorded, so even one lot needs $1,400 committed against a $500 capital limit; with all evidence in hand the limit still cannot be met. One lot at $2,000 already exceeds the $1,500 target, so raising capital to $1,400 is sufficient; margin arithmetic ($600/lot, $1,800 for three) checks.",
+        "findings": [
+          "The CAPITAL suggestion says three sequential lots bring $6,000 within 30 days; ordered one at a time with 12 days to usable cash, the third lot's receipt lands about day 36, outside the window. Two lots ($4,000) settle in time, which still clears the target, so the suggestion should say so.",
+          "The buyer-deposit alternative ($900+ per lot) is not on the card; it is an untested route, not an established one."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:12.334Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:46.346Z"
+    }
+  }
+}

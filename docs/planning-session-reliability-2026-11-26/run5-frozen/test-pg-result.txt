@@ -1,0 +1,13 @@
+atabase > refuses a plan with a cycle or an unknown dependency 2470ms
+ ✓ tests/standards.test.ts (17 tests) 39ms
+ ✓ tests/testingWorkflow.test.ts (13 tests) 70ms
+ ✓ tests/heldPriceAsk.test.ts (2 tests) 20ms
+ ✓ tests/unspecifiedDeliverableStep.test.ts (3 tests) 32ms
+
+ Test Files  84 passed (84)
+      Tests  1359 passed (1359)
+   Start at  05:15:07
+   Duration  1060.09s (transform 16.45s, setup 1.26s, collect 102.88s, tests 3044.44s, environment 19ms, prepare 6.92s)
+
+
+[exited with code 0]

@@ -1,0 +1,199 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_8275d461c776_1bbbd4",
+      "digest": "8275d461c776b91787276701",
+      "contractDigest": "e8ce07c4ec2f955569d8e597",
+      "plan": {
+        "goalId": "wst_6e19e35135124a4d8828",
+        "contractDigest": "e8ce07c4ec2f955569d8e597",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: the monitoring-report price is contradicted ($520 on the card, $52 in the sourced fact)",
+          "opportunityIds": [],
+          "why": "The card's price is $520 but the sourced price fact is $52. At $52 the $3,500 target needs about 68 deals, while 140 permitted pharmacies at the measured 10-in-90 close rate yield about 15; at $520 it needs 7 deals from about 63 contacts. Which price buyers pay decides whether any plan exists, and the record does not establish it."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 7 quarterly reports at $520 to permitted pharmacies by email",
+            "why": "Fits the market (about 63 of 140 contacts at the measured close rate), $8 cost, 4-day settlement — only if $520 is confirmed as the price buyers pay."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price buyers actually pay for a quarterly sterile-compounding environmental-monitoring report, resolving $520 versus $52 (the 10 recorded agreements' amounts, or published prices)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_cardprice"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per report",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s_price",
+              "s_cardprice"
+            ],
+            "needs": "One price that the sources agree buyers pay ($520 on the card vs $52 in the price fact)"
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.111,
+            "unit": "ratio",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "pharmacies",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 800,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_dc3a60a1c3f740e99c4e#price",
+            "dated": "2026-11-24",
+            "claim": "Price $52",
+            "population": "Independent compounding pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cardprice",
+            "url": "https://brain.local/card/cop_dc3a60a1c3f740e99c4e#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card price 52000 cents ($520)",
+            "population": "Independent compounding pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_dc3a60a1c3f740e99c4e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "10 agreements from 90 contacts",
+            "population": "Permitted pharmacies contacted for this offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_dc3a60a1c3f740e99c4e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "140 pharmacies hold sterile-compounding permits; one report a quarter each",
+            "population": "Independent compounding pharmacies",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_dc3a60a1c3f740e99c4e#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$8 direct cost",
+            "population": "This offer",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The price is contradicted: the card states $520 per report while the sourced price fact states $52. At $52 the target needs about 68 sales but the 140-pharmacy market at the measured 1-in-9 close rate yields about 15, so no plan exists; at $520 seven sales suffice. The record does not say which is true.",
+          "resolution": "Resolve the price from the amounts on the 10 recorded agreements or a published price for this report; if $520 holds, offer it to about 63 permitted pharmacies for 7 sales.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_dc3a60a1c3f740e99c4e",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_8275d461c776_1bbbd4",
+        "digest": "8275d461c776b91787276701",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f0c38e56ff6643fba9b2/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:30:56.766Z"
+      },
+      "review": {
+        "revisionId": "rev_8275d461c776_1bbbd4",
+        "revisionDigest": "8275d461c776b91787276701",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f0c38e56ff6643fba9b2/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_388a7ae4916c4cec952d/reviewer-theta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a contradicted price as the decisive gap is right. The card's priceCents of 52000 ($520) conflicts with the EVIDENCE price fact of $52, so no single price is established. At $52, the target needs 3500 / 52 = 68 deals. The measured 10 in 90 close rate on 140 pharmacies (one purchase each inside 30 days) yields about 15.6 deals, so no plan exists at that price. At $520, 7 deals from about 63 contacts suffice. The price therefore decides whether any plan exists, and resolving it from the 10 recorded agreements' amounts or a published price is the right next step.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T05:34:28.397Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:44.804Z"
+    }
+  }
+}

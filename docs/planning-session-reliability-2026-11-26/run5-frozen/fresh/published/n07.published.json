@@ -1,0 +1,177 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_af88f1fc259d_2f104e",
+      "digest": "af88f1fc259dc124a63056be",
+      "contractDigest": "8e29318713112085a4b8c22c",
+      "plan": {
+        "goalId": "wst_4060801c2c4c4737b007",
+        "contractDigest": "8e29318713112085a4b8c22c",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: the number of commissary-based food trucks is only an estimate",
+          "opportunityIds": [],
+          "why": "Price ($120), conversion (12 paid pre-orders from 150 visitors on this offer's checkout page), $3 cost and 2-day settlement are evidenced, but the target needs 20 sales (about 250 visitors at 8%), and the only buyer count is an estimate ('probably a few hundred'), so whether 20 buyers exist in the window is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 20 permit renewal packets at $120 via commissary flyers and checkout page",
+            "why": "Carries $2,400 if at least 20 commissary-based operators need a renewal in the window; volume unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count the mobile food units based at commissary kitchens in the area and how many renew their permit within the next 30 days (health department permit list)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_vol"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per packet",
+            "status": "EVIDENCED",
+            "value": 12000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "visitor-to-paid conversion",
+            "status": "EVIDENCED",
+            "value": 0.08,
+            "unit": "ratio",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers renewing in window",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "operators",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "A sourced count of commissary-based food trucks and their renewal timing"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_af3fe8a7e22043bb9d2e#price",
+            "dated": "2026-11-23",
+            "claim": "$120",
+            "population": "Food-truck operators based at commissary kitchens",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_af3fe8a7e22043bb9d2e#conversionRates",
+            "dated": "2026-11-23",
+            "claim": "12 paid pre-orders from 150 unique visitors",
+            "population": "Visitors to this offer's checkout page",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_af3fe8a7e22043bb9d2e#buyerVolume",
+            "dated": "2026-11-23",
+            "claim": "Probably a few hundred food trucks use commissary kitchens (estimate)",
+            "population": "Food trucks in the metro area",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The buyer population is an estimate, not evidence: 20 sales are needed and nobody has established how many commissary-based operators exist or how many renew a permit inside the 30 days.",
+          "resolution": "Count operators from the health department's mobile food-unit permit list (with renewal dates) and the commissaries' rosters; if at least ~250 can be reached in the window, run the flyer-and-checkout sale at the measured 8%.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_af3fe8a7e22043bb9d2e",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_af3fe8a7e22043bb9d2e",
+            "link": "CONVERSION",
+            "reason": "The card's EVIDENCE fact conversionRates records 12 paid pre-orders from 150 unique visitors to this offer's own checkout page (8%), a measured conversion on this buyer through this channel, so the close rate is established."
+          }
+        ],
+        "revisionId": "rev_af88f1fc259d_2f104e",
+        "digest": "af88f1fc259dc124a63056be",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e06de810d5ac497095bd/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:30:56.702Z"
+      },
+      "review": {
+        "revisionId": "rev_af88f1fc259d_2f104e",
+        "revisionDigest": "af88f1fc259dc124a63056be",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e06de810d5ac497095bd/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8914be3528564babb727/reviewer-theta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with MARKET_VOLUME as the decisive gap is right. Price $120 is evidence. Conversion of 8% (12 paid of 150 visitors) is measured on this offer's own checkout page, so the author's disagreement with Brain's CONVERSION link is supported. The only buyer count is a RECOMMENDATION ('probably a few hundred'), and the target needs 20 sales (20 x $120 = $2,400), about 250 visitors at 8%. Permits renew roughly once a year, so the number of operators renewing inside 30 days could be far below that. The gap is evidence, not a constraint. Research decides it (the permit list with renewal dates), not a live test, and the plan's step does that research at zero cost.",
+        "findings": [
+          "None blocking. The resolution should size buyers renewing inside the window, not total operators, because a yearly renewal means only a fraction buy within 30 days"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:27.364Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:43.866Z"
+    }
+  }
+}

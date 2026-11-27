@@ -1,0 +1,199 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_90f615e36e22_be7ab0",
+      "digest": "90f615e36e22d5850eb90a72",
+      "contractDigest": "6576b22d0359095b6cf5e147",
+      "plan": {
+        "goalId": "wst_e23ff3775ca64d6d8634",
+        "contractDigest": "6576b22d0359095b6cf5e147",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the owner-performed jobs need 15 hours, the goal allows 4",
+          "opportunityIds": [],
+          "why": "Six laundromats have accepted in writing at $600 ($3,600), with $40 direct cost, $0 exposure and 7-day settlement, but the only recorded fulfiller is the owner personally at 3 on-site hours a job. Reaching $3,000 needs 5 jobs = 15 owner hours (18 for all six); the objective now allows no more than 1 hour a week, 4 hours in the 30 days, which covers one job ($600)."
+        },
+        "alternatives": [
+          {
+            "title": "Owner commissions card readers for the signed laundromats",
+            "why": "Every commercial link holds, but only one 3-hour job fits the 4-hour owner allowance, bringing $600 of the $3,000."
+          },
+          {
+            "title": "Brain sources a local technician to do the commissioning",
+            "why": "Would remove the owner hours, but no technician, quote or cost is on record, so it is research, not a plan."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed agreements",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "agreements",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 60000,
+            "unit": "cents",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per job",
+            "status": "EVIDENCED",
+            "value": 4000,
+            "unit": "cents",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per job",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "hours",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to usable cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_f36c554abf4d487c84d2#captureMechanism",
+            "dated": "2026-11-23",
+            "claim": "six written acceptances at $600 for on-site commissioning",
+            "population": "self-service laundromat owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_f36c554abf4d487c84d2#price",
+            "dated": "2026-11-23",
+            "claim": "price $600",
+            "population": "self-service laundromat owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_f36c554abf4d487c84d2#fulfillment",
+            "dated": "2026-11-23",
+            "claim": "the owner does the work personally, 3 hours a job",
+            "population": "self-service laundromat owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_f36c554abf4d487c84d2#directCosts",
+            "dated": "2026-11-23",
+            "claim": "direct cost $40, exposure $0",
+            "population": "self-service laundromat owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_f36c554abf4d487c84d2#timeToFirstCash",
+            "dated": "2026-11-23",
+            "claim": "7 days to first cash",
+            "population": "self-service laundromat owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment within the owner-hours limit: the card names the owner personally as the only fulfiller at 3 on-site hours a job; five jobs (the minimum for $3,000) need 15 owner hours, against the 4 hours (1 a week) the goal allows. The 3 hours a job and the owner as fulfiller are recorded only as a person's statement, not an EVIDENCE fact, so this is a fulfilment gap to settle rather than an arithmetic constraint.",
+          "resolution": "Either allow at least 15 owner hours in the 30 days (about 3.5 a week; 18 for all six signed jobs), or have Brain find and get a written quote from a local technician who commissions the readers for well under $600 a job, paid from each job's receipt so capital stays at $0, then re-plan with that fulfiller.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_f36c554abf4d487c84d2",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_f36c554abf4d487c84d2",
+            "why": "Owner-performed delivery needs 15 hours for the target; the goal allows 4."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_f36c554abf4d487c84d2",
+            "link": "FULFILMENT",
+            "reason": "Brain marks fulfilment ok because the owner is the recorded fulfiller, but under the revised objective the owner has 4 hours in the window (scope hoursCeiling 4) and each job takes 3 (card humanHours 3); Brain's own run says the agreed deals need 18 owner hours, more than the 4 this goal has. No other fulfiller is recorded, so fulfilment of the 5 jobs the target needs is not established within the goal's limits."
+          }
+        ],
+        "revisionId": "rev_90f615e36e22_be7ab0",
+        "digest": "90f615e36e22d5850eb90a72",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9a466f655b0c4f08b719/rel8-author-c",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:38:26.517Z"
+      },
+      "review": {
+        "revisionId": "rev_90f615e36e22_be7ab0",
+        "revisionDigest": "90f615e36e22d5850eb90a72",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9a466f655b0c4f08b719/rel8-author-c",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f2f669d41a1b4bd7bd61/reviewer-iota",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Under contract v2 (ownerHoursPerWeek 1) NO_PLAN is right and follows from arithmetic on the card: the only recorded fulfiller is the owner, humanHours is 3 a job, five $600 jobs are the minimum for $3,000, so 15 owner hours are needed against about 4.3 (1 a week over 30 days, 30/7 weeks). That covers one job, $600. Every other link holds (six written acceptances at $600, $40 cost, $0 exposure, 7-day settlement). Brain's own run reaches the same conclusion: 18 hours needed against 4. The resolution is actionable and correct: allow at least 15 hours (about 3.5 a week), or get a quoted technician paid from receipts and re-plan.",
+        "findings": [
+          "The decisive gap is an OWNER_HOURS limit computed from the card's humanHours (3) and the contract's 1 hour a week. The revision calls it 'a fulfilment gap to settle rather than an arithmetic constraint' and records no OWNER_HOURS entry in constraints. It is a constraint that even complete evidence cannot fit, and it should be recorded as one.",
+          "The disagreement with Brain's FULFILMENT link is unnecessary. The owner is the recorded fulfiller; the failure is that the hours do not fit, not that fulfilment is unestablished. Calling the 3 hours 'only a person's statement' undercuts a figure the card holds as humanHours.",
+          "The technician alternative assumes payment out of each job's receipt; no fulfiller, quote or payment term is recorded, so it stays research, as the revision correctly says."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:39:16.023Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:39:34.608Z"
+    }
+  }
+}

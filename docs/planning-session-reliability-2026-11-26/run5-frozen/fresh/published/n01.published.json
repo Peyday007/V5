@@ -1,0 +1,138 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_9bb9c93791d3_7889ec",
+      "digest": "9bb9c93791d3c60e04089781",
+      "contractDigest": "ee7cf215cf67fa02b7b12b43",
+      "plan": {
+        "goalId": "wst_64cb0270e4304230b11e",
+        "contractDigest": "ee7cf215cf67fa02b7b12b43",
+        "parentRevisionId": "rev_61692a202757_b1cecb",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: no qualified paying buyer",
+          "opportunityIds": [],
+          "why": "Brain holds no qualified opening. The only recorded opening (varroa mite-load reports) names a state apiary program's registrants as payer, and nothing on record shows anyone paying a supplier a price for the report, so there is no established payer, price or conversion to plan $2,000 on."
+        },
+        "alternatives": [
+          {
+            "title": "Sell mite-load reports directly to commercial beekeepers",
+            "why": "Not established: no price, buying signal from a paying buyer, or conversion is recorded; it is a research lead, not a plan."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish whether commercial beekeepers (not the program) pay a supplier for mite-load reports, at what price, through what channel",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "paying buyers for the deliverable",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers",
+            "sources": [],
+            "needs": "a recorded purchase or committed order from a commercial buyer"
+          },
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a sourced price a buyer pays a supplier"
+          }
+        ],
+        "sources": [],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No opening has an established commercial payer paying a price for a deliverable: the only candidate's payer is a state program's registrants with no recorded purchase or price.",
+          "resolution": "Research and record a commercial buyer population, a sourced price and a reachable channel for a deliverable Brain can produce (e.g. mite-load reports sold to commercial beekeepers directly), then re-plan.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE",
+            "CURRENT_DEMAND"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_6110ca92ff7f484ebf61",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CURRENT_DEMAND"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_6110ca92ff7f484ebf61",
+            "why": "Payer is a state apiary program's registrants; no recorded purchase of a deliverable from a supplier, no established price."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "CURRENT_DEMAND"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_9bb9c93791d3_7889ec",
+        "digest": "9bb9c93791d3c60e04089781",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97525a659c144bfe9edd/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:29:43.382Z"
+      },
+      "review": {
+        "revisionId": "rev_9bb9c93791d3_7889ec",
+        "revisionDigest": "9bb9c93791d3c60e04089781",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97525a659c144bfe9edd/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_cc743df3860e48d298fd/reviewer-eta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance. Brain holds no qualified opening: the one recorded opening (varroa mite-load reports) has no price a buyer pays a supplier, no recorded purchase and no conversion, and Brain's own run excludes it and models nothing beyond implausible constructed estimates. The decisive gap is named as missing evidence (OFFER_AND_PRICE, CURRENT_DEMAND), not dressed up as a target or capital constraint, the plan spends nothing and commits no money, and the one research step targets exactly the missing evidence (do commercial beekeepers themselves pay, at what price, through what channel).",
+        "findings": [
+          "Minor wording, not decisive: the registrants of a state apiary program are themselves commercial beekeepers, so 'the payer is a program' overstates the exclusion; what decides it is the missing price and purchase evidence, which the noPlan correctly names."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:51.309Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:41.950Z"
+    }
+  }
+}

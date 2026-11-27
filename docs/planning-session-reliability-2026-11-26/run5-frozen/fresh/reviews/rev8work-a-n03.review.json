@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_54fe3ec9e4dd433481b3",
+ "revision_id": "rev_6f62e70857b3_13b49c",
+ "verdict": "PASS",
+ "reasons": "EXECUTABLE is supported. Three WRITTEN_ACCEPTANCE agreements at $3,200 each ($9,600) are recorded for the opening whose buyers posted requests for quote (2026-11-21), so price and conversion are this buyer's own committed figures and no new sales are needed. Delivery is by the recorded fulfiller, Harbor Wrap Marine Services, at its $1,400-a-marina quote ($4,200 < $9,600; net $5,400), exposure $0 on the card, and the supplier is paid on day 20 when the marinas' payments settle (day 6 invoice + 14 days), so cash never goes negative and $9,600 of settled cash is received by day 20 of 40, clearing the $8,000 received-cash proof condition. Recomputed ledger matches Brain's trace.",
+ "findings": [
+  "Cosmetic: step s4 is dated day 5 with its $4,200 cost while the ledger SPEND is day 20; the label explains it is paid from settled receipts, consistent with the card's $0 exposure, but the supplier's acceptance of payment after day 20 should be confirmed when scheduling.",
+  "Net kept is $5,400; the target is met on received settled cash as the contract's proof condition states, not on net."
+ ],
+ "conditions": [],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-eta",
+ "reviewer_model": "claude-opus-5-5"
+}

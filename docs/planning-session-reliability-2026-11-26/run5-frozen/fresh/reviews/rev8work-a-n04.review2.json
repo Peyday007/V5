@@ -1,0 +1,15 @@
+{
+ "goal_id": "wst_f44ff1506d07415581d0",
+ "revision_id": "rev_d55c07802f13_736ef9",
+ "verdict": "REVISE",
+ "reasons": "Accepting MARKET_VOLUME was correct (the buyerVolume fact limits demand to clinics still to file in a calendar year that is about 91% over), and CONDITIONAL is now the right stance with the unfiled count and request rate marked UNKNOWN. But the proof threshold does not imply the target. The plan needs about 34 quotes (10 / 0.3) by its last selling day, day 16. At the proof's minimum, 12 requests a week, 16 days give about 27 requests, which at 9 of 30 is about 8 wins = $2,720, short of $3,000. Likewise 3 wins in week 1 projects to about 7 wins by day 16. A plan that just meets its proof misses the goal, so the owner could pass the checkpoint and still fail. Raise the proof to about 15 requests and 3 wins from unfiled clinics in week 1, or extend selling (delivery and 6-day settlement allow a sale up to about day 23), and give a rule for the outcomes between stop and proof.",
+ "findings": [
+  "Proof threshold (>=12 quote requests, >=3 wins by day 7) projects to ~27 quotes / ~8 wins / ~$2,720 by day 16, below the $3,000 target; the proof must be one that implies the target.",
+  "Outcomes between stop (<6 requests or no win) and proof (6-11 requests, or 1-2 wins) have no rule.",
+  "Selling stops on day 16 although delivery plus 6-day settlement would allow sales up to about day 23 inside the 30-day window; using that time is one way to make the proof consistent."
+ ],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-eta",
+ "reviewer_model": "claude-opus-5-5",
+ "conditions": []
+}

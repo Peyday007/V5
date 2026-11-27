@@ -1,0 +1,429 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_2aeb776a96b3_1b200c",
+      "digest": "2aeb776a96b3d98424a5da97",
+      "contractDigest": "3574696d113fdb9646b98e71",
+      "plan": {
+        "goalId": "wst_f44ff1506d07415581d0",
+        "contractDigest": "3574696d113fdb9646b98e71",
+        "parentRevisionId": "rev_d55c07802f13_736ef9",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Test, then sell 10 controlled-substance inventory reconciliations to vet clinics at $340",
+          "opportunityIds": [
+            "cop_4c7c2b81d11d426d8f7c"
+          ],
+          "why": "Price ($340), the 9-of-30 quote win rate on this offer's own sales, Brain-produced fulfilment at $6 direct cost, $0 exposure and 6 days to usable cash are evidenced. The buyerVolume fact limits demand to clinics still to file this calendar year, which is about 91% over, so how many of the 520 are still unfiled, and how fast quote requests arrive (about 34 needed), is unknown. A first-week test of quote requests and wins measures both before the plan continues."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the price",
+            "why": "Only the $340 price has a measured win rate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Answer quote requests from clinics on the state board's DEA-registrant list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_reach",
+              "src_volume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Quote the reconciled inventory and discrepancy report in the new filing format at $340",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "src_price"
+            ],
+            "priceCents": 34000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Count quote requests from still-unfiled clinics and wins in days 1-7",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s2",
+            "evidence": [
+              "src_conv",
+              "src_volume"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "On proof, keep quoting through day 22 until 10 wins at $340 (about 34 quotes at 9 of 30)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 22,
+            "dependsOn": "t1",
+            "evidence": [
+              "src_conv"
+            ],
+            "priceCents": 34000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Produce each clinic's reconciliation spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 23,
+            "dependsOn": "s3",
+            "evidence": [
+              "src_delivery",
+              "src_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Invoice on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 23,
+            "dependsOn": "s4",
+            "evidence": [
+              "src_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 23,
+            "kind": "RECEIPT",
+            "amountCents": 340000,
+            "label": "10 clinics pay $340",
+            "settlesDay": 29,
+            "stepId": "s5"
+          },
+          {
+            "day": 29,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "Direct cost $6 x 10",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 340,
+            "unit": "USD",
+            "sources": [
+              "src_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "quote win rate",
+            "status": "EVIDENCED",
+            "value": 0.3,
+            "unit": "wins per quote",
+            "sources": [
+              "src_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "clinics still to file this calendar year",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "clinics",
+            "sources": [
+              "src_volume"
+            ],
+            "needs": "count of the 520 registrants not yet filed in the new format, measured by first-week quote requests"
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 10,
+            "unit": "sales",
+            "sources": [
+              "src_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "USD",
+            "sources": [
+              "src_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to usable cash",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "days",
+            "sources": [
+              "src_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "quote requests per week",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "requests",
+            "sources": [],
+            "needs": "first-week count of quote requests"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_price",
+            "url": "https://brain.local/card/cop_4c7c2b81d11d426d8f7c#price",
+            "dated": "2026-11-24",
+            "claim": "$340",
+            "population": "veterinary clinic practice managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_conv",
+            "url": "https://brain.local/card/cop_4c7c2b81d11d426d8f7c#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 wins from 30 quotes",
+            "population": "clinics quoting this offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_volume",
+            "url": "https://brain.local/card/cop_4c7c2b81d11d426d8f7c#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "520 DEA-registered clinics must file one inventory in the new format this calendar year",
+            "population": "veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_reach",
+            "url": "https://brain.local/card/cop_4c7c2b81d11d426d8f7c#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Quote requests from clinics on the state board's DEA-registrant list",
+            "population": "veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_delivery",
+            "url": "https://brain.local/card/cop_4c7c2b81d11d426d8f7c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_cost",
+            "url": "https://brain.local/card/cop_4c7c2b81d11d426d8f7c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6; exposure $0",
+            "population": "veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_settle",
+            "url": "https://brain.local/card/cop_4c7c2b81d11d426d8f7c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "6 days",
+            "population": "veterinary clinics",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 7: at least 15 quote requests from clinics that have not yet filed this year and at least 3 wins at $340. At 15 requests a week through day 22 that is about 49 quotes and 14 wins at 9 of 30; even at the proof's floor, 10 wins ($3,400) are reached by about day 16.",
+          "stop": [
+            "Fewer than 6 quote requests or no win by day 7",
+            "Middle band not recovered: fewer than 21 requests or fewer than 5 wins by day 10",
+            "Requests come mostly from clinics that already filed this year (no remaining obligation)"
+          ],
+          "continue": [
+            "Proof met by day 7: keep quoting through day 22 until 10 wins, deliver and invoice by day 23 (settles day 29)",
+            "Middle band (6-14 requests or 1-2 wins by day 7): extend the test to day 10 and continue only with at least 21 requests and 5 wins by then, which still reaches about 34 quotes by day 22"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "A plan that just meets its proof misses the target: 12 requests a week over 16 days is about 27 quotes, about 8 wins, about $2,720 against $3,000; no rule for results between stop and proof.",
+            "resolution": "Accepted, and the arithmetic checks out (12 x 16/7 = 27.4 quotes x 0.3 = 8.2 wins = $2,720). The proof is now 15 requests and 3 wins by day 7, and selling runs to day 22, with invoices on day 23 that settle on day 29, inside 30. At the proof rate that is about 49 quotes and 14 wins. The middle band (6-14 requests or 1-2 wins) extends the test to day 10, needing 21 requests and 5 wins, else stop."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_4c7c2b81d11d426d8f7c",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_4c7c2b81d11d426d8f7c",
+            "deals": 10,
+            "price": 340,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_4c7c2b81d11d426d8f7c",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain counts 520 available, but the buyerVolume fact says each clinic files once during this calendar year; on 2026-11-27 clinics that already filed are not buyers and the unfiled count is not recorded, nor is the rate of quote requests."
+          }
+        ],
+        "revisionId": "rev_2aeb776a96b3_1b200c",
+        "digest": "2aeb776a96b3d98424a5da97",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_32b62422e8404b5391e4/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:38:37.766Z"
+      },
+      "review": {
+        "revisionId": "rev_2aeb776a96b3_1b200c",
+        "revisionDigest": "2aeb776a96b3d98424a5da97",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_32b62422e8404b5391e4/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_86738e271cc0448a9aad/reviewer-eta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The proof now implies the target. Recomputed: at the proof floor of 15 requests a week, 15 x 16/7 = 34.3 quotes x 0.3 = 10.3 wins by about day 16, and 15 x 22/7 = 47 quotes, about 14 wins, by the day-22 sales cutoff. The middle-band rule (21 requests and 5 wins by day 10) is 2.1 requests a day, about 46 quotes by day 22, comfortably above the 34 needed, and 5 wins by day 10 at the same pace gives about 11 by day 22. Everything outside the bands stops. Invoices on day 23 settle on day 29, inside the 30-day window; $3,400 received, $60 cost, net $3,340, $0 exposure, matching Brain's trace. The unfiled count and the request rate stay UNKNOWN and are what the first week measures, and MARKET_VOLUME stays marked missing, so CONDITIONAL is the right stance and the plan is startable without capital.",
+        "findings": [
+          "One day of settlement slack: every sale is invoiced in one batch on day 23 and settles on day 29. Delivering and invoicing each win as it lands (6-day settlement) would bank most of the cash well before the deadline and remove the single-day risk.",
+          "The year-end filing obligation (about day 35) lies outside the window, so late-December demand is real, but clinics may defer to the last week; the day-10 checkpoint is the right guard."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:39:19.106Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:39:51.450Z"
+    }
+  }
+}

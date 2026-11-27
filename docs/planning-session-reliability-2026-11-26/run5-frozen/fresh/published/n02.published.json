@@ -1,0 +1,461 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_0b43592725e9_421ae6",
+      "digest": "0b43592725e967b628cc13d6",
+      "contractDigest": "010ff27118efd36e392f16f4",
+      "plan": {
+        "goalId": "wst_35b39c67ff394162b1b4",
+        "contractDigest": "010ff27118efd36e392f16f4",
+        "parentRevisionId": "rev_0ff6d367083b_28a4ed",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Test, then sell 17 dental-lab crosswalks at $95 through the association newsletter",
+          "opportunityIds": [
+            "cop_d6bcbbf8ff44479caaa5"
+          ],
+          "why": "Price ($95), conversion per page visitor (22 paid pre-orders / 400 unique visitors = 5.5%, this offer's own page), Brain-produced fulfilment at $2 direct cost, $0 exposure and 2 days to usable cash are evidenced. What no record gives is how many unique visitors a newsletter placement sends; 17 orders need about 310 visitors from the ~2,078 labs that have not already pre-ordered. The first send measures it, with a proof/stop on visitors and orders before the plan continues."
+        },
+        "alternatives": [
+          {
+            "title": "Rely only on the 22 recorded pre-orders",
+            "why": "They measure conversion; no agreement against this goal records them as cash owed, so they are not counted as receipts."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "First paid placement in the association's weekly newsletter linking to checkout (no fee before receipts: card exposure $0, peak funding $0)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_reach",
+              "src_volume",
+              "src_cost"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the crosswalk mapped to each lab's own product list at $95",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "src_price",
+              "src_conv"
+            ],
+            "priceCents": 9500,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure unique visitors and paid orders from the first send by day 5",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s2",
+            "evidence": [
+              "src_conv"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "On proof, run the weekly placements on days 8 and 15 until 17 paid orders at $95",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "t1",
+            "evidence": [
+              "src_conv"
+            ],
+            "priceCents": 9500,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Produce each lab's crosswalk spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 3400,
+            "day": 17,
+            "dependsOn": "s3",
+            "evidence": [
+              "src_delivery",
+              "src_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Checkout payments settle to usable cash",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "s3",
+            "evidence": [
+              "src_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 17,
+            "kind": "RECEIPT",
+            "amountCents": 161500,
+            "label": "17 checkout payments at $95",
+            "settlesDay": 19,
+            "stepId": "s5"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 3400,
+            "label": "Direct cost $2 x 17",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 95,
+            "unit": "USD",
+            "sources": [
+              "src_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.055,
+            "unit": "orders per visitor",
+            "sources": [
+              "src_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 2078,
+            "unit": "labs",
+            "sources": [
+              "src_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 17,
+            "unit": "sales",
+            "sources": [
+              "src_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "USD",
+            "sources": [
+              "src_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to usable cash",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "days",
+            "sources": [
+              "src_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "unique visitors per newsletter placement",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "visitors",
+            "sources": [],
+            "needs": "the first send's measured unique checkout-page visitors"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_price",
+            "url": "https://brain.local/card/cop_d6bcbbf8ff44479caaa5#price",
+            "dated": "2026-11-25",
+            "claim": "$95",
+            "population": "dental laboratory owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_conv",
+            "url": "https://brain.local/card/cop_d6bcbbf8ff44479caaa5#conversionRates",
+            "dated": "2026-11-25",
+            "claim": "22 paid pre-orders from 400 unique visitors",
+            "population": "visitors to this offer's own page",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_volume",
+            "url": "https://brain.local/card/cop_d6bcbbf8ff44479caaa5#buyerVolume",
+            "dated": "2026-11-25",
+            "claim": "2,100 member labs receive the newsletter",
+            "population": "dental laboratories",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_reach",
+            "url": "https://brain.local/card/cop_d6bcbbf8ff44479caaa5#reachableChannel",
+            "dated": "2026-11-25",
+            "claim": "Paid placement in the association's weekly newsletter linking to checkout",
+            "population": "dental laboratories",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_delivery",
+            "url": "https://brain.local/card/cop_d6bcbbf8ff44479caaa5#delivery",
+            "dated": "2026-11-25",
+            "claim": "A spreadsheet Brain produces",
+            "population": "dental laboratories",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_cost",
+            "url": "https://brain.local/card/cop_d6bcbbf8ff44479caaa5#directCosts",
+            "dated": "2026-11-25",
+            "claim": "$2 per deal; exposure $0",
+            "population": "dental laboratories",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_settle",
+            "url": "https://brain.local/card/cop_d6bcbbf8ff44479caaa5#timeToFirstCash",
+            "dated": "2026-11-25",
+            "claim": "2 days",
+            "population": "dental laboratories",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 5 the first placement has sent at least 105 unique visitors and at least 6 paid orders at $95 (one third of the 310 visitors / 17 orders the plan needs, from one of three sends).",
+          "stop": [
+            "Fewer than 50 unique visitors or fewer than 3 paid orders from the first send by day 5",
+            "The association requires a placement fee paid before receipts settle (exposure cap $0)"
+          ],
+          "continue": [
+            "Proof met: run the day-8 and day-15 placements and keep selling until 17 paid orders"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Paid newsletter placement has no cost in step s1 or in the cash ledger; with exposureCapCents 0 the fee and when it is due must be recorded.",
+            "resolution": "Rebutted as a gap in the economics: the card's sourced exposure is $0 and peak funding is $0 (Brain ECONOMICS: cost 2, tied up 0), so the opening's record says the placement needs no money before receipts. Kept a stop: if the association asks for a fee before receipts, the plan stops."
+          },
+          {
+            "finding": "Visitors per newsletter placement is not on the card; the plan silently assumes ~310 unique visitors (~15% of 2,100 recipients) to reach 17 orders at 5.5%.",
+            "resolution": "Accepted: the plan is now CONDITIONAL, visitors per placement is UNKNOWN, and REACHABLE_BUYER is marked missing and is what the first send measures."
+          },
+          {
+            "finding": "The 22 labs that already pre-ordered buy once a year and are not in the remaining pool; minor, but the reachable pool is ~2,078.",
+            "resolution": "Accepted: reachable pool restated as 2,078; 17 deals and ~310 visitors are unaffected."
+          },
+          {
+            "finding": "No proof/stop/continue checkpoint for the one quantity a live send measures (traffic and orders per placement).",
+            "resolution": "Accepted: validation added. Proof by day 5 is at least 105 visitors and 6 paid orders from the first send; stop below 50 visitors or 3 orders."
+          },
+          {
+            "condition": 0,
+            "decision": "REBUTTED",
+            "records": [
+              "exposure",
+              "directCosts",
+              "peakFundingCents",
+              "brain:ECONOMICS"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "conversionRates",
+              "reachableChannel",
+              "buyerVolume",
+              "brain:REACHABLE_BUYER"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_d6bcbbf8ff44479caaa5",
+            "missing": [
+              "REACHABLE_BUYER"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_d6bcbbf8ff44479caaa5",
+            "deals": 17,
+            "price": 95,
+            "directCost": 2,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "REACHABLE_BUYER"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_d6bcbbf8ff44479caaa5",
+            "link": "REACHABLE_BUYER",
+            "reason": "Brain's basis names the channel only; conversion is measured per page visitor (conversionRates: 22 of 400 visitors) and no record gives visitors per placement, so reaching ~310 visitors in the window is not established."
+          }
+        ],
+        "revisionId": "rev_0b43592725e9_421ae6",
+        "digest": "0b43592725e967b628cc13d6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5da3b9250a2b45acb198/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:36:17.465Z"
+      },
+      "review": {
+        "revisionId": "rev_0b43592725e9_421ae6",
+        "revisionDigest": "0b43592725e967b628cc13d6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5da3b9250a2b45acb198/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_37860a898b81477bb927/reviewer-eta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance and the plan is startable. The ECONOMICS rebuttal holds: my condition rested on the word 'paid' in the channel description, while the card's own sourced records say exposure $0, peak funding $0 and direct cost $2, and Brain's ECONOMICS basis (cost 2, tied up 0) is read from those records; no record contradicts them, and the plan keeps a stop if the association asks for a fee before receipts. Accepting REACHABLE_BUYER is correct: conversion is per page visitor and no record gives visitors per placement. Arithmetic recomputed: 17 x $95 = $1,615, $34 cost, net $1,581; the proof (>=105 visitors, >=6 orders from send 1) is one third of 310 visitors / 17 orders, so three equal sends on days 1, 8 and 15 just reach the target, with receipts on day 17 settling day 19 of 21. Pool restated to 2,078. Ledger matches Brain's trace.",
+        "findings": [
+          "Outcomes between stop and proof (50-104 visitors or 3-5 orders by day 5) have no rule; state whether the plan continues, re-prices or stops there.",
+          "Proof assumes each repeat send to the same list draws as many unique visitors as the first; later sends usually draw fewer, and there is only 2 days of slack after day 19, so the continue rule should re-check cumulative orders after the day-8 send.",
+          "If the association bills the placement after receipts, that fee is a cost the ledger does not carry; the stop only covers a fee due before receipts."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:37:58.085Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:39:34.118Z"
+    }
+  }
+}

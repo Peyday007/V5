@@ -1,0 +1,31 @@
+{
+ "goal_id": "wst_35b39c67ff394162b1b4",
+ "revision_id": "rev_0ff6d367083b_28a4ed",
+ "verdict": "REVISE",
+ "reasons": "Arithmetic holds as written (17 x $95 = $1,615 gross, $34 direct cost, $1,581 net, settles day 9 of 21), price is a sourced price to this buyer, conversion (22/400 = 5.5%) is measured on this offer's own page, fulfilment is Brain's proven spreadsheet capability, and January code updates mean all labs are still to buy inside the window. But EXECUTABLE is not supported: the card's reach is a PAID placement in the association newsletter, yet step s1 costs $0 and the ledger has no placement fee, under a $0 exposure cap; and the plan needs about 310 unique checkout visitors (17 / 0.055), i.e. ~15% of the 2,100 recipients, from a placement whose traffic yield no record gives. The cash depends on two unrecorded figures, so as an executable plan the owner cannot act on it; restate with the placement fee and its payment terms in the ledger (or show it is paid from receipts), and either evidence visitors per placement or make it CONDITIONAL with a proof/stop on visitors and orders after the first send.",
+ "findings": [
+  "Paid newsletter placement (card reachableChannel) has no cost in step s1 or in the cash ledger; with exposureCapCents 0 the fee and when it is due must be recorded.",
+  "Visitors per newsletter placement is not on the card; the plan silently assumes ~310 unique visitors (~15% of 2,100 recipients) to reach 17 orders at 5.5%.",
+  "The 22 labs that already pre-ordered buy once a year and are not in the remaining pool; minor, but the reachable pool is ~2,078.",
+  "No proof/stop/continue checkpoint for the one quantity a live send measures (traffic and orders per placement)."
+ ],
+ "conditions": [
+  {
+   "opportunityId": "cop_d6bcbbf8ff44479caaa5",
+   "link": "ECONOMICS",
+   "basis": "MISSING_PREREQUISITE",
+   "field": "newsletter placement fee and payment terms",
+   "why": "The card's reachable channel is a paid placement, but the economics count only $2 per deal and $0 exposure; the placement fee is not on the card, and if it is due before receipts it breaches the $0 exposure cap and changes whether the plan is startable without capital."
+  },
+  {
+   "opportunityId": "cop_d6bcbbf8ff44479caaa5",
+   "link": "REACHABLE_BUYER",
+   "basis": "MISSING_PREREQUISITE",
+   "field": "visitors per newsletter placement",
+   "why": "Conversion is measured per page visitor, not per newsletter recipient; without the traffic a placement delivers, 17 orders in 21 days rests on an assumed ~15% click-through."
+  }
+ ],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-eta",
+ "reviewer_model": "claude-opus-5-5"
+}

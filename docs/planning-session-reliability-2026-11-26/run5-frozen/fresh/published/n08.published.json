@@ -1,0 +1,196 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_f234e12dacae_7a17a0",
+      "digest": "f234e12dacaefc6d9dc5ed4d",
+      "contractDigest": "5446c9051ef6feb7bc208400",
+      "plan": {
+        "goalId": "wst_984fd745cbb042a08d9a",
+        "contractDigest": "5446c9051ef6feb7bc208400",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: subcontracted refrigerant leak-rate inspections lack an established cost",
+          "opportunityIds": [],
+          "why": "Buyer, price ($800, evidenced), close rate (5 of 40 on this offer), volume (175 stores, annual need) and 10-day settlement are established, but the named subcontractor's quoted cost and payment terms are not on the record, so neither the margin nor the no-up-front-capital limit can be shown to hold."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 6 inspections at $800 via the association directory, fulfilled by the quoted subcontractor",
+            "why": "Would carry $4,800 against the $4,000 target once the subcontractor's per-inspection cost is shown below $800 and payable from the buyer's payment (no advance)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Obtain the named subcontractor's quoted price per inspection and its payment terms (whether any deposit is due before the buyer pays)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_fulfil"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per inspection",
+            "status": "EVIDENCED",
+            "value": 80000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.125,
+            "unit": "ratio",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 175,
+            "unit": "stores",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontractor cost per inspection",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "The subcontractor's written quote"
+          },
+          {
+            "name": "capital advanced before buyer payment",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "The subcontractor's payment terms"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_ec776ed63e91415c8d1b#price",
+            "dated": "2026-11-22",
+            "claim": "$800 per inspection",
+            "population": "Independent grocery store owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_ec776ed63e91415c8d1b#conversionRates",
+            "dated": "2026-11-22",
+            "claim": "5 agreements from 40 contacts",
+            "population": "Independent grocery store owners contacted for this offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_ec776ed63e91415c8d1b#buyerVolume",
+            "dated": "2026-11-22",
+            "claim": "175 stores in the state association directory, annual inspection need",
+            "population": "Independent grocery stores",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_fulfil",
+            "url": "https://brain.local/card/cop_ec776ed63e91415c8d1b#fulfillment",
+            "dated": "2026-11-22",
+            "claim": "A named subcontractor quoted to do the work (amount not recorded)",
+            "population": "Fulfiller",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The subcontractor's cost per inspection and payment terms are not recorded: the card names a quoted subcontractor but no direct cost, so the deal's margin and whether it needs money advanced before the buyer pays are unknown.",
+          "resolution": "Get the subcontractor's written quote (per-inspection price and when it is due); if it is under $800 and payable after the buyer pays, sell 6 inspections to the directory stores at the measured 1-in-8 close rate (about 48 contacts).",
+          "decisiveLinks": [
+            "ECONOMICS"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ec776ed63e91415c8d1b",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f234e12dacae_7a17a0",
+        "digest": "f234e12dacaefc6d9dc5ed4d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ecf9f98daa37452bab69/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:30:17.259Z"
+      },
+      "review": {
+        "revisionId": "rev_f234e12dacae_7a17a0",
+        "revisionDigest": "f234e12dacaefc6d9dc5ed4d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ecf9f98daa37452bab69/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b896a55e1d454af493d9/reviewer-theta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with ECONOMICS as the decisive gap is right. Price $800, conversion of 5 in 40 measured on this offer, 175 stores with a yearly need, a quoted subcontractor as fulfiller and 10-day settlement are all evidence. The card has no direct-cost figure for the subcontractor, so the margin is unknown. That is decided by obtaining the quote, not by a live test, and it is not a ceiling. I recomputed: 6 x $800 = $4,800 against $4,000, and 6 / 0.125 = 48 contacts, well inside 175.",
+        "findings": [
+          "Overly conservative: 'capital advanced before buyer payment' is marked UNKNOWN, but the card holds exposure $0 as EVIDENCE (and $0 peak funding). Only the per-inspection cost is genuinely missing",
+          "Not stated: if the subcontractor's cost is close to $800, more than 6 sales are needed for the settled cash net of fulfilment to reach $4,000. The resolution should recompute the deal count from the quote"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:27.890Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:44.329Z"
+    }
+  }
+}

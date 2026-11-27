@@ -1,0 +1,15 @@
+{
+ "goal_id": "wst_35b39c67ff394162b1b4",
+ "revision_id": "rev_0b43592725e9_421ae6",
+ "verdict": "PASS",
+ "reasons": "CONDITIONAL is the right stance and the plan is startable. The ECONOMICS rebuttal holds: my condition rested on the word 'paid' in the channel description, while the card's own sourced records say exposure $0, peak funding $0 and direct cost $2, and Brain's ECONOMICS basis (cost 2, tied up 0) is read from those records; no record contradicts them, and the plan keeps a stop if the association asks for a fee before receipts. Accepting REACHABLE_BUYER is correct: conversion is per page visitor and no record gives visitors per placement. Arithmetic recomputed: 17 x $95 = $1,615, $34 cost, net $1,581; the proof (>=105 visitors, >=6 orders from send 1) is one third of 310 visitors / 17 orders, so three equal sends on days 1, 8 and 15 just reach the target, with receipts on day 17 settling day 19 of 21. Pool restated to 2,078. Ledger matches Brain's trace.",
+ "findings": [
+  "Outcomes between stop and proof (50-104 visitors or 3-5 orders by day 5) have no rule; state whether the plan continues, re-prices or stops there.",
+  "Proof assumes each repeat send to the same list draws as many unique visitors as the first; later sends usually draw fewer, and there is only 2 days of slack after day 19, so the continue rule should re-check cumulative orders after the day-8 send.",
+  "If the association bills the placement after receipts, that fee is a cost the ledger does not carry; the stop only covers a fee due before receipts."
+ ],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-eta",
+ "reviewer_model": "claude-opus-5-5",
+ "conditions": []
+}
