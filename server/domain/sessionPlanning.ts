@@ -162,7 +162,12 @@ export interface StepExecutorRecord {
 /** One money movement of the plan's cash sequence, in cents. */
 export interface CashEntryInput {
   day: number;
-  kind: 'SPEND' | 'FEE' | 'COMMIT' | 'RELEASE' | 'RECEIPT' | 'REFUND';
+  /**
+   * FUNDING is the owner's own money advanced into the plan (a float): it is not revenue, not a
+   * customer receipt and never repaid as a refund. It raises the cash available, and it leaves
+   * exposure untouched, because the owner's money is still at risk until receipts settle.
+   */
+  kind: 'SPEND' | 'FEE' | 'COMMIT' | 'RELEASE' | 'RECEIPT' | 'REFUND' | 'FUNDING';
   amountCents: number;
   label: string;
   /** RECEIPT only: the day the money reaches the bank. */
@@ -325,6 +330,8 @@ export interface CashTrace {
   collectedCents: number;
   collectedInWindowCents: number;
   refundsCents: number;
+  /** The owner's own money advanced (FUNDING): not revenue, never in collected or net. */
+  ownerFundedCents: number;
   netCents: number;
 }
 
@@ -354,6 +361,7 @@ export function cashTrace(r: Pick<PlanRevisionInput, 'cash' | 'proofDay'>, terms
   const days = [...new Set(entries.flatMap((e) => [e.day, ...(e.kind === 'RECEIPT' && e.settlesDay != null ? [e.settlesDay] : [])]))].sort((a, b) => a - b);
   let maxExposure = 0, minCash = Number.POSITIVE_INFINITY, minDay: number | null = null;
   const capital = terms.exposureCapCents ?? terms.totalSpendCapCents ?? 0;
+  const funded = entries.filter((e) => e.kind === 'FUNDING').reduce((s, e) => s + e.amountCents, 0);
   for (const d of days) {
     const out = entries.filter((e) => (e.kind === 'SPEND' || e.kind === 'FEE') && e.day <= d).reduce((s, e) => s + e.amountCents, 0)
       + entries.filter((e) => e.kind === 'REFUND' && e.day <= d).reduce((s, e) => s + e.amountCents, 0);
@@ -362,7 +370,8 @@ export function cashTrace(r: Pick<PlanRevisionInput, 'cash' | 'proofDay'>, terms
     const committedBy = Math.max(0, entries.filter((e) => e.kind === 'COMMIT' && e.day <= d).reduce((s, e) => s + e.amountCents, 0) - entries.filter((e) => e.kind === 'RELEASE' && e.day <= d).reduce((s, e) => s + e.amountCents, 0));
     const exposure = out - settled + committedBy;
     maxExposure = Math.max(maxExposure, exposure);
-    const cash = capital - exposure;
+    // The owner's advance is available from the day it is made; it never counts as collected.
+    const cash = capital + entries.filter((e) => e.kind === 'FUNDING' && e.day <= d).reduce((s, e) => s + e.amountCents, 0) - exposure;
     if (cash < minCash) { minCash = cash; minDay = d; }
   }
   return {
@@ -375,6 +384,7 @@ export function cashTrace(r: Pick<PlanRevisionInput, 'cash' | 'proofDay'>, terms
     collectedCents: collected,
     collectedInWindowCents: inWindow,
     refundsCents: refunds,
+    ownerFundedCents: funded,
     netCents: collected - refunds - spent,
   };
 }
@@ -470,7 +480,7 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     const stepIds = new Set(r.steps.map((s) => s.id));
     const linked = new Map<string, number>();
     for (const e of r.cash) {
-      if (e.kind === 'RECEIPT' || e.kind === 'REFUND') continue;
+      if (e.kind === 'RECEIPT' || e.kind === 'REFUND' || e.kind === 'FUNDING') continue;
       if (!e.stepId) { add('CASH_UNLINKED', `outflow "${e.label}" (${e.kind} ${e.amountCents / 100}) names no step whose cost or obligation it pays`, `day ${e.day}`); continue; }
       if (!stepIds.has(e.stepId)) { add('CASH_UNLINKED', `outflow "${e.label}" names step ${e.stepId}, which the plan does not have`, `day ${e.day}`); continue; }
       linked.set(e.stepId, (linked.get(e.stepId) ?? 0) + (e.kind === 'RELEASE' ? -e.amountCents : e.amountCents));

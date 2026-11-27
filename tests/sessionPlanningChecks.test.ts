@@ -5,7 +5,7 @@
  * And the grader reading the same records (bench/planningReliability/session.ts).
  */
 import { describe, expect, it } from 'vitest';
-import { checkRevision, contractDigest, type BrainFacts, type GoalContract, type PlanRevisionInput } from '../server/domain/sessionPlanning.ts';
+import { cashTrace, checkRevision, contractDigest, type BrainFacts, type GoalContract, type PlanRevisionInput } from '../server/domain/sessionPlanning.ts';
 import { observeSession } from '../bench/planningReliability/session.ts';
 import { grade } from '../bench/planningReliability/grade.ts';
 import { PUBLIC_CASES } from '../bench/planningReliability/cases.ts';
@@ -70,6 +70,34 @@ describe('every step cost and obligation reconciles to the cash ledger', () => {
       { day: 6, kind: 'SPEND', amountCents: 20_000, label: 'delivery paid', stepId: 'deliver' },
     ] });
     expect(codes(r)).not.toContain('STEP_COST_UNRECONCILED');
+  });
+});
+
+describe("the owner's own float is funding, never revenue (2026-11-27 run, world f10)", () => {
+  const open = { ...terms, totalSpendCapCents: null, exposureCapCents: null };
+  const c2: GoalContract = { ...contract, terms: open as never, digest: contractDigest({ goalId: 'g', words: 'w', terms: open as never }) };
+  const floatPlan = (cash: PlanRevisionInput['cash']) => plan({ contractDigest: c2.digest, cash, steps: plan().steps.map((s) => ({ ...s, costCents: s.id === 'deliver' ? 6_000 : 0 })) });
+  const delivery = { day: 5, kind: 'SPEND' as const, amountCents: 6_000, label: 'reports', stepId: 'deliver' };
+  const sales = { day: 6, kind: 'RECEIPT' as const, amountCents: 480_000, label: 'three courses', settlesDay: 15 };
+
+  it('a cost paid before receipts settle is a shortfall when nothing funds it', () => {
+    expect(checkRevision(c2, floatPlan([delivery, sales]), brain(), '2026-11-27').map((p) => p.code)).toContain('CASH_SHORTFALL');
+  });
+
+  it('a stated owner float covers it, and collected cash and net stay the customers\' money alone', () => {
+    const r = floatPlan([{ day: 1, kind: 'FUNDING', amountCents: 6_000, label: 'owner float' }, delivery, sales]);
+    expect(checkRevision(c2, r, brain(), '2026-11-27').map((p) => p.code)).not.toContain('CASH_SHORTFALL');
+    const t = cashTrace(r, open);
+    expect(t.collectedCents).toBe(480_000);
+    expect(t.refundsCents).toBe(0);
+    expect(t.ownerFundedCents).toBe(6_000);
+    expect(t.netCents).toBe(474_000);
+    expect(t.maxExposureCents).toBe(6_000); // the owner's $60 is still at risk until the courses pay
+  });
+
+  it('a float does not lift a stated exposure cap', () => {
+    const capped = { ...terms, totalSpendCapCents: null, exposureCapCents: 0 };
+    expect(cashTrace(floatPlan([{ day: 1, kind: 'FUNDING', amountCents: 6_000, label: 'owner float' }, delivery, sales]), capped).maxExposureCents).toBe(6_000);
   });
 });
 
