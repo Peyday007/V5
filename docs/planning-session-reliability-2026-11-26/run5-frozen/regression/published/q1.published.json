@@ -1,0 +1,371 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_258bea6567c3_96b82b",
+      "digest": "258bea6567c3d33735c8c516",
+      "contractDigest": "c546aba7bb2221738c141172",
+      "plan": {
+        "goalId": "wst_7a26baf2238548c99031",
+        "contractDigest": "c546aba7bb2221738c141172",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell cold-chain prescription delivery to independent pharmacies, fulfilled by MedCourier LLC",
+          "opportunityIds": [
+            "cop_cc75008978c5450d9cd3"
+          ],
+          "why": "Every chain link is evidenced on the card: 35 county pharmacies posting for this work, reachable by published business email, $180 evidenced price, 11% measured paid conversion (22/200) on this offer's own page, MedCourier LLC quoted to fulfil at $95, $0 exposure, cash usable in 7 days. 18 deliveries x $180 = $3,240 >= $3,000 with margin $85 each."
+        },
+        "alternatives": [
+          {
+            "title": "No alternative opening",
+            "why": "This world holds a single opening; nothing else is evidenced."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the published business addresses of the county's independent pharmacies with the offer page",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3",
+              "s7"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer cold-chain prescription delivery at $180 per delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Take 18 paid delivery orders (at the measured 11% conversion, about 164 page visitors)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "s2"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "MedCourier LLC performs the 18 temperature-controlled deliveries at its $95 quote",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 171000,
+            "day": 5,
+            "dependsOn": "sell",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect $180 per delivery; cash usable 7 days after sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 324000,
+            "label": "18 x $180 delivery orders",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 11,
+            "kind": "SPEND",
+            "amountCents": 171000,
+            "label": "Pay MedCourier LLC 18 x $95 from collected cash",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 180,
+            "unit": "USD per delivery",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.11,
+            "unit": "paid orders per unique visitor",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "EVIDENCED",
+            "value": 18,
+            "unit": "deliveries",
+            "sources": [
+              "s1",
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 95,
+            "unit": "USD per delivery",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToCash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "marketVolume",
+            "status": "EVIDENCED",
+            "value": 700,
+            "unit": "deliveries per week (35 pharmacies x 20)",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_cc75008978c5450d9cd3#price",
+            "dated": "2026-11-24",
+            "claim": "$180 per delivery",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_cc75008978c5450d9cd3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 paid pre-orders from 200 unique visitors on this offer's own page",
+            "population": "Visitors to this offer's page",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_cc75008978c5450d9cd3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+            "population": "Independent pharmacies in the county",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_cc75008978c5450d9cd3#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "MedCourier LLC quoted to do the work",
+            "population": "Fulfiller",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_cc75008978c5450d9cd3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$95 direct cost per delivery",
+            "population": "Fulfiller quote",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_cc75008978c5450d9cd3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to first cash",
+            "population": "This offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s7",
+            "url": "https://brain.local/card/cop_cc75008978c5450d9cd3#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer is independent pharmacy owners, reachable by published business email",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cc75008978c5450d9cd3",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_cc75008978c5450d9cd3",
+            "deals": 18,
+            "price": 180,
+            "directCost": 95,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_258bea6567c3_96b82b",
+        "digest": "258bea6567c3d33735c8c516",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e134be5662ae457c959d/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:17:04.743Z"
+      },
+      "review": {
+        "revisionId": "rev_258bea6567c3_96b82b",
+        "revisionDigest": "258bea6567c3d33735c8c516",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e134be5662ae457c959d/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f4e28df038744e069d71/reviewer-zeta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right: Brain's links[] establish all eight links for cop_cc75008978c5450d9cd3 from card EVIDENCE (published-email reach, $180 price for this buyer, 22/200 conversion measured on this offer's own page, 35 pharmacies x 20 deliveries/week volume, MedCourier LLC as the card's recorded fulfiller at $95, $0 exposure, 7-day settlement). Recomputed: 18 x $180 = $3,240 >= $3,000; cost 18 x $95 = $1,710 < price; receipts settle day 10 and the courier is paid day 11 from collected cash, so minimum cash $0 inside the $0 exposure cap; net $1,530. Owner hours 0.5. Nothing unknown is treated as known.",
+        "findings": [
+          "Minor: the sell step's 'about 164 page visitors' cannot come from a 35-pharmacy reach; the arithmetic that actually carries the plan is ~4 converting pharmacies (11% of 35) each routing ~5 of their ~80 monthly cold-chain deliveries, which the stated buyer volume supports. Label should say so.",
+          "Minor: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected before day 1, not a chain defect."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:21:25.838Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:21:56.262Z"
+    }
+  }
+}

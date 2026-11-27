@@ -1,0 +1,378 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_1d6a6aeaba11_40b189",
+      "digest": "1d6a6aeaba11f6cac3903d3d",
+      "contractDigest": "0737a97dfa8a451fae38c82a",
+      "plan": {
+        "goalId": "wst_1de80d22896340d8a350",
+        "contractDigest": "0737a97dfa8a451fae38c82a",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell Brain-produced cold-storage temperature log audits to licensed apple packing houses at $650",
+          "opportunityIds": [
+            "cop_975ad45f65a54cfe9eff"
+          ],
+          "why": "85 licensed packing houses must present audited logs each season (EVIDENCE), reachable by email via the state licensee list; $650 price evidenced by three paid invoices (2026-11); 15% measured close (9 of 60 contacts) on this offer's own sales; Brain produces the spreadsheet audit (PRODUCE_SPREADSHEET proven) at $10 cost; cash usable 6 days after sale. 5 audits x $650 = $3,250 needs about 34 of the 85 houses contacted at 15%."
+        },
+        "alternatives": [
+          {
+            "title": "Frost-fan controller rebate applications",
+            "why": "Excluded: the $1,500 is a state rebate paid to the orchard, not a price any grower has paid for the service, and the money settles in 45 days, after the 30-day deadline."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 85 packing houses on the state agriculture department's cold-storage licensee list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3",
+              "s7"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the pre-inspection cold-storage temperature log audit at $650",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 5 audits (15% measured close rate; contact at least 34, up to all 85)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "offer",
+            "evidence": [
+              "s2"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces each audited temperature-log spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 5000,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $650 per audit; usable 6 days after sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 325000,
+            "label": "5 x $650 audits",
+            "settlesDay": 11,
+            "stepId": "collect"
+          },
+          {
+            "day": 11,
+            "kind": "SPEND",
+            "amountCents": 5000,
+            "label": "Direct cost 5 x $10 paid from collected cash",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 11,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD per audit",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "closeRate",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "audits",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachableBuyers",
+            "status": "EVIDENCED",
+            "value": 85,
+            "unit": "licensed packing houses",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "USD per audit",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToCash",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_975ad45f65a54cfe9eff#price",
+            "dated": "2026-11-24",
+            "claim": "Packing houses pay $650 for a cold-storage log audit (three paid invoices, 2026-11)",
+            "population": "Apple packing houses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_975ad45f65a54cfe9eff#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 60 contacts on this offer's own sales",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_975ad45f65a54cfe9eff#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "85 apple packing houses hold state cold-storage licences; each must present audited logs before every season's inspection",
+            "population": "Licensed apple packing houses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_975ad45f65a54cfe9eff#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Fulfilment by Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_975ad45f65a54cfe9eff#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$10 direct cost",
+            "population": "This offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_975ad45f65a54cfe9eff#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "6 days to first cash",
+            "population": "This offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s7",
+            "url": "https://brain.local/card/cop_975ad45f65a54cfe9eff#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer is apple packing house managers",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_975ad45f65a54cfe9eff",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_5335853f01894ff8989c",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_5335853f01894ff8989c",
+            "why": "The $1,500 'price' is a state energy-office rebate paid to orchards that install a controller, not a price a grower pays for application help; no close rate is measured; and time to first cash is 45 days, after the 30-day deadline."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_975ad45f65a54cfe9eff",
+            "deals": 5,
+            "price": 650,
+            "directCost": 10,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1d6a6aeaba11_40b189",
+        "digest": "1d6a6aeaba11f6cac3903d3d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8534db31397544e09681/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:17:30.746Z"
+      },
+      "review": {
+        "revisionId": "rev_1d6a6aeaba11_40b189",
+        "revisionDigest": "1d6a6aeaba11f6cac3903d3d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8534db31397544e09681/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_53fbc6563d634182a4ff/reviewer-zeta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right. All links of cop_975ad45f65a54cfe9eff are established on card EVIDENCE: licensee-list email reach to 85 licensed packing houses with a seasonal obligation, $650 price from three paid invoices by this buyer type, 9/60 close on this offer's own sales, Brain-proved PRODUCE_SPREADSHEET fulfilment, $10 cost, $0 exposure, 6-day settlement. Recomputed: 5 x $650 = $3,250 >= $3,000 (Brain's cautious count of 6 = $3,900 also fits: 85 x 15% ~ 12.75 closes); cost $50 paid day 11 from collected cash, min cash $0, settles day 11 of 30. The frost-fan opening is correctly excluded: the $1,500 is a state rebate to the orchard, not a price paid for the service, and 45-day settlement misses the window.",
+        "findings": [
+          "Minor: the card does not say whether the 60 measured contacts and 9 buyers are already among the 85 licensees; if so, the 9 have bought this season and the fresh pool is smaller. Even at 76 remaining x 15% ~ 11 closes the target holds, but the plan should exclude prior buyers from the reach list."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:21:27.862Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:22:02.374Z"
+    }
+  }
+}

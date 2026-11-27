@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_cbca3387bf464f9cbca7",
+ "revision_id": "rev_b25e3a1a98c5_56715b",
+ "verdict": "PASS",
+ "reasons": "CONDITIONAL is right. The author's MARKET_VOLUME disagreement is supported: Brain's basis (~192 orders/month) is the category total across 40 sellers (buyerVolume fact; population 'all sellers', not this listing), so counting all of it as available to one listing transfers another population's figure; 36 sales is ~19% of category volume and nothing on the card establishes this listing's share or traffic. Price $29 (comparable listings for this buyer), 4% conversion measured on this offer's own page, Brain-proved PRODUCE_SPREADSHEET fulfilment, $3 cost, $0 exposure and 3-day settlement are established. Recomputed: 36 x $29 = $1,044 >= $1,000; 9 + 27 sales; last receipts day 26 settle day 29 inside 30; cost $108 deducted from payouts; min cash $0. Proof (9 sales by day 9), stop (<4) and continue rules are measurable and the test costs nothing.",
+ "findings": [
+  "Minor: the card's 60 money-committed pre-orders on this offer's page are neither counted toward the target nor explained (whether they are already settled, refundable, or outside the window); the plan should say.",
+  "Minor: the 4-8-sales continue branch re-measures but a 4-in-7-days rate projects ~14 sales by day 26, far below 36; the branch should stop at the day-16 re-measure if the run rate stays under ~1.3/day.",
+  "Minor: the workbook must be produced before the day-2 listing; the deliver step is dated day 26."
+ ],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-zeta",
+ "reviewer_model": "claude-opus-5-5"
+}

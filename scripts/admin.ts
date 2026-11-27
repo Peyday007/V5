@@ -44,6 +44,7 @@
  *   npm run admin -- projects list
  *   npm run admin -- projects create "A name" --admin someone@example.com
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
+ *   npm run admin -- access grant-planning <worker> <project> --admin someone@example.com   (adds operator:act for brain_planning_*)
  *   npm run admin -- access revoke <worker> <project> --admin someone@example.com
  *   npm run admin -- queue list <project>
  *   npm run admin -- packets list <project>
@@ -128,7 +129,7 @@ import { countLivePasskeys } from '../server/repos/passkeys.ts';
 import { listOrchestrationsByProject, currentFragments } from '../server/repos/research.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import { reissueMissingVerification, retryFragment } from '../server/services/research/reissue.ts';
-import { CONNECTOR_SCOPES, IDENTITY_RESULTS, type IdentityResult } from '../server/domain/types.ts';
+import { CONNECTOR_SCOPES, IDENTITY_RESULTS, OPERATOR_SCOPES, type IdentityResult } from '../server/domain/types.ts';
 import {
   WORKLOAD_FAMILIES,
   decideBinRouting,
@@ -2396,6 +2397,33 @@ async function main(): Promise<void> {
         metadata: { scopes: [...CONNECTOR_SCOPES].join(','), kind: 'RESEARCH' },
       });
       console.log(`  ${workerIdentity(worker)} researches for ${project.name}.`);
+      break;
+    }
+    case 'access grant-planning': {
+      /*
+       * The app-session planning tools (`brain_planning_*`) write with `operator:act` on the goal's project. A
+       * connector's research set does not hold it, so a Claude app connector reaches only the planning reads until
+       * this is granted. It ADDS the operator set to what the worker already holds on that one project — never
+       * replacing its research scopes, never touching another project. An author and an independent reviewer are
+       * two workers, each approved on its own connector: one worker in both sessions is self-review.
+       */
+      const actor = await administrator();
+      const worker = await workerFrom(rest[0] ?? fail('Name a worker.'));
+      const project = await projectFrom(rest[1] ?? fail('Name a project.'));
+      const held = (await listMembershipsForPrincipal('WORKER', worker.id)).find((m) => m.active && m.projectId === project.id)?.scopes ?? [];
+      const scopes = [...new Set([...held, ...OPERATOR_SCOPES])];
+      await grantMembership({ projectId: project.id, principalType: 'WORKER', principalId: worker.id, role: null, scopes, grantedByType: 'HUMAN', grantedById: actor.id });
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'GRANT_MEMBERSHIP',
+        targetType: 'WORKER',
+        targetId: worker.id,
+        projectId: project.id,
+        result: 'SUCCESS',
+        metadata: { scopes: scopes.join(','), kind: 'PLANNING' },
+      });
+      console.log(`  ${workerIdentity(worker)} may plan on ${project.name} (${scopes.join(', ')}).`);
       break;
     }
     case 'access revoke': {

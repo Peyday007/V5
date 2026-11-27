@@ -1,0 +1,12 @@
+{
+ "goal_id": "wst_1de80d22896340d8a350",
+ "revision_id": "rev_1d6a6aeaba11_40b189",
+ "verdict": "PASS",
+ "reasons": "EXECUTABLE is right. All links of cop_975ad45f65a54cfe9eff are established on card EVIDENCE: licensee-list email reach to 85 licensed packing houses with a seasonal obligation, $650 price from three paid invoices by this buyer type, 9/60 close on this offer's own sales, Brain-proved PRODUCE_SPREADSHEET fulfilment, $10 cost, $0 exposure, 6-day settlement. Recomputed: 5 x $650 = $3,250 >= $3,000 (Brain's cautious count of 6 = $3,900 also fits: 85 x 15% ~ 12.75 closes); cost $50 paid day 11 from collected cash, min cash $0, settles day 11 of 30. The frost-fan opening is correctly excluded: the $1,500 is a state rebate to the orchard, not a price paid for the service, and 45-day settlement misses the window.",
+ "findings": [
+  "Minor: the card does not say whether the 60 measured contacts and 9 buyers are already among the 85 licensees; if so, the 9 have bought this season and the fresh pool is smaller. Even at 76 remaining x 15% ~ 11 closes the target holds, but the plan should exclude prior buyers from the reach list."
+ ],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-zeta",
+ "reviewer_model": "claude-opus-5-5"
+}

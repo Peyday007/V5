@@ -1,0 +1,181 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_a4a7f06de866_0dcbf0",
+      "digest": "a4a7f06de866505e45ef5584",
+      "contractDigest": "09c8d101d009e9b6a6cc5cb5",
+      "plan": {
+        "goalId": "wst_e40a03ab0e564c55ac74",
+        "contractDigest": "09c8d101d009e9b6a6cc5cb5",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan until the inspection-certificate pack's price is established",
+          "opportunityIds": [],
+          "why": "The only opening's price is contradicted: the card records 120000 cents ($1,200) while its sourced price fact says $120. At $1,200, 5 deals carry $6,000 and 140 licensed contractors at the measured 12% close yield about 16, so the plan would work; at $120, 50 deals are needed and the whole reachable market at 12% yields about 17 deals, about $2,016. Which is true decides the plan, and nothing on the card says which, so no executable or conditional plan is established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell at $1,200 anyway and measure",
+            "why": "No source shows any contractor paying $1,200; the only sourced price is $120, so a $1,200 offer is an unestablished price, not a test of an unknown close rate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Establish what elevator maintenance contractors actually pay for an annual inspection certificate pack (published price or paid invoices, with source and date) and whether the 12-of-100 close was at $120 or $1,200",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per pack",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "A source for the price buyers pay; card says $1,200, fact says $120"
+          },
+          {
+            "name": "closeRate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachableBuyers",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "licensed contractors, buying about once a year",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_35c6a44cc2564458be1b#price",
+            "dated": "2026-11-24",
+            "claim": "Price fact: $120",
+            "population": "Elevator maintenance contractors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_35c6a44cc2564458be1b#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card price field: 120000 cents ($1,200), contradicting the $120 fact",
+            "population": "Elevator maintenance contractors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_35c6a44cc2564458be1b#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "12 agreements from 100 contacts",
+            "population": "Elevator maintenance contractors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_35c6a44cc2564458be1b#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "140 licensed elevator maintenance contractors, each filing inspection certificates annually",
+            "population": "Licensed contractors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The price is contradicted ($1,200 on the card vs a sourced $120): at $1,200 the target needs 5 of ~17 expected closes and is reachable; at $120 the whole 140-contractor market yields about $2,016, short of $6,000. No figure establishes which.",
+          "resolution": "Research the published or invoiced price contractors pay for this pack and the price at which the 12/100 close was measured; if $1,200 is confirmed, sell 5-6 packs by email to the state board's licensee list (cash in 8 days); if $120, record that this opening cannot carry the target and look for a second opening.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_35c6a44cc2564458be1b",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_a4a7f06de866_0dcbf0",
+        "digest": "a4a7f06de866505e45ef5584",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_72adc5d043c1482daae8/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:18:26.745Z"
+      },
+      "review": {
+        "revisionId": "rev_a4a7f06de866_0dcbf0",
+        "revisionDigest": "a4a7f06de866505e45ef5584",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_72adc5d043c1482daae8/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_9976022b831049399f6e/reviewer-zeta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right, and the decisive gap is named correctly as the price, which the card's own evidence contradicts (priceCents 120000 = $1,200 vs the sourced price fact $120); Brain's links[] also mark OFFER_AND_PRICE unestablished ('no single price on the card'). Recomputed: at $120, 140 licensees buying ~once a year x 12% measured close ~ 16.8 deals ~ $2,016 < $6,000 (Brain's MARKET_VOLUME is also unestablished at that price); at $1,200, 5 deals = $6,000 out of ~17 expected. No constraint is asserted from missing evidence. The resolution (establish the paid price and the price at which 12/100 closed) is the right next step, and refusing to sell at an unsourced $1,200 is correct.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T05:21:28.733Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:22:04.472Z"
+    }
+  }
+}
