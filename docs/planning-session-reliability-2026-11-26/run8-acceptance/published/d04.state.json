@@ -1,0 +1,319 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_23f27897ecc14443add8",
+      "words": "I need to keep $3,000 after costs, settled within 14 days. No starting capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "CONTRIBUTION",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "No starting capital: costs must be paid from buyer money already received; only settled cash within 14 days counts",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "4cd41ab06dab35303ea51bf5"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_23f27897ecc14443add8",
+        "contractDigest": "4cd41ab06dab35303ea51bf5",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "probe",
+          "opportunityIds": [],
+          "why": "probe"
+        },
+        "alternatives": [],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [],
+        "sources": [],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "x",
+          "resolution": "y",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_4b9b2e454db4_26769a",
+        "digest": "4b9b2e454db4127b6e4fbba7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c832ccaf9ecf44c4b85b/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:39:30.028Z"
+      },
+      {
+        "goalId": "wst_23f27897ecc14443add8",
+        "contractDigest": "4cd41ab06dab35303ea51bf5",
+        "parentRevisionId": "rev_4b9b2e454db4_26769a",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: no opening can be shown to settle $3,000 of contribution in 14 days with zero capital",
+          "opportunityIds": [],
+          "why": "Brain holds no target for this goal and refuses every route, so no opening could be recorded or calculated. On the public evidence, settlement itself is the binding link for a new seller: Stripe schedules a new account's first payout 7-14 days after the first live payment, PayPal holds a new seller's service payments until 7 days after completion (up to 21 days), Fiverr clears earnings 14 days after completion and Upwork holds fixed-price payments 5 days after approval (clients have 14 days to approve). A sale would have to be closed, delivered and approved inside the first week, with no money for tools or a subcontractor until a buyer pays."
+        },
+        "alternatives": [
+          {
+            "title": "Bid on posted website projects on Freelancer.com",
+            "why": "348 open website-design jobs on 2026-11-27, but average bids $25-$656 against 100-400 rival bids and a 10%/$5 fee; 6+ wins delivered and released inside 14 days from a new account is not evidenced."
+          },
+          {
+            "title": "Fiverr website gig",
+            "why": "Fiverr's 14-day clearing period after completion puts every dollar outside a 14-day window."
+          },
+          {
+            "title": "Cold-emailed website redesign with card deposit",
+            "why": "Needs a paid sending tool before any buyer pays (capital 0), and Stripe's 7-14 day first payout makes even a day-1 deposit settle at the window's edge; price and close rate unknown."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026",
+            "claim": "Initial payout typically 7-14 days after first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s2",
+            "url": "https://www.paypal.com/us/cshelp/article/HELP848",
+            "dated": "2026",
+            "claim": "New PayPal sellers' payments held up to 21 days; services released 7 days after marked Completed",
+            "population": "new PayPal sellers",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s3",
+            "url": "https://help.fiverr.com/hc/en-us/articles/34069565843985",
+            "dated": "2026",
+            "claim": "Funds subject to a 14-day clearing period",
+            "population": "Fiverr sellers",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s4",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "348 open website-design jobs; average bids $25-$656 with 100-400 bids",
+            "population": "marketplace clients",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Settlement in time for a brand-new seller with no capital: no route has a payment path shown to put buyer money in the owner's account within 14 days (Stripe first payout 7-14 days, PayPal 7-21 day holds, Fiverr 14-day clearing, Upwork 5-day hold after up to 14-day approval), and no buyer, price or close rate is established.",
+          "resolution": "Zero-cost test: on day 1-3 bid on 20 posted fixed-price Freelancer.com website jobs whose clients fund milestones in escrow; PROOF: 3 funded milestones totalling >= $1,200 by day 4 and the first released and withdrawn by day 10; STOP: no funded milestone by day 4, or first release not withdrawable by day 10 -> the window cannot be met, ask the owner to relax the deadline to 30 days; CONTINUE: 1-2 funded milestones -> keep bidding through day 5 only.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME",
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME",
+          "CURRENT_DEMAND",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_7e8fc4f62b6c_560075",
+        "digest": "7e8fc4f62b6ce93b74934ec4",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c832ccaf9ecf44c4b85b/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:43:15.032Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_23f27897ecc14443add8",
+      "contractDigest": "4cd41ab06dab35303ea51bf5",
+      "parentRevisionId": "rev_4b9b2e454db4_26769a",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: no opening can be shown to settle $3,000 of contribution in 14 days with zero capital",
+        "opportunityIds": [],
+        "why": "Brain holds no target for this goal and refuses every route, so no opening could be recorded or calculated. On the public evidence, settlement itself is the binding link for a new seller: Stripe schedules a new account's first payout 7-14 days after the first live payment, PayPal holds a new seller's service payments until 7 days after completion (up to 21 days), Fiverr clears earnings 14 days after completion and Upwork holds fixed-price payments 5 days after approval (clients have 14 days to approve). A sale would have to be closed, delivered and approved inside the first week, with no money for tools or a subcontractor until a buyer pays."
+      },
+      "alternatives": [
+        {
+          "title": "Bid on posted website projects on Freelancer.com",
+          "why": "348 open website-design jobs on 2026-11-27, but average bids $25-$656 against 100-400 rival bids and a 10%/$5 fee; 6+ wins delivered and released inside 14 days from a new account is not evidenced."
+        },
+        {
+          "title": "Fiverr website gig",
+          "why": "Fiverr's 14-day clearing period after completion puts every dollar outside a 14-day window."
+        },
+        {
+          "title": "Cold-emailed website redesign with card deposit",
+          "why": "Needs a paid sending tool before any buyer pays (capital 0), and Stripe's 7-14 day first payout makes even a day-1 deposit settle at the window's edge; price and close rate unknown."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://docs.stripe.com/payouts",
+          "dated": "2026",
+          "claim": "Initial payout typically 7-14 days after first live payment",
+          "population": "new Stripe accounts",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s2",
+          "url": "https://www.paypal.com/us/cshelp/article/HELP848",
+          "dated": "2026",
+          "claim": "New PayPal sellers' payments held up to 21 days; services released 7 days after marked Completed",
+          "population": "new PayPal sellers",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s3",
+          "url": "https://help.fiverr.com/hc/en-us/articles/34069565843985",
+          "dated": "2026",
+          "claim": "Funds subject to a 14-day clearing period",
+          "population": "Fiverr sellers",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s4",
+          "url": "https://www.freelancer.com/jobs/website-design/",
+          "dated": "2026-11-27",
+          "claim": "348 open website-design jobs; average bids $25-$656 with 100-400 bids",
+          "population": "marketplace clients",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Settlement in time for a brand-new seller with no capital: no route has a payment path shown to put buyer money in the owner's account within 14 days (Stripe first payout 7-14 days, PayPal 7-21 day holds, Fiverr 14-day clearing, Upwork 5-day hold after up to 14-day approval), and no buyer, price or close rate is established.",
+        "resolution": "Zero-cost test: on day 1-3 bid on 20 posted fixed-price Freelancer.com website jobs whose clients fund milestones in escrow; PROOF: 3 funded milestones totalling >= $1,200 by day 4 and the first released and withdrawn by day 10; STOP: no funded milestone by day 4, or first release not withdrawable by day 10 -> the window cannot be met, ask the owner to relax the deadline to 30 days; CONTINUE: 1-2 funded milestones -> keep bidding through day 5 only.",
+        "decisiveLinks": [
+          "SETTLES_IN_TIME",
+          "CURRENT_DEMAND",
+          "CONVERSION"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "SETTLES_IN_TIME",
+        "CURRENT_DEMAND",
+        "CONVERSION"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_7e8fc4f62b6c_560075",
+      "digest": "7e8fc4f62b6ce93b74934ec4",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_c832ccaf9ecf44c4b85b/author-F",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:43:15.032Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_7e8fc4f62b6c_560075",
+      "digest": "7e8fc4f62b6ce93b74934ec4",
+      "contractDigest": "4cd41ab06dab35303ea51bf5",
+      "problems": [
+        {
+          "code": "BRAIN_CHECK_FAILED",
+          "detail": "Brain's planner did not complete (the planner returned no reading); the revision cannot be certified on a missing calculation",
+          "at": null
+        },
+        {
+          "code": "RESOLUTION_UNNAMED",
+          "detail": "the decisive gap names SETTLES_IN_TIME, but no opening's chain marks it missing",
+          "at": null
+        },
+        {
+          "code": "RESOLUTION_UNNAMED",
+          "detail": "the decisive gap names CURRENT_DEMAND, but no opening's chain marks it missing",
+          "at": null
+        },
+        {
+          "code": "RESOLUTION_UNNAMED",
+          "detail": "the decisive gap names CONVERSION, but no opening's chain marks it missing",
+          "at": null
+        }
+      ],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": false,
+        "error": "the planner returned no reading",
+        "verdict": null,
+        "summary": null,
+        "acceptance": null,
+        "considered": [],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [],
+        "excluded": [],
+        "questions": [],
+        "scope": null,
+        "at": "2026-11-27T09:36:43.020Z"
+      }
+    },
+    "reviews": [],
+    "final": null,
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,3986 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_d29acc5756e24d39b4f3",
+      "words": "Generate $5,000 of settled cash within 30 days selling only to craft distilleries. I can put in at most $500.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 50000,
+        "proofCondition": "First craft-distillery buyer payment settled",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [
+          "Any buyer that is not a craft distillery"
+        ],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 4,
+      "digest": "c95b4da86fbcef5e761b16a7"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_d29acc5756e24d39b4f3",
+        "contractDigest": "c95b4da86fbcef5e761b16a7",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell spirits bottle label design ($2,000 per label) to craft distilleries by cold email, fulfilled by a 7-day 99designs spirits label designer ($1,150 + 5%) paid from the buyer's prepayment",
+          "opportunityIds": [
+            "cop_c44d3c09f256407f8d73"
+          ],
+          "why": "Highest margin per deal among the distillery routes ($2,000 published single-label price from Pine Watt vs $1,207.50 subcontract cost, about $792 margin), a named fulfiller with a 7-day turnaround that fits the window, and a counted buyer population (2,282 active craft distillers, ACSA/Park Street). Seven paid labels net about $5,544. Demand from cold email and the close rate are unmeasured, so the plan is conditional on paid orders in the first week; the owner's $500 is never needed to fund the designer because each buyer prepays."
+        },
+        "alternatives": [
+          {
+            "title": "TTB COLA label-approval filing at $65",
+            "why": "Needs about 77 filings in 30 days; $65 is one law firm's rate (BevLaw), and the owner would have to master TTB labeling rules."
+          },
+          {
+            "title": "TTB formula filing at $200",
+            "why": "Needs 25 filings; owner regulatory competence unestablished."
+          },
+          {
+            "title": "Outsourced monthly TTB operations reporting",
+            "why": "Price benchmark is a winery bookkeeper, not a distillery service; only the first month settles; owner competence in DSP accounting unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain compiles 300 craft distilleries (state guild and ACSA public directories) and drafts personalised emails tied to new releases; owner sends from own mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_count",
+              "s_card_access"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer one spirits label design at $2,000, prepaid by invoice/Stripe, delivered 7 days after payment clears",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price_pine"
+            ],
+            "ownerHours": 2,
+            "priceCents": 200000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count prepaid label orders from the first 150 emails by day 8",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "If proven, keep sending batches and calls until 7 prepaid labels by day 14",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 10,
+            "priceCents": 200000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Buyer prepayments settle to the owner's bank (Stripe first payout 7-14 days after first live payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Commission each label from the 99designs spirits label designer out of settled prepayments; Brain prepares the brief and checks TTB mandatory label statements",
+            "performer": "99designs designer tristanv, 'Professional Wine and Spirits Label Design' $1,150 + 5% platform fee, 7 days",
+            "costCents": 845250,
+            "day": 19,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_supply",
+              "s_card_fulfillment"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "99designs designer tristanv, 'Professional Wine and Spirits Label Design' $1,150 + 5% platform fee, 7 days",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Owner hands over print-ready files and confirms acceptance",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_supply"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 200000,
+            "label": "First prepaid label",
+            "settlesDay": 19,
+            "stepId": "offer"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 1200000,
+            "label": "Six further prepaid labels",
+            "settlesDay": 19,
+            "stepId": "sell"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 845250,
+            "label": "Seven labels from the 99designs designer at $1,150 + 5%",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ESTIMATE",
+            "value": 2000,
+            "unit": "USD per label",
+            "sources": [
+              "s_price_pine"
+            ],
+            "needs": "prepaid orders at $2,000"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email",
+            "sources": [],
+            "needs": "the day-8 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "EVIDENCED",
+            "value": 1207.5,
+            "unit": "USD per label",
+            "sources": [
+              "s_supply"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer_population",
+            "status": "EVIDENCED",
+            "value": 2282,
+            "unit": "active US craft distillers",
+            "sources": [
+              "s_count"
+            ],
+            "needs": null
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "payout date"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_c44d3c09f256407f8d73#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by cold email from public distillery directories",
+            "population": "craft distilleries",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_card_fulfillment",
+            "url": "https://brain.local/card/cop_c44d3c09f256407f8d73#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "A 99designs spirits label designer delivers it",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_price_pine",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label; four-label package $1,750 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_supply",
+            "url": "https://99designs.com/profiles/tristanv/services/3380",
+            "dated": "2026-11-27",
+            "claim": "Professional Wine and Spirits Label Design, $1,150 excluding 5% fee, 7-day turnaround",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_count",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically within 7-14 days of first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_cola",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Labeling: $65 for basic labels (per label set); formulas $200 basic",
+            "population": "beverage alcohol producers using a label/formula filing firm",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_cola_ttb",
+            "url": "https://www.ttb.gov/public-information/featured-stories/ttb-label-approval-basics",
+            "dated": "2026-11-27",
+            "claim": "TTB label approval has no fee to apply",
+            "population": "TTB permittees",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_formula",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Formulas: $200 for basic formulas",
+            "population": "beverage alcohol producers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_f358c7aff7044700ac21"
+          },
+          {
+            "id": "s_ttbrep",
+            "url": "https://recorder-horse-j7ya.squarespace.com/winery-bookkeeping",
+            "dated": "2026-11-27",
+            "claim": "Winery bookkeeping packages $1,500-$4,000/month including TTB filings (winery, not distillery)",
+            "population": "wineries",
+            "matchesBuyer": false,
+            "opportunityId": "cop_18513ab2057d44508805"
+          },
+          {
+            "id": "s_ttbrep_due",
+            "url": "https://www.ttb.gov/taxes/tax-audit/due-dates-for-operational-reports",
+            "dated": "2026-11-27",
+            "claim": "DSP monthly operational reports due by the 15th of the following month",
+            "population": "distilled spirits plants",
+            "matchesBuyer": true,
+            "opportunityId": "cop_18513ab2057d44508805"
+          }
+        ],
+        "validation": {
+          "proof": "At least 1 prepaid $2,000 label order from the first 150 craft-distillery emails by day 8, with the payment settled or scheduled to settle by day 19",
+          "stop": [
+            "0 prepaid orders by day 8",
+            "fewer than 4 prepaid orders by day 14",
+            "the designer cannot start within 2 days or deliver within 7 days at $1,150",
+            "first payout scheduled after day 21"
+          ],
+          "continue": [
+            "1 or more prepaid orders by day 8: continue outreach to reach 7 prepaid labels by day 14"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "why": "77 filings needed at a single firm's $65 rate; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "why": "25 filings needed; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "why": "Winery price benchmark only; owner competence unestablished; one month settles"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "deals": 7,
+            "price": 2000,
+            "directCost": 1207.5,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND",
+          "ECONOMICS",
+          "FULFILMENT",
+          "MARKET_VOLUME",
+          "OFFER_AND_PRICE",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_de6d03764204_1f588e",
+        "digest": "de6d0376420486b79fd0c50a",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b70747332771444f825f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:44:33.131Z"
+      },
+      {
+        "goalId": "wst_d29acc5756e24d39b4f3",
+        "contractDigest": "c95b4da86fbcef5e761b16a7",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell managed spirits label design ($1,500 per label) to craft distilleries by cold email, fulfilled as a 7-day 99designs Silver beverage-label contest ($499) paid from the buyer's settled prepayment",
+          "opportunityIds": [
+            "cop_23e896a5713f4cf9a8e8"
+          ],
+          "why": "Priced under a published spirits label designer ($2,000 single label, Pine Watt on Dribbble) with a fulfiller whose price and duration are published (99designs Silver beverage-label contest US$499, 4-day qualifying plus 3-day final round), about $1,001 margin per label, and a counted buyer population (2,282 active craft distillers, ACSA via Park Street). Five prepaid labels net about $5,005 and no deal costs more than the $500 the owner may put in; each contest is paid from the buyer's settled prepayment. Demand from cold email and the close rate are unmeasured, so the plan is conditional on prepaid orders in the first week."
+        },
+        "alternatives": [
+          {
+            "title": "Label design via a $1,150 + 5% 99designs designer at $2,000",
+            "why": "Per-deal designer cost ($1,207.50) exceeds the $500 the owner may put in; dropped for the $499 contest route."
+          },
+          {
+            "title": "TTB COLA label-approval filing at $65",
+            "why": "Needs about 77 filings in 30 days; $65 is one law firm's rate (BevLaw), and the owner would have to master TTB labeling rules."
+          },
+          {
+            "title": "TTB formula filing at $200",
+            "why": "Needs 25 filings; owner regulatory competence unestablished."
+          },
+          {
+            "title": "Outsourced monthly TTB operations reporting",
+            "why": "Price benchmark is a winery bookkeeper, not a distillery service; only the first month settles; owner competence in DSP accounting unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain compiles 300 craft distilleries (state guild and ACSA public directories) and drafts personalised emails tied to new releases; owner sends from own mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_count_m",
+              "s_card_access"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer one managed spirits label design at $1,500, prepaid by invoice/Stripe, delivered 7 days after payment clears",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price_pine_m"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count prepaid label orders from the first 150 emails by day 8",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "If proven, keep sending batches and calls until 5 prepaid labels by day 14",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 10,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Buyer prepayments settle to the owner's bank (Stripe first payout 7-14 days after first live payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Launch a 99designs Silver beverage-label contest per label out of settled prepayments; Brain writes the brief (TTB mandatory statements), shortlists and checks the winning files",
+            "performer": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+            "costCents": 249500,
+            "day": 19,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_99",
+              "s_99time"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Owner hands over print-ready files and confirms acceptance",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_99time"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 150000,
+            "label": "First prepaid label",
+            "settlesDay": 19,
+            "stepId": "offer"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 600000,
+            "label": "Four further prepaid labels",
+            "settlesDay": 19,
+            "stepId": "sell"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 249500,
+            "label": "Five 99designs Silver contests at $499",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ESTIMATE",
+            "value": 1500,
+            "unit": "USD per label",
+            "sources": [
+              "s_price_pine_m"
+            ],
+            "needs": "prepaid orders at $1,500"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email",
+            "sources": [],
+            "needs": "the day-8 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "EVIDENCED",
+            "value": 499,
+            "unit": "USD per label",
+            "sources": [
+              "s_99"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer_population",
+            "status": "EVIDENCED",
+            "value": 2282,
+            "unit": "active US craft distillers",
+            "sources": [
+              "s_count_m"
+            ],
+            "needs": null
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "payout date"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_99",
+            "url": "https://99designs.com/beverage-label-design",
+            "dated": "2026-11-27",
+            "claim": "Beverage label design contest packages Bronze US$299, Silver US$499, Gold US$799, Platinum US$1,199",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_99time",
+            "url": "https://support.99designs.com/hc/en/articles/204109459",
+            "dated": "2026-11-27",
+            "claim": "Contests run a 4-day qualifying round and a 3-day final round",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_price_pine_m",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_count_m",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_23e896a5713f4cf9a8e8#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by cold email from public distillery directories",
+            "population": "craft distilleries",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_price_pine",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label; four-label package $1,750 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_supply",
+            "url": "https://99designs.com/profiles/tristanv/services/3380",
+            "dated": "2026-11-27",
+            "claim": "Professional Wine and Spirits Label Design, $1,150 excluding 5% fee, 7-day turnaround",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_count",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically within 7-14 days of first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_cola",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Labeling: $65 for basic labels (per label set); formulas $200 basic",
+            "population": "beverage alcohol producers using a label/formula filing firm",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_cola_ttb",
+            "url": "https://www.ttb.gov/public-information/featured-stories/ttb-label-approval-basics",
+            "dated": "2026-11-27",
+            "claim": "TTB label approval has no fee to apply",
+            "population": "TTB permittees",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_formula",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Formulas: $200 for basic formulas",
+            "population": "beverage alcohol producers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_f358c7aff7044700ac21"
+          },
+          {
+            "id": "s_ttbrep",
+            "url": "https://recorder-horse-j7ya.squarespace.com/winery-bookkeeping",
+            "dated": "2026-11-27",
+            "claim": "Winery bookkeeping packages $1,500-$4,000/month including TTB filings (winery, not distillery)",
+            "population": "wineries",
+            "matchesBuyer": false,
+            "opportunityId": "cop_18513ab2057d44508805"
+          },
+          {
+            "id": "s_ttbrep_due",
+            "url": "https://www.ttb.gov/taxes/tax-audit/due-dates-for-operational-reports",
+            "dated": "2026-11-27",
+            "claim": "DSP monthly operational reports due by the 15th of the following month",
+            "population": "distilled spirits plants",
+            "matchesBuyer": true,
+            "opportunityId": "cop_18513ab2057d44508805"
+          }
+        ],
+        "validation": {
+          "proof": "At least 1 prepaid $1,500 label order from the first 150 craft-distillery emails by day 8, with the payment settled or scheduled to settle by day 19",
+          "stop": [
+            "0 prepaid orders by day 8",
+            "fewer than 3 prepaid orders by day 14",
+            "a Silver contest does not produce an acceptable label within 7 days",
+            "first payout scheduled after day 21"
+          ],
+          "continue": [
+            "1 or more prepaid orders by day 8: continue outreach to reach 5 prepaid labels by day 14"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "why": "Designer cost $1,207.50 per deal exceeds the $500 the owner may put in"
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "why": "77 filings needed at a single firm's $65 rate; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "why": "25 filings needed; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "why": "Winery price benchmark only; owner competence unestablished; one month settles"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "deals": 5,
+            "price": 1500,
+            "directCost": 499,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND",
+          "ECONOMICS",
+          "FULFILMENT",
+          "MARKET_VOLUME",
+          "OFFER_AND_PRICE",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1dbaa2cf6b48_2ad4f5",
+        "digest": "1dbaa2cf6b48ae0092804f6e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b70747332771444f825f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:46:08.761Z"
+      },
+      {
+        "goalId": "wst_d29acc5756e24d39b4f3",
+        "contractDigest": "c95b4da86fbcef5e761b16a7",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell managed spirits label design ($1,500 per label) to craft distilleries by cold email, fulfilled as a 7-day 99designs Silver beverage-label contest ($499) paid from the buyer's settled prepayment",
+          "opportunityIds": [
+            "cop_23e896a5713f4cf9a8e8"
+          ],
+          "why": "Priced under a published spirits label designer ($2,000 single label, Pine Watt on Dribbble) with a fulfiller whose price and duration are published (99designs Silver beverage-label contest US$499, 4-day qualifying plus 3-day final round), about $1,001 margin per label, and a counted buyer population (2,282 active craft distillers, ACSA via Park Street). Five prepaid labels net about $5,005 and no deal costs more than the $500 the owner may put in; each contest is paid from the buyer's settled prepayment. Demand from cold email and the close rate are unmeasured, so the plan is conditional on prepaid orders in the first week."
+        },
+        "alternatives": [
+          {
+            "title": "Label design via a $1,150 + 5% 99designs designer at $2,000",
+            "why": "Per-deal designer cost ($1,207.50) exceeds the $500 the owner may put in; dropped for the $499 contest route."
+          },
+          {
+            "title": "TTB COLA label-approval filing at $65",
+            "why": "Needs about 77 filings in 30 days; $65 is one law firm's rate (BevLaw), and the owner would have to master TTB labeling rules."
+          },
+          {
+            "title": "TTB formula filing at $200",
+            "why": "Needs 25 filings; owner regulatory competence unestablished."
+          },
+          {
+            "title": "Outsourced monthly TTB operations reporting",
+            "why": "Price benchmark is a winery bookkeeper, not a distillery service; only the first month settles; owner competence in DSP accounting unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain compiles 300 craft distilleries (state guild and ACSA public directories) and drafts personalised emails tied to new releases; owner sends from own mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_count_m",
+              "s_card_access"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer one managed spirits label design at $1,500, prepaid by invoice/Stripe, delivered 7 days after payment clears",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price_pine_m"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count prepaid label orders from the first 150 emails by day 8",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "If proven, keep sending batches and calls until 5 prepaid labels by day 14",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 10,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Buyer prepayments settle to the owner's bank (Stripe first payout 7-14 days after first live payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Launch a 99designs Silver beverage-label contest per label out of settled prepayments; Brain writes the brief (TTB mandatory statements), shortlists and checks the winning files",
+            "performer": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+            "costCents": 249500,
+            "day": 19,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_99",
+              "s_99time"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Owner hands over print-ready files and confirms acceptance",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_99time"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 150000,
+            "label": "First prepaid label",
+            "settlesDay": 19,
+            "stepId": "offer"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 600000,
+            "label": "Four further prepaid labels",
+            "settlesDay": 19,
+            "stepId": "sell"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 249500,
+            "label": "Five 99designs Silver contests at $499",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ESTIMATE",
+            "value": 1500,
+            "unit": "USD per label",
+            "sources": [
+              "s_price_pine_m"
+            ],
+            "needs": "prepaid orders at $1,500"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email",
+            "sources": [],
+            "needs": "the day-8 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "EVIDENCED",
+            "value": 499,
+            "unit": "USD per label",
+            "sources": [
+              "s_99"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer_population",
+            "status": "EVIDENCED",
+            "value": 2282,
+            "unit": "active US craft distillers",
+            "sources": [
+              "s_count_m"
+            ],
+            "needs": null
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "payout date"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_99",
+            "url": "https://99designs.com/beverage-label-design",
+            "dated": "2026-11-27",
+            "claim": "Beverage label design contest packages Bronze US$299, Silver US$499, Gold US$799, Platinum US$1,199",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_99time",
+            "url": "https://support.99designs.com/hc/en/articles/204109459",
+            "dated": "2026-11-27",
+            "claim": "Contests run a 4-day qualifying round and a 3-day final round",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_price_pine_m",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_count_m",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_23e896a5713f4cf9a8e8#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by cold email from public distillery directories",
+            "population": "craft distilleries",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_price_pine",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label; four-label package $1,750 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_supply",
+            "url": "https://99designs.com/profiles/tristanv/services/3380",
+            "dated": "2026-11-27",
+            "claim": "Professional Wine and Spirits Label Design, $1,150 excluding 5% fee, 7-day turnaround",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_count",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically within 7-14 days of first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_cola",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Labeling: $65 for basic labels (per label set); formulas $200 basic",
+            "population": "beverage alcohol producers using a label/formula filing firm",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_cola_ttb",
+            "url": "https://www.ttb.gov/public-information/featured-stories/ttb-label-approval-basics",
+            "dated": "2026-11-27",
+            "claim": "TTB label approval has no fee to apply",
+            "population": "TTB permittees",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_formula",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Formulas: $200 for basic formulas",
+            "population": "beverage alcohol producers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_f358c7aff7044700ac21"
+          },
+          {
+            "id": "s_ttbrep",
+            "url": "https://recorder-horse-j7ya.squarespace.com/winery-bookkeeping",
+            "dated": "2026-11-27",
+            "claim": "Winery bookkeeping packages $1,500-$4,000/month including TTB filings (winery, not distillery)",
+            "population": "wineries",
+            "matchesBuyer": false,
+            "opportunityId": "cop_18513ab2057d44508805"
+          },
+          {
+            "id": "s_ttbrep_due",
+            "url": "https://www.ttb.gov/taxes/tax-audit/due-dates-for-operational-reports",
+            "dated": "2026-11-27",
+            "claim": "DSP monthly operational reports due by the 15th of the following month",
+            "population": "distilled spirits plants",
+            "matchesBuyer": true,
+            "opportunityId": "cop_18513ab2057d44508805"
+          }
+        ],
+        "validation": {
+          "proof": "At least 1 prepaid $1,500 label order from the first 150 craft-distillery emails by day 8, with the payment settled or scheduled to settle by day 19",
+          "stop": [
+            "0 prepaid orders by day 8",
+            "fewer than 3 prepaid orders by day 14",
+            "a Silver contest does not produce an acceptable label within 7 days",
+            "first payout scheduled after day 21"
+          ],
+          "continue": [
+            "1 or more prepaid orders by day 8: continue outreach to reach 5 prepaid labels by day 14"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "why": "Designer cost $1,207.50 per deal exceeds the $500 the owner may put in"
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "why": "77 filings needed at a single firm's $65 rate; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "why": "25 filings needed; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "why": "Winery price benchmark only; owner competence unestablished; one month settles"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "deals": 5,
+            "price": 1500,
+            "directCost": 499,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND",
+          "ECONOMICS",
+          "FULFILMENT",
+          "MARKET_VOLUME",
+          "OFFER_AND_PRICE",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1dbaa2cf6b48_52e9b1",
+        "digest": "1dbaa2cf6b48ae0092804f6e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b70747332771444f825f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:50:58.651Z"
+      },
+      {
+        "goalId": "wst_d29acc5756e24d39b4f3",
+        "contractDigest": "c95b4da86fbcef5e761b16a7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "Sell managed spirits label design ($1,500 per label) to craft distilleries by cold email, fulfilled as a 7-day 99designs Silver beverage-label contest ($499) paid from the buyer's settled prepayment",
+          "opportunityIds": [],
+          "why": "Priced under a published spirits label designer ($2,000 single label, Pine Watt on Dribbble) with a fulfiller whose price and duration are published (99designs Silver beverage-label contest US$499, 4-day qualifying plus 3-day final round), about $1,001 margin per label, and a counted buyer population (2,282 active craft distillers, ACSA via Park Street). Five prepaid labels net about $5,005 and no deal costs more than the $500 the owner may put in; each contest is paid from the buyer's settled prepayment. Demand from cold email and the close rate are unmeasured, so the plan is conditional on prepaid orders in the first week."
+        },
+        "alternatives": [
+          {
+            "title": "Label design via a $1,150 + 5% 99designs designer at $2,000",
+            "why": "Per-deal designer cost ($1,207.50) exceeds the $500 the owner may put in; dropped for the $499 contest route."
+          },
+          {
+            "title": "TTB COLA label-approval filing at $65",
+            "why": "Needs about 77 filings in 30 days; $65 is one law firm's rate (BevLaw), and the owner would have to master TTB labeling rules."
+          },
+          {
+            "title": "TTB formula filing at $200",
+            "why": "Needs 25 filings; owner regulatory competence unestablished."
+          },
+          {
+            "title": "Outsourced monthly TTB operations reporting",
+            "why": "Price benchmark is a winery bookkeeper, not a distillery service; only the first month settles; owner competence in DSP accounting unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain compiles 300 craft distilleries (state guild and ACSA public directories) and drafts personalised emails tied to new releases; owner sends from own mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_count_m",
+              "s_card_access"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer one managed spirits label design at $1,500, prepaid by invoice/Stripe, delivered 7 days after payment clears",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price_pine_m"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count prepaid label orders from the first 150 emails by day 8",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "If proven, keep sending batches and calls until 5 prepaid labels by day 14",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 10,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Buyer prepayments settle to the owner's bank (Stripe first payout 7-14 days after first live payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Launch a 99designs Silver beverage-label contest per label out of settled prepayments; Brain writes the brief (TTB mandatory statements), shortlists and checks the winning files",
+            "performer": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+            "costCents": 249500,
+            "day": 19,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_99",
+              "s_99time"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Owner hands over print-ready files and confirms acceptance",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_99time"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 150000,
+            "label": "First prepaid label",
+            "settlesDay": 19,
+            "stepId": "offer"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 600000,
+            "label": "Four further prepaid labels",
+            "settlesDay": 19,
+            "stepId": "sell"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 249500,
+            "label": "Five 99designs Silver contests at $499",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ESTIMATE",
+            "value": 1500,
+            "unit": "USD per label",
+            "sources": [
+              "s_price_pine_m"
+            ],
+            "needs": "prepaid orders at $1,500"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email",
+            "sources": [],
+            "needs": "the day-8 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "EVIDENCED",
+            "value": 499,
+            "unit": "USD per label",
+            "sources": [
+              "s_99"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer_population",
+            "status": "EVIDENCED",
+            "value": 2282,
+            "unit": "active US craft distillers",
+            "sources": [
+              "s_count_m"
+            ],
+            "needs": null
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "payout date"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_99",
+            "url": "https://99designs.com/beverage-label-design",
+            "dated": "2026-11-27",
+            "claim": "Beverage label design contest packages Bronze US$299, Silver US$499, Gold US$799, Platinum US$1,199",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_99time",
+            "url": "https://support.99designs.com/hc/en/articles/204109459",
+            "dated": "2026-11-27",
+            "claim": "Contests run a 4-day qualifying round and a 3-day final round",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_price_pine_m",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_count_m",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_23e896a5713f4cf9a8e8#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by cold email from public distillery directories",
+            "population": "craft distilleries",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_price_pine",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label; four-label package $1,750 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_supply",
+            "url": "https://99designs.com/profiles/tristanv/services/3380",
+            "dated": "2026-11-27",
+            "claim": "Professional Wine and Spirits Label Design, $1,150 excluding 5% fee, 7-day turnaround",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_count",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically within 7-14 days of first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_cola",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Labeling: $65 for basic labels (per label set); formulas $200 basic",
+            "population": "beverage alcohol producers using a label/formula filing firm",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_cola_ttb",
+            "url": "https://www.ttb.gov/public-information/featured-stories/ttb-label-approval-basics",
+            "dated": "2026-11-27",
+            "claim": "TTB label approval has no fee to apply",
+            "population": "TTB permittees",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_formula",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Formulas: $200 for basic formulas",
+            "population": "beverage alcohol producers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_f358c7aff7044700ac21"
+          },
+          {
+            "id": "s_ttbrep",
+            "url": "https://recorder-horse-j7ya.squarespace.com/winery-bookkeeping",
+            "dated": "2026-11-27",
+            "claim": "Winery bookkeeping packages $1,500-$4,000/month including TTB filings (winery, not distillery)",
+            "population": "wineries",
+            "matchesBuyer": false,
+            "opportunityId": "cop_18513ab2057d44508805"
+          },
+          {
+            "id": "s_ttbrep_due",
+            "url": "https://www.ttb.gov/taxes/tax-audit/due-dates-for-operational-reports",
+            "dated": "2026-11-27",
+            "claim": "DSP monthly operational reports due by the 15th of the following month",
+            "population": "distilled spirits plants",
+            "matchesBuyer": true,
+            "opportunityId": "cop_18513ab2057d44508805"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No buyer-paid price",
+          "resolution": "test",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "why": "Designer cost $1,207.50 per deal exceeds the $500 the owner may put in"
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "why": "77 filings needed at a single firm's $65 rate; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "why": "25 filings needed; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "why": "Winery price benchmark only; owner competence unestablished; one month settles"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_8178e4816c2a_db7ee9",
+        "digest": "8178e4816c2aae942fb41c33",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b70747332771444f825f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:51:07.237Z"
+      },
+      {
+        "goalId": "wst_d29acc5756e24d39b4f3",
+        "contractDigest": "c95b4da86fbcef5e761b16a7",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell managed spirits label design ($999 per label) to craft distilleries by cold email, fulfilled as a 7-day 99designs Silver beverage-label contest ($499) paid from the buyer's settled prepayment",
+          "opportunityIds": [
+            "cop_23e896a5713f4cf9a8e8"
+          ],
+          "why": "A craft-distillery label redesign is bought as a project, and its fulfiller is published: a 99designs Silver beverage-label contest costs US$499 and runs a 4-day qualifying plus 3-day final round, so each prepaid label can be delivered inside the window and the owner advances nothing (the contest is paid from the settled prepayment). The managed offer adds what a distillery would otherwise do itself: the brief, the TTB mandatory label statements check, shortlisting and print-ready files. It is priced at $999, between 99designs Gold (US$799) and Platinum (US$1,199) and under a published spirits designer's $2,000 single label, because a distillery can run a contest itself; no buyer payment at $999 is established (research on price returned NO_SUPPORT) and demand and close rate are unmeasured, so the plan is conditional on prepaid orders in week 1. Eleven prepaid labels collect $10,989 and leave about $5,178 settled after $5,489 of contests and $322 of Stripe fees."
+        },
+        "alternatives": [
+          {
+            "title": "Label design via a $1,150 + 5% 99designs designer at $2,000",
+            "why": "Per-deal designer cost ($1,207.50) exceeds the $500 the owner may put in; dropped for the $499 contest route."
+          },
+          {
+            "title": "TTB COLA label-approval filing at $65",
+            "why": "Needs about 77 filings in 30 days; $65 is one law firm's rate (BevLaw), and the owner would have to master TTB labeling rules."
+          },
+          {
+            "title": "TTB formula filing at $200",
+            "why": "Needs 25 filings; owner regulatory competence unestablished."
+          },
+          {
+            "title": "Outsourced monthly TTB operations reporting",
+            "why": "Price benchmark is a winery bookkeeper, not a distillery service; only the first month settles; owner competence in DSP accounting unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain compiles 300 craft distilleries (state guild and ACSA public directories) and drafts personalised emails tied to new releases; owner sends from own mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_count_m",
+              "s_card_access"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer one managed spirits label design at $999, prepaid by invoice/Stripe, delivered 7 days after payment clears",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price_pine_m"
+            ],
+            "ownerHours": 2,
+            "priceCents": 99900,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count prepaid label orders from the first 150 emails by day 8",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "If proven, keep sending batches and calls until 11 prepaid labels by day 14",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 10,
+            "priceCents": 99900,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Buyer prepayments settle to the owner's bank (Stripe first payout 7-14 days after first live payment); Stripe keeps 2.9% + 30c per charge",
+            "performer": "BRAIN",
+            "costCents": 32197,
+            "day": 19,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe",
+              "s_stripe_fee"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Launch a 99designs Silver beverage-label contest per label out of settled prepayments; Brain writes the brief (TTB mandatory statements), shortlists and checks the winning files",
+            "performer": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+            "costCents": 548900,
+            "day": 19,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_99",
+              "s_99time"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Owner hands over print-ready files and confirms acceptance",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_99time"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 299700,
+            "label": "Three prepaid test labels",
+            "settlesDay": 19,
+            "stepId": "offer"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 799200,
+            "label": "Eight further prepaid labels",
+            "settlesDay": 19,
+            "stepId": "sell"
+          },
+          {
+            "day": 19,
+            "kind": "FEE",
+            "amountCents": 32197,
+            "label": "Stripe fees, 2.9% + $0.30 on 11 charges of $999",
+            "stepId": "collect"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 548900,
+            "label": "Eleven 99designs Silver contests at $499",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 999,
+            "unit": "USD per label",
+            "sources": [
+              "s_99",
+              "s_price_pine_m"
+            ],
+            "needs": "prepaid orders at $999"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email",
+            "sources": [],
+            "needs": "the day-8 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "EVIDENCED",
+            "value": 499,
+            "unit": "USD per label",
+            "sources": [
+              "s_99"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer_population",
+            "status": "EVIDENCED",
+            "value": 2282,
+            "unit": "active US craft distillers",
+            "sources": [
+              "s_count_m"
+            ],
+            "needs": null
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "payout date"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_99",
+            "url": "https://99designs.com/beverage-label-design",
+            "dated": "2026-11-27",
+            "claim": "Beverage label design contest packages Bronze US$299, Silver US$499, Gold US$799, Platinum US$1,199",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_99time",
+            "url": "https://support.99designs.com/hc/en/articles/204109459",
+            "dated": "2026-11-27",
+            "claim": "Contests run a 4-day qualifying round and a 3-day final round",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_price_pine_m",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_solar",
+            "url": "https://www.freelancer.ie/contest/product-labels-for-fast-growing-craft-distillery-1072900",
+            "dated": "2018-01-01",
+            "claim": "A Washington State craft distillery ran a $500 label-redesign contest (closed, winner chosen; about 8 years old)",
+            "population": "craft distillery",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_count_m",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_23e896a5713f4cf9a8e8#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by cold email from public distillery directories",
+            "population": "craft distilleries",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_price_pine",
+            "url": "https://dribbble.com/pinewatt/services",
+            "dated": "2026-11-27",
+            "claim": "Spirits label designer lists Single Label Design at $2,000 per label; four-label package $1,750 per label",
+            "population": "spirits brands buying label design",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_supply",
+            "url": "https://99designs.com/profiles/tristanv/services/3380",
+            "dated": "2026-11-27",
+            "claim": "Professional Wine and Spirits Label Design, $1,150 excluding 5% fee, 7-day turnaround",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_count",
+            "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+            "dated": "2026-06-03",
+            "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+            "population": "US craft distillers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_stripe_fee",
+            "url": "https://stripe.com/pricing",
+            "dated": "2026-11-27",
+            "claim": "2.9% + 30c per successful transaction for domestic cards",
+            "population": "Stripe US accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_23e896a5713f4cf9a8e8"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically within 7-14 days of first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c44d3c09f256407f8d73"
+          },
+          {
+            "id": "s_cola",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Labeling: $65 for basic labels (per label set); formulas $200 basic",
+            "population": "beverage alcohol producers using a label/formula filing firm",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_cola_ttb",
+            "url": "https://www.ttb.gov/public-information/featured-stories/ttb-label-approval-basics",
+            "dated": "2026-11-27",
+            "claim": "TTB label approval has no fee to apply",
+            "population": "TTB permittees",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1e3f973e130b4b59a6c9"
+          },
+          {
+            "id": "s_formula",
+            "url": "https://bevlaw.com/rates/",
+            "dated": "2025-04-01",
+            "claim": "Formulas: $200 for basic formulas",
+            "population": "beverage alcohol producers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_f358c7aff7044700ac21"
+          },
+          {
+            "id": "s_ttbrep",
+            "url": "https://recorder-horse-j7ya.squarespace.com/winery-bookkeeping",
+            "dated": "2026-11-27",
+            "claim": "Winery bookkeeping packages $1,500-$4,000/month including TTB filings (winery, not distillery)",
+            "population": "wineries",
+            "matchesBuyer": false,
+            "opportunityId": "cop_18513ab2057d44508805"
+          },
+          {
+            "id": "s_ttbrep_due",
+            "url": "https://www.ttb.gov/taxes/tax-audit/due-dates-for-operational-reports",
+            "dated": "2026-11-27",
+            "claim": "DSP monthly operational reports due by the 15th of the following month",
+            "population": "distilled spirits plants",
+            "matchesBuyer": true,
+            "opportunityId": "cop_18513ab2057d44508805"
+          }
+        ],
+        "validation": {
+          "proof": "At least 3 prepaid $999 label orders from the first 150 craft-distillery emails by day 8, with the payment settled or scheduled to settle by day 19",
+          "stop": [
+            "fewer than 3 prepaid orders by day 8 (exactly 3 continues)",
+            "fewer than 8 prepaid orders by day 12",
+            "a Silver contest does not produce an acceptable label within 7 days",
+            "first payout scheduled after day 21"
+          ],
+          "continue": [
+            "3 or more prepaid orders by day 8: continue outreach to reach 11 prepaid labels by day 14"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "why": "Designer cost $1,207.50 per deal exceeds the $500 the owner may put in"
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "why": "77 filings needed at a single firm's $65 rate; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "why": "25 filings needed; owner competence unestablished"
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "why": "Winery price benchmark only; owner competence unestablished; one month settles"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "deals": 11,
+            "price": 999,
+            "directCost": 499,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND",
+          "ECONOMICS",
+          "FULFILMENT",
+          "MARKET_VOLUME",
+          "OFFER_AND_PRICE",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_81eafff969eb_395515",
+        "digest": "81eafff969eb0e04fd1db021",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b70747332771444f825f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:58:32.429Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_d29acc5756e24d39b4f3",
+      "contractDigest": "c95b4da86fbcef5e761b16a7",
+      "parentRevisionId": null,
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Sell managed spirits label design ($999 per label) to craft distilleries by cold email, fulfilled as a 7-day 99designs Silver beverage-label contest ($499) paid from the buyer's settled prepayment",
+        "opportunityIds": [
+          "cop_23e896a5713f4cf9a8e8"
+        ],
+        "why": "A craft-distillery label redesign is bought as a project, and its fulfiller is published: a 99designs Silver beverage-label contest costs US$499 and runs a 4-day qualifying plus 3-day final round, so each prepaid label can be delivered inside the window and the owner advances nothing (the contest is paid from the settled prepayment). The managed offer adds what a distillery would otherwise do itself: the brief, the TTB mandatory label statements check, shortlisting and print-ready files. It is priced at $999, between 99designs Gold (US$799) and Platinum (US$1,199) and under a published spirits designer's $2,000 single label, because a distillery can run a contest itself; no buyer payment at $999 is established (research on price returned NO_SUPPORT) and demand and close rate are unmeasured, so the plan is conditional on prepaid orders in week 1. Eleven prepaid labels collect $10,989 and leave about $5,178 settled after $5,489 of contests and $322 of Stripe fees."
+      },
+      "alternatives": [
+        {
+          "title": "Label design via a $1,150 + 5% 99designs designer at $2,000",
+          "why": "Per-deal designer cost ($1,207.50) exceeds the $500 the owner may put in; dropped for the $499 contest route."
+        },
+        {
+          "title": "TTB COLA label-approval filing at $65",
+          "why": "Needs about 77 filings in 30 days; $65 is one law firm's rate (BevLaw), and the owner would have to master TTB labeling rules."
+        },
+        {
+          "title": "TTB formula filing at $200",
+          "why": "Needs 25 filings; owner regulatory competence unestablished."
+        },
+        {
+          "title": "Outsourced monthly TTB operations reporting",
+          "why": "Price benchmark is a winery bookkeeper, not a distillery service; only the first month settles; owner competence in DSP accounting unestablished."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Brain compiles 300 craft distilleries (state guild and ACSA public directories) and drafts personalised emails tied to new releases; owner sends from own mailbox",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_count_m",
+            "s_card_access"
+          ],
+          "ownerHours": 6,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer one managed spirits label design at $999, prepaid by invoice/Stripe, delivered 7 days after payment clears",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_price_pine_m"
+          ],
+          "ownerHours": 2,
+          "priceCents": 99900,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "test",
+          "kind": "TEST",
+          "label": "Validation: count prepaid label orders from the first 150 emails by day 8",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "offer",
+          "evidence": [
+            "close_rate"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "If proven, keep sending batches and calls until 11 prepaid labels by day 14",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 9,
+          "dependsOn": "test",
+          "evidence": [
+            "close_rate"
+          ],
+          "ownerHours": 10,
+          "priceCents": 99900,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Buyer prepayments settle to the owner's bank (Stripe first payout 7-14 days after first live payment); Stripe keeps 2.9% + 30c per charge",
+          "performer": "BRAIN",
+          "costCents": 32197,
+          "day": 19,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_stripe",
+            "s_stripe_fee"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Launch a 99designs Silver beverage-label contest per label out of settled prepayments; Brain writes the brief (TTB mandatory statements), shortlists and checks the winning files",
+          "performer": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+          "costCents": 548900,
+          "day": 19,
+          "dependsOn": "collect",
+          "evidence": [
+            "s_99",
+            "s_99time"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "confirm",
+          "kind": "OTHER",
+          "label": "Owner hands over print-ready files and confirms acceptance",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 27,
+          "dependsOn": "deliver",
+          "evidence": [
+            "s_99time"
+          ],
+          "ownerHours": 4,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 6,
+          "kind": "RECEIPT",
+          "amountCents": 299700,
+          "label": "Three prepaid test labels",
+          "settlesDay": 19,
+          "stepId": "offer"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 799200,
+          "label": "Eight further prepaid labels",
+          "settlesDay": 19,
+          "stepId": "sell"
+        },
+        {
+          "day": 19,
+          "kind": "FEE",
+          "amountCents": 32197,
+          "label": "Stripe fees, 2.9% + $0.30 on 11 charges of $999",
+          "stepId": "collect"
+        },
+        {
+          "day": 19,
+          "kind": "SPEND",
+          "amountCents": 548900,
+          "label": "Eleven 99designs Silver contests at $499",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 8,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "ASSUMED",
+          "value": 999,
+          "unit": "USD per label",
+          "sources": [
+            "s_99",
+            "s_price_pine_m"
+          ],
+          "needs": "prepaid orders at $999"
+        },
+        {
+          "name": "close_rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "prepaid orders per email",
+          "sources": [],
+          "needs": "the day-8 test"
+        },
+        {
+          "name": "supplier_cost",
+          "status": "EVIDENCED",
+          "value": 499,
+          "unit": "USD per label",
+          "sources": [
+            "s_99"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyer_population",
+          "status": "EVIDENCED",
+          "value": 2282,
+          "unit": "active US craft distillers",
+          "sources": [
+            "s_count_m"
+          ],
+          "needs": null
+        },
+        {
+          "name": "first_payout_days",
+          "status": "ESTIMATE",
+          "value": 14,
+          "unit": "days after first live payment (upper bound)",
+          "sources": [
+            "s_stripe"
+          ],
+          "needs": "payout date"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_99",
+          "url": "https://99designs.com/beverage-label-design",
+          "dated": "2026-11-27",
+          "claim": "Beverage label design contest packages Bronze US$299, Silver US$499, Gold US$799, Platinum US$1,199",
+          "population": "supplier",
+          "matchesBuyer": false,
+          "opportunityId": "cop_23e896a5713f4cf9a8e8"
+        },
+        {
+          "id": "s_99time",
+          "url": "https://support.99designs.com/hc/en/articles/204109459",
+          "dated": "2026-11-27",
+          "claim": "Contests run a 4-day qualifying round and a 3-day final round",
+          "population": "supplier",
+          "matchesBuyer": false,
+          "opportunityId": "cop_23e896a5713f4cf9a8e8"
+        },
+        {
+          "id": "s_price_pine_m",
+          "url": "https://dribbble.com/pinewatt/services",
+          "dated": "2026-11-27",
+          "claim": "Spirits label designer lists Single Label Design at $2,000 per label",
+          "population": "spirits brands buying label design",
+          "matchesBuyer": true,
+          "opportunityId": "cop_23e896a5713f4cf9a8e8"
+        },
+        {
+          "id": "s_solar",
+          "url": "https://www.freelancer.ie/contest/product-labels-for-fast-growing-craft-distillery-1072900",
+          "dated": "2018-01-01",
+          "claim": "A Washington State craft distillery ran a $500 label-redesign contest (closed, winner chosen; about 8 years old)",
+          "population": "craft distillery",
+          "matchesBuyer": true,
+          "opportunityId": "cop_23e896a5713f4cf9a8e8"
+        },
+        {
+          "id": "s_count_m",
+          "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+          "dated": "2026-06-03",
+          "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+          "population": "US craft distillers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_23e896a5713f4cf9a8e8"
+        },
+        {
+          "id": "s_card_access",
+          "url": "https://brain.local/card/cop_23e896a5713f4cf9a8e8#access",
+          "dated": "2026-11-27",
+          "claim": "Reached by cold email from public distillery directories",
+          "population": "craft distilleries",
+          "matchesBuyer": true,
+          "opportunityId": "cop_c44d3c09f256407f8d73"
+        },
+        {
+          "id": "s_price_pine",
+          "url": "https://dribbble.com/pinewatt/services",
+          "dated": "2026-11-27",
+          "claim": "Spirits label designer lists Single Label Design at $2,000 per label; four-label package $1,750 per label",
+          "population": "spirits brands buying label design",
+          "matchesBuyer": true,
+          "opportunityId": "cop_c44d3c09f256407f8d73"
+        },
+        {
+          "id": "s_supply",
+          "url": "https://99designs.com/profiles/tristanv/services/3380",
+          "dated": "2026-11-27",
+          "claim": "Professional Wine and Spirits Label Design, $1,150 excluding 5% fee, 7-day turnaround",
+          "population": "supplier",
+          "matchesBuyer": false,
+          "opportunityId": "cop_c44d3c09f256407f8d73"
+        },
+        {
+          "id": "s_count",
+          "url": "https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+          "dated": "2026-06-03",
+          "claim": "The number of active craft distillers in the U.S. now sits at 2,282",
+          "population": "US craft distillers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_c44d3c09f256407f8d73"
+        },
+        {
+          "id": "s_stripe_fee",
+          "url": "https://stripe.com/pricing",
+          "dated": "2026-11-27",
+          "claim": "2.9% + 30c per successful transaction for domestic cards",
+          "population": "Stripe US accounts",
+          "matchesBuyer": false,
+          "opportunityId": "cop_23e896a5713f4cf9a8e8"
+        },
+        {
+          "id": "s_stripe",
+          "url": "https://docs.stripe.com/payouts",
+          "dated": "2026-11-27",
+          "claim": "Initial payout typically within 7-14 days of first live payment",
+          "population": "new Stripe accounts",
+          "matchesBuyer": false,
+          "opportunityId": "cop_c44d3c09f256407f8d73"
+        },
+        {
+          "id": "s_cola",
+          "url": "https://bevlaw.com/rates/",
+          "dated": "2025-04-01",
+          "claim": "Labeling: $65 for basic labels (per label set); formulas $200 basic",
+          "population": "beverage alcohol producers using a label/formula filing firm",
+          "matchesBuyer": true,
+          "opportunityId": "cop_1e3f973e130b4b59a6c9"
+        },
+        {
+          "id": "s_cola_ttb",
+          "url": "https://www.ttb.gov/public-information/featured-stories/ttb-label-approval-basics",
+          "dated": "2026-11-27",
+          "claim": "TTB label approval has no fee to apply",
+          "population": "TTB permittees",
+          "matchesBuyer": true,
+          "opportunityId": "cop_1e3f973e130b4b59a6c9"
+        },
+        {
+          "id": "s_formula",
+          "url": "https://bevlaw.com/rates/",
+          "dated": "2025-04-01",
+          "claim": "Formulas: $200 for basic formulas",
+          "population": "beverage alcohol producers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_f358c7aff7044700ac21"
+        },
+        {
+          "id": "s_ttbrep",
+          "url": "https://recorder-horse-j7ya.squarespace.com/winery-bookkeeping",
+          "dated": "2026-11-27",
+          "claim": "Winery bookkeeping packages $1,500-$4,000/month including TTB filings (winery, not distillery)",
+          "population": "wineries",
+          "matchesBuyer": false,
+          "opportunityId": "cop_18513ab2057d44508805"
+        },
+        {
+          "id": "s_ttbrep_due",
+          "url": "https://www.ttb.gov/taxes/tax-audit/due-dates-for-operational-reports",
+          "dated": "2026-11-27",
+          "claim": "DSP monthly operational reports due by the 15th of the following month",
+          "population": "distilled spirits plants",
+          "matchesBuyer": true,
+          "opportunityId": "cop_18513ab2057d44508805"
+        }
+      ],
+      "validation": {
+        "proof": "At least 3 prepaid $999 label orders from the first 150 craft-distillery emails by day 8, with the payment settled or scheduled to settle by day 19",
+        "stop": [
+          "fewer than 3 prepaid orders by day 8 (exactly 3 continues)",
+          "fewer than 8 prepaid orders by day 12",
+          "a Silver contest does not produce an acceptable label within 7 days",
+          "first payout scheduled after day 21"
+        ],
+        "continue": [
+          "3 or more prepaid orders by day 8: continue outreach to reach 11 prepaid labels by day 14"
+        ],
+        "decides": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_23e896a5713f4cf9a8e8",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_18513ab2057d44508805",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_f358c7aff7044700ac21",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_1e3f973e130b4b59a6c9",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_c44d3c09f256407f8d73",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_c44d3c09f256407f8d73",
+          "why": "Designer cost $1,207.50 per deal exceeds the $500 the owner may put in"
+        },
+        {
+          "opportunityId": "cop_1e3f973e130b4b59a6c9",
+          "why": "77 filings needed at a single firm's $65 rate; owner competence unestablished"
+        },
+        {
+          "opportunityId": "cop_f358c7aff7044700ac21",
+          "why": "25 filings needed; owner competence unestablished"
+        },
+        {
+          "opportunityId": "cop_18513ab2057d44508805",
+          "why": "Winery price benchmark only; owner competence unestablished; one month settles"
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_23e896a5713f4cf9a8e8",
+          "deals": 11,
+          "price": 999,
+          "directCost": 499,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CONVERSION",
+        "CURRENT_DEMAND",
+        "ECONOMICS",
+        "FULFILMENT",
+        "MARKET_VOLUME",
+        "OFFER_AND_PRICE",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_81eafff969eb_395515",
+      "digest": "81eafff969eb0e04fd1db021",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_b70747332771444f825f/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:58:32.429Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_81eafff969eb_395515",
+      "digest": "81eafff969eb0e04fd1db021",
+      "contractDigest": "c95b4da86fbcef5e761b16a7",
+      "problems": [
+        {
+          "code": "BRAIN_CHECK_FAILED",
+          "detail": "Brain plan integrity NO_FAVOURABLE_UNKNOWN: \"Craft-distillery spirits label design, subcontracted to a s…\" costs at least 1208 a deal as modelled, not established, more than the 500 the goal may spend in all",
+          "at": null
+        }
+      ],
+      "trace": {
+        "totalSpentCents": 581097,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 50000,
+        "minCashDay": 6,
+        "collectedCents": 1098900,
+        "collectedInWindowCents": 1098900,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 517803
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Managed spirits label design for craft distilleries run as a\", \"Outsourced monthly TTB operations reporting for small craft \", \"TTB formula approval filing for craft distilleries' flavored\", \"TTB COLA label-approval filing service for craft distillerie\" and 1 more establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction's strongest plan counts money from Outsourced monthly TTB operations reporting for small craft , TTB formula approval filing for craft distilleries' flavored, TTB COLA label-approval filing service for craft distillerie, whose price nobody has established; an unknown price is not evidence of reach.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_23e896a5713f4cf9a8e8",
+          "cop_18513ab2057d44508805",
+          "cop_f358c7aff7044700ac21",
+          "cop_1e3f973e130b4b59a6c9",
+          "cop_c44d3c09f256407f8d73"
+        ],
+        "integrity": [
+          {
+            "rule": "NO_FAVOURABLE_UNKNOWN",
+            "detail": "\"Craft-distillery spirits label design, subcontracted to a s…\" costs at least 1208 a deal as modelled, not established, more than the 500 the goal may spend in all"
+          }
+        ],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Research first: the deep dives on \"Managed spirits label design for craft distilleries run as a\", \"Outsourced monthly TTB operations reporting for small craft \", \"TTB formula approval filing for craft distilleries' flavored\", \"TTB COLA label-approval filing service for craft distillerie\" and 1 more establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+        "openings": [
+          {
+            "opportunityId": "cop_23e896a5713f4cf9a8e8",
+            "title": "Managed spirits label design for craft distilleries run as a 99designs Silver contest",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Craft distillery owner or brand manager launching or refreshing a SKU",
+              "reachableChannel": "Cold email to craft distillers from state guild and ACSA public directories; deposit by Stripe/invoice",
+              "offerScope": "One spirits bottle label: Brain writes the brief (incl. TTB mandatory statements), runs a 7-day 99designs Silver beverage-label contest, checks the winner and hands over print-ready files",
+              "priceCents": 150000,
+              "currency": "USD",
+              "fulfillmentOwner": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round)",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "Craft distilling",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to craft distillers from state guild and ACSA public directories; dep"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "16 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "4 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 499, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to craft distillers from state guild and ACSA public directories; deposit by Stripe/invoice",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "2,131 Craft distillery owner or brand manager launching or refreshing a SKU (2,282 active craft distillers (ACSA via Park Street, June 2026); 5 labels x $1,001 margin = $5,005)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One spirits bottle label: Brain writes the brief (incl. TTB mandatory statements), runs a 7-day 99designs Silver beverage-label contest, checks the winner and hands over print-ready files to Craft distillery owner or brand manager launching or refreshing a SKU, reached through Cold email to craft distillers from state guild and ACSA public directories; deposit by Stripe/invoice, at $1,500; 99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$499",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "99designs beverage label design contest, Silver package (US$499; 4-day qualifying + 3-day final round).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "2 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "One spirits bottle label: Brain writes the brief (incl. TTB mandatory statements), runs a 7-day 99designs Silver beverage-label contest, checks the winner and hands over print-ready files",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Craft distillery owner or brand manager launching or refreshing a SKU",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://dribbble.com/pinewatt/services; https://99designs.com/beverage-label-design; https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/; https://www.parkstreet.com/craft-spirits-sales-reach-7-58-billion-as-producers-focus-on-home-markets/",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_18513ab2057d44508805",
+            "title": "Outsourced monthly TTB operations reporting for small craft distilleries",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Small craft distillery owner",
+              "reachableChannel": "Cold email to craft distillers",
+              "offerScope": "Monthly preparation of TTB F 5110.40/5110.11/5110.28 reports from the distillery's records, filed by the 15th",
+              "priceCents": 50000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 4,
+              "requiredCapabilities": [],
+              "industry": "Craft distilling",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to craft distillers"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "40 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "10 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to craft distillers",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "2,131 Small craft distillery owner (10 clients first month at $500)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly preparation of TTB F 5110.40/5110.11/5110.28 reports from the distillery's records, filed by the 15th to Small craft distillery owner, reached through Cold email to craft distillers, at $500; Owner using the distillery's records delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Owner using the distillery's records.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "4 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Monthly preparation of TTB F 5110.40/5110.11/5110.28 reports from the distillery's records, filed by the 15th",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Small craft distillery owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://recorder-horse-j7ya.squarespace.com/winery-bookkeeping; https://www.ttb.gov/taxes/tax-audit/due-dates-for-operational-reports; https://americancraftspirits.org/wp-content/uploads/2017/02/2025-craft-spirits-data-project-102125-final.pdf; https://bevnet.com/pr/2026/10/06/craft-spirits-sales-decline-for-third-straight-year",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_f358c7aff7044700ac21",
+            "title": "TTB formula approval filing for craft distilleries' flavored spirits",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Craft distillery",
+              "reachableChannel": "Cold email to craft distillers",
+              "offerScope": "Prepare and file a TTB formula (Formulas Online) for a flavored/infused spirit",
+              "priceCents": 20000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "Craft distilling",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to craft distillers"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "100 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "25 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to craft distillers",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "2,131 Craft distillery (Target needs 25 formulas at $200)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Prepare and file a TTB formula (Formulas Online) for a flavored/infused spirit to Craft distillery, reached through Cold email to craft distillers, at $200; Owner delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Owner.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "2 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Prepare and file a TTB formula (Formulas Online) for a flavored/infused spirit",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Craft distillery",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://bevlaw.com/rates/; https://americancraftspirits.org/wp-content/uploads/2017/02/2025-craft-spirits-data-project-102125-final.pdf; https://bevnet.com/pr/2026/10/06/craft-spirits-sales-decline-for-third-straight-year",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_1e3f973e130b4b59a6c9",
+            "title": "TTB COLA label-approval filing service for craft distilleries",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Craft distillery compliance or owner",
+              "reachableChannel": "Cold email to craft distillers",
+              "offerScope": "Prepare and file a Certificate of Label Approval in COLAs Online under the distillery's power of attorney",
+              "priceCents": 6500,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 0.75,
+              "requiredCapabilities": [],
+              "industry": "Craft distilling",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to craft distillers"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 65 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "200 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "50 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to craft distillers",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "Park Street / ACSA Craft Spirits Data Project reports 2,282 active craft distillers in the U.S.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Prepare and file a Certificate of Label Approval in COLAs Online under the distillery's power of attorney to Craft distillery compliance or owner, reached through Cold email to craft distillers, at $65; Owner (files in COLAs Online; TTB charges no fee) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Owner (files in COLAs Online; TTB charges no fee).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.75 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Prepare and file a Certificate of Label Approval in COLAs Online under the distillery's power of attorney",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Craft distillery compliance or owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$65",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$65",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://bevlaw.com/rates/; https://www.ttb.gov/public-information/featured-stories/ttb-label-approval-basics; https://americancraftspirits.org/wp-content/uploads/2017/02/2025-craft-spirits-data-project-102125-final.pdf; https://bevnet.com/pr/2026/10/06/craft-spirits-sales-decline-for-third-straight-year",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_c44d3c09f256407f8d73",
+            "title": "Craft-distillery spirits label design, subcontracted to a spirits label designer",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Craft distillery owner or brand manager launching or refreshing a SKU",
+              "reachableChannel": "Cold email to craft distillers from state guild and ACSA public directories; deposit by Stripe/invoice",
+              "offerScope": "One spirits bottle label design (concepts, revisions, print-ready dieline, mockups), 7-day designer turnaround",
+              "priceCents": 200000,
+              "currency": "USD",
+              "fulfillmentOwner": "99designs designer tristanv, 'Professional Wine and Spirits Label Design' $1,150 + 5% platform fee, 7 days",
+              "peakFundingCents": 50000,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "Craft distilling",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to craft distillers from state guild and ACSA public directories; dep"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 2000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "12 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 1208, tied up 500"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to craft distillers from state guild and ACSA public directories; deposit by Stripe/invoice",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "2,131 Craft distillery owner or brand manager launching or refreshing a SKU (ACSA: 2,131 active craft distillers (Aug 2026); target needs about 7 labels at $792 margin, or 3 labels gross)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One spirits bottle label design (concepts, revisions, print-ready dieline, mockups), 7-day designer turnaround to Craft distillery owner or brand manager launching or refreshing a SKU, reached through Cold email to craft distillers from state guild and ACSA public directories; deposit by Stripe/invoice, at $2,000; 99designs designer tristanv, 'Professional Wine and Spirits Label Design' $1,150 + 5% platform fee, 7 days delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$1,208",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "99designs designer tristanv, 'Professional Wine and Spirits Label Design' $1,150 + 5% platform fee, 7 days.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "3 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "One spirits bottle label design (concepts, revisions, print-ready dieline, mockups), 7-day designer turnaround",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Craft distillery owner or brand manager launching or refreshing a SKU",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$2,000",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$2,000",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://dribbble.com/services/2896-Spirits-Label-Design; https://americancraftspirits.org/wp-content/uploads/2017/02/2025-craft-spirits-data-project-102125-final.pdf; https://bevnet.com/pr/2026/10/06/craft-spirits-sales-decline-for-third-straight-year; https://americancraftspirits.org/wp-content/uploads/2017/02/2025-craft-spirits-data-project-102125-final.pdf; https://bevnet.com/pr/2026/10/06/craft-spirits-sales-decline-for-third-straight-year",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:57:41.198Z"
+      }
+    },
+    "reviews": [],
+    "final": null,
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,786 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_d326fa11b5ed4cb18df2",
+      "words": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 350000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash received totals the target within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "7e1c55ccfd4c94002e592d7f"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_d326fa11b5ed4cb18df2",
+        "contractDigest": "7e1c55ccfd4c94002e592d7f",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: the number of clinics that would buy is only an estimate",
+          "opportunityIds": [],
+          "why": "The offer is otherwise sound: $260 per monthly packet (three October invoices), 3 of 20 contacts accepted, $4 cost, no capital, Brain produces the spreadsheet, cash in 6 days. But $3,500 needs 14 packets at $256 net, i.e. 14 distinct clinics buying once in the 30-day monthly cycle, and at 3/20 that means ~94 reachable clinic managers. The only count of clinics is a RECOMMENDATION ('probably number in the dozens'), an estimate that cannot establish the market; if 'dozens' is literal, ~3-7 deals is all the market yields."
+        },
+        "alternatives": [
+          {
+            "title": "Start outreach now and treat it as a conditional test",
+            "why": "The conversion rate is already measured; what is unknown is how many buyers exist, which a directory count answers faster and without spending outreach on a market that may be too small."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count independent sleep-medicine clinics with a reachable clinic-manager email from a published directory or register (e.g. AASM accredited sleep facility directory) and confirm they need monthly CPAP adherence packets for payer re-authorisation",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Reachable independent sleep clinics",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": "A count from a published directory or register; at least ~94 needed at 3/20 conversion"
+          },
+          {
+            "name": "Price per monthly packet",
+            "status": "EVIDENCED",
+            "value": 26000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements/contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Direct cost per packet",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Deals needed",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "deals",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "Independent sleep clinics in the region probably number in the dozens and would each need these packets monthly (RECOMMENDATION - an estimate)",
+            "population": "Independent sleep-medicine clinics",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#price",
+            "dated": "2026-10",
+            "claim": "Invoices (Oct 2026): three clinics each paid $260 for a monthly adherence-report batch",
+            "population": "Independent sleep-medicine clinic managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "3 agreements from 20 contacts",
+            "population": "Independent sleep-medicine clinic managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4 direct cost",
+            "population": "Independent sleep-medicine clinic managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: the plan needs 14 clinics buying a $260 packet within 30 days (~94 reachable clinic managers at the measured 3/20 conversion), and the only buyer count on record is a RECOMMENDATION that the clinics 'probably number in the dozens' - an estimate, not a count.",
+          "resolution": "Brain counts independent sleep-medicine clinics with reachable managers from a published directory or register; if at least ~94 are reachable, re-plan as executable outreach at $260 (cash in 6 days, no capital); if fewer, the offer cannot carry $3,500 in 30 days.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_57912cbaccbb41e59d26",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_9ec7cb5392a3_2b85dd",
+        "digest": "9ec7cb5392a30b0eeb1597f0",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ad5bd6206c184420a48f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:52.483Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_d326fa11b5ed4cb18df2",
+      "contractDigest": "7e1c55ccfd4c94002e592d7f",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan yet: the number of clinics that would buy is only an estimate",
+        "opportunityIds": [],
+        "why": "The offer is otherwise sound: $260 per monthly packet (three October invoices), 3 of 20 contacts accepted, $4 cost, no capital, Brain produces the spreadsheet, cash in 6 days. But $3,500 needs 14 packets at $256 net, i.e. 14 distinct clinics buying once in the 30-day monthly cycle, and at 3/20 that means ~94 reachable clinic managers. The only count of clinics is a RECOMMENDATION ('probably number in the dozens'), an estimate that cannot establish the market; if 'dozens' is literal, ~3-7 deals is all the market yields."
+      },
+      "alternatives": [
+        {
+          "title": "Start outreach now and treat it as a conditional test",
+          "why": "The conversion rate is already measured; what is unknown is how many buyers exist, which a directory count answers faster and without spending outreach on a market that may be too small."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Count independent sleep-medicine clinics with a reachable clinic-manager email from a published directory or register (e.g. AASM accredited sleep facility directory) and confirm they need monthly CPAP adherence packets for payer re-authorisation",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_volume"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "Reachable independent sleep clinics",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "buyers",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": "A count from a published directory or register; at least ~94 needed at 3/20 conversion"
+        },
+        {
+          "name": "Price per monthly packet",
+          "status": "EVIDENCED",
+          "value": 26000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Conversion",
+          "status": "EVIDENCED",
+          "value": 0.15,
+          "unit": "agreements/contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Direct cost per packet",
+          "status": "EVIDENCED",
+          "value": 400,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Deals needed",
+          "status": "ESTIMATE",
+          "value": 14,
+          "unit": "deals",
+          "sources": [
+            "s_price",
+            "s_cost"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "Independent sleep clinics in the region probably number in the dozens and would each need these packets monthly (RECOMMENDATION - an estimate)",
+          "population": "Independent sleep-medicine clinics",
+          "matchesBuyer": true,
+          "opportunityId": "cop_57912cbaccbb41e59d26"
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#price",
+          "dated": "2026-10",
+          "claim": "Invoices (Oct 2026): three clinics each paid $260 for a monthly adherence-report batch",
+          "population": "Independent sleep-medicine clinic managers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_57912cbaccbb41e59d26"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "3 agreements from 20 contacts",
+          "population": "Independent sleep-medicine clinic managers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_57912cbaccbb41e59d26"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$4 direct cost",
+          "population": "Independent sleep-medicine clinic managers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_57912cbaccbb41e59d26"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "MARKET_VOLUME: the plan needs 14 clinics buying a $260 packet within 30 days (~94 reachable clinic managers at the measured 3/20 conversion), and the only buyer count on record is a RECOMMENDATION that the clinics 'probably number in the dozens' - an estimate, not a count.",
+        "resolution": "Brain counts independent sleep-medicine clinics with reachable managers from a published directory or register; if at least ~94 are reachable, re-plan as executable outreach at $260 (cash in 6 days, no capital); if fewer, the offer cannot carry $3,500 in 30 days.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_57912cbaccbb41e59d26",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_9ec7cb5392a3_2b85dd",
+      "digest": "9ec7cb5392a30b0eeb1597f0",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_ad5bd6206c184420a48f/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:36:52.483Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_9ec7cb5392a3_2b85dd",
+      "digest": "9ec7cb5392a30b0eeb1597f0",
+      "contractDigest": "7e1c55ccfd4c94002e592d7f",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Monthly CPAP adherence-report packets for payer re-authorisa\", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 18432× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Monthly CPAP adherence-report packets for payer re-authorisation at sl\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_57912cbaccbb41e59d26"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medici\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medici\"",
+            "owner": "PERSON",
+            "cost": 4
+          },
+          {
+            "label": "Collect payment for \"Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medici\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Establish how many buyers for \"Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medici\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+        "openings": [
+          {
+            "opportunityId": "cop_57912cbaccbb41e59d26",
+            "title": "Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medicine clinics",
+            "missing": [
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 260,
+            "potentialReach": 3500,
+            "card": {
+              "payer": "Independent sleep-medicine clinic managers",
+              "reachableChannel": "Direct email to clinic managers",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:54.159Z",
+              "offerScope": "Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medicine clinics",
+              "priceCents": 26000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "sleep-medicine clinics",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Direct email to clinic managers"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 260 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 3 accepted of 20 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "15 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 4, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "6 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "Independent sleep clinics in the region probably number in the dozens and would each need these packets monthly.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medicine clinics to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "3 agreements from 20 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent sleep-medicine clinic managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Invoices (Oct 2026): three clinics each paid $260 for a monthly adherence-report batch.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "6 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_cc44cccf5daa4fe99df8"
+        ],
+        "scope": {
+          "targetCents": 350000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:33:17.923Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_9ec7cb5392a3_2b85dd",
+        "revisionDigest": "9ec7cb5392a30b0eeb1597f0",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ad5bd6206c184420a48f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_59c19762337d497ebc1a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN naming MARKET_VOLUME as the decisive gap is correct. The price ($260, three October invoices actually paid by clinics), conversion (3/20 on this offer), cost ($4), exposure ($0), fulfilment (Brain spreadsheet) and settlement (6 days) are on the card as EVIDENCE, but the only buyer count is a RECOMMENDATION ('probably number in the dozens'), which is an estimate and cannot establish volume. Arithmetic checks: $3,500 / $260 = 13.5, so 14 packets; at 15% that needs ~94 reachable clinics; if 'dozens' means 24-84, the market yields ~4-13 new deals, which may fall short, so the count really does decide the outcome. This is missing evidence, not a constraint, and the plan correctly does not call it one. The resolution (count from a published directory such as the AASM accredited-facility directory; re-plan at >= ~94) is zero-cost and decisive; Brain's own reading names the same gap.",
+        "findings": [
+          "Existing customers: the three October clinics bought a monthly batch, so on the card's own 'monthly' statement they are repeat buyers within the window (3 x $260 = $780), reducing the new clinics needed to ~11 (~74 contacts at 15%). The re-plan should count them, if their renewal is recorded.",
+          "Small sample: 3/20 has a wide interval (a 95% lower bound near 3-5%); the re-plan should show the target still holds if conversion is well below 15%, or carry a stop rule on the measured rate.",
+          "Card records 1 human hour per packet; no hours ceiling, so it fits, but the re-plan should state it."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:43:28.897Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_9ec7cb5392a3_2b85dd",
+      "digest": "9ec7cb5392a30b0eeb1597f0",
+      "contractDigest": "7e1c55ccfd4c94002e592d7f",
+      "plan": {
+        "goalId": "wst_d326fa11b5ed4cb18df2",
+        "contractDigest": "7e1c55ccfd4c94002e592d7f",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: the number of clinics that would buy is only an estimate",
+          "opportunityIds": [],
+          "why": "The offer is otherwise sound: $260 per monthly packet (three October invoices), 3 of 20 contacts accepted, $4 cost, no capital, Brain produces the spreadsheet, cash in 6 days. But $3,500 needs 14 packets at $256 net, i.e. 14 distinct clinics buying once in the 30-day monthly cycle, and at 3/20 that means ~94 reachable clinic managers. The only count of clinics is a RECOMMENDATION ('probably number in the dozens'), an estimate that cannot establish the market; if 'dozens' is literal, ~3-7 deals is all the market yields."
+        },
+        "alternatives": [
+          {
+            "title": "Start outreach now and treat it as a conditional test",
+            "why": "The conversion rate is already measured; what is unknown is how many buyers exist, which a directory count answers faster and without spending outreach on a market that may be too small."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count independent sleep-medicine clinics with a reachable clinic-manager email from a published directory or register (e.g. AASM accredited sleep facility directory) and confirm they need monthly CPAP adherence packets for payer re-authorisation",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Reachable independent sleep clinics",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": "A count from a published directory or register; at least ~94 needed at 3/20 conversion"
+          },
+          {
+            "name": "Price per monthly packet",
+            "status": "EVIDENCED",
+            "value": 26000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements/contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Direct cost per packet",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Deals needed",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "deals",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "Independent sleep clinics in the region probably number in the dozens and would each need these packets monthly (RECOMMENDATION - an estimate)",
+            "population": "Independent sleep-medicine clinics",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#price",
+            "dated": "2026-10",
+            "claim": "Invoices (Oct 2026): three clinics each paid $260 for a monthly adherence-report batch",
+            "population": "Independent sleep-medicine clinic managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "3 agreements from 20 contacts",
+            "population": "Independent sleep-medicine clinic managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_57912cbaccbb41e59d26#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4 direct cost",
+            "population": "Independent sleep-medicine clinic managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_57912cbaccbb41e59d26"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: the plan needs 14 clinics buying a $260 packet within 30 days (~94 reachable clinic managers at the measured 3/20 conversion), and the only buyer count on record is a RECOMMENDATION that the clinics 'probably number in the dozens' - an estimate, not a count.",
+          "resolution": "Brain counts independent sleep-medicine clinics with reachable managers from a published directory or register; if at least ~94 are reachable, re-plan as executable outreach at $260 (cash in 6 days, no capital); if fewer, the offer cannot carry $3,500 in 30 days.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_57912cbaccbb41e59d26",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_9ec7cb5392a3_2b85dd",
+        "digest": "9ec7cb5392a30b0eeb1597f0",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ad5bd6206c184420a48f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:52.483Z"
+      },
+      "review": {
+        "revisionId": "rev_9ec7cb5392a3_2b85dd",
+        "revisionDigest": "9ec7cb5392a30b0eeb1597f0",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ad5bd6206c184420a48f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_59c19762337d497ebc1a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN naming MARKET_VOLUME as the decisive gap is correct. The price ($260, three October invoices actually paid by clinics), conversion (3/20 on this offer), cost ($4), exposure ($0), fulfilment (Brain spreadsheet) and settlement (6 days) are on the card as EVIDENCE, but the only buyer count is a RECOMMENDATION ('probably number in the dozens'), which is an estimate and cannot establish volume. Arithmetic checks: $3,500 / $260 = 13.5, so 14 packets; at 15% that needs ~94 reachable clinics; if 'dozens' means 24-84, the market yields ~4-13 new deals, which may fall short, so the count really does decide the outcome. This is missing evidence, not a constraint, and the plan correctly does not call it one. The resolution (count from a published directory such as the AASM accredited-facility directory; re-plan at >= ~94) is zero-cost and decisive; Brain's own reading names the same gap.",
+        "findings": [
+          "Existing customers: the three October clinics bought a monthly batch, so on the card's own 'monthly' statement they are repeat buyers within the window (3 x $260 = $780), reducing the new clinics needed to ~11 (~74 contacts at 15%). The re-plan should count them, if their renewal is recorded.",
+          "Small sample: 3/20 has a wide interval (a 95% lower bound near 3-5%); the re-plan should show the target still holds if conversion is well below 15%, or carry a stop rule on the measured rate.",
+          "Card records 1 human hour per packet; no hours ceiling, so it fits, but the re-plan should state it."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:43:28.897Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+        "terms": "afc328ec1e09d81c",
+        "openings": {
+          "cop_57912cbaccbb41e59d26": "132c467f248b4d9b"
+        }
+      },
+      "at": "2026-11-27T09:44:19.770Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

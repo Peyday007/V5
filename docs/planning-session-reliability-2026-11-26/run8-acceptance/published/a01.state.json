@@ -1,0 +1,1483 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_673d5e76df5142ef8a03",
+      "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "The target amount is settled in the owner's account within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "3bbce435d8707b97244198a0"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_673d5e76df5142ef8a03",
+        "contractDigest": "3bbce435d8707b97244198a0",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell Category 1 test record packs to uncontacted licensed elevator contractors",
+          "opportunityIds": [
+            "cop_5d5016028fa941ecab87"
+          ],
+          "why": "The $380 price is evidenced by 19 paid pilot invoices; conversion was measured on this offer's own sales (19 of 120 contacts, 15.8%); 520 registry contractors with published emails are not yet contacted. 12 deals x $380 = $4,560 settled within 5 days of sale, delivered by Brain as a spreadsheet at $6 direct cost and $0 exposure. Contacting the 520 uncontacted contractors yields an expected ~82 agreements at the measured rate, far above the 12 needed."
+        },
+        "alternatives": [
+          {
+            "title": "No other opening exists in this world",
+            "why": "The only researched opening is this one; nothing to combine."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 520 uncontacted contractors from the state labor department elevator-contractor licence registry",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "5d5016-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a completed Category 1 test record pack at $380 and take agreements",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "5d5016-conversionRates",
+              "5d5016-price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each contractor's test record pack spreadsheet from its unit list",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 8,
+            "dependsOn": "sell",
+            "evidence": [
+              "5d5016-delivery",
+              "5d5016-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $380 per pack",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver",
+            "evidence": [
+              "5d5016-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost $6 x 12 packs",
+            "stepId": "deliver"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 456000,
+            "label": "12 packs x $380",
+            "settlesDay": 15,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 38000,
+            "unit": "cents per pack",
+            "sources": [
+              "5d5016-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.158,
+            "unit": "agreements per contact",
+            "sources": [
+              "5d5016-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 520,
+            "unit": "uncontacted licensed contractors",
+            "sources": [
+              "5d5016-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 12,
+            "unit": "deals",
+            "sources": [
+              "5d5016-conversionRates",
+              "5d5016-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents per pack",
+            "sources": [
+              "5d5016-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "5d5016-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "ecab87-price",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct-Nov 2026: 19 contractors each paid $380",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "ecab87-conversionRates",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "19 agreements from 120 contacts on this offer",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "ecab87-buyerVolume",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "640 licensed contractors with published emails; 520 not yet contacted",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "ecab87-directCosts",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6 direct cost per pack",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "ecab87-delivery",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "ecab87-timeToFirstCash",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5d5016028fa941ecab87",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_5d5016028fa941ecab87",
+            "deals": 12,
+            "price": 380,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_e445350c107f_bec68a",
+        "digest": "e445350c107f217f358441a8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e72f4b1f66e141f4b294/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:01.487Z"
+      },
+      {
+        "goalId": "wst_673d5e76df5142ef8a03",
+        "contractDigest": "3bbce435d8707b97244198a0",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell Category 1 test record packs to uncontacted licensed elevator contractors",
+          "opportunityIds": [
+            "cop_5d5016028fa941ecab87"
+          ],
+          "why": "The $380 price is evidenced by 19 paid pilot invoices; conversion was measured on this offer's own sales (19 of 120 contacts, 15.8%); 520 registry contractors with published emails are not yet contacted. 12 deals x $380 = $4,560 settled within 5 days of sale, delivered by Brain as a spreadsheet at $6 direct cost and $0 exposure. Contacting the 520 uncontacted contractors yields an expected ~82 agreements at the measured rate, far above the 12 needed."
+        },
+        "alternatives": [
+          {
+            "title": "No other opening exists in this world",
+            "why": "The only researched opening is this one; nothing to combine."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 520 uncontacted contractors from the state labor department elevator-contractor licence registry",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "5d5016-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a completed Category 1 test record pack at $380 and take agreements",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "5d5016-conversionRates",
+              "5d5016-price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each contractor's test record pack spreadsheet from its unit list",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 8,
+            "dependsOn": "sell",
+            "evidence": [
+              "5d5016-delivery",
+              "5d5016-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $380 per pack",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver",
+            "evidence": [
+              "5d5016-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost $6 x 12 packs, paid after receipts settle",
+            "stepId": "deliver"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 456000,
+            "label": "12 packs x $380",
+            "settlesDay": 15,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 38000,
+            "unit": "cents per pack",
+            "sources": [
+              "5d5016-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.158,
+            "unit": "agreements per contact",
+            "sources": [
+              "5d5016-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 520,
+            "unit": "uncontacted licensed contractors",
+            "sources": [
+              "5d5016-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 12,
+            "unit": "deals",
+            "sources": [
+              "5d5016-conversionRates",
+              "5d5016-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents per pack",
+            "sources": [
+              "5d5016-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "5d5016-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "5d5016-price",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct-Nov 2026: 19 contractors each paid $380",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-conversionRates",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "19 agreements from 120 contacts on this offer",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-buyerVolume",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "640 licensed contractors with published emails; 520 not yet contacted",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-directCosts",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6 direct cost per pack",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-delivery",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-timeToFirstCash",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5d5016028fa941ecab87",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_5d5016028fa941ecab87",
+            "deals": 12,
+            "price": 380,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_dab93ec0775c_ad8f79",
+        "digest": "dab93ec0775cf890b37ab78e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e72f4b1f66e141f4b294/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:12.564Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_673d5e76df5142ef8a03",
+      "contractDigest": "3bbce435d8707b97244198a0",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell Category 1 test record packs to uncontacted licensed elevator contractors",
+        "opportunityIds": [
+          "cop_5d5016028fa941ecab87"
+        ],
+        "why": "The $380 price is evidenced by 19 paid pilot invoices; conversion was measured on this offer's own sales (19 of 120 contacts, 15.8%); 520 registry contractors with published emails are not yet contacted. 12 deals x $380 = $4,560 settled within 5 days of sale, delivered by Brain as a spreadsheet at $6 direct cost and $0 exposure. Contacting the 520 uncontacted contractors yields an expected ~82 agreements at the measured rate, far above the 12 needed."
+      },
+      "alternatives": [
+        {
+          "title": "No other opening exists in this world",
+          "why": "The only researched opening is this one; nothing to combine."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email the 520 uncontacted contractors from the state labor department elevator-contractor licence registry",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "buyerVolume",
+            "5d5016-buyerVolume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Offer a completed Category 1 test record pack at $380 and take agreements",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "reach",
+          "evidence": [
+            "conversion",
+            "5d5016-conversionRates",
+            "5d5016-price"
+          ],
+          "priceCents": 38000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Produce each contractor's test record pack spreadsheet from its unit list",
+          "performer": "BRAIN",
+          "costCents": 7200,
+          "day": 8,
+          "dependsOn": "sell",
+          "evidence": [
+            "5d5016-delivery",
+            "5d5016-directCosts"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $380 per pack",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "deliver",
+          "evidence": [
+            "5d5016-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 16,
+          "kind": "SPEND",
+          "amountCents": 7200,
+          "label": "Direct cost $6 x 12 packs, paid after receipts settle",
+          "stepId": "deliver"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 456000,
+          "label": "12 packs x $380",
+          "settlesDay": 15,
+          "stepId": "collect"
+        }
+      ],
+      "proofDay": 15,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 38000,
+          "unit": "cents per pack",
+          "sources": [
+            "5d5016-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.158,
+          "unit": "agreements per contact",
+          "sources": [
+            "5d5016-conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerVolume",
+          "status": "EVIDENCED",
+          "value": 520,
+          "unit": "uncontacted licensed contractors",
+          "sources": [
+            "5d5016-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 12,
+          "unit": "deals",
+          "sources": [
+            "5d5016-conversionRates",
+            "5d5016-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "cents per pack",
+          "sources": [
+            "5d5016-directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "settlementDays",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "5d5016-timeToFirstCash"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "5d5016-price",
+          "url": "https://brain.local/card/cop_5d5016028fa941ecab87#price",
+          "dated": "2026-11-24",
+          "claim": "Pilot invoices Oct-Nov 2026: 19 contractors each paid $380",
+          "population": "independent elevator maintenance contractors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5d5016028fa941ecab87"
+        },
+        {
+          "id": "5d5016-conversionRates",
+          "url": "https://brain.local/card/cop_5d5016028fa941ecab87#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "19 agreements from 120 contacts on this offer",
+          "population": "independent elevator maintenance contractors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5d5016028fa941ecab87"
+        },
+        {
+          "id": "5d5016-buyerVolume",
+          "url": "https://brain.local/card/cop_5d5016028fa941ecab87#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "640 licensed contractors with published emails; 520 not yet contacted",
+          "population": "independent elevator maintenance contractors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5d5016028fa941ecab87"
+        },
+        {
+          "id": "5d5016-directCosts",
+          "url": "https://brain.local/card/cop_5d5016028fa941ecab87#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$6 direct cost per pack",
+          "population": "independent elevator maintenance contractors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5d5016028fa941ecab87"
+        },
+        {
+          "id": "5d5016-delivery",
+          "url": "https://brain.local/card/cop_5d5016028fa941ecab87#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "independent elevator maintenance contractors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5d5016028fa941ecab87"
+        },
+        {
+          "id": "5d5016-timeToFirstCash",
+          "url": "https://brain.local/card/cop_5d5016028fa941ecab87#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days to first cash",
+          "population": "independent elevator maintenance contractors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5d5016028fa941ecab87"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_5d5016028fa941ecab87",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_5d5016028fa941ecab87",
+          "deals": 12,
+          "price": 380,
+          "directCost": 6,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_dab93ec0775c_ad8f79",
+      "digest": "dab93ec0775cf890b37ab78e",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_e72f4b1f66e141f4b294/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:37:12.564Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_dab93ec0775c_ad8f79",
+      "digest": "dab93ec0775cf890b37ab78e",
+      "contractDigest": "3bbce435d8707b97244198a0",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 7200,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 10,
+        "collectedCents": 456000,
+        "collectedInWindowCents": 456000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 448800
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Annual Category 1 test record packs for independent elevator\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Annual Category 1 test record packs for independent elevator\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 51612× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Annual Category 1 test record packs for independent elevator maintenan\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_5d5016028fa941ecab87"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Annual Category 1 test record packs for independent elevator maintenance contrac\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Annual Category 1 test record packs for independent elevator maintenance contrac\"",
+            "owner": "PERSON",
+            "cost": 6
+          },
+          {
+            "label": "Collect payment for \"Annual Category 1 test record packs for independent elevator maintenance contrac\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_5d5016028fa941ecab87",
+            "title": "Annual Category 1 test record packs for independent elevator maintenance contractors",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 4000,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Independent elevator maintenance contractors",
+              "reachableChannel": "Direct email to the contacts published in the state labor department elevator-contractor licence registry",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:08.209Z",
+              "offerScope": "A completed Category 1 test record pack per contractor, assembled from its own unit list, ready to file",
+              "priceCents": 38000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "elevator maintenance contracting",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Direct email to the contacts published in the state labor department elevator-co"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 380 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 19 accepted of 120 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "12 deal(s) needed, 640 available in the window (640 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "640 elevator maintenance contractors hold active licences and are listed with a published email in the state labor department elevator registry; each must file Category 1 test records for every unit it maintains once a year. 120 have been contacted; 520 have not.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell A completed Category 1 test record pack per contractor, assembled from its own unit list, ready to file to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "19 agreements from 120 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent elevator maintenance contractors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Pilot invoices (Oct–Nov 2026): 19 contractors each paid $380 for a Category 1 test record pack.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:35:01.143Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_dab93ec0775c_ad8f79",
+        "revisionDigest": "dab93ec0775cf890b37ab78e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e72f4b1f66e141f4b294/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_9993ae4ae2f64d96a2a1/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Price $380 is a real purchase price paid by this buyer population (19 pilot invoices Oct-Nov 2026, card fact price, EVIDENCE). Conversion 19/120 = 15.8% measured on this offer's own sales to the same population; 520 uncontacted registry contractors x 15.8% = ~82 expected agreements vs 11 needed for $4,000 (11 x $380 = $4,180; plan uses 12 = $4,560). Even the ~10% lower bound of 19/120 gives ~52, so the target holds with wide margin. Each contractor is a separate buyer (one filing per contractor per year), so volume is 520 distinct buyers, not a shared category total. Cost $6 < price $380; card exposure $0 and peakFunding 0 support no up-front capital; net ~$4,488. Settlement: 5 days to first cash (EVIDENCE); receipt day 10 settles day 15, 15 days of slack inside the 30-day window. Delivery is a spreadsheet Brain produces (card delivery EVIDENCE; FULFILMENT link proved PRODUCE_SPREADSHEET), matching the plan's performer.",
+        "findings": [
+          "Ledger/step timing: the deliver step carries its $72 cost on day 8 while the ledger books it on day 16 'after receipts settle'. This is consistent with the card's exposure $0 / peakFunding 0, but the step and ledger should state the same payment timing.",
+          "Owner hours: the card records 0.5 human hours per deal (~6 h for 12 deals) that the plan does not show; the contract sets no hours ceiling so it fits, but it should be stated rather than implied zero.",
+          "Execution prerequisites SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they are routine connections, not evidence gaps, and must be connected before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:38:48.414Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_dab93ec0775c_ad8f79",
+      "digest": "dab93ec0775cf890b37ab78e",
+      "contractDigest": "3bbce435d8707b97244198a0",
+      "plan": {
+        "goalId": "wst_673d5e76df5142ef8a03",
+        "contractDigest": "3bbce435d8707b97244198a0",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell Category 1 test record packs to uncontacted licensed elevator contractors",
+          "opportunityIds": [
+            "cop_5d5016028fa941ecab87"
+          ],
+          "why": "The $380 price is evidenced by 19 paid pilot invoices; conversion was measured on this offer's own sales (19 of 120 contacts, 15.8%); 520 registry contractors with published emails are not yet contacted. 12 deals x $380 = $4,560 settled within 5 days of sale, delivered by Brain as a spreadsheet at $6 direct cost and $0 exposure. Contacting the 520 uncontacted contractors yields an expected ~82 agreements at the measured rate, far above the 12 needed."
+        },
+        "alternatives": [
+          {
+            "title": "No other opening exists in this world",
+            "why": "The only researched opening is this one; nothing to combine."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 520 uncontacted contractors from the state labor department elevator-contractor licence registry",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "5d5016-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a completed Category 1 test record pack at $380 and take agreements",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "5d5016-conversionRates",
+              "5d5016-price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each contractor's test record pack spreadsheet from its unit list",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 8,
+            "dependsOn": "sell",
+            "evidence": [
+              "5d5016-delivery",
+              "5d5016-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $380 per pack",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver",
+            "evidence": [
+              "5d5016-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost $6 x 12 packs, paid after receipts settle",
+            "stepId": "deliver"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 456000,
+            "label": "12 packs x $380",
+            "settlesDay": 15,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 38000,
+            "unit": "cents per pack",
+            "sources": [
+              "5d5016-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.158,
+            "unit": "agreements per contact",
+            "sources": [
+              "5d5016-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 520,
+            "unit": "uncontacted licensed contractors",
+            "sources": [
+              "5d5016-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 12,
+            "unit": "deals",
+            "sources": [
+              "5d5016-conversionRates",
+              "5d5016-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents per pack",
+            "sources": [
+              "5d5016-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "5d5016-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "5d5016-price",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct-Nov 2026: 19 contractors each paid $380",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-conversionRates",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "19 agreements from 120 contacts on this offer",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-buyerVolume",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "640 licensed contractors with published emails; 520 not yet contacted",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-directCosts",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6 direct cost per pack",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-delivery",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          },
+          {
+            "id": "5d5016-timeToFirstCash",
+            "url": "https://brain.local/card/cop_5d5016028fa941ecab87#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "independent elevator maintenance contractors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5d5016028fa941ecab87"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5d5016028fa941ecab87",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_5d5016028fa941ecab87",
+            "deals": 12,
+            "price": 380,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_dab93ec0775c_ad8f79",
+        "digest": "dab93ec0775cf890b37ab78e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e72f4b1f66e141f4b294/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:12.564Z"
+      },
+      "review": {
+        "revisionId": "rev_dab93ec0775c_ad8f79",
+        "revisionDigest": "dab93ec0775cf890b37ab78e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e72f4b1f66e141f4b294/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_9993ae4ae2f64d96a2a1/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Price $380 is a real purchase price paid by this buyer population (19 pilot invoices Oct-Nov 2026, card fact price, EVIDENCE). Conversion 19/120 = 15.8% measured on this offer's own sales to the same population; 520 uncontacted registry contractors x 15.8% = ~82 expected agreements vs 11 needed for $4,000 (11 x $380 = $4,180; plan uses 12 = $4,560). Even the ~10% lower bound of 19/120 gives ~52, so the target holds with wide margin. Each contractor is a separate buyer (one filing per contractor per year), so volume is 520 distinct buyers, not a shared category total. Cost $6 < price $380; card exposure $0 and peakFunding 0 support no up-front capital; net ~$4,488. Settlement: 5 days to first cash (EVIDENCE); receipt day 10 settles day 15, 15 days of slack inside the 30-day window. Delivery is a spreadsheet Brain produces (card delivery EVIDENCE; FULFILMENT link proved PRODUCE_SPREADSHEET), matching the plan's performer.",
+        "findings": [
+          "Ledger/step timing: the deliver step carries its $72 cost on day 8 while the ledger books it on day 16 'after receipts settle'. This is consistent with the card's exposure $0 / peakFunding 0, but the step and ledger should state the same payment timing.",
+          "Owner hours: the card records 0.5 human hours per deal (~6 h for 12 deals) that the plan does not show; the contract sets no hours ceiling so it fits, but it should be stated rather than implied zero.",
+          "Execution prerequisites SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they are routine connections, not evidence gaps, and must be connected before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:38:48.414Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "b06f1d839258b239",
+        "openings": {
+          "cop_5d5016028fa941ecab87": "c93f7b360e509ca0"
+        }
+      },
+      "at": "2026-11-27T09:40:59.197Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

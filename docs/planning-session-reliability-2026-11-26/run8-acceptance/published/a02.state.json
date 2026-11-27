@@ -1,0 +1,2048 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_442e8f03ee474cd89c6f",
+      "words": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 250000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "The target amount is settled in the owner's account within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "2bf7ab5c72e05ae8247e2ac4"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_442e8f03ee474cd89c6f",
+        "contractDigest": "2bf7ab5c72e05ae8247e2ac4",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell one-season re-tuning reminder campaigns to uncontacted guild-listed piano technicians",
+          "opportunityIds": [
+            "cop_d21f4c6dbd264c3a913d"
+          ],
+          "why": "$290 price evidenced by 11 September pilot payments (processor receipts); conversion measured on this offer's own sales (11 of 90, 12.2%); 340 guild-directory technicians with business emails not yet contacted (expected ~41 agreements at the measured rate, 10 needed). 10 deals x $290 = $2,900, settling 3 days after sale, delivered by Brain at $12 direct cost and $0 exposure."
+        },
+        "alternatives": [
+          {
+            "title": "Brokered replacement hammer sets",
+            "why": "Excluded: the supplier's written quote is $640 per set against a $600 signed price, so every deal loses $40."
+          },
+          {
+            "title": "Insurance valuation appraisals",
+            "why": "Excluded: six engagement letters at $450 exist but no fulfiller is named and no Brain capability covers a physical appraisal, so nobody can deliver it."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 340 uncontacted technicians listed in the regional guild chapter directories",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "d21f4c-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a one-season reminder campaign and booking link at $290",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "d21f4c-conversionRates",
+              "d21f4c-price"
+            ],
+            "priceCents": 29000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each technician's reminder schedule and booking campaign from its client list",
+            "performer": "BRAIN",
+            "costCents": 12000,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "d21f4c-delivery",
+              "d21f4c-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $290 per campaign",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver",
+            "evidence": [
+              "d21f4c-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 12000,
+            "label": "Direct cost $12 x 10 campaigns, paid after receipts settle",
+            "stepId": "deliver"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 290000,
+            "label": "10 campaigns x $290",
+            "settlesDay": 11,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 11,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29000,
+            "unit": "cents per campaign",
+            "sources": [
+              "d21f4c-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.122,
+            "unit": "agreements per contact",
+            "sources": [
+              "d21f4c-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 340,
+            "unit": "uncontacted technicians",
+            "sources": [
+              "d21f4c-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 10,
+            "unit": "deals",
+            "sources": [
+              "d21f4c-conversionRates",
+              "d21f4c-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "cents per campaign",
+            "sources": [
+              "d21f4c-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "d21f4c-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "d21f4c-price",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#price",
+            "dated": "2026-11-24",
+            "claim": "September pilot: 11 technicians paid $290 (payment-processor receipts)",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-conversionRates",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "11 agreements from 90 contacts on this offer",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-buyerVolume",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "430 technicians listed with business emails; 340 not yet contacted",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-directCosts",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$12 direct cost per campaign",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-delivery",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-timeToFirstCash",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "64ee89-directCosts",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Keystone quote $640 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          },
+          {
+            "id": "64ee89-price",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#price",
+            "dated": "2026-11-24",
+            "claim": "Five technicians signed orders at $600 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d21f4c6dbd264c3a913d",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "missing": [
+              "ECONOMICS"
+            ]
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "why": "Supplier cost $640 per set (written quote) is above the $600 signed price: each deal loses $40."
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "why": "No fulfiller: the card names no fulfillmentOwner and lists no capability Brain could perform; a physical insurance appraisal (3 hours per deal) has nobody established to do it."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_d21f4c6dbd264c3a913d",
+            "deals": 10,
+            "price": 290,
+            "directCost": 12,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1bfeead33633_9dc0b6",
+        "digest": "1bfeead3363365d8546f27f0",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_38ae28aede094d619ed2/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:35.776Z"
+      },
+      {
+        "goalId": "wst_442e8f03ee474cd89c6f",
+        "contractDigest": "2bf7ab5c72e05ae8247e2ac4",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell one-season re-tuning reminder campaigns to uncontacted guild-listed piano technicians",
+          "opportunityIds": [
+            "cop_d21f4c6dbd264c3a913d"
+          ],
+          "why": "$290 price evidenced by 11 September pilot payments (processor receipts); conversion measured on this offer's own sales (11 of 90, 12.2%); 340 guild-directory technicians with business emails not yet contacted (expected ~41 agreements at the measured rate, 10 needed). 10 deals x $290 = $2,900, settling 3 days after sale, delivered by Brain at $12 direct cost and $0 exposure."
+        },
+        "alternatives": [
+          {
+            "title": "Brokered replacement hammer sets",
+            "why": "Excluded: the supplier's written quote is $640 per set against a $600 signed price, so every deal loses $40."
+          },
+          {
+            "title": "Insurance valuation appraisals",
+            "why": "Excluded: six engagement letters at $450 exist but no fulfiller is named and no Brain capability covers a physical appraisal, so nobody can deliver it."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 340 uncontacted technicians listed in the regional guild chapter directories",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "d21f4c-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a one-season reminder campaign and booking link at $290",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "d21f4c-conversionRates",
+              "d21f4c-price"
+            ],
+            "priceCents": 29000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each technician's reminder schedule and booking campaign from its client list",
+            "performer": "BRAIN",
+            "costCents": 12000,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "d21f4c-delivery",
+              "d21f4c-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $290 per campaign",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver",
+            "evidence": [
+              "d21f4c-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 12000,
+            "label": "Direct cost $12 x 10 campaigns, paid after receipts settle",
+            "stepId": "deliver"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 290000,
+            "label": "10 campaigns x $290",
+            "settlesDay": 11,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 11,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29000,
+            "unit": "cents per campaign",
+            "sources": [
+              "d21f4c-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.122,
+            "unit": "agreements per contact",
+            "sources": [
+              "d21f4c-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 340,
+            "unit": "uncontacted technicians",
+            "sources": [
+              "d21f4c-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 10,
+            "unit": "deals",
+            "sources": [
+              "d21f4c-conversionRates",
+              "d21f4c-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "cents per campaign",
+            "sources": [
+              "d21f4c-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "d21f4c-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "d21f4c-price",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#price",
+            "dated": "2026-11-24",
+            "claim": "September pilot: 11 technicians paid $290 (payment-processor receipts)",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-conversionRates",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "11 agreements from 90 contacts on this offer",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-buyerVolume",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "430 technicians listed with business emails; 340 not yet contacted",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-directCosts",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$12 direct cost per campaign",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-delivery",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-timeToFirstCash",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "64ee89-directCosts",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Keystone quote $640 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          },
+          {
+            "id": "64ee89-price",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#price",
+            "dated": "2026-11-24",
+            "claim": "Five technicians signed orders at $600 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          },
+          {
+            "id": "a55dd2-directCosts",
+            "url": "https://brain.local/card/cop_a55dd2ddfaf847c6b8fc#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$20 direct cost per appraisal",
+            "population": "piano owners referred by technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc"
+          },
+          {
+            "id": "64ee89-fulfillment",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Keystone Action Parts quoted to do the work at $640 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d21f4c6dbd264c3a913d",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "missing": [
+              "ECONOMICS"
+            ]
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "why": "Supplier cost $640 per set (written quote) is above the $600 signed price: each deal loses $40."
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "why": "No fulfiller: the card names no fulfillmentOwner and lists no capability Brain could perform; a physical insurance appraisal (3 hours per deal) has nobody established to do it."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_d21f4c6dbd264c3a913d",
+            "deals": 10,
+            "price": 290,
+            "directCost": 12,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "link": "FULFILMENT",
+            "reason": "This opening's own record names its fulfiller: fulfillmentOwner 'Keystone Action Parts (written quote: $640 per set, drop-shipped)' and the EVIDENCE fact 'fulfillment: Keystone Action Parts ... quoted to do the work'. Brain's 'nobody has established who would do the work' half of the basis belongs to the appraisal opening (its links are merged with cop_a55dd2ddfaf847c6b8fc). The opening is still excluded on ECONOMICS."
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "link": "ECONOMICS",
+            "reason": "This opening's own record: price $450 (six signed engagement letters) and directCosts $20 (EVIDENCE), exposure $0, so each deal earns $430. The 'cost of 640 against a price of 600' half of Brain's basis is the hammer-set opening's (links merged with cop_64ee89996a864828b5cf). The opening is still excluded on FULFILMENT."
+          }
+        ],
+        "revisionId": "rev_667afc513826_ce7086",
+        "digest": "667afc51382650ccd4850e68",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_38ae28aede094d619ed2/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:46.358Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_442e8f03ee474cd89c6f",
+      "contractDigest": "2bf7ab5c72e05ae8247e2ac4",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell one-season re-tuning reminder campaigns to uncontacted guild-listed piano technicians",
+        "opportunityIds": [
+          "cop_d21f4c6dbd264c3a913d"
+        ],
+        "why": "$290 price evidenced by 11 September pilot payments (processor receipts); conversion measured on this offer's own sales (11 of 90, 12.2%); 340 guild-directory technicians with business emails not yet contacted (expected ~41 agreements at the measured rate, 10 needed). 10 deals x $290 = $2,900, settling 3 days after sale, delivered by Brain at $12 direct cost and $0 exposure."
+      },
+      "alternatives": [
+        {
+          "title": "Brokered replacement hammer sets",
+          "why": "Excluded: the supplier's written quote is $640 per set against a $600 signed price, so every deal loses $40."
+        },
+        {
+          "title": "Insurance valuation appraisals",
+          "why": "Excluded: six engagement letters at $450 exist but no fulfiller is named and no Brain capability covers a physical appraisal, so nobody can deliver it."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email the 340 uncontacted technicians listed in the regional guild chapter directories",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "buyerVolume",
+            "d21f4c-buyerVolume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Offer a one-season reminder campaign and booking link at $290",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "reach",
+          "evidence": [
+            "conversion",
+            "d21f4c-conversionRates",
+            "d21f4c-price"
+          ],
+          "priceCents": 29000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Produce each technician's reminder schedule and booking campaign from its client list",
+          "performer": "BRAIN",
+          "costCents": 12000,
+          "day": 7,
+          "dependsOn": "sell",
+          "evidence": [
+            "d21f4c-delivery",
+            "d21f4c-directCosts"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $290 per campaign",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "deliver",
+          "evidence": [
+            "d21f4c-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 12,
+          "kind": "SPEND",
+          "amountCents": 12000,
+          "label": "Direct cost $12 x 10 campaigns, paid after receipts settle",
+          "stepId": "deliver"
+        },
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 290000,
+          "label": "10 campaigns x $290",
+          "settlesDay": 11,
+          "stepId": "collect"
+        }
+      ],
+      "proofDay": 11,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 29000,
+          "unit": "cents per campaign",
+          "sources": [
+            "d21f4c-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.122,
+          "unit": "agreements per contact",
+          "sources": [
+            "d21f4c-conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerVolume",
+          "status": "EVIDENCED",
+          "value": 340,
+          "unit": "uncontacted technicians",
+          "sources": [
+            "d21f4c-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 10,
+          "unit": "deals",
+          "sources": [
+            "d21f4c-conversionRates",
+            "d21f4c-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 1200,
+          "unit": "cents per campaign",
+          "sources": [
+            "d21f4c-directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "settlementDays",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "days",
+          "sources": [
+            "d21f4c-timeToFirstCash"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "d21f4c-price",
+          "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#price",
+          "dated": "2026-11-24",
+          "claim": "September pilot: 11 technicians paid $290 (payment-processor receipts)",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d21f4c6dbd264c3a913d"
+        },
+        {
+          "id": "d21f4c-conversionRates",
+          "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "11 agreements from 90 contacts on this offer",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d21f4c6dbd264c3a913d"
+        },
+        {
+          "id": "d21f4c-buyerVolume",
+          "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "430 technicians listed with business emails; 340 not yet contacted",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d21f4c6dbd264c3a913d"
+        },
+        {
+          "id": "d21f4c-directCosts",
+          "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$12 direct cost per campaign",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d21f4c6dbd264c3a913d"
+        },
+        {
+          "id": "d21f4c-delivery",
+          "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d21f4c6dbd264c3a913d"
+        },
+        {
+          "id": "d21f4c-timeToFirstCash",
+          "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "3 days to first cash",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d21f4c6dbd264c3a913d"
+        },
+        {
+          "id": "64ee89-directCosts",
+          "url": "https://brain.local/card/cop_64ee89996a864828b5cf#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Keystone quote $640 per set",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_64ee89996a864828b5cf"
+        },
+        {
+          "id": "64ee89-price",
+          "url": "https://brain.local/card/cop_64ee89996a864828b5cf#price",
+          "dated": "2026-11-24",
+          "claim": "Five technicians signed orders at $600 per set",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_64ee89996a864828b5cf"
+        },
+        {
+          "id": "a55dd2-directCosts",
+          "url": "https://brain.local/card/cop_a55dd2ddfaf847c6b8fc#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$20 direct cost per appraisal",
+          "population": "piano owners referred by technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_a55dd2ddfaf847c6b8fc"
+        },
+        {
+          "id": "64ee89-fulfillment",
+          "url": "https://brain.local/card/cop_64ee89996a864828b5cf#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Keystone Action Parts quoted to do the work at $640 per set",
+          "population": "independent piano technicians",
+          "matchesBuyer": true,
+          "opportunityId": "cop_64ee89996a864828b5cf"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_d21f4c6dbd264c3a913d",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_64ee89996a864828b5cf",
+          "missing": [
+            "ECONOMICS"
+          ]
+        },
+        {
+          "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+          "missing": [
+            "FULFILMENT"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_64ee89996a864828b5cf",
+          "why": "Supplier cost $640 per set (written quote) is above the $600 signed price: each deal loses $40."
+        },
+        {
+          "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+          "why": "No fulfiller: the card names no fulfillmentOwner and lists no capability Brain could perform; a physical insurance appraisal (3 hours per deal) has nobody established to do it."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_d21f4c6dbd264c3a913d",
+          "deals": 10,
+          "price": 290,
+          "directCost": 12,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_64ee89996a864828b5cf",
+          "link": "FULFILMENT",
+          "reason": "This opening's own record names its fulfiller: fulfillmentOwner 'Keystone Action Parts (written quote: $640 per set, drop-shipped)' and the EVIDENCE fact 'fulfillment: Keystone Action Parts ... quoted to do the work'. Brain's 'nobody has established who would do the work' half of the basis belongs to the appraisal opening (its links are merged with cop_a55dd2ddfaf847c6b8fc). The opening is still excluded on ECONOMICS."
+        },
+        {
+          "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+          "link": "ECONOMICS",
+          "reason": "This opening's own record: price $450 (six signed engagement letters) and directCosts $20 (EVIDENCE), exposure $0, so each deal earns $430. The 'cost of 640 against a price of 600' half of Brain's basis is the hammer-set opening's (links merged with cop_64ee89996a864828b5cf). The opening is still excluded on FULFILMENT."
+        }
+      ],
+      "revisionId": "rev_667afc513826_ce7086",
+      "digest": "667afc51382650ccd4850e68",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_38ae28aede094d619ed2/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:37:46.358Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_667afc513826_ce7086",
+      "digest": "667afc51382650ccd4850e68",
+      "contractDigest": "2bf7ab5c72e05ae8247e2ac4",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 12000,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 8,
+        "collectedCents": 290000,
+        "collectedInWindowCents": 290000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 278000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Client re-tuning reminder and booking campaign for independe\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 32526× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Client re-tuning reminder and booking campaign for independent piano t\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_d21f4c6dbd264c3a913d",
+          "cop_64ee89996a864828b5cf",
+          "cop_a55dd2ddfaf847c6b8fc"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Client re-tuning reminder and booking campaign for independent piano technicians\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Client re-tuning reminder and booking campaign for independent piano technicians\"",
+            "owner": "PERSON",
+            "cost": 12
+          },
+          {
+            "label": "Collect payment for \"Client re-tuning reminder and booking campaign for independent piano technicians\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_d21f4c6dbd264c3a913d",
+            "title": "Client re-tuning reminder and booking campaign for independent piano technicians",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 2500,
+            "potentialReach": 2500,
+            "card": {
+              "payer": "Independent piano technicians",
+              "reachableChannel": "Business emails published in the regional piano technicians guild chapter directories",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:14.092Z",
+              "offerScope": "One season of reminder emails and a booking link sent to the technician’s own client list",
+              "priceCents": 29000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "piano tuning and repair",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Business emails published in the regional piano technicians guild chapter direct"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 290 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 11 accepted of 90 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "10 deal(s) needed, 430 available in the window (430 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 12, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "3 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "430 independent piano technicians are listed with business emails in the regional guild chapter directories; each re-tunes its clients on a 6–12 month cycle. 90 have been contacted; 340 have not.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One season of reminder emails and a booking link sent to the technician’s own client list to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "11 agreements from 90 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$12",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent piano technicians",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "September pilot: 11 technicians paid $290 for a one-season reminder campaign (payment-processor receipts).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "3 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "title": "Brokered replacement hammer sets for piano technicians",
+            "missing": [
+              "ECONOMICS"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2500,
+            "potentialReach": 2500,
+            "card": {
+              "payer": "Independent piano technicians",
+              "reachableChannel": "Signed order forms by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:14.092Z",
+              "offerScope": "Brokered replacement hammer sets for piano technicians",
+              "priceCents": 60000,
+              "currency": "USD",
+              "fulfillmentOwner": "Keystone Action Parts (written quote: $640 per set, drop-shipped)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "piano tuning and repair",
+              "mechanism": "SUPPLY_DEMAND_MISMATCH",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Brokered replacement hammer sets for piano technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Brokered replacement hammer sets for piano technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Brokered replacement hammer sets for piano technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Brokered replacement hammer sets for piano technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Brokered replacement hammer sets for piano technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed order forms by email | reach: Technician referrals"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 3000 USD | a buyer agreed to 2700 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 3000 USD | buyers have agreed to 2700 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer | a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "fulfilled by Keystone Action Parts (written quote: $640 per set, drop-shipped) (a source says so) | nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "each deal loses money: a cost of 640 against a price of 600 | cost 20, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "12 days to usable cash against 30 left | 10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Brokered replacement hammer sets for piano technicians to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$640",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Keystone Action Parts (written quote: $640 per set, drop-shipped) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent piano technicians",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Five technicians signed orders at $600 per replacement hammer set.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "title": "Insurance valuation appraisals for pianos referred by technicians",
+            "missing": [
+              "FULFILMENT"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2500,
+            "potentialReach": 2500,
+            "card": {
+              "payer": "Piano owners referred by their technicians",
+              "reachableChannel": "Technician referrals",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:14.092Z",
+              "offerScope": "Insurance valuation appraisals for pianos referred by technicians",
+              "priceCents": 45000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "piano tuning and repair",
+              "mechanism": "EXISTING_BUYING_SIGNAL",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "Insurance valuation appraisals for pianos referred by technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "Insurance valuation appraisals for pianos referred by technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "Insurance valuation appraisals for pianos referred by technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "Insurance valuation appraisals for pianos referred by technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "Insurance valuation appraisals for pianos referred by technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "Insurance valuation appraisals for pianos referred by technicians",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed order forms by email | reach: Technician referrals"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 3000 USD | a buyer agreed to 2700 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 3000 USD | buyers have agreed to 2700 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer | a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "fulfilled by Keystone Action Parts (written quote: $640 per set, drop-shipped) (a source says so) | nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "each deal loses money: a cost of 640 against a price of 600 | cost 20, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "12 days to usable cash against 30 left | 10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Insurance valuation appraisals for pianos referred by technicians to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$20",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Piano owners referred by their technicians",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Six piano owners signed engagement letters at $450 per insurance appraisal.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_91c8a43bbc524938a60c",
+          "cnd_bc61c9ff4cc741969be3",
+          "cnd_ca9350abaaf5487c899a"
+        ],
+        "scope": {
+          "targetCents": 250000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:33:10.132Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_667afc513826_ce7086",
+        "revisionDigest": "667afc51382650ccd4850e68",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_38ae28aede094d619ed2/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_71a133c9db084da4a7e7/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Price $290 is a real purchase price paid by this buyer population (11 September pilot payments, processor receipts; card price EVIDENCE). Conversion 11/90 = 12.2% measured on this offer's own sales; 340 uncontacted guild-listed technicians x 12.2% = ~41 expected vs 9 needed for $2,500 (9 x $290 = $2,610; plan uses 10 = $2,900). Even a ~6.5% lower bound on 11/90 gives ~22, so margin is wide. Each technician is a distinct buyer (430 listed, 340 uncontacted), not a shared category total. Cost $12 < $290; exposure $0 / peakFunding 0 on the card; net $2,780. Settlement 3 days (EVIDENCE): receipt day 8 settles day 11, inside 30. Both exclusions are correct: hammer sets are a constraint (written supplier quote $640 > signed price $600, every deal loses $40, no amount of evidence fixes it), appraisals have no established fulfiller for a 3-hour physical appraisal. The author's disagreements correctly note that Brain's links for the two excluded openings are merged across both cards; neither changes the outcome.",
+        "findings": [
+          "Ledger/step timing: the deliver step carries $120 on day 7 while the ledger books it on day 12 'after receipts settle'; consistent with the card's exposure $0, but step and ledger should state the same payment timing.",
+          "Delivery scope: the offer is 'one season of reminder emails and a booking link sent to the technician's own client list', which runs over a season and involves sending emails, while the card's delivery fact and the plan cover only the spreadsheet Brain produces. Collection is on day 8, before most of the season is delivered; the plan should state that sending runs through the buyer's own list/tool or connect SEND_A_MESSAGE, and that payment is upfront as in the pilot.",
+          "Owner hours: the card records 0.5 human hours per deal (~5 h for 10) the plan does not show; no hours ceiling, so it fits.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections required before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:39:38.582Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_667afc513826_ce7086",
+      "digest": "667afc51382650ccd4850e68",
+      "contractDigest": "2bf7ab5c72e05ae8247e2ac4",
+      "plan": {
+        "goalId": "wst_442e8f03ee474cd89c6f",
+        "contractDigest": "2bf7ab5c72e05ae8247e2ac4",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell one-season re-tuning reminder campaigns to uncontacted guild-listed piano technicians",
+          "opportunityIds": [
+            "cop_d21f4c6dbd264c3a913d"
+          ],
+          "why": "$290 price evidenced by 11 September pilot payments (processor receipts); conversion measured on this offer's own sales (11 of 90, 12.2%); 340 guild-directory technicians with business emails not yet contacted (expected ~41 agreements at the measured rate, 10 needed). 10 deals x $290 = $2,900, settling 3 days after sale, delivered by Brain at $12 direct cost and $0 exposure."
+        },
+        "alternatives": [
+          {
+            "title": "Brokered replacement hammer sets",
+            "why": "Excluded: the supplier's written quote is $640 per set against a $600 signed price, so every deal loses $40."
+          },
+          {
+            "title": "Insurance valuation appraisals",
+            "why": "Excluded: six engagement letters at $450 exist but no fulfiller is named and no Brain capability covers a physical appraisal, so nobody can deliver it."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 340 uncontacted technicians listed in the regional guild chapter directories",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "d21f4c-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a one-season reminder campaign and booking link at $290",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "d21f4c-conversionRates",
+              "d21f4c-price"
+            ],
+            "priceCents": 29000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each technician's reminder schedule and booking campaign from its client list",
+            "performer": "BRAIN",
+            "costCents": 12000,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "d21f4c-delivery",
+              "d21f4c-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $290 per campaign",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver",
+            "evidence": [
+              "d21f4c-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 12000,
+            "label": "Direct cost $12 x 10 campaigns, paid after receipts settle",
+            "stepId": "deliver"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 290000,
+            "label": "10 campaigns x $290",
+            "settlesDay": 11,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 11,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29000,
+            "unit": "cents per campaign",
+            "sources": [
+              "d21f4c-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.122,
+            "unit": "agreements per contact",
+            "sources": [
+              "d21f4c-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 340,
+            "unit": "uncontacted technicians",
+            "sources": [
+              "d21f4c-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 10,
+            "unit": "deals",
+            "sources": [
+              "d21f4c-conversionRates",
+              "d21f4c-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "cents per campaign",
+            "sources": [
+              "d21f4c-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "d21f4c-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "d21f4c-price",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#price",
+            "dated": "2026-11-24",
+            "claim": "September pilot: 11 technicians paid $290 (payment-processor receipts)",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-conversionRates",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "11 agreements from 90 contacts on this offer",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-buyerVolume",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "430 technicians listed with business emails; 340 not yet contacted",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-directCosts",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$12 direct cost per campaign",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-delivery",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "d21f4c-timeToFirstCash",
+            "url": "https://brain.local/card/cop_d21f4c6dbd264c3a913d#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d21f4c6dbd264c3a913d"
+          },
+          {
+            "id": "64ee89-directCosts",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Keystone quote $640 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          },
+          {
+            "id": "64ee89-price",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#price",
+            "dated": "2026-11-24",
+            "claim": "Five technicians signed orders at $600 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          },
+          {
+            "id": "a55dd2-directCosts",
+            "url": "https://brain.local/card/cop_a55dd2ddfaf847c6b8fc#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$20 direct cost per appraisal",
+            "population": "piano owners referred by technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc"
+          },
+          {
+            "id": "64ee89-fulfillment",
+            "url": "https://brain.local/card/cop_64ee89996a864828b5cf#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Keystone Action Parts quoted to do the work at $640 per set",
+            "population": "independent piano technicians",
+            "matchesBuyer": true,
+            "opportunityId": "cop_64ee89996a864828b5cf"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d21f4c6dbd264c3a913d",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "missing": [
+              "ECONOMICS"
+            ]
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "why": "Supplier cost $640 per set (written quote) is above the $600 signed price: each deal loses $40."
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "why": "No fulfiller: the card names no fulfillmentOwner and lists no capability Brain could perform; a physical insurance appraisal (3 hours per deal) has nobody established to do it."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_d21f4c6dbd264c3a913d",
+            "deals": 10,
+            "price": 290,
+            "directCost": 12,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_64ee89996a864828b5cf",
+            "link": "FULFILMENT",
+            "reason": "This opening's own record names its fulfiller: fulfillmentOwner 'Keystone Action Parts (written quote: $640 per set, drop-shipped)' and the EVIDENCE fact 'fulfillment: Keystone Action Parts ... quoted to do the work'. Brain's 'nobody has established who would do the work' half of the basis belongs to the appraisal opening (its links are merged with cop_a55dd2ddfaf847c6b8fc). The opening is still excluded on ECONOMICS."
+          },
+          {
+            "opportunityId": "cop_a55dd2ddfaf847c6b8fc",
+            "link": "ECONOMICS",
+            "reason": "This opening's own record: price $450 (six signed engagement letters) and directCosts $20 (EVIDENCE), exposure $0, so each deal earns $430. The 'cost of 640 against a price of 600' half of Brain's basis is the hammer-set opening's (links merged with cop_64ee89996a864828b5cf). The opening is still excluded on FULFILMENT."
+          }
+        ],
+        "revisionId": "rev_667afc513826_ce7086",
+        "digest": "667afc51382650ccd4850e68",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_38ae28aede094d619ed2/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:46.358Z"
+      },
+      "review": {
+        "revisionId": "rev_667afc513826_ce7086",
+        "revisionDigest": "667afc51382650ccd4850e68",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_38ae28aede094d619ed2/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_71a133c9db084da4a7e7/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Price $290 is a real purchase price paid by this buyer population (11 September pilot payments, processor receipts; card price EVIDENCE). Conversion 11/90 = 12.2% measured on this offer's own sales; 340 uncontacted guild-listed technicians x 12.2% = ~41 expected vs 9 needed for $2,500 (9 x $290 = $2,610; plan uses 10 = $2,900). Even a ~6.5% lower bound on 11/90 gives ~22, so margin is wide. Each technician is a distinct buyer (430 listed, 340 uncontacted), not a shared category total. Cost $12 < $290; exposure $0 / peakFunding 0 on the card; net $2,780. Settlement 3 days (EVIDENCE): receipt day 8 settles day 11, inside 30. Both exclusions are correct: hammer sets are a constraint (written supplier quote $640 > signed price $600, every deal loses $40, no amount of evidence fixes it), appraisals have no established fulfiller for a 3-hour physical appraisal. The author's disagreements correctly note that Brain's links for the two excluded openings are merged across both cards; neither changes the outcome.",
+        "findings": [
+          "Ledger/step timing: the deliver step carries $120 on day 7 while the ledger books it on day 12 'after receipts settle'; consistent with the card's exposure $0, but step and ledger should state the same payment timing.",
+          "Delivery scope: the offer is 'one season of reminder emails and a booking link sent to the technician's own client list', which runs over a season and involves sending emails, while the card's delivery fact and the plan cover only the spreadsheet Brain produces. Collection is on day 8, before most of the season is delivered; the plan should state that sending runs through the buyer's own list/tool or connect SEND_A_MESSAGE, and that payment is upfront as in the pilot.",
+          "Owner hours: the card records 0.5 human hours per deal (~5 h for 10) the plan does not show; no hours ceiling, so it fits.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections required before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:39:38.582Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+        "terms": "5f67e7635aeeb057",
+        "openings": {
+          "cop_64ee89996a864828b5cf": "467520027e61df4f",
+          "cop_a55dd2ddfaf847c6b8fc": "a61d6083b0f26541",
+          "cop_d21f4c6dbd264c3a913d": "ea59e3b776dc53ec"
+        }
+      },
+      "at": "2026-11-27T09:41:07.185Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

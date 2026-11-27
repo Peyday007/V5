@@ -263,6 +263,29 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect((await svc.planningState(goalId)).final?.revisionId).toBe(clean.revision.revisionId);
   }, 240_000);
 
+  it('an opening Brain’s planner excluded is still the goal’s opening, so a disputed exclusion can be built on (run 8, ah-06)', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const { recordWorkstreamEvent } = await import('../server/repos/register.ts');
+    await recordWorkstreamEvent({ workstreamId: goalId, kind: svc.PLANNING_EVENTS.brain, summary: 'run with an exclusion', detail: { summary: { openings: [], excluded: [{ opportunityId: 'cop_excluded_example', title: 'Ice rink workbook', reason: 'not a sale' }], integrity: [], at: new Date().toISOString() } }, actorRef: 'test' });
+    expect(await svc.admittedIds(goalId)).toContain('cop_excluded_example');
+    // Leave the goal's latest planner run a real one for the tests after this.
+    await svc.runBrain({ goalId, actor: AUTHOR });
+  }, 240_000);
+
+  it('an integrity finding about an opening the plan does not use does not refuse it; one about a used opening, or none named, still does (run 8, ai-02)', async () => {
+    const { integrityFor } = await import('../server/services/planning/sessionPlanning.ts');
+    const run = {
+      openings: [{ opportunityId: 'o_label', title: 'Craft-distillery spirits label design, subcontracted to a studio' }, { opportunityId: 'o_web', title: 'Distillery website rebuild' }],
+      excluded: [],
+      integrity: [
+        { rule: 'NO_FAVOURABLE_UNKNOWN', detail: '"Craft-distillery spirits label design, subcontracted to a s…" costs at least 1208 a deal as modelled, not established, more than the 500 the goal may spend in all' },
+        { rule: 'PROBABILITY_UNSUPPORTED', detail: 'the reading certifies a probability with no measured record' },
+      ],
+    } as never;
+    expect((integrityFor(run, ['o_web'])).map((v) => v.rule)).toEqual(['PROBABILITY_UNSUPPORTED']);
+    expect((integrityFor(run, ['o_label'])).map((v) => v.rule)).toEqual(['NO_FAVOURABLE_UNKNOWN', 'PROBABILITY_UNSUPPORTED']);
+  });
+
   it('a reviewer that dies loses its review: the lapsed lease grants nothing, and the queue deals the review to another member', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     const { createWorker } = await import('../server/repos/identity.ts');

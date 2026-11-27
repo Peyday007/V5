@@ -1,0 +1,839 @@
+[
+  {
+    "id": "ah-01-elevator-test-records",
+    "heldOut": true,
+    "description": "Every link evidenced for this seller: 640 contractors counted in the state registry, 520 not yet asked, a measured 19/120 = 15.8% of contacts paid $380 in the pilot, Brain assembles the pack at $6, cash in 5 days. $4,000 needs 11 sales ($4,180) = ~70 contacts at the measured rate, ~140 at half of it; 520 uncontacted × 15.8% ≈ 82 sales ≈ $31,000. Executable inside 30 days with no capital.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "elevator maintenance contracting",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "elevator",
+        "title": "Annual Category 1 test record packs for independent elevator maintenance contractors",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "elevator maintenance contracting",
+        "payer": "Independent elevator maintenance contractors",
+        "channel": "Direct email to the contacts published in the state labor department elevator-contractor licence registry",
+        "offer": "A completed Category 1 test record pack per contractor, assembled from its own unit list, ready to file",
+        "price": 380,
+        "priceEvidence": "Pilot invoices (Oct–Nov 2026): 19 contractors each paid $380 for a Category 1 test record pack.",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "640 elevator maintenance contractors hold active licences and are listed with a published email in the state labor department elevator registry; each must file Category 1 test records for every unit it maintains once a year. 120 have been contacted; 520 have not.",
+        "conversion": {
+          "paid": 19,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ah-02-piano-one-sound-of-three",
+    "heldOut": true,
+    "description": "Three piano openings, each of which alone \"covers\" $2,500 on its face. Hammer sets: 5 signed × $600 = $3,000, but each costs $640 — a loss on every deal. Appraisals: 6 signed × $450 = $2,700, but nobody is established to appraise. The reminder campaign is sound: 430 counted technicians, 340 not yet asked, a measured 11/90 = 12.2% paid $290, Brain runs it at $12, cash in 3 days. $2,500 needs 9 sales ($2,610) ≈ 74 contacts at the rate, ~148 at half; 340 × 12.2% ≈ 41 sales ≈ $11,900. Executable on the reminders alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "piano tuning and repair",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "pianoParts",
+        "title": "Brokered replacement hammer sets for piano technicians",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "piano tuning and repair",
+        "payer": "Independent piano technicians",
+        "channel": "Signed order forms by email",
+        "price": 600,
+        "priceEvidence": "Five technicians signed orders at $600 per replacement hammer set.",
+        "cost": 640,
+        "capital": 0,
+        "daysToCash": 12,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Keystone Action Parts (written quote: $640 per set, drop-shipped)",
+        "agreements": [
+          600,
+          600,
+          600,
+          600,
+          600
+        ]
+      },
+      {
+        "key": "pianoAppraisal",
+        "title": "Insurance valuation appraisals for pianos referred by technicians",
+        "mechanism": "EXISTING_BUYING_SIGNAL",
+        "industry": "piano tuning and repair",
+        "payer": "Piano owners referred by their technicians",
+        "channel": "Technician referrals",
+        "price": 450,
+        "priceEvidence": "Six piano owners signed engagement letters at $450 per insurance appraisal.",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 3,
+        "performer": "NOBODY",
+        "agreements": [
+          450,
+          450,
+          450,
+          450,
+          450,
+          450
+        ]
+      },
+      {
+        "key": "pianoReminders",
+        "title": "Client re-tuning reminder and booking campaign for independent piano technicians",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "piano tuning and repair",
+        "payer": "Independent piano technicians",
+        "channel": "Business emails published in the regional piano technicians guild chapter directories",
+        "offer": "One season of reminder emails and a booking link sent to the technician’s own client list",
+        "price": 290,
+        "priceEvidence": "September pilot: 11 technicians paid $290 for a one-season reminder campaign (payment-processor receipts).",
+        "cost": 12,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "430 independent piano technicians are listed with business emails in the regional guild chapter directories; each re-tunes its clients on a 6–12 month cycle. 90 have been contacted; 340 have not.",
+        "conversion": {
+          "paid": 11,
+          "of": 90,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "pianoParts",
+        "pianoAppraisal"
+      ]
+    }
+  },
+  {
+    "id": "ah-03-towing-owner-hours",
+    "heldOut": true,
+    "description": "2 owner hours a week over 35 days = 10 owner hours. The owner-delivered claim reviews (4 signed × $1,500 = $6,000) take 6 owner hours each = 24 hours, so at most one fits. The permit packets need no owner time: 380 towing companies counted on the city roster, 230 not yet asked, a measured 24/150 = 16% paid $420, Brain produces at $5, cash in 4 days, and the 31 December expiry is a dated trigger. $6,000 needs 15 packets ($6,300) ≈ 94 contacts at the rate, ~188 at half; 230 × 16% ≈ 37 sales ≈ $15,500. Executable inside the hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "towing and roadside recovery",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $6,000 of settled cash within 35 days with no more than 2 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "towConsult",
+        "title": "Fleet insurance claim review consultations for towing companies, delivered by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "towing and roadside recovery",
+        "payer": "Towing company owners",
+        "channel": "Signed engagement letters",
+        "price": 1500,
+        "priceEvidence": "Four towing companies signed engagement letters at $1,500 per claim review.",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 6,
+        "performer": "OWNER",
+        "agreements": [
+          1500,
+          1500,
+          1500,
+          1500
+        ]
+      },
+      {
+        "key": "towPermits",
+        "title": "Annual non-consent tow permit renewal packets for towing companies",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "towing and roadside recovery",
+        "payer": "Towing company owners",
+        "channel": "Business emails on the city’s public non-consent tow permit roster",
+        "offer": "A complete renewal packet: vehicle inspection schedule, insurance certificate checklist and filled renewal forms",
+        "price": 420,
+        "priceEvidence": "Pilot invoices (Oct 2026): 24 towing companies paid $420 for a permit renewal packet.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "380 towing companies hold non-consent tow permits listed on the city roster with business emails; every permit expires on 31 December and must be renewed with an inspection packet. 150 have been contacted; 230 have not.",
+        "conversion": {
+          "paid": 24,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "ownerHoursMax": 10
+    }
+  },
+  {
+    "id": "ah-04-oyster-net-kept",
+    "heldOut": true,
+    "description": "The objective counts money kept. Sampling: 9 signed × $650 = $5,850 gross, subcontracted lab at $380 → 9 × $270 = $2,430 kept ≥ $2,000, settled day 12. Cage resale: 4 signed × $1,100 = $4,400 gross but only 4 × $80 = $320 kept, and each set ties up $1,020 paid before shipment against no capital allowed — it may not be used. A plan counting gross revenue toward the net target, or using the cages, is wrong. Executable on the sampling orders.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "shellfish aquaculture",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $2,000 of net settled cash, after direct costs, within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "oysterGear",
+        "title": "Resale of floating oyster cage sets to shellfish farms",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "shellfish aquaculture",
+        "payer": "Licensed oyster farms",
+        "channel": "Signed purchase orders",
+        "price": 1100,
+        "priceEvidence": "Four farms signed purchase orders at $1,100 per cage set.",
+        "cost": 1020,
+        "capital": 1020,
+        "daysToCash": 18,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Bay Gear Supply (quote: $1,020 per set, paid before shipment)",
+        "agreements": [
+          1100,
+          1100,
+          1100,
+          1100
+        ]
+      },
+      {
+        "key": "oysterSampling",
+        "title": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "shellfish aquaculture",
+        "payer": "Licensed oyster and clam farms",
+        "channel": "Signed service orders by email",
+        "price": 650,
+        "priceEvidence": "Nine farms signed service orders at $650 per monthly sampling round (Nov 2026).",
+        "cost": 380,
+        "capital": 0,
+        "daysToCash": 12,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Tidewater Analytical Labs (written quote: $380 per round including courier, invoiced net 30)",
+        "agreements": [
+          650,
+          650,
+          650,
+          650,
+          650,
+          650,
+          650,
+          650,
+          650
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "oysterGear"
+      ]
+    }
+  },
+  {
+    "id": "ah-05-escape-room-capital-raised",
+    "heldOut": true,
+    "description": "Four signed $1,450 kits ($5,800); each needs $900 paid to the supplier before shipment, operators pay on delivery, cash in 9 days. Initially capital is capped at $500: no kit can be bought, so no plan (capital). The owner then raises capital to $2,000: two kits at a time ($1,800 tied up) → $2,900 by day 9, the other two by day 18 = $5,800 ≥ $4,000 inside 30 days, $550 kept per kit. Executable after the change.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "escape rooms",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days with at most $500 of capital.",
+    "openings": [
+      {
+        "key": "escapeKits",
+        "title": "Refurbished maglock puzzle-controller kits for escape room operators",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "escape rooms",
+        "payer": "Escape room operators",
+        "channel": "Signed purchase orders by email",
+        "price": 1450,
+        "priceEvidence": "Four escape room operators signed purchase orders at $1,450 per refurbished maglock controller kit (POs dated 2026-11-20); each pays on delivery.",
+        "cost": 900,
+        "capital": 900,
+        "daysToCash": 9,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "PuzzleWorks Surplus (written quote: $900 per kit, paid before shipment, ships in 3 days)",
+        "agreements": [
+          1450,
+          1450,
+          1450,
+          1450
+        ]
+      }
+    ],
+    "expectInitial": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "CAPITAL"
+        ],
+        "links": [
+          "ECONOMICS"
+        ]
+      },
+      "capitalMax": 500
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "CAPITAL",
+          "capital": 2000
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 2000
+    }
+  },
+  {
+    "id": "ah-06-ice-rink-ten-days",
+    "heldOut": true,
+    "description": "Five rink directors signed order forms at $420 = $2,100 against $1,800 in 10 days; Brain produces the workbook at $4, paid in 4 days. Settles well inside the window. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "community ice rinks",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $1,800 of settled cash within 10 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "iceRink",
+        "title": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "community ice rinks",
+        "payer": "Ice rink program directors",
+        "channel": "Signed order forms returned by email",
+        "price": 420,
+        "priceEvidence": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          420,
+          420,
+          420,
+          420,
+          420
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ah-07-locksmith-price-said",
+    "heldOut": true,
+    "description": "Every link but the price: 310 counted licensed locksmiths, a channel, Brain produces it. The $550 is only the owner’s word; no buyer or source shows locksmiths pay it. At $550, 310 × 14% ≈ 43 × $550 ≈ $23,900 would dwarf $3,000 — which is exactly why an unevidenced price must not carry it. The decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "commercial locksmithing",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "locksmith",
+        "title": "Key-control register and master-key audit package for commercial locksmith shops",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "commercial locksmithing",
+        "payer": "Commercial locksmith shop owners",
+        "channel": "Business emails on the state locksmith licensing board roster",
+        "price": 550,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says locksmith shops would pay $550 for the key-control package.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "310 locksmith businesses hold state locksmith licences and are listed with business emails on the licensing board roster; each manages master-key systems for commercial clients.",
+        "conversion": {
+          "paid": 14,
+          "of": 100,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "locksmith"
+      }
+    }
+  },
+  {
+    "id": "ah-08-sprinkler-price-contradicted",
+    "heldOut": true,
+    "description": "One source prices the workbook at $750, another at $75. At $750: 180 counted firms × a measured 15% = 27 × $750 = $20,250 ≥ $4,000; at $75: 27 × $75 = $2,025 < $4,000. Which price holds decides the plan, so no executable plan until the contradiction is settled; the decisive gap is the price (and with it the economics).",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "fire sprinkler inspection",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "sprinkler",
+        "title": "NFPA 25 inspection report and deficiency-tracking workbook for fire sprinkler inspection firms",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "fire sprinkler inspection",
+        "payer": "Fire sprinkler inspection firm owners",
+        "channel": "Business emails on the state fire marshal’s fire-protection contractor roster",
+        "price": 750,
+        "priceEvidence": "A fire-protection trade newsletter (Oct 2026) lists the inspection workbook package at $750 per firm.",
+        "priceContradiction": 75,
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "180 fire sprinkler inspection firms hold state fire-protection contractor licences and are listed with business emails on the fire marshal’s roster.",
+        "conversion": {
+          "paid": 18,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "sprinkler"
+      }
+    }
+  },
+  {
+    "id": "ah-09-sleep-clinic-volume-estimated",
+    "heldOut": true,
+    "description": "Price evidenced ($260, three paid), conversion measured (3/20), Brain produces it. $3,500 needs 14 sales; only 20 clinics have been asked and how many more exist is only Brain’s \"probably dozens\" estimate — no count, no directory. Market volume is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "sleep-medicine clinics",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "sleepClinic",
+        "title": "Monthly CPAP adherence-report packets for payer re-authorisation at sleep-medicine clinics",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "sleep-medicine clinics",
+        "payer": "Independent sleep-medicine clinic managers",
+        "channel": "Direct email to clinic managers",
+        "price": 260,
+        "priceEvidence": "Invoices (Oct 2026): three clinics each paid $260 for a monthly adherence-report batch.",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 6,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "Independent sleep clinics in the region probably number in the dozens and would each need these packets monthly.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 3,
+          "of": 20,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "sleepClinic"
+      }
+    }
+  },
+  {
+    "id": "ah-10-ev-rebate-as-price",
+    "heldOut": true,
+    "description": "The $2,500 is the rebate the utility pays a site host per charging port — money paid to the buyer, by someone else, for an installation — not what a host pays for an application package. Read as a price, 2 deals would \"reach\" $5,000. No evidence shows what hosts pay for the package, so the decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "EV charging site hosts",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "objective": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "evRebate",
+        "title": "Make-ready rebate application packages for workplace EV charging site hosts",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "EV charging site hosts",
+        "payer": "Workplace EV charging site hosts",
+        "channel": "Facilities contacts on the utility’s public list of pre-approved site hosts",
+        "price": 2500,
+        "priceEvidence": "The state utility’s make-ready program pays site hosts a $2,500 rebate for each Level 2 charging port installed (program tariff, 2026).",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "260 site hosts are on the utility’s pre-approved list, each with a published facilities contact; each files one rebate application per installation.",
+        "conversion": {
+          "paid": 21,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "evRebate"
+      },
+      "notAPurchasePrice": [
+        "evRebate"
+      ]
+    }
+  },
+  {
+    "id": "ah-11-airport-one-authority",
+    "heldOut": true,
+    "description": "One named airport authority issued one $6,200 purchase order, paid in 21 days. Nothing shows it buys again or that any other buyer exists: the most evidenced is $6,200 against $15,000. Modelling it as repeat buyers invents $8,800. The decisive gap is market volume.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "regional airport operations",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $15,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "airport",
+        "title": "Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport Authority",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "regional airport operations",
+        "payer": "Harbor County Regional Airport Authority",
+        "channel": "The authority’s procurement portal",
+        "price": 6200,
+        "priceEvidence": "Harbor County Regional Airport Authority awarded a $6,200 purchase order for a wildlife-hazard log reconciliation (award notice, 2026-11-12).",
+        "cost": 60,
+        "capital": 0,
+        "daysToCash": 21,
+        "hours": 2,
+        "performer": "BRAIN",
+        "agreements": [
+          6200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "airport"
+      },
+      "payerDealsMax": {
+        "airport": 1
+      }
+    }
+  },
+  {
+    "id": "ah-12-interpreting-deadline-cut",
+    "heldOut": true,
+    "description": "Six hospitals signed $1,100 blocks ($6,600), subcontracted at $700 ($400 kept each), paid net 45 after delivery: first cash on day 50. With 75 days, $6,600 ≥ $6,000 settles in time — executable. The deadline then moves to 14 days from the change: no hospital payment can arrive before day 50, so no plan; the deadline (settlement) rules it out.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "sign language interpreting",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $6,000 of settled cash within 75 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "interpreting",
+        "title": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "sign language interpreting",
+        "payer": "Hospital patient-access departments",
+        "channel": "Signed purchase orders",
+        "price": 1100,
+        "priceEvidence": "Six hospitals signed purchase orders at $1,100 per monthly block of booked ASL interpreting; payment terms net 45 after the block is invoiced at delivery.",
+        "cost": 700,
+        "capital": 0,
+        "daysToCash": 50,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Signal Interpreting Collective (written quote: $700 per block, invoiced net 60)",
+        "agreements": [
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100
+        ]
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "DEADLINE",
+          "days": 14
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ah-13-taxidermy-hours-added",
+    "heldOut": true,
+    "description": "Eight studios signed $650 permit filings ($5,200) the owner prepares at 7 hours each. Unlimited hours: 7 filings × 7 h = 49 h → $4,550 ≥ $4,500, executable. The owner restates the objective with 3 hours a week (30 days ≈ 13 hours): one filing fits ($650); $4,500 needs 7 filings = 49 owner hours. Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "taxidermy studios",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $4,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "taxidermyPermits",
+        "title": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "taxidermy studios",
+        "payer": "Taxidermy studio owners",
+        "channel": "Signed engagement letters",
+        "price": 650,
+        "priceEvidence": "Eight taxidermy studios signed engagement letters at $650 per permit filing.",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 7,
+        "performer": "OWNER",
+        "agreements": [
+          650,
+          650,
+          650,
+          650,
+          650,
+          650,
+          650,
+          650
+        ]
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $4,500 of settled cash within 30 days with no more than 3 hours a week of owner time."
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 13
+    }
+  },
+  {
+    "id": "ah-14-drone-counted-market",
+    "heldOut": true,
+    "description": "The registry counts exactly 140 survey firms, each buying one $480 pack a year: the whole market is 140 × $480 = $67,200 (16 already paid, so $59,520 remains) — under $100,000 at 100% conversion, whatever the capital. Infeasible on the target.",
+    "dimensions": {
+      "capital": "large",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "commercial drone surveying",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $100,000 of settled cash within 30 days with at most $15,000 of capital.",
+    "openings": [
+      {
+        "key": "drone",
+        "title": "Annual Part 107 waiver and flight-log compliance packs for commercial drone survey firms",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "commercial drone surveying",
+        "payer": "Commercial drone survey firm owners",
+        "channel": "Business contacts in the state registry of commercial drone operators",
+        "price": 480,
+        "priceEvidence": "Pilot invoices (Sept–Oct 2026): 16 survey firms each paid $480 for an annual compliance pack.",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state registry of commercial drone operators lists exactly 140 survey firms with business contacts; each needs one compliance pack a year.",
+        "conversion": {
+          "paid": 16,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  }
+]

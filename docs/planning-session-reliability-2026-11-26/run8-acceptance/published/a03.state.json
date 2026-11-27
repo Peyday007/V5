@@ -1,0 +1,3275 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_38c200a7640146aebfce",
+      "words": "Collect $6,000 of settled cash within 35 days with no more than 2 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 600000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 35,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "The target amount is settled in the owner's account within the window",
+        "ownerHoursPerWeek": 2,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "f1a08c18f28235578d279cad"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_38c200a7640146aebfce",
+        "contractDigest": "f1a08c18f28235578d279cad",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell non-consent tow permit renewal packets to uncontacted roster towing companies",
+          "opportunityIds": [
+            "cop_ee11ea279c0b4f55bdf8"
+          ],
+          "why": "$420 price evidenced by 24 paid October pilot invoices; conversion measured on this offer's own sales (24 of 150, 16%); 230 roster towing companies with business emails not yet contacted, all facing the 31 December permit expiry (expected ~37 agreements, 16 needed). 16 deals x $420 = $6,720 settling 4 days after sale; Brain produces the packet ($5 direct cost, $0 exposure), so the plan needs no owner hours and stays inside the 2 hours/week limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner-delivered fleet insurance claim reviews",
+            "why": "Excluded: four signed letters at $1,500 reach $6,000, but the owner delivers each personally at 6 hours per deal = 24 hours, over the 10-hour window allowance (2 h/week x 5 weeks). Even one review (6 h) would use most of the allowance; not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 230 uncontacted towing companies on the city's non-consent tow permit roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "ee11ea-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a complete permit renewal packet at $420",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "ee11ea-conversionRates",
+              "ee11ea-price"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each company's inspection schedule, insurance checklist and filled renewal forms",
+            "performer": "BRAIN",
+            "costCents": 8000,
+            "day": 8,
+            "dependsOn": "sell",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $420 per packet",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 8000,
+            "label": "Direct cost $5 x 16 packets, paid after receipts settle",
+            "stepId": "deliver"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 672000,
+            "label": "16 packets x $420",
+            "settlesDay": 14,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.16,
+            "unit": "agreements per contact",
+            "sources": [
+              "ee11ea-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 230,
+            "unit": "uncontacted permit holders",
+            "sources": [
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 16,
+            "unit": "deals",
+            "sources": [
+              "ee11ea-conversionRates",
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "owner hours in window",
+            "sources": [
+              "ee11ea-delivery"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "ee11ea-price",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct 2026: 24 towing companies paid $420",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-conversionRates",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "24 agreements from 150 contacts on this offer",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-buyerVolume",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "380 permit holders on the city roster; 230 not yet contacted; permits expire 31 December",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-directCosts",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 direct cost per packet",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-delivery",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-timeToFirstCash",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "fbbaf8-fulfillment",
+            "url": "https://brain.local/card/cop_fbbaf861b9ab4be2a881#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally (6 human hours per deal)",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fbbaf861b9ab4be2a881"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "why": "Owner delivers personally at 6 hours per deal; the four signed reviews need 24 owner hours against the 10-hour allowance (2 h/week over 35 days)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "deals": 16,
+            "price": 420,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_35b0fac13237_c8499d",
+        "digest": "35b0fac132379dde2066074e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:38:09.724Z"
+      },
+      {
+        "goalId": "wst_38c200a7640146aebfce",
+        "contractDigest": "f1a08c18f28235578d279cad",
+        "parentRevisionId": "rev_35b0fac13237_c8499d",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell non-consent tow permit renewal packets to uncontacted roster towing companies",
+          "opportunityIds": [
+            "cop_ee11ea279c0b4f55bdf8"
+          ],
+          "why": "$420 price evidenced by 24 paid October pilot invoices; conversion measured on this offer's own sales (24 of 150, 16%); 230 roster towing companies with business emails not yet contacted, all facing the 31 December permit expiry (expected ~37 agreements, 16 needed). 16 deals x $420 = $6,720 settling 4 days after sale; Brain produces the packet ($5 direct cost, $0 exposure), so the plan needs no owner hours and stays inside the 2 hours/week limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner-delivered fleet insurance claim reviews",
+            "why": "Excluded: four signed letters at $1,500 reach $6,000, but the owner delivers each personally at 6 hours per deal = 24 hours, over the 10-hour window allowance (2 h/week x 5 weeks). Even one review (6 h) would use most of the allowance; not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 230 uncontacted towing companies on the city's non-consent tow permit roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "ee11ea-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a complete permit renewal packet at $420",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "ee11ea-conversionRates",
+              "ee11ea-price"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each company's inspection schedule, insurance checklist and filled renewal forms",
+            "performer": "BRAIN",
+            "costCents": 8000,
+            "day": 8,
+            "dependsOn": "sell",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $420 per packet",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 8000,
+            "label": "Direct cost $5 x 16 packets",
+            "stepId": "deliver"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 336000,
+            "label": "First batch: 8 packets x $420",
+            "settlesDay": 14,
+            "stepId": "collect"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 336000,
+            "label": "Second batch: 8 packets x $420",
+            "settlesDay": 22,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 22,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.16,
+            "unit": "agreements per contact",
+            "sources": [
+              "ee11ea-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 230,
+            "unit": "uncontacted permit holders",
+            "sources": [
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 16,
+            "unit": "deals",
+            "sources": [
+              "ee11ea-conversionRates",
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "owner hours in window (the 0.5 h per deal is Brain's production work, not the owner's)",
+            "sources": [
+              "ee11ea-delivery",
+              "ee11ea-requiredCapabilities"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "ee11ea-price",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct 2026: 24 towing companies paid $420",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-conversionRates",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "24 agreements from 150 contacts on this offer",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-buyerVolume",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "380 permit holders on the city roster; 230 not yet contacted; permits expire 31 December",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-directCosts",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 direct cost per packet",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-delivery",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-timeToFirstCash",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "fbbaf8-fulfillment",
+            "url": "https://brain.local/card/cop_fbbaf861b9ab4be2a881#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally (6 human hours per deal)",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fbbaf861b9ab4be2a881"
+          },
+          {
+            "id": "ee11ea-requiredCapabilities",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "Fulfilment requires PRODUCE_SPREADSHEET, a capability Brain has proved; no fulfillmentOwner is named",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "ownerHours quantity is wrong: card humanHours 0.5 per deal gives 8 h for 16 deals",
+            "resolution": "REBUTTED with the records. humanHours is work per deal by the opening's fulfiller, and owner work only when the owner is the fulfiller. This card names no fulfillmentOwner; its delivery fact (EVIDENCE) reads 'A spreadsheet Brain produces', requiredCapabilities is [PRODUCE_SPREADSHEET], and Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'; every step's executor record is performedBy BRAIN. So the 0.5 h per packet is Brain's production time. On the claim-review opening the same field means owner time only because its fulfillmentOwner is 'The owner, personally'. Owner hours in this plan are 0, inside 2 h/week; the quantity now cites delivery and requiredCapabilities."
+          },
+          {
+            "finding": "Ledger/step timing: the deliver step carries $80 on day 8 while the ledger books it on day 15",
+            "resolution": "ACCEPTED: the $80 spend is now booked on day 8, the deliver step's day."
+          },
+          {
+            "finding": "Once hours are scheduled, the receipt rows must be split by batch",
+            "resolution": "ACCEPTED in part: no owner-hour schedule is needed (see first answer), but receipts are now split into two batches of 8 packets (day 10 settling day 14; day 18 settling day 22), both well inside 35 days."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections needed before day 1.",
+            "resolution": "Noted: the executor records mark these operations routine and performed by BRAIN; connecting the sending inbox and invoicing is Brain's own setup before day 1 and needs no owner hours, money or new evidence, so it does not change any chain link."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "why": "Owner delivers personally at 6 hours per deal; the four signed reviews need 24 owner hours against the 10-hour allowance (2 h/week over 35 days)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "deals": 16,
+            "price": 420,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c279180618b9_9ff145",
+        "digest": "c279180618b9160c89e33c9b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:41:28.049Z"
+      },
+      {
+        "goalId": "wst_38c200a7640146aebfce",
+        "contractDigest": "f1a08c18f28235578d279cad",
+        "parentRevisionId": "rev_35b0fac13237_c8499d",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell non-consent tow permit renewal packets to uncontacted roster towing companies",
+          "opportunityIds": [
+            "cop_ee11ea279c0b4f55bdf8"
+          ],
+          "why": "$420 price evidenced by 24 paid October pilot invoices; conversion measured on this offer's own sales (24 of 150, 16%); 230 roster towing companies with business emails not yet contacted, all facing the 31 December permit expiry (expected ~37 agreements, 16 needed). 16 deals x $420 = $6,720 settling 4 days after sale; Brain produces the packet ($5 direct cost, $0 exposure), so the plan needs no owner hours and stays inside the 2 hours/week limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner-delivered fleet insurance claim reviews",
+            "why": "Excluded: four signed letters at $1,500 reach $6,000, but the owner delivers each personally at 6 hours per deal = 24 hours, over the 10-hour window allowance (2 h/week x 5 weeks). Even one review (6 h) would use most of the allowance; not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 230 uncontacted towing companies on the city's non-consent tow permit roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "ee11ea-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a complete permit renewal packet at $420",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "ee11ea-conversionRates",
+              "ee11ea-price"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice $420 per packet on order and collect before production",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce each company's inspection schedule, insurance checklist and filled renewal forms",
+            "performer": "BRAIN",
+            "costCents": 8000,
+            "day": 9,
+            "dependsOn": "collect",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 336000,
+            "label": "First batch: 8 packets x $420, invoiced on order",
+            "settlesDay": 8,
+            "stepId": "collect"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 336000,
+            "label": "Second batch: 8 packets x $420, invoiced on order",
+            "settlesDay": 16,
+            "stepId": "collect"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 8000,
+            "label": "Direct cost $5 x 16 packets",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.16,
+            "unit": "agreements per contact",
+            "sources": [
+              "ee11ea-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 230,
+            "unit": "uncontacted permit holders",
+            "sources": [
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 16,
+            "unit": "deals",
+            "sources": [
+              "ee11ea-conversionRates",
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "owner hours in window (the 0.5 h per deal is Brain's production work, not the owner's)",
+            "sources": [
+              "ee11ea-delivery",
+              "ee11ea-requiredCapabilities"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "ee11ea-price",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct 2026: 24 towing companies paid $420",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-conversionRates",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "24 agreements from 150 contacts on this offer",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-buyerVolume",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "380 permit holders on the city roster; 230 not yet contacted; permits expire 31 December",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-directCosts",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 direct cost per packet",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-delivery",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-timeToFirstCash",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "fbbaf8-fulfillment",
+            "url": "https://brain.local/card/cop_fbbaf861b9ab4be2a881#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally (6 human hours per deal)",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fbbaf861b9ab4be2a881"
+          },
+          {
+            "id": "ee11ea-requiredCapabilities",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "Fulfilment requires PRODUCE_SPREADSHEET, a capability Brain has proved; no fulfillmentOwner is named",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "ownerHours quantity is wrong: card humanHours 0.5 per deal gives 8 h for 16 deals",
+            "resolution": "REBUTTED with the records. humanHours is work per deal by the opening's fulfiller, and owner work only when the owner is the fulfiller. This card names no fulfillmentOwner; its delivery fact (EVIDENCE) reads 'A spreadsheet Brain produces', requiredCapabilities is [PRODUCE_SPREADSHEET], and Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'; every step's executor record is performedBy BRAIN. So the 0.5 h per packet is Brain's production time. On the claim-review opening the same field means owner time only because its fulfillmentOwner is 'The owner, personally'. Owner hours in this plan are 0, inside 2 h/week; the quantity now cites delivery and requiredCapabilities."
+          },
+          {
+            "finding": "Ledger/step timing: the deliver step carries $80 on day 8 while the ledger books it on day 15",
+            "resolution": "ACCEPTED: the deliver step and its $80 spend now share day 9; packets are invoiced on order (collect day 4), so the spend follows settled cash and step and ledger agree."
+          },
+          {
+            "finding": "Once hours are scheduled, the receipt rows must be split by batch",
+            "resolution": "ACCEPTED in part: no owner-hour schedule is needed (see first answer), but receipts are now split into two batches of 8 packets (invoiced day 4 settling day 8; day 12 settling day 16), both well inside 35 days."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections needed before day 1.",
+            "resolution": "Noted: the executor records mark these operations routine and performed by BRAIN; connecting the sending inbox and invoicing is Brain's own setup before day 1 and needs no owner hours, money or new evidence, so it does not change any chain link."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "why": "Owner delivers personally at 6 hours per deal; the four signed reviews need 24 owner hours against the 10-hour allowance (2 h/week over 35 days)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "deals": 16,
+            "price": 420,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_2c74243e9eb9_76ec43",
+        "digest": "2c74243e9eb971bdb894a5b5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:41:40.321Z"
+      },
+      {
+        "goalId": "wst_38c200a7640146aebfce",
+        "contractDigest": "f1a08c18f28235578d279cad",
+        "parentRevisionId": "rev_2c74243e9eb9_76ec43",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell non-consent tow permit renewal packets to uncontacted roster towing companies",
+          "opportunityIds": [
+            "cop_ee11ea279c0b4f55bdf8"
+          ],
+          "why": "$420 price evidenced by 24 paid October pilot invoices; conversion measured on this offer's own sales (24 of 150, 16%); 230 roster towing companies with business emails not yet contacted, all facing the 31 December permit expiry (expected ~37 agreements, 15 needed). 16 packets in four weekly batches of 4 (days 7, 14, 21, 28), paid on delivery and settling 4 days later (last on day 32 < 35) = $6,720. Brain produces the packets ($5 direct cost each); even if the card's 0.5 human hours per packet were counted as the owner's, 4 packets a week is exactly 2 h/week and 8 h in total, inside the limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner-delivered fleet insurance claim reviews",
+            "why": "Excluded: four signed letters at $1,500 reach $6,000, but the owner delivers each personally at 6 hours per deal = 24 hours, over the 10-hour window allowance (2 h/week x 5 weeks). Even one review (6 h) would use most of the allowance; not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 230 uncontacted towing companies on the city's non-consent tow permit roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "ee11ea-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a complete permit renewal packet at $420",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "ee11ea-conversionRates",
+              "ee11ea-price"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Batch 1: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Batch 1: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Batch 2: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 14,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Batch 2: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "Batch 3: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 21,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Batch 3: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 21,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver4",
+            "kind": "DELIVER",
+            "label": "Batch 4: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 28,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect4",
+            "kind": "COLLECT",
+            "label": "Batch 4: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 28,
+            "dependsOn": "deliver4",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "FUNDING",
+            "amountCents": 2000,
+            "label": "Owner advances $20 to cover the first batch's direct cost until its receipts settle on day 11",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 1: direct cost $5 x 4 packets",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 1: 4 packets x $420, paid on delivery",
+            "settlesDay": 11,
+            "stepId": "collect1"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 2: direct cost $5 x 4 packets",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 2: 4 packets x $420, paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 3: direct cost $5 x 4 packets",
+            "stepId": "deliver3"
+          },
+          {
+            "day": 21,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 3: 4 packets x $420, paid on delivery",
+            "settlesDay": 25,
+            "stepId": "collect3"
+          },
+          {
+            "day": 28,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 4: direct cost $5 x 4 packets",
+            "stepId": "deliver4"
+          },
+          {
+            "day": 28,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 4: 4 packets x $420, paid on delivery",
+            "settlesDay": 32,
+            "stepId": "collect4"
+          }
+        ],
+        "proofDay": 32,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.16,
+            "unit": "agreements per contact",
+            "sources": [
+              "ee11ea-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 230,
+            "unit": "uncontacted permit holders",
+            "sources": [
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 16,
+            "unit": "deals",
+            "sources": [
+              "ee11ea-conversionRates",
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "humanHoursPerDeal",
+            "status": "EVIDENCED",
+            "value": 0.5,
+            "unit": "human hours per packet (card humanHours)",
+            "sources": [
+              "ee11ea-humanHours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHoursWorstCase",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "hours in window if the 0.5 h per packet were the owner's: 4 packets/week = 2 h/week, inside the 2 h/week and 10 h limits",
+            "sources": [
+              "ee11ea-humanHours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveryPace",
+            "status": "ESTIMATE",
+            "value": 4,
+            "unit": "packets delivered per week, weeks 1-4",
+            "sources": [
+              "ee11ea-humanHours"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "ee11ea-price",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct 2026: 24 towing companies paid $420",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-conversionRates",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "24 agreements from 150 contacts on this offer",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-buyerVolume",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "380 permit holders on the city roster; 230 not yet contacted; permits expire 31 December",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-directCosts",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 direct cost per packet",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-delivery",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-timeToFirstCash",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "fbbaf8-fulfillment",
+            "url": "https://brain.local/card/cop_fbbaf861b9ab4be2a881#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally (6 human hours per deal)",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fbbaf861b9ab4be2a881"
+          },
+          {
+            "id": "ee11ea-requiredCapabilities",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "Fulfilment requires PRODUCE_SPREADSHEET, a capability Brain has proved; no fulfillmentOwner is named",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-humanHours",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#humanHours",
+            "dated": "2026-11-24",
+            "claim": "0.5 human hours per packet",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "ownerHours: carry 0.5 h per deal as the owner's (or as UNKNOWN with a pace that fits even if it is the owner's), not EVIDENCED 0; schedule at most 4 deliveries per week.",
+            "resolution": "ACCEPTED as a pacing constraint: the EVIDENCED 0 quantity is removed; the card's 0.5 h per packet is carried, and delivery is paced at 4 packets per week over weeks 1-4 so that even counted as owner time it is 2 h/week and 8 h total. The fulfiller remains Brain (delivery fact 'A spreadsheet Brain produces', requiredCapabilities PRODUCE_SPREADSHEET, brain:FULFILMENT 'Brain has proved'), so the plan holds under either reading."
+          },
+          {
+            "finding": "Payment terms: the plan now invoices 'on order and collect before production'",
+            "resolution": "ACCEPTED: prepayment removed; each batch is invoiced on delivery and settles 4 days later (timeToFirstCash 4 days), days 11, 18, 25, 32. The first batch's $20 direct cost is covered by a $20 owner FUNDING row (the goal sets no capital cap); later batches are covered by settled receipts."
+          },
+          {
+            "finding": "Step/ledger: the single deliver step on day 9 spends for all 16 packets while the second batch of 8 is only ordered on day 12; split delivery by batch to match the receipts.",
+            "resolution": "ACCEPTED: four DELIVER/COLLECT step pairs, one per weekly batch, each with its own $20 spend and $1,680 receipt."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "why": "Owner delivers personally at 6 hours per deal; the four signed reviews need 24 owner hours against the 10-hour allowance (2 h/week over 35 days)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "deals": 16,
+            "price": 420,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_8b48ba3f5b3b_022c49",
+        "digest": "8b48ba3f5b3b3d1e6c56378d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:44:12.167Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_38c200a7640146aebfce",
+      "contractDigest": "f1a08c18f28235578d279cad",
+      "parentRevisionId": "rev_2c74243e9eb9_76ec43",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell non-consent tow permit renewal packets to uncontacted roster towing companies",
+        "opportunityIds": [
+          "cop_ee11ea279c0b4f55bdf8"
+        ],
+        "why": "$420 price evidenced by 24 paid October pilot invoices; conversion measured on this offer's own sales (24 of 150, 16%); 230 roster towing companies with business emails not yet contacted, all facing the 31 December permit expiry (expected ~37 agreements, 15 needed). 16 packets in four weekly batches of 4 (days 7, 14, 21, 28), paid on delivery and settling 4 days later (last on day 32 < 35) = $6,720. Brain produces the packets ($5 direct cost each); even if the card's 0.5 human hours per packet were counted as the owner's, 4 packets a week is exactly 2 h/week and 8 h in total, inside the limit."
+      },
+      "alternatives": [
+        {
+          "title": "Owner-delivered fleet insurance claim reviews",
+          "why": "Excluded: four signed letters at $1,500 reach $6,000, but the owner delivers each personally at 6 hours per deal = 24 hours, over the 10-hour window allowance (2 h/week x 5 weeks). Even one review (6 h) would use most of the allowance; not needed."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email the 230 uncontacted towing companies on the city's non-consent tow permit roster",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "buyerVolume",
+            "ee11ea-buyerVolume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Offer a complete permit renewal packet at $420",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "reach",
+          "evidence": [
+            "conversion",
+            "ee11ea-conversionRates",
+            "ee11ea-price"
+          ],
+          "priceCents": 42000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver1",
+          "kind": "DELIVER",
+          "label": "Batch 1: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+          "performer": "BRAIN",
+          "costCents": 2000,
+          "day": 7,
+          "dependsOn": "sell",
+          "evidence": [
+            "ee11ea-delivery",
+            "ee11ea-directCosts",
+            "ee11ea-requiredCapabilities"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect1",
+          "kind": "COLLECT",
+          "label": "Batch 1: invoice 4 x $420 on delivery and collect",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "ee11ea-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver2",
+          "kind": "DELIVER",
+          "label": "Batch 2: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+          "performer": "BRAIN",
+          "costCents": 2000,
+          "day": 14,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "ee11ea-delivery",
+            "ee11ea-directCosts",
+            "ee11ea-requiredCapabilities"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect2",
+          "kind": "COLLECT",
+          "label": "Batch 2: invoice 4 x $420 on delivery and collect",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 14,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "ee11ea-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver3",
+          "kind": "DELIVER",
+          "label": "Batch 3: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+          "performer": "BRAIN",
+          "costCents": 2000,
+          "day": 21,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "ee11ea-delivery",
+            "ee11ea-directCosts",
+            "ee11ea-requiredCapabilities"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect3",
+          "kind": "COLLECT",
+          "label": "Batch 3: invoice 4 x $420 on delivery and collect",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 21,
+          "dependsOn": "deliver3",
+          "evidence": [
+            "ee11ea-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver4",
+          "kind": "DELIVER",
+          "label": "Batch 4: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+          "performer": "BRAIN",
+          "costCents": 2000,
+          "day": 28,
+          "dependsOn": "deliver3",
+          "evidence": [
+            "ee11ea-delivery",
+            "ee11ea-directCosts",
+            "ee11ea-requiredCapabilities"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect4",
+          "kind": "COLLECT",
+          "label": "Batch 4: invoice 4 x $420 on delivery and collect",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 28,
+          "dependsOn": "deliver4",
+          "evidence": [
+            "ee11ea-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 7,
+          "kind": "FUNDING",
+          "amountCents": 2000,
+          "label": "Owner advances $20 to cover the first batch's direct cost until its receipts settle on day 11",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 7,
+          "kind": "SPEND",
+          "amountCents": 2000,
+          "label": "Batch 1: direct cost $5 x 4 packets",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 7,
+          "kind": "RECEIPT",
+          "amountCents": 168000,
+          "label": "Batch 1: 4 packets x $420, paid on delivery",
+          "settlesDay": 11,
+          "stepId": "collect1"
+        },
+        {
+          "day": 14,
+          "kind": "SPEND",
+          "amountCents": 2000,
+          "label": "Batch 2: direct cost $5 x 4 packets",
+          "stepId": "deliver2"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 168000,
+          "label": "Batch 2: 4 packets x $420, paid on delivery",
+          "settlesDay": 18,
+          "stepId": "collect2"
+        },
+        {
+          "day": 21,
+          "kind": "SPEND",
+          "amountCents": 2000,
+          "label": "Batch 3: direct cost $5 x 4 packets",
+          "stepId": "deliver3"
+        },
+        {
+          "day": 21,
+          "kind": "RECEIPT",
+          "amountCents": 168000,
+          "label": "Batch 3: 4 packets x $420, paid on delivery",
+          "settlesDay": 25,
+          "stepId": "collect3"
+        },
+        {
+          "day": 28,
+          "kind": "SPEND",
+          "amountCents": 2000,
+          "label": "Batch 4: direct cost $5 x 4 packets",
+          "stepId": "deliver4"
+        },
+        {
+          "day": 28,
+          "kind": "RECEIPT",
+          "amountCents": 168000,
+          "label": "Batch 4: 4 packets x $420, paid on delivery",
+          "settlesDay": 32,
+          "stepId": "collect4"
+        }
+      ],
+      "proofDay": 32,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 42000,
+          "unit": "cents per packet",
+          "sources": [
+            "ee11ea-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.16,
+          "unit": "agreements per contact",
+          "sources": [
+            "ee11ea-conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerVolume",
+          "status": "EVIDENCED",
+          "value": 230,
+          "unit": "uncontacted permit holders",
+          "sources": [
+            "ee11ea-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 16,
+          "unit": "deals",
+          "sources": [
+            "ee11ea-conversionRates",
+            "ee11ea-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 500,
+          "unit": "cents per packet",
+          "sources": [
+            "ee11ea-directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "settlementDays",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "days",
+          "sources": [
+            "ee11ea-timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "humanHoursPerDeal",
+          "status": "EVIDENCED",
+          "value": 0.5,
+          "unit": "human hours per packet (card humanHours)",
+          "sources": [
+            "ee11ea-humanHours"
+          ],
+          "needs": null
+        },
+        {
+          "name": "ownerHoursWorstCase",
+          "status": "ESTIMATE",
+          "value": 8,
+          "unit": "hours in window if the 0.5 h per packet were the owner's: 4 packets/week = 2 h/week, inside the 2 h/week and 10 h limits",
+          "sources": [
+            "ee11ea-humanHours"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deliveryPace",
+          "status": "ESTIMATE",
+          "value": 4,
+          "unit": "packets delivered per week, weeks 1-4",
+          "sources": [
+            "ee11ea-humanHours"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "ee11ea-price",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#price",
+          "dated": "2026-11-24",
+          "claim": "Pilot invoices Oct 2026: 24 towing companies paid $420",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        },
+        {
+          "id": "ee11ea-conversionRates",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "24 agreements from 150 contacts on this offer",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        },
+        {
+          "id": "ee11ea-buyerVolume",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "380 permit holders on the city roster; 230 not yet contacted; permits expire 31 December",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        },
+        {
+          "id": "ee11ea-directCosts",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$5 direct cost per packet",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        },
+        {
+          "id": "ee11ea-delivery",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        },
+        {
+          "id": "ee11ea-timeToFirstCash",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "4 days to first cash",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        },
+        {
+          "id": "fbbaf8-fulfillment",
+          "url": "https://brain.local/card/cop_fbbaf861b9ab4be2a881#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "The owner does the work personally (6 human hours per deal)",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_fbbaf861b9ab4be2a881"
+        },
+        {
+          "id": "ee11ea-requiredCapabilities",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#requiredCapabilities",
+          "dated": "2026-11-24",
+          "claim": "Fulfilment requires PRODUCE_SPREADSHEET, a capability Brain has proved; no fulfillmentOwner is named",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        },
+        {
+          "id": "ee11ea-humanHours",
+          "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#humanHours",
+          "dated": "2026-11-24",
+          "claim": "0.5 human hours per packet",
+          "population": "towing company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "ownerHours: carry 0.5 h per deal as the owner's (or as UNKNOWN with a pace that fits even if it is the owner's), not EVIDENCED 0; schedule at most 4 deliveries per week.",
+          "resolution": "ACCEPTED as a pacing constraint: the EVIDENCED 0 quantity is removed; the card's 0.5 h per packet is carried, and delivery is paced at 4 packets per week over weeks 1-4 so that even counted as owner time it is 2 h/week and 8 h total. The fulfiller remains Brain (delivery fact 'A spreadsheet Brain produces', requiredCapabilities PRODUCE_SPREADSHEET, brain:FULFILMENT 'Brain has proved'), so the plan holds under either reading."
+        },
+        {
+          "finding": "Payment terms: the plan now invoices 'on order and collect before production'",
+          "resolution": "ACCEPTED: prepayment removed; each batch is invoiced on delivery and settles 4 days later (timeToFirstCash 4 days), days 11, 18, 25, 32. The first batch's $20 direct cost is covered by a $20 owner FUNDING row (the goal sets no capital cap); later batches are covered by settled receipts."
+        },
+        {
+          "finding": "Step/ledger: the single deliver step on day 9 spends for all 16 packets while the second batch of 8 is only ordered on day 12; split delivery by batch to match the receipts.",
+          "resolution": "ACCEPTED: four DELIVER/COLLECT step pairs, one per weekly batch, each with its own $20 spend and $1,680 receipt."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_fbbaf861b9ab4be2a881",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_fbbaf861b9ab4be2a881",
+          "why": "Owner delivers personally at 6 hours per deal; the four signed reviews need 24 owner hours against the 10-hour allowance (2 h/week over 35 days)."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+          "deals": 16,
+          "price": 420,
+          "directCost": 5,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_8b48ba3f5b3b_022c49",
+      "digest": "8b48ba3f5b3b3d1e6c56378d",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_97e8d31ea1434122a06a/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:44:12.167Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_8b48ba3f5b3b_022c49",
+      "digest": "8b48ba3f5b3b3d1e6c56378d",
+      "contractDigest": "f1a08c18f28235578d279cad",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 8000,
+        "committedOpenCents": 0,
+        "preProofCents": 8000,
+        "maxExposureCents": 2000,
+        "minCashCents": 0,
+        "minCashDay": 7,
+        "collectedCents": 672000,
+        "collectedInWindowCents": 672000,
+        "refundsCents": 0,
+        "ownerFundedCents": 2000,
+        "netCents": 664000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Annual non-consent tow permit renewal packets for towing com\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 72210× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Annual non-consent tow permit renewal packets for towing companies\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_ee11ea279c0b4f55bdf8",
+          "cop_fbbaf861b9ab4be2a881"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Annual non-consent tow permit renewal packets for towing companies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Annual non-consent tow permit renewal packets for towing companies\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Collect payment for \"Annual non-consent tow permit renewal packets for towing companies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "title": "Fleet insurance claim review consultations for towing companies, delivered by the owner",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 6000,
+            "potentialReach": 6000,
+            "card": {
+              "payer": "Towing company owners",
+              "reachableChannel": "Signed engagement letters",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:20.178Z",
+              "offerScope": "Fleet insurance claim review consultations for towing companies, delivered by the owner",
+              "priceCents": 150000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 6,
+              "requiredCapabilities": [],
+              "industry": "towing and roadside recovery",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 150000,
+                "currency": "USD",
+                "deliverable": "Fleet insurance claim review consultations for towing companies, delivered by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 150000,
+                "currency": "USD",
+                "deliverable": "Fleet insurance claim review consultations for towing companies, delivered by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 150000,
+                "currency": "USD",
+                "deliverable": "Fleet insurance claim review consultations for towing companies, delivered by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 150000,
+                "currency": "USD",
+                "deliverable": "Fleet insurance claim review consultations for towing companies, delivered by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed engagement letters"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 6000 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 6000 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by The owner, personally (a person says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 35 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Fleet insurance claim review consultations for towing companies, delivered by the owner to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Towing company owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four towing companies signed engagement letters at $1,500 per claim review.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "title": "Annual non-consent tow permit renewal packets for towing companies",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 6000,
+            "potentialReach": 6000,
+            "card": {
+              "payer": "Towing company owners",
+              "reachableChannel": "Business emails on the city’s public non-consent tow permit roster",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:20.178Z",
+              "offerScope": "A complete renewal packet: vehicle inspection schedule, insurance certificate checklist and filled renewal forms",
+              "priceCents": 42000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "towing and roadside recovery",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Business emails on the city’s public non-consent tow permit roster"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 420 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 24 accepted of 150 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "16 deal(s) needed, 380 available in the window (380 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 5, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "4 days to usable cash against 35 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "380 towing companies hold non-consent tow permits listed on the city roster with business emails; every permit expires on 31 December and must be renewed with an inspection packet. 150 have been contacted; 230 have not.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell A complete renewal packet: vehicle inspection schedule, insurance certificate checklist and filled renewal forms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "24 agreements from 150 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Towing company owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Pilot invoices (Oct 2026): 24 towing companies paid $420 for a permit renewal packet.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 600000,
+          "daysLeft": 35,
+          "hoursCeiling": 10,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 2
+        },
+        "at": "2026-11-27T09:35:16.733Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_35b0fac13237_c8499d",
+        "revisionDigest": "35b0fac132379dde2066074e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_28eb3c3c03984a6cac6a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The commercial chain holds: $420 is a real purchase price paid by 24 towing companies (Oct 2026 pilot invoices); conversion 24/150 = 16% on this offer's own sales; 230 uncontacted roster companies x 16% = ~37 vs 15 needed (15 x $420 = $6,300; plan uses 16 = $6,720); permits expire 31 Dec, inside the window; cost $5 < $420; settlement 4 days. The exclusion of the owner-delivered claim reviews is correct (4 x 6 h = 24 h > 10 h allowance). But this goal's binding limit is 2 owner hours per week, and the plan records ownerHours = 0 as EVIDENCED citing the delivery fact, while the same card records humanHours 0.5 per deal (the same field that records 6 h per deal on the owner-delivered opening). 16 deals x 0.5 h = 8 h. As scheduled (all packets delivered on day 8, collected day 10) that is ~8 h in one week against a 2 h/week limit. Treating a recorded 0.5 h/deal as zero is an unknown/contradicted figure treated as known, on the one limit this goal sets.",
+        "findings": [
+          "ownerHours quantity is wrong: card humanHours 0.5 per deal gives 8 h for 16 deals (7.5 h for the 15 actually needed), not 0. The plan must carry it and schedule it inside 2 h/week: at most 4 deals delivered per week, e.g. 4/week over weeks 1-4 (8 h total, never more than 2 h in a week), last batch delivered by ~day 28 and settled by ~day 32 < 35; or show evidence that the 0.5 h is not owner time.",
+          "Ledger/step timing: the deliver step carries $80 on day 8 while the ledger books it on day 15 'after receipts settle'; the contract has no exposure cap here, so this is cosmetic, but step and ledger should agree.",
+          "Once hours are scheduled, the receipt rows must be split by batch with their own settle days rather than one $6,720 receipt on day 10.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections needed before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:40:08.101Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_2c74243e9eb9_76ec43",
+        "revisionDigest": "2c74243e9eb971bdb894a5b5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_28eb3c3c03984a6cac6a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The ledger/step and batch fixes are accepted, and the commercial chain still holds ($420 paid by 24 companies; 24/150 = 16%; 230 uncontacted x 16% = ~37 vs 15 needed; $5 cost; 4-day settlement; permits expire 31 Dec). The rebuttal on owner hours does not settle it. The card field is humanHours = 0.5 per deal: hours a human spends, which by definition is not Brain's production time. No human other than the owner is recorded on this opening, and Brain's own check of this revision maps the Deliver step to owner PERSON (currentCheck.brain.steps: 'Deliver ... owner: PERSON, cost 5'), which is a specific record contradicting the reading that the 0.5 h belongs to Brain. On a goal whose only limit is 2 owner hours per week, a recorded 0.5 human hour per deal cannot be booked as EVIDENCED 0. It is at best unknown, and as recorded it is 8 h for 16 deals; the plan's schedule (16 packets produced on day 9) would put ~8 h in one week. The fix is cheap and keeps the target: pace delivery at <= 4 packets per week (<= 2 h/week), 4/week over weeks 1-4 = 16 packets, last batch delivered ~day 28 and settled ~day 32 < 35; 15 packets already reach $6,300.",
+        "findings": [
+          "ownerHours: carry 0.5 h per deal as the owner's (or as UNKNOWN with a pace that fits even if it is the owner's), not EVIDENCED 0; schedule at most 4 deliveries per week.",
+          "Payment terms: the plan now invoices 'on order and collect before production', but the pilot evidence (24 paid invoices, 4 days to first cash) does not state prepayment. The goal has no exposure cap, so pay-on-delivery also works, but prepayment is a new assumption and should either be evidenced or replaced by pay-on-delivery with settle = delivery + 4 days.",
+          "Step/ledger: the single deliver step on day 9 spends for all 16 packets while the second batch of 8 is only ordered on day 12; split delivery by batch to match the receipts."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:42:46.152Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_8b48ba3f5b3b_022c49",
+        "revisionDigest": "8b48ba3f5b3b3d1e6c56378d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_28eb3c3c03984a6cac6a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The earlier findings are resolved. Owner hours: the card's 0.5 human hours per packet is now carried, and delivery is paced at 4 packets per week in weeks 1-4 (days 7, 14, 21, 28), so even counted entirely as owner time it is exactly 2 h/week and 8 h total, inside the 2 h/week (10 h over 35 days) limit. The plan holds under either reading of who spends those hours. Payment is on delivery per the pilot, settling 4 days later (days 11, 18, 25, 32 <= 35). Recomputed: 4 x 4 x $420 = $6,720 >= $6,000; 15 packets ($6,300) suffice, so batch 4 needs only 3 of its 4. Direct cost 16 x $5 = $80; the $20 owner advance for batch 1 is allowed (no capital cap in this contract) and is recovered on day 11. Demand: 230 uncontacted roster companies x 16% = ~37 vs 16 needed; every permit expires 31 Dec (day 34), so demand is current through the window. The steps and ledger now match batch by batch. Exclusion of the owner-delivered claim reviews (24 h > 10 h) remains correct.",
+        "findings": [
+          "Tight tail: the last batch settles on day 32 against a 35-day window, and the target needs it ($5,040 after three batches). Any 4-day slip in batch 4 misses the window. Deliver each batch as soon as its week's 4 orders arrive (e.g. days 5, 12, 19, 26) to widen the slack; the weekly hour pace is unchanged.",
+          "Week-4 buyers receive their packet on ~day 28 for a 31 December (day 34) expiry; confirm the city accepts renewals filed that late, or deliver the 4 latest-deadline companies in the earlier weeks.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections Brain makes before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:45:33.739Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_8b48ba3f5b3b_022c49",
+      "digest": "8b48ba3f5b3b3d1e6c56378d",
+      "contractDigest": "f1a08c18f28235578d279cad",
+      "plan": {
+        "goalId": "wst_38c200a7640146aebfce",
+        "contractDigest": "f1a08c18f28235578d279cad",
+        "parentRevisionId": "rev_2c74243e9eb9_76ec43",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell non-consent tow permit renewal packets to uncontacted roster towing companies",
+          "opportunityIds": [
+            "cop_ee11ea279c0b4f55bdf8"
+          ],
+          "why": "$420 price evidenced by 24 paid October pilot invoices; conversion measured on this offer's own sales (24 of 150, 16%); 230 roster towing companies with business emails not yet contacted, all facing the 31 December permit expiry (expected ~37 agreements, 15 needed). 16 packets in four weekly batches of 4 (days 7, 14, 21, 28), paid on delivery and settling 4 days later (last on day 32 < 35) = $6,720. Brain produces the packets ($5 direct cost each); even if the card's 0.5 human hours per packet were counted as the owner's, 4 packets a week is exactly 2 h/week and 8 h in total, inside the limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner-delivered fleet insurance claim reviews",
+            "why": "Excluded: four signed letters at $1,500 reach $6,000, but the owner delivers each personally at 6 hours per deal = 24 hours, over the 10-hour window allowance (2 h/week x 5 weeks). Even one review (6 h) would use most of the allowance; not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 230 uncontacted towing companies on the city's non-consent tow permit roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume",
+              "ee11ea-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer a complete permit renewal packet at $420",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "conversion",
+              "ee11ea-conversionRates",
+              "ee11ea-price"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Batch 1: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Batch 1: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Batch 2: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 14,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Batch 2: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "Batch 3: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 21,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Batch 3: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 21,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver4",
+            "kind": "DELIVER",
+            "label": "Batch 4: produce 4 renewal packets (inspection schedule, insurance checklist, filled forms)",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 28,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "ee11ea-delivery",
+              "ee11ea-directCosts",
+              "ee11ea-requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect4",
+            "kind": "COLLECT",
+            "label": "Batch 4: invoice 4 x $420 on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 28,
+            "dependsOn": "deliver4",
+            "evidence": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "FUNDING",
+            "amountCents": 2000,
+            "label": "Owner advances $20 to cover the first batch's direct cost until its receipts settle on day 11",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 1: direct cost $5 x 4 packets",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 1: 4 packets x $420, paid on delivery",
+            "settlesDay": 11,
+            "stepId": "collect1"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 2: direct cost $5 x 4 packets",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 2: 4 packets x $420, paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 3: direct cost $5 x 4 packets",
+            "stepId": "deliver3"
+          },
+          {
+            "day": 21,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 3: 4 packets x $420, paid on delivery",
+            "settlesDay": 25,
+            "stepId": "collect3"
+          },
+          {
+            "day": 28,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Batch 4: direct cost $5 x 4 packets",
+            "stepId": "deliver4"
+          },
+          {
+            "day": 28,
+            "kind": "RECEIPT",
+            "amountCents": 168000,
+            "label": "Batch 4: 4 packets x $420, paid on delivery",
+            "settlesDay": 32,
+            "stepId": "collect4"
+          }
+        ],
+        "proofDay": 32,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.16,
+            "unit": "agreements per contact",
+            "sources": [
+              "ee11ea-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 230,
+            "unit": "uncontacted permit holders",
+            "sources": [
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 16,
+            "unit": "deals",
+            "sources": [
+              "ee11ea-conversionRates",
+              "ee11ea-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents per packet",
+            "sources": [
+              "ee11ea-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "ee11ea-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "humanHoursPerDeal",
+            "status": "EVIDENCED",
+            "value": 0.5,
+            "unit": "human hours per packet (card humanHours)",
+            "sources": [
+              "ee11ea-humanHours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHoursWorstCase",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "hours in window if the 0.5 h per packet were the owner's: 4 packets/week = 2 h/week, inside the 2 h/week and 10 h limits",
+            "sources": [
+              "ee11ea-humanHours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveryPace",
+            "status": "ESTIMATE",
+            "value": 4,
+            "unit": "packets delivered per week, weeks 1-4",
+            "sources": [
+              "ee11ea-humanHours"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "ee11ea-price",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices Oct 2026: 24 towing companies paid $420",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-conversionRates",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "24 agreements from 150 contacts on this offer",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-buyerVolume",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "380 permit holders on the city roster; 230 not yet contacted; permits expire 31 December",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-directCosts",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 direct cost per packet",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-delivery",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-timeToFirstCash",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "fbbaf8-fulfillment",
+            "url": "https://brain.local/card/cop_fbbaf861b9ab4be2a881#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally (6 human hours per deal)",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fbbaf861b9ab4be2a881"
+          },
+          {
+            "id": "ee11ea-requiredCapabilities",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "Fulfilment requires PRODUCE_SPREADSHEET, a capability Brain has proved; no fulfillmentOwner is named",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          },
+          {
+            "id": "ee11ea-humanHours",
+            "url": "https://brain.local/card/cop_ee11ea279c0b4f55bdf8#humanHours",
+            "dated": "2026-11-24",
+            "claim": "0.5 human hours per packet",
+            "population": "towing company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "ownerHours: carry 0.5 h per deal as the owner's (or as UNKNOWN with a pace that fits even if it is the owner's), not EVIDENCED 0; schedule at most 4 deliveries per week.",
+            "resolution": "ACCEPTED as a pacing constraint: the EVIDENCED 0 quantity is removed; the card's 0.5 h per packet is carried, and delivery is paced at 4 packets per week over weeks 1-4 so that even counted as owner time it is 2 h/week and 8 h total. The fulfiller remains Brain (delivery fact 'A spreadsheet Brain produces', requiredCapabilities PRODUCE_SPREADSHEET, brain:FULFILMENT 'Brain has proved'), so the plan holds under either reading."
+          },
+          {
+            "finding": "Payment terms: the plan now invoices 'on order and collect before production'",
+            "resolution": "ACCEPTED: prepayment removed; each batch is invoiced on delivery and settles 4 days later (timeToFirstCash 4 days), days 11, 18, 25, 32. The first batch's $20 direct cost is covered by a $20 owner FUNDING row (the goal sets no capital cap); later batches are covered by settled receipts."
+          },
+          {
+            "finding": "Step/ledger: the single deliver step on day 9 spends for all 16 packets while the second batch of 8 is only ordered on day 12; split delivery by batch to match the receipts.",
+            "resolution": "ACCEPTED: four DELIVER/COLLECT step pairs, one per weekly batch, each with its own $20 spend and $1,680 receipt."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fbbaf861b9ab4be2a881",
+            "why": "Owner delivers personally at 6 hours per deal; the four signed reviews need 24 owner hours against the 10-hour allowance (2 h/week over 35 days)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ee11ea279c0b4f55bdf8",
+            "deals": 16,
+            "price": 420,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_8b48ba3f5b3b_022c49",
+        "digest": "8b48ba3f5b3b3d1e6c56378d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:44:12.167Z"
+      },
+      "review": {
+        "revisionId": "rev_8b48ba3f5b3b_022c49",
+        "revisionDigest": "8b48ba3f5b3b3d1e6c56378d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_97e8d31ea1434122a06a/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_28eb3c3c03984a6cac6a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The earlier findings are resolved. Owner hours: the card's 0.5 human hours per packet is now carried, and delivery is paced at 4 packets per week in weeks 1-4 (days 7, 14, 21, 28), so even counted entirely as owner time it is exactly 2 h/week and 8 h total, inside the 2 h/week (10 h over 35 days) limit. The plan holds under either reading of who spends those hours. Payment is on delivery per the pilot, settling 4 days later (days 11, 18, 25, 32 <= 35). Recomputed: 4 x 4 x $420 = $6,720 >= $6,000; 15 packets ($6,300) suffice, so batch 4 needs only 3 of its 4. Direct cost 16 x $5 = $80; the $20 owner advance for batch 1 is allowed (no capital cap in this contract) and is recovered on day 11. Demand: 230 uncontacted roster companies x 16% = ~37 vs 16 needed; every permit expires 31 Dec (day 34), so demand is current through the window. The steps and ledger now match batch by batch. Exclusion of the owner-delivered claim reviews (24 h > 10 h) remains correct.",
+        "findings": [
+          "Tight tail: the last batch settles on day 32 against a 35-day window, and the target needs it ($5,040 after three batches). Any 4-day slip in batch 4 misses the window. Deliver each batch as soon as its week's 4 orders arrive (e.g. days 5, 12, 19, 26) to widen the slack; the weekly hour pace is unchanged.",
+          "Week-4 buyers receive their packet on ~day 28 for a 31 December (day 34) expiry; confirm the city accepts renewals filed that late, or deliver the 4 latest-deadline companies in the earlier weeks.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections Brain makes before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:45:33.739Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $6,000 of settled cash within 35 days with no more than 2 hours a week of owner time.",
+        "terms": "200261612b169e34",
+        "openings": {
+          "cop_ee11ea279c0b4f55bdf8": "0905c52db56bf66c",
+          "cop_fbbaf861b9ab4be2a881": "d7b586e68c3f057d"
+        }
+      },
+      "at": "2026-11-27T09:46:20.773Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

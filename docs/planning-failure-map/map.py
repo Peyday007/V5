@@ -761,3 +761,21 @@ for _w in WORKFLOW:
         _w.update(remaining='Run 7 discovery 1/4: alternatives left uncited; provenance now required for every weighed discovered opening. Fresh acceptance: run 8.')
     if _w['id'] == 'W13':
         _w.update(remaining='Run 7 ag-11: counted-market rule now applies to every TARGET limit. Fresh acceptance: run 8.')
+
+# ---- Run 8 (frozen a664ccd; run8-acceptance) ----
+_R8 = f'{_J}/run8-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 8 on a664ccd: 15/18 = 0.83 (Wilson 0.61-0.94), 0 critical ({_R8})', remaining='Run 9 on the build carrying the run 8 repairs (job-title payers, excluded openings admitted, integrity findings scoped to used openings).')
+    if _w['id'] == 'W12':
+        _w.update(status='PASS', evidence=_w['evidence'] + '; run 8 ah-06: "program directors" read as a program, repaired (role words after a program noun name a person)', remaining='—')
+    if _w['id'] == 'W09':
+        _w.update(remaining=_w['remaining'] + ' Run 8: an excluded opening was not admitted, so a disputed exclusion could not be built on; excluded openings are now admitted.')
+    if _w['id'] == 'W07':
+        _w.update(evidence=_w['evidence'] + '; run 8 ai-02: an integrity finding on an unused opening refused every revision, now scoped to the openings the plan uses')
+    if _w['id'] == 'W18':
+        _w.update(evidence=_w['evidence'] + '; run 8: an orphaned host child held its port (EADDRINUSE); the harness watchdog now probes the port')
+    if _w['id'] == 'W13':
+        _w.update(status='PASS', evidence=_w['evidence'] + '; run 8: ah-11 (one authority) MARKET_VOLUME and ah-14 (counted market) TARGET both correct', remaining='—')
+    if _w['id'] == 'W02':
+        _w.update(evidence=_w['evidence'] + '; run 8: ai-01 and ai-03 pass with 3-4 cited discovered openings each', remaining='Run 8 discovery 2/4 (one Brain integrity defect, one harness failure). Fresh acceptance: run 9.')

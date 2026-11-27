@@ -1,0 +1,3506 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_673aa2e7d46244d6ae82",
+      "words": "Make $12,000 within 45 days. I can put up to $2,500 of my own money in if it pays back inside that time. Any industry is fine.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1200000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 250000,
+        "proofCondition": "Owner money at risk (exposure) never exceeds $2,500 and must be paid back by settled cash inside the 45-day window; spending paid from buyer receipts is not owner capital",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "579dee56c9d781ca205bdeb9"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_673aa2e7d46244d6ae82",
+        "contractDigest": "f61ce55768f32f811cd57354",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: run a costed cold-email price-and-demand test for tax-season catch-up bookkeeping before committing the owner's money",
+          "opportunityIds": [],
+          "why": "All three discovered openings (catch-up bookkeeping, local-business website redesign, Shopify store build) rest on prices and demand the route author assumed. No buyer is shown paying these prices: the published bookkeeping list prices (Xendoo from $295/month of history; Bench includes catch-up free with a $1,910/yr plan) did not survive verification, and posted website-redesign requests on Freelancer.com draw average bids of $283-$656, far under a $1,500 offer. With no established price, current demand or close rate, no combination of the openings can be shown to carry $12,000 of settled cash in 45 days. Catch-up bookkeeping is the strongest candidate to test because the tax-filing deadline creates a dated reason to buy now and fulfilment can be subcontracted, so the test is run there first."
+        },
+        "alternatives": [
+          {
+            "title": "Website redesign for local service businesses (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,500 is an assumption; public marketplace demand for redesigns is priced at $283-$656 average bids with 300-400 competing bids, so the margin over a ~$600 subcontractor is unproven; demand and close rate unmeasured."
+          },
+          {
+            "title": "Shopify store build for small product sellers (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,200 is an assumption; posted store-build jobs on Freelancer.com draw ~$390-$437 average bids, so buyers are not shown paying $1,200; no buying signal recorded."
+          },
+          {
+            "title": "Bid on posted Freelancer.com / Fiverr web jobs directly",
+            "why": "Refused by Brain as a Brain-performed deliverable it has not proved; average bids of $25-$656 against 100-400 rival bids would need 30+ wins to reach $12,000."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Set up 2 sending domains + Instantly Growth plan ($47/mo) and warm inboxes; build a list of 1,500 US small-business owners (sole-prop retail, trades, salons) from public directories",
+            "performer": "OWNER",
+            "costCents": 7700,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OFFER",
+            "label": "Send a flat-fee tax-ready catch-up offer (up to 4 months behind, $1,200, 50% deposit by card) to the 1,500 contacts; Brain writes copy and handles replies",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 120000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Measure replies, calls booked and deposits paid by day 21; in parallel get 3 written quotes from freelance QBO bookkeepers for a 4-month catch-up",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 21,
+            "dependsOn": "t2",
+            "evidence": [],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth plan, 1 month",
+            "stepId": "t1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Two sending domains",
+            "stepId": "t1"
+          }
+        ],
+        "proofDay": 21,
+        "quantities": [
+          {
+            "name": "catch-up bookkeeping price buyers pay",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per job",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "deposits actually paid at $1,200 in the test"
+          },
+          {
+            "name": "cold-email close rate (deposit per contact)",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-21 test count"
+          },
+          {
+            "name": "subcontractor cost per catch-up job",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "3 written freelancer quotes"
+          },
+          {
+            "name": "test spend",
+            "status": "ESTIMATE",
+            "value": 77,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": "invoice"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://xendoo.com/catchmeup",
+            "dated": "2026",
+            "claim": "Catch-up bookkeeping is a currently sold offer: 'Specialized Catch-Up Bookkeeping Starting at $295/Month' (list price, unverified as paid)",
+            "population": "US small businesses behind on books",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.bench.co/campaign/catch-up-service",
+            "dated": "2026-04",
+            "claim": "Bench sells catch-up bundled free with annual plans from $1,910/yr; turnaround 2 weeks to 1 month",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s3",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "348 open website-design jobs; redesign projects draw $283-$656 average bids with 300-400 bids each",
+            "population": "marketplace clients posting web projects",
+            "matchesBuyer": false,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          },
+          {
+            "id": "s4",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "Posted store-build jobs: 'Build Modern E-Commerce Store' $437 average bid (337 bids); 'Online Store Development for Physical Products' $390 (421 bids)",
+            "population": "marketplace clients posting store builds",
+            "matchesBuyer": false,
+            "opportunityId": "cop_346aa0c858d144399298"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026",
+            "claim": "Instantly Growth Plan $47/mo, 5,000 emails monthly, 1,000 uploaded contacts",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026",
+            "claim": "Stripe schedules a new account's initial payout within 7-14 days of the first live payment; US standard settlement 2 business days",
+            "population": "payment settlement",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s7",
+            "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+            "dated": "2026-03-19",
+            "claim": "Vendor estimate: freelancer website design $500 to $10,000+ (estimate, not a payment)",
+            "population": "US businesses buying websites",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No opening has a price buyers are shown to pay or a current buying signal: every price is the route author's assumption, the published catch-up list prices did not survive verification, and marketplace web-build demand is priced at a fraction of the assumed offers. Without an established price, demand and close rate, no plan can be shown to settle $12,000 in 45 days.",
+          "resolution": "Run the costed test in steps t1-t3: $77 of the owner's $2,500 (Instantly Growth $47 + two domains $30) and about 10 owner hours, offering a $1,200 tax-ready catch-up with a $600 card deposit to 1,500 US small-business owners. PROOF by day 21: at least 3 paid $600 deposits and 3 written bookkeeper quotes at or under $600 per job -> plan the 10+ job build with the subcontractor. STOP: zero deposits after all 1,500 contacts, or quotes above $900 per job (margin gone) -> abandon the route, spend nothing more. CONTINUE: 1-2 deposits -> one more 1,500-contact round at $47 before deciding.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f84d44b94b5d_9ab6da",
+        "digest": "f84d44b94b5d1d94a99f4f0f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:42:44.654Z"
+      },
+      {
+        "goalId": "wst_673aa2e7d46244d6ae82",
+        "contractDigest": "f61ce55768f32f811cd57354",
+        "parentRevisionId": "rev_f84d44b94b5d_9ab6da",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Conditional: tax-season catch-up bookkeeping sold by cold email at $1,200, fulfilled by a freelance bookkeeper - started only after a day-18 deposit test",
+          "opportunityIds": [
+            "cop_481162c71db040628593"
+          ],
+          "why": "Nothing is established yet (price, demand, close rate, fulfiller cost are all RECOMMENDATION), so the plan is a live test whose thresholds are set from the target backwards. Reading the target net of costs (the owner's money must pay back), each job nets about $543 after a ~$600 bookkeeper and Stripe fees, so 22 jobs are needed. Catch-up takes about 2 weeks (Bench: 2 weeks to 1 month), and a new Stripe account's first payout takes 7-14 days, so the last job must be sold by day 28 and delivered by day 42 for its final card payment to settle by day 44. The day-18 test (1,000 contacts, the Growth plan's upload cap) must therefore show at least 5 paid deposits - a 0.5% deposit rate, which on the 4,000 further contacts reachable on days 19-25 yields the remaining 17 - and 3 bookkeeper quotes at or under $600 with a 14-day turnaround. Below that pace 22 settled jobs by day 45 is not reachable and the plan stops. The $77 test spend is pre-proof owner money at risk: it is lost on STOP and is the owner's to approve inside his $2,500 ceiling; no further money is spent unless proof is met."
+        },
+        "alternatives": [
+          {
+            "title": "Website redesign for local service businesses (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,500 is an assumption; public marketplace demand for redesigns is priced at $283-$656 average bids with 300-400 competing bids, so the margin over a ~$600 subcontractor is unproven; demand and close rate unmeasured."
+          },
+          {
+            "title": "Shopify store build for small product sellers (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,200 is an assumption; posted store-build jobs on Freelancer.com draw ~$390-$437 average bids, so buyers are not shown paying $1,200; no buying signal recorded."
+          },
+          {
+            "title": "Bid on posted Freelancer.com / Fiverr web jobs directly",
+            "why": "Refused by Brain as a Brain-performed deliverable it has not proved; average bids of $25-$656 against 100-400 rival bids would need 30+ wins to reach $12,000."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner approves the $77 at-risk test spend; set up Instantly Growth ($47/mo, 1,000 uploaded contacts) and two sending domains ($30); start inbox warm-up; Brain builds a 1,000-contact list of US small-business owners from public directories",
+            "performer": "OWNER",
+            "costCents": 7700,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 3,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Brain requests written quotes from 3 freelance QBO bookkeepers for a 4-month catch-up with 14-day turnaround (nothing committed)",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "OFFER",
+            "label": "Send the flat-fee tax-ready catch-up offer ($1,200; $600 card deposit, $600 on delivery) to the 1,000 contacts after a 9-day warm-up; Brain writes copy and triages replies",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s5"
+            ],
+            "priceCents": 120000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t4",
+            "kind": "TEST",
+            "label": "Day-18 decision: count paid deposits and bookkeeper quotes against the proof/stop thresholds",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 18,
+            "dependsOn": "t3",
+            "evidence": [],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t5",
+            "kind": "REACH",
+            "label": "Only on proof: move to Instantly Hypergrowth bundle ($107/mo, 25,000 contacts) and send to 4,000 further contacts on days 19-25",
+            "performer": "BRAIN",
+            "costCents": 10700,
+            "day": 19,
+            "dependsOn": "t4",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t6",
+            "kind": "SELL",
+            "label": "Owner takes 15-minute scoping calls and closes 22 jobs by day 28 (5 by day 18, 17 more by day 28), each taking a $600 deposit",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 28,
+            "dependsOn": "t3",
+            "evidence": [],
+            "ownerHours": 44,
+            "priceCents": 120000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t7",
+            "kind": "DELIVER",
+            "label": "Freelance bookkeeper catches up each client's books in QBO within 14 days; Brain reviews; bookkeeper paid $600 per job on delivery",
+            "performer": "Freelance US bookkeeper hired per job",
+            "costCents": 1320000,
+            "day": 42,
+            "dependsOn": "t6",
+            "evidence": [],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance US bookkeeper hired per job",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t8",
+            "kind": "COLLECT",
+            "label": "Collect the $600 balance by card on delivery; Stripe card fees 2.9% + $0.30 on 44 charges",
+            "performer": "BRAIN",
+            "costCents": 77880,
+            "day": 42,
+            "dependsOn": "t7",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth plan, 1 month (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Two sending domains (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 10700,
+            "label": "Instantly Hypergrowth bundle, 1 month (only after proof)",
+            "stepId": "t5"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 300000,
+            "label": "5 deposits x $600 by day 18 (first Stripe payout up to 14 days)",
+            "settlesDay": 32
+          },
+          {
+            "day": 28,
+            "kind": "RECEIPT",
+            "amountCents": 1020000,
+            "label": "17 deposits x $600 by day 28",
+            "settlesDay": 32
+          },
+          {
+            "day": 42,
+            "kind": "SPEND",
+            "amountCents": 1320000,
+            "label": "22 bookkeeper jobs x $600 on delivery",
+            "stepId": "t7"
+          },
+          {
+            "day": 42,
+            "kind": "FEE",
+            "amountCents": 77880,
+            "label": "Stripe 2.9% + $0.30 on 44 charges of $600",
+            "stepId": "t8"
+          },
+          {
+            "day": 42,
+            "kind": "RECEIPT",
+            "amountCents": 1320000,
+            "label": "22 balances x $600 on delivery",
+            "settlesDay": 44
+          }
+        ],
+        "proofDay": 18,
+        "quantities": [
+          {
+            "name": "price buyers pay for a 4-month catch-up",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per job",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "deposits actually paid at $1,200 in the test"
+          },
+          {
+            "name": "deposit rate per contact",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-18 count (threshold 0.5%)"
+          },
+          {
+            "name": "bookkeeper cost per job",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "3 written quotes (threshold <= $600, 14-day turnaround)"
+          },
+          {
+            "name": "owner hours available",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "hours",
+            "sources": [],
+            "needs": "owner confirms ~49 hours over 6 weeks"
+          },
+          {
+            "name": "jobs needed (net of costs)",
+            "status": "ESTIMATE",
+            "value": 22,
+            "unit": "jobs",
+            "sources": [
+              "s5",
+              "s6"
+            ],
+            "needs": "recomputed from measured price and cost"
+          },
+          {
+            "name": "test spend at risk",
+            "status": "ESTIMATE",
+            "value": 77,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": "invoice"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://xendoo.com/catchmeup",
+            "dated": "2026",
+            "claim": "Catch-up bookkeeping is a currently sold offer: Xendoo headline 'Specialized Catch-Up Bookkeeping Starting at $295/Month' (the page does not state the unit is per month of books; a seller list price, not what buyers paid)",
+            "population": "US small businesses behind on books",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.bench.co/campaign/catch-up-service",
+            "dated": "2026-04",
+            "claim": "Bench sells catch-up bundled free with annual plans from $1,910/yr; turnaround 2 weeks to 1 month",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s3",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "348 open website-design jobs; redesign projects draw $283-$656 average bids with 300-400 bids each",
+            "population": "marketplace clients posting web projects",
+            "matchesBuyer": false,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          },
+          {
+            "id": "s4",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "Posted store-build jobs: 'Build Modern E-Commerce Store' $437 average bid (337 bids); 'Online Store Development for Physical Products' $390 (421 bids)",
+            "population": "marketplace clients posting store builds",
+            "matchesBuyer": false,
+            "opportunityId": "cop_346aa0c858d144399298"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026",
+            "claim": "Instantly Growth Plan $47/mo, 5,000 emails monthly, 1,000 uploaded contacts",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026",
+            "claim": "Stripe schedules a new account's initial payout within 7-14 days of the first live payment; US standard settlement 2 business days",
+            "population": "payment settlement",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s7",
+            "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+            "dated": "2026-03-19",
+            "claim": "Vendor estimate: freelancer website design $500 to $10,000+ (estimate, not a payment)",
+            "population": "US businesses buying websites",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          }
+        ],
+        "validation": {
+          "proof": "By day 18: at least 5 paid $600 deposits from the first 1,000 contacts AND at least 3 written bookkeeper quotes at or under $600 per 4-month job with a 14-day turnaround",
+          "stop": [
+            "Fewer than 3 paid deposits by day 18 - 22 settled jobs by day 45 is out of reach; stop, total loss $77",
+            "Every bookkeeper quote above $600 or turnaround above 14 days - margin or settlement fails; stop",
+            "No job can be sold after day 28 (cannot deliver and settle by day 44); stop selling then"
+          ],
+          "continue": [
+            "5+ deposits and quotes met -> buy the $107 Hypergrowth bundle and send to 4,000 more contacts days 19-25, close to 22 jobs by day 28",
+            "3-4 deposits -> no new spend; keep working the existing 1,000 contacts to day 21 and re-decide: continue only if 5 deposits are reached by day 21"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours are unstated; the ~10 owner hours in t1/t3 are unknown, not available; Brain could request the bookkeeper quotes itself.",
+            "resolution": "Accepted. Owner hours are now an UNKNOWN quantity the owner must confirm (~49 over 6 weeks); the bookkeeper quotes are a Brain RESEARCH step (t2), and list building is Brain's."
+          },
+          {
+            "finding": "New sending domains need warm-up; sending on day 10 leaves little time if the first round underperforms. Consider shortening by using an already-warm channel.",
+            "resolution": "Accepted in part. Warm-up runs days 1-9 and the thresholds are set from the target backwards, so a weak first round triggers STOP at day 18 rather than a rescue; the second round only uses the already-warmed domains. The owner has no warm channel on record."
+          },
+          {
+            "finding": "Source s1 describes Xendoo as '$295/month of history'; the page says '$295/Month' without stating the unit is per month of books caught up.",
+            "resolution": "Accepted. s1 now quotes '$295/Month' and says the unit is not stated."
+          },
+          {
+            "finding": "Review reasons: 1,500 contacts exceed the Growth plan's 1,000-contact cap; proof not tied to the target; pre-proof spend at risk; should be CONDITIONAL.",
+            "resolution": "Accepted all four: the test uses 1,000 contacts; proof (5 deposits by day 18) and stop (<3) are derived from 22 net jobs settled by day 44 given 14-day delivery and the 7-14 day first Stripe payout; the $77 is labelled at-risk owner money for him to approve and no more is spent before proof; stance is CONDITIONAL with validation.decides set."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "why": "Assumed $1,500 price against public redesign demand priced at $283-$656 average bids; no buying signal; tested later only if the bookkeeping test stops"
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "why": "Assumed $1,200 price against posted store-build jobs averaging $390-$437 bids; no buying signal"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "deals": 22,
+            "price": 1200,
+            "directCost": 600,
+            "capital": 77
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_45ba3b71da66_dae142",
+        "digest": "45ba3b71da6698e5dfb4b17b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:46:46.726Z"
+      },
+      {
+        "goalId": "wst_673aa2e7d46244d6ae82",
+        "contractDigest": "579dee56c9d781ca205bdeb9",
+        "parentRevisionId": "rev_45ba3b71da66_dae142",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Conditional: tax-season catch-up bookkeeping sold by cold email at $1,200, fulfilled by a freelance bookkeeper - started only after a day-18 deposit test",
+          "opportunityIds": [
+            "cop_481162c71db040628593"
+          ],
+          "why": "Nothing is established yet (price, demand, close rate, fulfiller cost are all RECOMMENDATION), so the plan is a live test whose thresholds are set from the target backwards. Reading the target net of costs (the owner's money must pay back), each job nets about $543 after a ~$600 bookkeeper and Stripe fees, so 22 jobs are needed. Catch-up takes about 2 weeks (Bench: 2 weeks to 1 month), and a new Stripe account's first payout takes 7-14 days, so the last job must be sold by day 28 and delivered by day 42 for its final card payment to settle by day 44. The day-18 test (1,000 contacts, the Growth plan's upload cap) must therefore show at least 5 paid deposits - a 0.5% deposit rate, which on the 4,000 further contacts reachable on days 19-25 yields the remaining 17 - and 3 bookkeeper quotes at or under $600 with a 14-day turnaround. Below that pace 22 settled jobs by day 45 is not reachable and the plan stops. The $77 test spend is pre-proof owner money at risk: it is lost on STOP and is the owner's to approve inside his $2,500 ceiling; no further money is spent unless proof is met."
+        },
+        "alternatives": [
+          {
+            "title": "Website redesign for local service businesses (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,500 is an assumption; public marketplace demand for redesigns is priced at $283-$656 average bids with 300-400 competing bids, so the margin over a ~$600 subcontractor is unproven; demand and close rate unmeasured."
+          },
+          {
+            "title": "Shopify store build for small product sellers (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,200 is an assumption; posted store-build jobs on Freelancer.com draw ~$390-$437 average bids, so buyers are not shown paying $1,200; no buying signal recorded."
+          },
+          {
+            "title": "Bid on posted Freelancer.com / Fiverr web jobs directly",
+            "why": "Refused by Brain as a Brain-performed deliverable it has not proved; average bids of $25-$656 against 100-400 rival bids would need 30+ wins to reach $12,000."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner approves the $77 at-risk test spend; set up Instantly Growth ($47/mo, 1,000 uploaded contacts) and two sending domains ($30); start inbox warm-up; Brain builds a 1,000-contact list of US small-business owners from public directories",
+            "performer": "OWNER",
+            "costCents": 7700,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 3,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Brain requests written quotes from 3 freelance QBO bookkeepers for a 4-month catch-up with 14-day turnaround (nothing committed)",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "bookkeeper cost per job"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "OFFER",
+            "label": "Send the flat-fee tax-ready catch-up offer ($1,200; $600 card deposit, $600 on delivery) to the 1,000 contacts after a 9-day warm-up; Brain writes copy and triages replies",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s5"
+            ],
+            "priceCents": 120000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t4",
+            "kind": "TEST",
+            "label": "Day-18 decision: count paid deposits and bookkeeper quotes against the proof/stop thresholds",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 18,
+            "dependsOn": "t3",
+            "evidence": [
+              "deposit rate per contact",
+              "bookkeeper cost per job"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t5",
+            "kind": "REACH",
+            "label": "Only on proof: move to Instantly Hypergrowth bundle ($107/mo, 25,000 contacts) and send to 4,000 further contacts on days 19-25",
+            "performer": "BRAIN",
+            "costCents": 10700,
+            "day": 19,
+            "dependsOn": "t4",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t6",
+            "kind": "SELL",
+            "label": "Owner takes 15-minute scoping calls and closes 22 jobs by day 28 (5 by day 18, 17 more by day 28), each taking a $600 deposit",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 28,
+            "dependsOn": "t3",
+            "evidence": [
+              "deposit rate per contact",
+              "price buyers pay for a 4-month catch-up"
+            ],
+            "ownerHours": 44,
+            "priceCents": 120000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t7",
+            "kind": "DELIVER",
+            "label": "Freelance bookkeeper catches up each client's books in QBO within 14 days; Brain reviews; bookkeeper paid $600 per job on delivery",
+            "performer": "Freelance US bookkeeper hired per job",
+            "costCents": 1320000,
+            "day": 42,
+            "dependsOn": "t6",
+            "evidence": [
+              "bookkeeper cost per job",
+              "s2"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance US bookkeeper hired per job",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t8",
+            "kind": "COLLECT",
+            "label": "Collect the $600 balance by card on delivery; Stripe card fees 2.9% + $0.30 on 44 charges",
+            "performer": "BRAIN",
+            "costCents": 77880,
+            "day": 42,
+            "dependsOn": "t7",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth plan, 1 month (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Two sending domains (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 10700,
+            "label": "Instantly Hypergrowth bundle, 1 month (only after proof)",
+            "stepId": "t5"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 300000,
+            "label": "5 deposits x $600 by day 18 (first Stripe payout up to 14 days)",
+            "settlesDay": 32
+          },
+          {
+            "day": 28,
+            "kind": "RECEIPT",
+            "amountCents": 1020000,
+            "label": "17 deposits x $600 by day 28",
+            "settlesDay": 32
+          },
+          {
+            "day": 42,
+            "kind": "SPEND",
+            "amountCents": 1320000,
+            "label": "22 bookkeeper jobs x $600 on delivery",
+            "stepId": "t7"
+          },
+          {
+            "day": 42,
+            "kind": "FEE",
+            "amountCents": 77880,
+            "label": "Stripe 2.9% + $0.30 on 44 charges of $600",
+            "stepId": "t8"
+          },
+          {
+            "day": 42,
+            "kind": "RECEIPT",
+            "amountCents": 1320000,
+            "label": "22 balances x $600 on delivery",
+            "settlesDay": 44
+          }
+        ],
+        "proofDay": 18,
+        "quantities": [
+          {
+            "name": "price buyers pay for a 4-month catch-up",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per job",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "deposits actually paid at $1,200 in the test"
+          },
+          {
+            "name": "deposit rate per contact",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-18 count (threshold 0.5%)"
+          },
+          {
+            "name": "bookkeeper cost per job",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "3 written quotes (threshold <= $600, 14-day turnaround)"
+          },
+          {
+            "name": "owner hours available",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "hours",
+            "sources": [],
+            "needs": "owner confirms ~49 hours over 6 weeks"
+          },
+          {
+            "name": "jobs needed (net of costs)",
+            "status": "ESTIMATE",
+            "value": 22,
+            "unit": "jobs",
+            "sources": [
+              "s5",
+              "s6"
+            ],
+            "needs": "recomputed from measured price and cost"
+          },
+          {
+            "name": "test spend at risk",
+            "status": "ESTIMATE",
+            "value": 77,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": "invoice"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://xendoo.com/catchmeup",
+            "dated": "2026",
+            "claim": "Catch-up bookkeeping is a currently sold offer: Xendoo headline 'Specialized Catch-Up Bookkeeping Starting at $295/Month' (the page does not state the unit is per month of books; a seller list price, not what buyers paid)",
+            "population": "US small businesses behind on books",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.bench.co/campaign/catch-up-service",
+            "dated": "2026-04",
+            "claim": "Bench sells catch-up bundled free with annual plans from $1,910/yr; turnaround 2 weeks to 1 month",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s3",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "348 open website-design jobs; redesign projects draw $283-$656 average bids with 300-400 bids each",
+            "population": "marketplace clients posting web projects",
+            "matchesBuyer": false,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          },
+          {
+            "id": "s4",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "Posted store-build jobs: 'Build Modern E-Commerce Store' $437 average bid (337 bids); 'Online Store Development for Physical Products' $390 (421 bids)",
+            "population": "marketplace clients posting store builds",
+            "matchesBuyer": false,
+            "opportunityId": "cop_346aa0c858d144399298"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026",
+            "claim": "Instantly Growth Plan $47/mo, 5,000 emails monthly, 1,000 uploaded contacts",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026",
+            "claim": "Stripe schedules a new account's initial payout within 7-14 days of the first live payment; US standard settlement 2 business days",
+            "population": "payment settlement",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s7",
+            "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+            "dated": "2026-03-19",
+            "claim": "Vendor estimate: freelancer website design $500 to $10,000+ (estimate, not a payment)",
+            "population": "US businesses buying websites",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          }
+        ],
+        "validation": {
+          "proof": "By day 18: at least 5 paid $600 deposits from the first 1,000 contacts AND at least 3 written bookkeeper quotes at or under $600 per 4-month job with a 14-day turnaround",
+          "stop": [
+            "Fewer than 3 paid deposits by day 18 - 22 settled jobs by day 45 is out of reach; stop, total loss $77",
+            "Every bookkeeper quote above $600 or turnaround above 14 days - margin or settlement fails; stop",
+            "No job can be sold after day 28 (cannot deliver and settle by day 44); stop selling then"
+          ],
+          "continue": [
+            "5+ deposits and quotes met -> buy the $107 Hypergrowth bundle and send to 4,000 more contacts days 19-25, close to 22 jobs by day 28",
+            "3-4 deposits -> no new spend; keep working the existing 1,000 contacts to day 21 and re-decide: continue only if 5 deposits are reached by day 21"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours are unstated; the ~10 owner hours in t1/t3 are unknown, not available; Brain could request the bookkeeper quotes itself.",
+            "resolution": "Accepted. Owner hours are now an UNKNOWN quantity the owner must confirm (~49 over 6 weeks); the bookkeeper quotes are a Brain RESEARCH step (t2), and list building is Brain's."
+          },
+          {
+            "finding": "New sending domains need warm-up; sending on day 10 leaves little time if the first round underperforms. Consider shortening by using an already-warm channel.",
+            "resolution": "Accepted in part. Warm-up runs days 1-9 and the thresholds are set from the target backwards, so a weak first round triggers STOP at day 18 rather than a rescue; the second round only uses the already-warmed domains. The owner has no warm channel on record."
+          },
+          {
+            "finding": "Source s1 describes Xendoo as '$295/month of history'; the page says '$295/Month' without stating the unit is per month of books caught up.",
+            "resolution": "Accepted. s1 now quotes '$295/Month' and says the unit is not stated."
+          },
+          {
+            "finding": "Review reasons: 1,500 contacts exceed the Growth plan's 1,000-contact cap; proof not tied to the target; pre-proof spend at risk; should be CONDITIONAL.",
+            "resolution": "Accepted all four: the test uses 1,000 contacts; proof (5 deposits by day 18) and stop (<3) are derived from 22 net jobs settled by day 44 given 14-day delivery and the 7-14 day first Stripe payout; the $77 is labelled at-risk owner money for him to approve and no more is spent before proof; stance is CONDITIONAL with validation.decides set."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "why": "Assumed $1,500 price against public redesign demand priced at $283-$656 average bids; no buying signal; tested later only if the bookkeeping test stops"
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "why": "Assumed $1,200 price against posted store-build jobs averaging $390-$437 bids; no buying signal"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "deals": 22,
+            "price": 1200,
+            "directCost": 600,
+            "capital": 77
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_9699ddd6aca6_16bef7",
+        "digest": "9699ddd6aca65cfd4c5a2bce",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:47:05.257Z"
+      },
+      {
+        "goalId": "wst_673aa2e7d46244d6ae82",
+        "contractDigest": "579dee56c9d781ca205bdeb9",
+        "parentRevisionId": "rev_f84d44b94b5d_9ab6da",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Conditional: tax-season catch-up bookkeeping sold by cold email at $1,200, fulfilled by a freelance bookkeeper - started only after a day-18 deposit test",
+          "opportunityIds": [
+            "cop_481162c71db040628593"
+          ],
+          "why": "Nothing is established yet (price, demand, close rate, fulfiller cost are all RECOMMENDATION), so the plan is a live test whose thresholds are set from the target backwards. Reading the target net of costs (the owner's money must pay back), each job nets about $543 after a ~$600 bookkeeper and Stripe fees, so 22 jobs are needed. Catch-up takes about 2 weeks (Bench: 2 weeks to 1 month), and a new Stripe account's first payout takes 7-14 days, so the last job must be sold by day 28 and delivered by day 42 for its final card payment to settle by day 44. The day-18 test (1,000 contacts, the Growth plan's upload cap) must therefore show at least 5 paid deposits - a 0.5% deposit rate, which on the 4,000 further contacts reachable on days 19-25 yields the remaining 17 - and 3 bookkeeper quotes at or under $600 with a 14-day turnaround. Below that pace 22 settled jobs by day 45 is not reachable and the plan stops. The $77 test spend is pre-proof owner money at risk: it is lost on STOP and is the owner's to approve inside his $2,500 ceiling; no further money is spent unless proof is met."
+        },
+        "alternatives": [
+          {
+            "title": "Website redesign for local service businesses (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,500 is an assumption; public marketplace demand for redesigns is priced at $283-$656 average bids with 300-400 competing bids, so the margin over a ~$600 subcontractor is unproven; demand and close rate unmeasured."
+          },
+          {
+            "title": "Shopify store build for small product sellers (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,200 is an assumption; posted store-build jobs on Freelancer.com draw ~$390-$437 average bids, so buyers are not shown paying $1,200; no buying signal recorded."
+          },
+          {
+            "title": "Bid on posted Freelancer.com / Fiverr web jobs directly",
+            "why": "Refused by Brain as a Brain-performed deliverable it has not proved; average bids of $25-$656 against 100-400 rival bids would need 30+ wins to reach $12,000."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner approves the $77 at-risk test spend; set up Instantly Growth ($47/mo, 1,000 uploaded contacts) and two sending domains ($30); start inbox warm-up; Brain builds a 1,000-contact list of US small-business owners from public directories",
+            "performer": "OWNER",
+            "costCents": 7700,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 3,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Brain requests written quotes from 3 freelance QBO bookkeepers for a 4-month catch-up with 14-day turnaround (nothing committed)",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "bookkeeper cost per job"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "OFFER",
+            "label": "Send the flat-fee tax-ready catch-up offer ($1,200; $600 card deposit, $600 on delivery) to the 1,000 contacts after a 9-day warm-up; Brain writes copy and triages replies",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s5"
+            ],
+            "priceCents": 120000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t4",
+            "kind": "TEST",
+            "label": "Day-18 decision: count paid deposits and bookkeeper quotes against the proof/stop thresholds",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 18,
+            "dependsOn": "t3",
+            "evidence": [
+              "deposit rate per contact",
+              "bookkeeper cost per job"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t5",
+            "kind": "REACH",
+            "label": "Only on proof: move to Instantly Hypergrowth bundle ($107/mo, 25,000 contacts) and send to 4,000 further contacts on days 19-25",
+            "performer": "BRAIN",
+            "costCents": 10700,
+            "day": 19,
+            "dependsOn": "t4",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t6",
+            "kind": "SELL",
+            "label": "Owner takes 15-minute scoping calls and closes 22 jobs by day 28 (5 by day 18, 17 more by day 28), each taking a $600 deposit",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 28,
+            "dependsOn": "t3",
+            "evidence": [
+              "deposit rate per contact",
+              "price buyers pay for a 4-month catch-up"
+            ],
+            "ownerHours": 44,
+            "priceCents": 120000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t7",
+            "kind": "DELIVER",
+            "label": "Freelance bookkeeper catches up each client's books in QBO within 14 days; Brain reviews; bookkeeper paid $600 per job on delivery",
+            "performer": "Freelance US bookkeeper hired per job",
+            "costCents": 1320000,
+            "day": 42,
+            "dependsOn": "t6",
+            "evidence": [
+              "bookkeeper cost per job",
+              "s2"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance US bookkeeper hired per job",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t8",
+            "kind": "COLLECT",
+            "label": "Collect the $600 balance by card on delivery; Stripe card fees 2.9% + $0.30 on 44 charges",
+            "performer": "BRAIN",
+            "costCents": 77880,
+            "day": 42,
+            "dependsOn": "t7",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth plan, 1 month (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Two sending domains (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 10700,
+            "label": "Instantly Hypergrowth bundle, 1 month (only after proof)",
+            "stepId": "t5"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 300000,
+            "label": "5 deposits x $600 by day 18 (first Stripe payout up to 14 days)",
+            "settlesDay": 32
+          },
+          {
+            "day": 28,
+            "kind": "RECEIPT",
+            "amountCents": 1020000,
+            "label": "17 deposits x $600 by day 28",
+            "settlesDay": 32
+          },
+          {
+            "day": 42,
+            "kind": "SPEND",
+            "amountCents": 1320000,
+            "label": "22 bookkeeper jobs x $600 on delivery",
+            "stepId": "t7"
+          },
+          {
+            "day": 42,
+            "kind": "FEE",
+            "amountCents": 77880,
+            "label": "Stripe 2.9% + $0.30 on 44 charges of $600",
+            "stepId": "t8"
+          },
+          {
+            "day": 42,
+            "kind": "RECEIPT",
+            "amountCents": 1320000,
+            "label": "22 balances x $600 on delivery",
+            "settlesDay": 44
+          }
+        ],
+        "proofDay": 18,
+        "quantities": [
+          {
+            "name": "price buyers pay for a 4-month catch-up",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per job",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "deposits actually paid at $1,200 in the test"
+          },
+          {
+            "name": "deposit rate per contact",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-18 count (threshold 0.5%)"
+          },
+          {
+            "name": "bookkeeper cost per job",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "3 written quotes (threshold <= $600, 14-day turnaround)"
+          },
+          {
+            "name": "owner hours available",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "hours",
+            "sources": [],
+            "needs": "owner confirms ~49 hours over 6 weeks"
+          },
+          {
+            "name": "jobs needed (net of costs)",
+            "status": "ESTIMATE",
+            "value": 22,
+            "unit": "jobs",
+            "sources": [
+              "s5",
+              "s6"
+            ],
+            "needs": "recomputed from measured price and cost"
+          },
+          {
+            "name": "test spend at risk",
+            "status": "ESTIMATE",
+            "value": 77,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": "invoice"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://xendoo.com/catchmeup",
+            "dated": "2026",
+            "claim": "Catch-up bookkeeping is a currently sold offer: Xendoo headline 'Specialized Catch-Up Bookkeeping Starting at $295/Month' (the page does not state the unit is per month of books; a seller list price, not what buyers paid)",
+            "population": "US small businesses behind on books",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.bench.co/campaign/catch-up-service",
+            "dated": "2026-04",
+            "claim": "Bench sells catch-up bundled free with annual plans from $1,910/yr; turnaround 2 weeks to 1 month",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s3",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "348 open website-design jobs; redesign projects draw $283-$656 average bids with 300-400 bids each",
+            "population": "marketplace clients posting web projects",
+            "matchesBuyer": false,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          },
+          {
+            "id": "s4",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "Posted store-build jobs: 'Build Modern E-Commerce Store' $437 average bid (337 bids); 'Online Store Development for Physical Products' $390 (421 bids)",
+            "population": "marketplace clients posting store builds",
+            "matchesBuyer": false,
+            "opportunityId": "cop_346aa0c858d144399298"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026",
+            "claim": "Instantly Growth Plan $47/mo, 5,000 emails monthly, 1,000 uploaded contacts",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026",
+            "claim": "Stripe schedules a new account's initial payout within 7-14 days of the first live payment; US standard settlement 2 business days",
+            "population": "payment settlement",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s7",
+            "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+            "dated": "2026-03-19",
+            "claim": "Vendor estimate: freelancer website design $500 to $10,000+ (estimate, not a payment)",
+            "population": "US businesses buying websites",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          }
+        ],
+        "validation": {
+          "proof": "By day 18: at least 5 paid $600 deposits from the first 1,000 contacts AND at least 3 written bookkeeper quotes at or under $600 per 4-month job with a 14-day turnaround",
+          "stop": [
+            "Fewer than 3 paid deposits by day 18 - 22 settled jobs by day 45 is out of reach; stop, total loss $77",
+            "Every bookkeeper quote above $600 or turnaround above 14 days - margin or settlement fails; stop",
+            "No job can be sold after day 28 (cannot deliver and settle by day 44); stop selling then"
+          ],
+          "continue": [
+            "5+ deposits and quotes met -> buy the $107 Hypergrowth bundle and send to 4,000 more contacts days 19-25, close to 22 jobs by day 28",
+            "3-4 deposits -> no new spend; keep working the existing 1,000 contacts to day 21 and re-decide: continue only if 5 deposits are reached by day 21"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours are unstated; the ~10 owner hours in t1/t3 are unknown, not available; Brain could request the bookkeeper quotes itself.",
+            "resolution": "Accepted. Owner hours are now an UNKNOWN quantity the owner must confirm (~49 over 6 weeks); the bookkeeper quotes are a Brain RESEARCH step (t2), and list building is Brain's."
+          },
+          {
+            "finding": "New sending domains need warm-up; sending on day 10 leaves little time if the first round underperforms. Consider shortening by using an already-warm channel.",
+            "resolution": "Accepted in part. Warm-up runs days 1-9 and the thresholds are set from the target backwards, so a weak first round triggers STOP at day 18 rather than a rescue; the second round only uses the already-warmed domains. The owner has no warm channel on record."
+          },
+          {
+            "finding": "Source s1 describes Xendoo as '$295/month of history'; the page says '$295/Month' without stating the unit is per month of books caught up.",
+            "resolution": "Accepted. s1 now quotes '$295/Month' and says the unit is not stated."
+          },
+          {
+            "finding": "Review reasons: 1,500 contacts exceed the Growth plan's 1,000-contact cap; proof not tied to the target; pre-proof spend at risk; should be CONDITIONAL.",
+            "resolution": "Accepted all four: the test uses 1,000 contacts; proof (5 deposits by day 18) and stop (<3) are derived from 22 net jobs settled by day 44 given 14-day delivery and the 7-14 day first Stripe payout; the $77 is labelled at-risk owner money for him to approve and no more is spent before proof; stance is CONDITIONAL with validation.decides set."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "why": "Assumed $1,500 price against public redesign demand priced at $283-$656 average bids; no buying signal; tested later only if the bookkeeping test stops"
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "why": "Assumed $1,200 price against posted store-build jobs averaging $390-$437 bids; no buying signal"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "deals": 22,
+            "price": 1200,
+            "directCost": 600,
+            "capital": 77
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_fc88cd742dae_451725",
+        "digest": "fc88cd742daeb400a0a4c43b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:47:13.244Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_673aa2e7d46244d6ae82",
+      "contractDigest": "579dee56c9d781ca205bdeb9",
+      "parentRevisionId": "rev_f84d44b94b5d_9ab6da",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Conditional: tax-season catch-up bookkeeping sold by cold email at $1,200, fulfilled by a freelance bookkeeper - started only after a day-18 deposit test",
+        "opportunityIds": [
+          "cop_481162c71db040628593"
+        ],
+        "why": "Nothing is established yet (price, demand, close rate, fulfiller cost are all RECOMMENDATION), so the plan is a live test whose thresholds are set from the target backwards. Reading the target net of costs (the owner's money must pay back), each job nets about $543 after a ~$600 bookkeeper and Stripe fees, so 22 jobs are needed. Catch-up takes about 2 weeks (Bench: 2 weeks to 1 month), and a new Stripe account's first payout takes 7-14 days, so the last job must be sold by day 28 and delivered by day 42 for its final card payment to settle by day 44. The day-18 test (1,000 contacts, the Growth plan's upload cap) must therefore show at least 5 paid deposits - a 0.5% deposit rate, which on the 4,000 further contacts reachable on days 19-25 yields the remaining 17 - and 3 bookkeeper quotes at or under $600 with a 14-day turnaround. Below that pace 22 settled jobs by day 45 is not reachable and the plan stops. The $77 test spend is pre-proof owner money at risk: it is lost on STOP and is the owner's to approve inside his $2,500 ceiling; no further money is spent unless proof is met."
+      },
+      "alternatives": [
+        {
+          "title": "Website redesign for local service businesses (cold email, Freelancer.com subcontractor)",
+          "why": "Price $1,500 is an assumption; public marketplace demand for redesigns is priced at $283-$656 average bids with 300-400 competing bids, so the margin over a ~$600 subcontractor is unproven; demand and close rate unmeasured."
+        },
+        {
+          "title": "Shopify store build for small product sellers (cold email, Freelancer.com subcontractor)",
+          "why": "Price $1,200 is an assumption; posted store-build jobs on Freelancer.com draw ~$390-$437 average bids, so buyers are not shown paying $1,200; no buying signal recorded."
+        },
+        {
+          "title": "Bid on posted Freelancer.com / Fiverr web jobs directly",
+          "why": "Refused by Brain as a Brain-performed deliverable it has not proved; average bids of $25-$656 against 100-400 rival bids would need 30+ wins to reach $12,000."
+        }
+      ],
+      "steps": [
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Owner approves the $77 at-risk test spend; set up Instantly Growth ($47/mo, 1,000 uploaded contacts) and two sending domains ($30); start inbox warm-up; Brain builds a 1,000-contact list of US small-business owners from public directories",
+          "performer": "OWNER",
+          "costCents": 7700,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s5"
+          ],
+          "ownerHours": 3,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "t2",
+          "kind": "RESEARCH",
+          "label": "Brain requests written quotes from 3 freelance QBO bookkeepers for a 4-month catch-up with 14-day turnaround (nothing committed)",
+          "performer": "BRAIN",
+          "costCents": null,
+          "day": 2,
+          "dependsOn": null,
+          "evidence": [
+            "bookkeeper cost per job"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "t3",
+          "kind": "OFFER",
+          "label": "Send the flat-fee tax-ready catch-up offer ($1,200; $600 card deposit, $600 on delivery) to the 1,000 contacts after a 9-day warm-up; Brain writes copy and triages replies",
+          "performer": "BRAIN",
+          "costCents": null,
+          "day": 10,
+          "dependsOn": "t1",
+          "evidence": [
+            "s5"
+          ],
+          "priceCents": 120000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t4",
+          "kind": "TEST",
+          "label": "Day-18 decision: count paid deposits and bookkeeper quotes against the proof/stop thresholds",
+          "performer": "OWNER",
+          "costCents": null,
+          "day": 18,
+          "dependsOn": "t3",
+          "evidence": [
+            "deposit rate per contact",
+            "bookkeeper cost per job"
+          ],
+          "ownerHours": 2,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "t5",
+          "kind": "REACH",
+          "label": "Only on proof: move to Instantly Hypergrowth bundle ($107/mo, 25,000 contacts) and send to 4,000 further contacts on days 19-25",
+          "performer": "BRAIN",
+          "costCents": 10700,
+          "day": 19,
+          "dependsOn": "t4",
+          "evidence": [
+            "s5"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t6",
+          "kind": "SELL",
+          "label": "Owner takes 15-minute scoping calls and closes 22 jobs by day 28 (5 by day 18, 17 more by day 28), each taking a $600 deposit",
+          "performer": "OWNER",
+          "costCents": null,
+          "day": 28,
+          "dependsOn": "t3",
+          "evidence": [
+            "deposit rate per contact",
+            "price buyers pay for a 4-month catch-up"
+          ],
+          "ownerHours": 44,
+          "priceCents": 120000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "t7",
+          "kind": "DELIVER",
+          "label": "Freelance bookkeeper catches up each client's books in QBO within 14 days; Brain reviews; bookkeeper paid $600 per job on delivery",
+          "performer": "Freelance US bookkeeper hired per job",
+          "costCents": 1320000,
+          "day": 42,
+          "dependsOn": "t6",
+          "evidence": [
+            "bookkeeper cost per job",
+            "s2"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Freelance US bookkeeper hired per job",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t8",
+          "kind": "COLLECT",
+          "label": "Collect the $600 balance by card on delivery; Stripe card fees 2.9% + $0.30 on 44 charges",
+          "performer": "BRAIN",
+          "costCents": 77880,
+          "day": 42,
+          "dependsOn": "t7",
+          "evidence": [
+            "s6"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 4700,
+          "label": "Instantly Growth plan, 1 month (at risk)",
+          "stepId": "t1"
+        },
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 3000,
+          "label": "Two sending domains (at risk)",
+          "stepId": "t1"
+        },
+        {
+          "day": 19,
+          "kind": "SPEND",
+          "amountCents": 10700,
+          "label": "Instantly Hypergrowth bundle, 1 month (only after proof)",
+          "stepId": "t5"
+        },
+        {
+          "day": 18,
+          "kind": "RECEIPT",
+          "amountCents": 300000,
+          "label": "5 deposits x $600 by day 18 (first Stripe payout up to 14 days)",
+          "settlesDay": 32
+        },
+        {
+          "day": 28,
+          "kind": "RECEIPT",
+          "amountCents": 1020000,
+          "label": "17 deposits x $600 by day 28",
+          "settlesDay": 32
+        },
+        {
+          "day": 42,
+          "kind": "SPEND",
+          "amountCents": 1320000,
+          "label": "22 bookkeeper jobs x $600 on delivery",
+          "stepId": "t7"
+        },
+        {
+          "day": 42,
+          "kind": "FEE",
+          "amountCents": 77880,
+          "label": "Stripe 2.9% + $0.30 on 44 charges of $600",
+          "stepId": "t8"
+        },
+        {
+          "day": 42,
+          "kind": "RECEIPT",
+          "amountCents": 1320000,
+          "label": "22 balances x $600 on delivery",
+          "settlesDay": 44
+        }
+      ],
+      "proofDay": 18,
+      "quantities": [
+        {
+          "name": "price buyers pay for a 4-month catch-up",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per job",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": "deposits actually paid at $1,200 in the test"
+        },
+        {
+          "name": "deposit rate per contact",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "ratio",
+          "sources": [],
+          "needs": "the day-18 count (threshold 0.5%)"
+        },
+        {
+          "name": "bookkeeper cost per job",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [],
+          "needs": "3 written quotes (threshold <= $600, 14-day turnaround)"
+        },
+        {
+          "name": "owner hours available",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "hours",
+          "sources": [],
+          "needs": "owner confirms ~49 hours over 6 weeks"
+        },
+        {
+          "name": "jobs needed (net of costs)",
+          "status": "ESTIMATE",
+          "value": 22,
+          "unit": "jobs",
+          "sources": [
+            "s5",
+            "s6"
+          ],
+          "needs": "recomputed from measured price and cost"
+        },
+        {
+          "name": "test spend at risk",
+          "status": "ESTIMATE",
+          "value": 77,
+          "unit": "USD",
+          "sources": [
+            "s5"
+          ],
+          "needs": "invoice"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://xendoo.com/catchmeup",
+          "dated": "2026",
+          "claim": "Catch-up bookkeeping is a currently sold offer: Xendoo headline 'Specialized Catch-Up Bookkeeping Starting at $295/Month' (the page does not state the unit is per month of books; a seller list price, not what buyers paid)",
+          "population": "US small businesses behind on books",
+          "matchesBuyer": true,
+          "opportunityId": "cop_481162c71db040628593"
+        },
+        {
+          "id": "s2",
+          "url": "https://www.bench.co/campaign/catch-up-service",
+          "dated": "2026-04",
+          "claim": "Bench sells catch-up bundled free with annual plans from $1,910/yr; turnaround 2 weeks to 1 month",
+          "population": "US small businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_481162c71db040628593"
+        },
+        {
+          "id": "s3",
+          "url": "https://www.freelancer.com/jobs/website-design/",
+          "dated": "2026-11-27",
+          "claim": "348 open website-design jobs; redesign projects draw $283-$656 average bids with 300-400 bids each",
+          "population": "marketplace clients posting web projects",
+          "matchesBuyer": false,
+          "opportunityId": "cop_fef88a928eaa45799bc7"
+        },
+        {
+          "id": "s4",
+          "url": "https://www.freelancer.com/jobs/website-design/",
+          "dated": "2026-11-27",
+          "claim": "Posted store-build jobs: 'Build Modern E-Commerce Store' $437 average bid (337 bids); 'Online Store Development for Physical Products' $390 (421 bids)",
+          "population": "marketplace clients posting store builds",
+          "matchesBuyer": false,
+          "opportunityId": "cop_346aa0c858d144399298"
+        },
+        {
+          "id": "s5",
+          "url": "https://instantly.ai/pricing",
+          "dated": "2026",
+          "claim": "Instantly Growth Plan $47/mo, 5,000 emails monthly, 1,000 uploaded contacts",
+          "population": "tool pricing",
+          "matchesBuyer": false,
+          "opportunityId": "cop_481162c71db040628593"
+        },
+        {
+          "id": "s6",
+          "url": "https://docs.stripe.com/payouts",
+          "dated": "2026",
+          "claim": "Stripe schedules a new account's initial payout within 7-14 days of the first live payment; US standard settlement 2 business days",
+          "population": "payment settlement",
+          "matchesBuyer": false,
+          "opportunityId": "cop_481162c71db040628593"
+        },
+        {
+          "id": "s7",
+          "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+          "dated": "2026-03-19",
+          "claim": "Vendor estimate: freelancer website design $500 to $10,000+ (estimate, not a payment)",
+          "population": "US businesses buying websites",
+          "matchesBuyer": true,
+          "opportunityId": "cop_fef88a928eaa45799bc7"
+        }
+      ],
+      "validation": {
+        "proof": "By day 18: at least 5 paid $600 deposits from the first 1,000 contacts AND at least 3 written bookkeeper quotes at or under $600 per 4-month job with a 14-day turnaround",
+        "stop": [
+          "Fewer than 3 paid deposits by day 18 - 22 settled jobs by day 45 is out of reach; stop, total loss $77",
+          "Every bookkeeper quote above $600 or turnaround above 14 days - margin or settlement fails; stop",
+          "No job can be sold after day 28 (cannot deliver and settle by day 44); stop selling then"
+        ],
+        "continue": [
+          "5+ deposits and quotes met -> buy the $107 Hypergrowth bundle and send to 4,000 more contacts days 19-25, close to 22 jobs by day 28",
+          "3-4 deposits -> no new spend; keep working the existing 1,000 contacts to day 21 and re-decide: continue only if 5 deposits are reached by day 21"
+        ],
+        "decides": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Owner hours are unstated; the ~10 owner hours in t1/t3 are unknown, not available; Brain could request the bookkeeper quotes itself.",
+          "resolution": "Accepted. Owner hours are now an UNKNOWN quantity the owner must confirm (~49 over 6 weeks); the bookkeeper quotes are a Brain RESEARCH step (t2), and list building is Brain's."
+        },
+        {
+          "finding": "New sending domains need warm-up; sending on day 10 leaves little time if the first round underperforms. Consider shortening by using an already-warm channel.",
+          "resolution": "Accepted in part. Warm-up runs days 1-9 and the thresholds are set from the target backwards, so a weak first round triggers STOP at day 18 rather than a rescue; the second round only uses the already-warmed domains. The owner has no warm channel on record."
+        },
+        {
+          "finding": "Source s1 describes Xendoo as '$295/month of history'; the page says '$295/Month' without stating the unit is per month of books caught up.",
+          "resolution": "Accepted. s1 now quotes '$295/Month' and says the unit is not stated."
+        },
+        {
+          "finding": "Review reasons: 1,500 contacts exceed the Growth plan's 1,000-contact cap; proof not tied to the target; pre-proof spend at risk; should be CONDITIONAL.",
+          "resolution": "Accepted all four: the test uses 1,000 contacts; proof (5 deposits by day 18) and stop (<3) are derived from 22 net jobs settled by day 44 given 14-day delivery and the 7-14 day first Stripe payout; the $77 is labelled at-risk owner money for him to approve and no more is spent before proof; stance is CONDITIONAL with validation.decides set."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_481162c71db040628593",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_fef88a928eaa45799bc7",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_346aa0c858d144399298",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_fef88a928eaa45799bc7",
+          "why": "Assumed $1,500 price against public redesign demand priced at $283-$656 average bids; no buying signal; tested later only if the bookkeeping test stops"
+        },
+        {
+          "opportunityId": "cop_346aa0c858d144399298",
+          "why": "Assumed $1,200 price against posted store-build jobs averaging $390-$437 bids; no buying signal"
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_481162c71db040628593",
+          "deals": 22,
+          "price": 1200,
+          "directCost": 600,
+          "capital": 77
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_fc88cd742dae_451725",
+      "digest": "fc88cd742daeb400a0a4c43b",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_a43a68b4cd9d4045a212/author-F",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:47:13.244Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_fc88cd742dae_451725",
+      "digest": "fc88cd742daeb400a0a4c43b",
+      "contractDigest": "579dee56c9d781ca205bdeb9",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 1416280,
+        "committedOpenCents": 0,
+        "preProofCents": 7700,
+        "maxExposureCents": 96280,
+        "minCashCents": 153720,
+        "minCashDay": 42,
+        "collectedCents": 2640000,
+        "collectedInWindowCents": 2640000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 1223720
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_fef88a928eaa45799bc7",
+          "cop_346aa0c858d144399298",
+          "cop_481162c71db040628593"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "title": "Website redesign for local service businesses, sold by cold email and built by a Freelancer.com subcontractor",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1500,
+            "card": {
+              "payer": "US local service business owner (contractors, clinics, salons) with an outdated website",
+              "reachableChannel": "Cold email via Instantly Growth plan to scraped local-business lists",
+              "offerScope": "Fixed-scope 5-page website redesign delivered in 10 days, paid 50% deposit / 50% on launch",
+              "priceCents": 150000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelancer.com web designer hired per project (category average bids $283-$656 for WordPress/redesign jobs, 2026-11-27)",
+              "peakFundingCents": 70000,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "Local services / web design",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email via Instantly Growth plan to scraped local-business lists"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 600, tied up 700"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email via Instantly Growth plan to scraped local-business lists",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Fixed-scope 5-page website redesign delivered in 10 days, paid 50% deposit / 50% on launch to US local service business owner (contractors, clinics, salons) with an outdated website, reached through Cold email via Instantly Growth plan to scraped local-business lists, at $1,500; Freelancer.com web designer hired per project (category average bids $283-$656 for WordPress/redesign jobs, 2026-11-27) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$600",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$700",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelancer.com web designer hired per project (category average bids $283-$656 for WordPress/redesign jobs, 2026-11-27).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "2 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Fixed-scope 5-page website redesign delivered in 10 days, paid 50% deposit / 50% on launch",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US local service business owner (contractors, clinics, salons) with an outdated website",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.webfx.com/web-design/pricing/website-costs/; https://websitesetup.org/how-much-does-a-website-cost/; https://www.freelancer.com/jobs/website-design/; https://instantly.ai/pricing",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "title": "Shopify store build for small product sellers, sold by cold email, built by a Freelancer.com subcontractor",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "Small US product brands selling on Etsy/Instagram without their own store",
+              "reachableChannel": "Cold email via Instantly Growth plan",
+              "offerScope": "Fixed-scope Shopify store setup (theme, 20 products, payments, shipping) in 10 days",
+              "priceCents": 120000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelancer.com e-commerce developer (category average bids $390-$437 for store builds, 2026-11-27)",
+              "peakFundingCents": 55000,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "E-commerce services",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email via Instantly Growth plan"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 450, tied up 550"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email via Instantly Growth plan",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Fixed-scope Shopify store setup (theme, 20 products, payments, shipping) in 10 days to Small US product brands selling on Etsy/Instagram without their own store, reached through Cold email via Instantly Growth plan, at $1,200; Freelancer.com e-commerce developer (category average bids $390-$437 for store builds, 2026-11-27) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$450",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$550",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelancer.com e-commerce developer (category average bids $390-$437 for store builds, 2026-11-27).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "2 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Fixed-scope Shopify store setup (theme, 20 products, payments, shipping) in 10 days",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Small US product brands selling on Etsy/Instagram without their own store",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.webfx.com/web-design/pricing/website-costs/; https://www.freelancer.com/jobs/website-design/; https://instantly.ai/pricing",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "title": "Tax-season catch-up bookkeeping for small businesses (subcontracted bookkeeper)",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "US small business owner whose books are months behind before the 2026 tax filing season",
+              "reachableChannel": "Cold email via Instantly to small businesses; local Craigslist services posts",
+              "offerScope": "Flat-fee catch-up of up to 4 months of books in QuickBooks Online, tax-ready, done by a subcontracted bookkeeper and reviewed by Brain",
+              "priceCents": 120000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance US bookkeeper hired per job",
+              "peakFundingCents": 20000,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "Bookkeeping / accounting",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email via Instantly to small businesses; local Craigslist services posts"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 600, tied up 200"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "21 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email via Instantly to small businesses; local Craigslist services posts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Flat-fee catch-up of up to 4 months of books in QuickBooks Online, tax-ready, done by a subcontracted bookkeeper and reviewed by Brain to US small business owner whose books are months behind before the 2026 tax filing season, reached through Cold email via Instantly to small businesses; local Craigslist services posts, at $1,200; Freelance US bookkeeper hired per job delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$600",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance US bookkeeper hired per job.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "2 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Flat-fee catch-up of up to 4 months of books in QuickBooks Online, tax-ready, done by a subcontracted bookkeeper and reviewed by Brain",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US small business owner whose books are months behind before the 2026 tax filing season",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.sdocpa.com/small-business-bookkeeping-catch-up-services/; https://xendoo.com/catchmeup; https://www.bench.co/campaign/catch-up-service; https://www.craigslist.org/view/d/la-jolla-behind-on-bookkeeping-can-help/ixAv3TmJ8bGcPbb7rakYwK; https://www.nerdwallet.com/business/software/learn/bookkeeping-pricing",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "21 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 1200000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:43:20.406Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_f84d44b94b5d_9ab6da",
+        "revisionDigest": "f84d44b94b5d1d94a99f4f0f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1efdd003bd484f39865c/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "Correct that nothing is established: all three openings rest on RECOMMENDATION prices, no buying signal, no close rate and no fulfiller quote; the Xendoo/Bench list prices and Freelancer bids were rejected in verification (seller list prices and supplier-side bids are not what these buyers pay). Not proposing the website or Shopify openings as members is right. But the test as written does not hold together. (1) It uploads 1,500 contacts on the Instantly Growth plan, while its own source s5 (verified on instantly.ai/pricing: '$47/mo', '5000 Emails Monthly', '1000 Uploaded Contacts') caps uploads at 1,000; either the list is 1,000 or the cost is wrong. (2) The proof is not tied to the target. $12,000 at $1,200 needs 10 jobs settled by day 45 (more if the target is read net of the ~$600 bookkeeper cost). Proof is '3 paid $600 deposits by day 21', after which 7+ more jobs must still be sold, subcontracted, delivered (Bench quotes 2 weeks to 1 month for a catch-up) and settled through a new Stripe account whose first payout takes 7-14 days (s6) inside the remaining 24 days. The proof/stop thresholds must be the deposit count and dates from which 10 settled jobs by day 45 is still reachable, and stop when that pace is missed. (3) The contract allows owner money only if it pays back inside the window. The $77 is spent before proof and is lost on STOP, and the CONTINUE branch spends another $47; the plan must state that this spend is at risk and is the owner's to approve, or use a channel that costs nothing (e.g. the Craigslist route on the card) for the first measurement. Because the plan is a startable test with proof/stop/continue on unknowns only a live offer measures, it should be presented as CONDITIONAL with validation.decides = CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION (and FULFILMENT/ECONOMICS via the quotes), not as NO_PLAN.",
+        "findings": [
+          "Owner hours are unstated; the ~10 owner hours in t1/t3 are unknown, not available; Brain could request the bookkeeper quotes itself.",
+          "New sending domains need warm-up; sending on day 10 leaves little time if the first round underperforms. Consider shortening by using an already-warm channel.",
+          "Source s1 describes Xendoo as '$295/month of history'; the page says '$295/Month' without stating the unit is per month of books caught up."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:44:59.245Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_9699ddd6aca6_16bef7",
+        "revisionDigest": "9699ddd6aca65cfd4c5a2bce",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1efdd003bd484f39865c/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right: price, demand, close rate and fulfiller cost are all unknown (RECOMMENDATION or rejected list prices), and the plan is a costed live test whose thresholds are derived backwards from the target. Recomputed: 22 jobs x $1,200 = $26,400 collected; bookkeepers 22 x $600 = $13,200; Stripe 44 x ($17.40 + $0.30) = $778.80; tools $47 + $30 + $107 = $184; net $12,237.20 >= $12,000 (reading the target net, which is the conservative reading). Deposits ($13,200) settle by day 32, before bookkeepers are paid on delivery day 42, so owner money at risk peaks under $1,000 (the $77 test plus fees), inside the $2,500 exposure cap. Timing holds at the edge: last sale day 28 + 14-day turnaround = delivery day 42, balance settles day 44 of 45; stop rules cut selling after day 28 and stop if quotes exceed $600 or 14 days. Proof (5 deposits/1,000 = 0.5%) is consistent with the 17 more needed from 4,000 contacts (0.425%), and the Growth plan's 1,000-contact cap is respected; the $107 Hypergrowth bundle (25,000 contacts) exists on instantly.ai/pricing. The $77 is correctly labelled pre-proof owner money at risk for the owner to approve; further spend only after proof. Prior review findings were all answered.",
+        "findings": [
+          "Owner hours (~44 h of scoping calls in t6, ~49 h total) are listed as UNKNOWN but are not in the proof or stop rules; make the owner's confirmation of ~49 hours over the window a day-1 proof condition before the $77 is spent.",
+          "Zero slack on the last jobs: any job sold after ~day 26 or any bookkeeper running over 14 days misses the window; sell early and front-load deliveries.",
+          "The Hypergrowth $107 price is not in a cited source (s5 covers only Growth); add it.",
+          "A 0.5% paid-deposit rate on $600 from cold email is the critical unknown; the day-18 stop at under 3 deposits limits the loss to $77."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:48:19.317Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_fc88cd742dae_451725",
+        "revisionDigest": "fc88cd742daeb400a0a4c43b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1efdd003bd484f39865c/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right: price, demand, close rate and fulfiller cost are all unknown (RECOMMENDATION or rejected list prices), and the plan is a costed live test whose thresholds are derived backwards from the target. Recomputed: 22 jobs x $1,200 = $26,400 collected; bookkeepers 22 x $600 = $13,200; Stripe 44 x ($17.40 + $0.30) = $778.80; tools $47 + $30 + $107 = $184; net $12,237.20 >= $12,000 (reading the target net, which is the conservative reading). Deposits ($13,200) settle by day 32, before bookkeepers are paid on delivery day 42, so owner money at risk peaks under $1,000 (the $77 test plus fees), inside the $2,500 exposure cap. Timing holds at the edge: last sale day 28 + 14-day turnaround = delivery day 42, balance settles day 44 of 45; stop rules cut selling after day 28 and stop if quotes exceed $600 or 14 days. Proof (5 deposits/1,000 = 0.5%) is consistent with the 17 more needed from 4,000 contacts (0.425%), and the Growth plan's 1,000-contact cap is respected; the $107 Hypergrowth bundle (25,000 contacts) exists on instantly.ai/pricing. The $77 is correctly labelled pre-proof owner money at risk for the owner to approve; further spend only after proof. Prior review findings were all answered.",
+        "findings": [
+          "Owner hours (~44 h of scoping calls in t6, ~49 h total) are listed as UNKNOWN but are not in the proof or stop rules; make the owner's confirmation of ~49 hours over the window a day-1 proof condition before the $77 is spent.",
+          "Zero slack on the last jobs: any job sold after ~day 26 or any bookkeeper running over 14 days misses the window; sell early and front-load deliveries.",
+          "The Hypergrowth $107 price is not in a cited source (s5 covers only Growth); add it.",
+          "A 0.5% paid-deposit rate on $600 from cold email is the critical unknown; the day-18 stop at under 3 deposits limits the loss to $77."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:48:47.976Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_fc88cd742dae_451725",
+      "digest": "fc88cd742daeb400a0a4c43b",
+      "contractDigest": "579dee56c9d781ca205bdeb9",
+      "plan": {
+        "goalId": "wst_673aa2e7d46244d6ae82",
+        "contractDigest": "579dee56c9d781ca205bdeb9",
+        "parentRevisionId": "rev_f84d44b94b5d_9ab6da",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Conditional: tax-season catch-up bookkeeping sold by cold email at $1,200, fulfilled by a freelance bookkeeper - started only after a day-18 deposit test",
+          "opportunityIds": [
+            "cop_481162c71db040628593"
+          ],
+          "why": "Nothing is established yet (price, demand, close rate, fulfiller cost are all RECOMMENDATION), so the plan is a live test whose thresholds are set from the target backwards. Reading the target net of costs (the owner's money must pay back), each job nets about $543 after a ~$600 bookkeeper and Stripe fees, so 22 jobs are needed. Catch-up takes about 2 weeks (Bench: 2 weeks to 1 month), and a new Stripe account's first payout takes 7-14 days, so the last job must be sold by day 28 and delivered by day 42 for its final card payment to settle by day 44. The day-18 test (1,000 contacts, the Growth plan's upload cap) must therefore show at least 5 paid deposits - a 0.5% deposit rate, which on the 4,000 further contacts reachable on days 19-25 yields the remaining 17 - and 3 bookkeeper quotes at or under $600 with a 14-day turnaround. Below that pace 22 settled jobs by day 45 is not reachable and the plan stops. The $77 test spend is pre-proof owner money at risk: it is lost on STOP and is the owner's to approve inside his $2,500 ceiling; no further money is spent unless proof is met."
+        },
+        "alternatives": [
+          {
+            "title": "Website redesign for local service businesses (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,500 is an assumption; public marketplace demand for redesigns is priced at $283-$656 average bids with 300-400 competing bids, so the margin over a ~$600 subcontractor is unproven; demand and close rate unmeasured."
+          },
+          {
+            "title": "Shopify store build for small product sellers (cold email, Freelancer.com subcontractor)",
+            "why": "Price $1,200 is an assumption; posted store-build jobs on Freelancer.com draw ~$390-$437 average bids, so buyers are not shown paying $1,200; no buying signal recorded."
+          },
+          {
+            "title": "Bid on posted Freelancer.com / Fiverr web jobs directly",
+            "why": "Refused by Brain as a Brain-performed deliverable it has not proved; average bids of $25-$656 against 100-400 rival bids would need 30+ wins to reach $12,000."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner approves the $77 at-risk test spend; set up Instantly Growth ($47/mo, 1,000 uploaded contacts) and two sending domains ($30); start inbox warm-up; Brain builds a 1,000-contact list of US small-business owners from public directories",
+            "performer": "OWNER",
+            "costCents": 7700,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 3,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Brain requests written quotes from 3 freelance QBO bookkeepers for a 4-month catch-up with 14-day turnaround (nothing committed)",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "bookkeeper cost per job"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "OFFER",
+            "label": "Send the flat-fee tax-ready catch-up offer ($1,200; $600 card deposit, $600 on delivery) to the 1,000 contacts after a 9-day warm-up; Brain writes copy and triages replies",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s5"
+            ],
+            "priceCents": 120000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t4",
+            "kind": "TEST",
+            "label": "Day-18 decision: count paid deposits and bookkeeper quotes against the proof/stop thresholds",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 18,
+            "dependsOn": "t3",
+            "evidence": [
+              "deposit rate per contact",
+              "bookkeeper cost per job"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t5",
+            "kind": "REACH",
+            "label": "Only on proof: move to Instantly Hypergrowth bundle ($107/mo, 25,000 contacts) and send to 4,000 further contacts on days 19-25",
+            "performer": "BRAIN",
+            "costCents": 10700,
+            "day": 19,
+            "dependsOn": "t4",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t6",
+            "kind": "SELL",
+            "label": "Owner takes 15-minute scoping calls and closes 22 jobs by day 28 (5 by day 18, 17 more by day 28), each taking a $600 deposit",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 28,
+            "dependsOn": "t3",
+            "evidence": [
+              "deposit rate per contact",
+              "price buyers pay for a 4-month catch-up"
+            ],
+            "ownerHours": 44,
+            "priceCents": 120000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t7",
+            "kind": "DELIVER",
+            "label": "Freelance bookkeeper catches up each client's books in QBO within 14 days; Brain reviews; bookkeeper paid $600 per job on delivery",
+            "performer": "Freelance US bookkeeper hired per job",
+            "costCents": 1320000,
+            "day": 42,
+            "dependsOn": "t6",
+            "evidence": [
+              "bookkeeper cost per job",
+              "s2"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance US bookkeeper hired per job",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t8",
+            "kind": "COLLECT",
+            "label": "Collect the $600 balance by card on delivery; Stripe card fees 2.9% + $0.30 on 44 charges",
+            "performer": "BRAIN",
+            "costCents": 77880,
+            "day": 42,
+            "dependsOn": "t7",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth plan, 1 month (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Two sending domains (at risk)",
+            "stepId": "t1"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 10700,
+            "label": "Instantly Hypergrowth bundle, 1 month (only after proof)",
+            "stepId": "t5"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 300000,
+            "label": "5 deposits x $600 by day 18 (first Stripe payout up to 14 days)",
+            "settlesDay": 32
+          },
+          {
+            "day": 28,
+            "kind": "RECEIPT",
+            "amountCents": 1020000,
+            "label": "17 deposits x $600 by day 28",
+            "settlesDay": 32
+          },
+          {
+            "day": 42,
+            "kind": "SPEND",
+            "amountCents": 1320000,
+            "label": "22 bookkeeper jobs x $600 on delivery",
+            "stepId": "t7"
+          },
+          {
+            "day": 42,
+            "kind": "FEE",
+            "amountCents": 77880,
+            "label": "Stripe 2.9% + $0.30 on 44 charges of $600",
+            "stepId": "t8"
+          },
+          {
+            "day": 42,
+            "kind": "RECEIPT",
+            "amountCents": 1320000,
+            "label": "22 balances x $600 on delivery",
+            "settlesDay": 44
+          }
+        ],
+        "proofDay": 18,
+        "quantities": [
+          {
+            "name": "price buyers pay for a 4-month catch-up",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per job",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "deposits actually paid at $1,200 in the test"
+          },
+          {
+            "name": "deposit rate per contact",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-18 count (threshold 0.5%)"
+          },
+          {
+            "name": "bookkeeper cost per job",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "3 written quotes (threshold <= $600, 14-day turnaround)"
+          },
+          {
+            "name": "owner hours available",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "hours",
+            "sources": [],
+            "needs": "owner confirms ~49 hours over 6 weeks"
+          },
+          {
+            "name": "jobs needed (net of costs)",
+            "status": "ESTIMATE",
+            "value": 22,
+            "unit": "jobs",
+            "sources": [
+              "s5",
+              "s6"
+            ],
+            "needs": "recomputed from measured price and cost"
+          },
+          {
+            "name": "test spend at risk",
+            "status": "ESTIMATE",
+            "value": 77,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": "invoice"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://xendoo.com/catchmeup",
+            "dated": "2026",
+            "claim": "Catch-up bookkeeping is a currently sold offer: Xendoo headline 'Specialized Catch-Up Bookkeeping Starting at $295/Month' (the page does not state the unit is per month of books; a seller list price, not what buyers paid)",
+            "population": "US small businesses behind on books",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.bench.co/campaign/catch-up-service",
+            "dated": "2026-04",
+            "claim": "Bench sells catch-up bundled free with annual plans from $1,910/yr; turnaround 2 weeks to 1 month",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s3",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "348 open website-design jobs; redesign projects draw $283-$656 average bids with 300-400 bids each",
+            "population": "marketplace clients posting web projects",
+            "matchesBuyer": false,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          },
+          {
+            "id": "s4",
+            "url": "https://www.freelancer.com/jobs/website-design/",
+            "dated": "2026-11-27",
+            "claim": "Posted store-build jobs: 'Build Modern E-Commerce Store' $437 average bid (337 bids); 'Online Store Development for Physical Products' $390 (421 bids)",
+            "population": "marketplace clients posting store builds",
+            "matchesBuyer": false,
+            "opportunityId": "cop_346aa0c858d144399298"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026",
+            "claim": "Instantly Growth Plan $47/mo, 5,000 emails monthly, 1,000 uploaded contacts",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026",
+            "claim": "Stripe schedules a new account's initial payout within 7-14 days of the first live payment; US standard settlement 2 business days",
+            "population": "payment settlement",
+            "matchesBuyer": false,
+            "opportunityId": "cop_481162c71db040628593"
+          },
+          {
+            "id": "s7",
+            "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+            "dated": "2026-03-19",
+            "claim": "Vendor estimate: freelancer website design $500 to $10,000+ (estimate, not a payment)",
+            "population": "US businesses buying websites",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fef88a928eaa45799bc7"
+          }
+        ],
+        "validation": {
+          "proof": "By day 18: at least 5 paid $600 deposits from the first 1,000 contacts AND at least 3 written bookkeeper quotes at or under $600 per 4-month job with a 14-day turnaround",
+          "stop": [
+            "Fewer than 3 paid deposits by day 18 - 22 settled jobs by day 45 is out of reach; stop, total loss $77",
+            "Every bookkeeper quote above $600 or turnaround above 14 days - margin or settlement fails; stop",
+            "No job can be sold after day 28 (cannot deliver and settle by day 44); stop selling then"
+          ],
+          "continue": [
+            "5+ deposits and quotes met -> buy the $107 Hypergrowth bundle and send to 4,000 more contacts days 19-25, close to 22 jobs by day 28",
+            "3-4 deposits -> no new spend; keep working the existing 1,000 contacts to day 21 and re-decide: continue only if 5 deposits are reached by day 21"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours are unstated; the ~10 owner hours in t1/t3 are unknown, not available; Brain could request the bookkeeper quotes itself.",
+            "resolution": "Accepted. Owner hours are now an UNKNOWN quantity the owner must confirm (~49 over 6 weeks); the bookkeeper quotes are a Brain RESEARCH step (t2), and list building is Brain's."
+          },
+          {
+            "finding": "New sending domains need warm-up; sending on day 10 leaves little time if the first round underperforms. Consider shortening by using an already-warm channel.",
+            "resolution": "Accepted in part. Warm-up runs days 1-9 and the thresholds are set from the target backwards, so a weak first round triggers STOP at day 18 rather than a rescue; the second round only uses the already-warmed domains. The owner has no warm channel on record."
+          },
+          {
+            "finding": "Source s1 describes Xendoo as '$295/month of history'; the page says '$295/Month' without stating the unit is per month of books caught up.",
+            "resolution": "Accepted. s1 now quotes '$295/Month' and says the unit is not stated."
+          },
+          {
+            "finding": "Review reasons: 1,500 contacts exceed the Growth plan's 1,000-contact cap; proof not tied to the target; pre-proof spend at risk; should be CONDITIONAL.",
+            "resolution": "Accepted all four: the test uses 1,000 contacts; proof (5 deposits by day 18) and stop (<3) are derived from 22 net jobs settled by day 44 given 14-day delivery and the 7-14 day first Stripe payout; the $77 is labelled at-risk owner money for him to approve and no more is spent before proof; stance is CONDITIONAL with validation.decides set."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_fef88a928eaa45799bc7",
+            "why": "Assumed $1,500 price against public redesign demand priced at $283-$656 average bids; no buying signal; tested later only if the bookkeeping test stops"
+          },
+          {
+            "opportunityId": "cop_346aa0c858d144399298",
+            "why": "Assumed $1,200 price against posted store-build jobs averaging $390-$437 bids; no buying signal"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_481162c71db040628593",
+            "deals": 22,
+            "price": 1200,
+            "directCost": 600,
+            "capital": 77
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_fc88cd742dae_451725",
+        "digest": "fc88cd742daeb400a0a4c43b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:47:13.244Z"
+      },
+      "review": {
+        "revisionId": "rev_fc88cd742dae_451725",
+        "revisionDigest": "fc88cd742daeb400a0a4c43b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a43a68b4cd9d4045a212/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1efdd003bd484f39865c/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right: price, demand, close rate and fulfiller cost are all unknown (RECOMMENDATION or rejected list prices), and the plan is a costed live test whose thresholds are derived backwards from the target. Recomputed: 22 jobs x $1,200 = $26,400 collected; bookkeepers 22 x $600 = $13,200; Stripe 44 x ($17.40 + $0.30) = $778.80; tools $47 + $30 + $107 = $184; net $12,237.20 >= $12,000 (reading the target net, which is the conservative reading). Deposits ($13,200) settle by day 32, before bookkeepers are paid on delivery day 42, so owner money at risk peaks under $1,000 (the $77 test plus fees), inside the $2,500 exposure cap. Timing holds at the edge: last sale day 28 + 14-day turnaround = delivery day 42, balance settles day 44 of 45; stop rules cut selling after day 28 and stop if quotes exceed $600 or 14 days. Proof (5 deposits/1,000 = 0.5%) is consistent with the 17 more needed from 4,000 contacts (0.425%), and the Growth plan's 1,000-contact cap is respected; the $107 Hypergrowth bundle (25,000 contacts) exists on instantly.ai/pricing. The $77 is correctly labelled pre-proof owner money at risk for the owner to approve; further spend only after proof. Prior review findings were all answered.",
+        "findings": [
+          "Owner hours (~44 h of scoping calls in t6, ~49 h total) are listed as UNKNOWN but are not in the proof or stop rules; make the owner's confirmation of ~49 hours over the window a day-1 proof condition before the $77 is spent.",
+          "Zero slack on the last jobs: any job sold after ~day 26 or any bookkeeper running over 14 days misses the window; sell early and front-load deliveries.",
+          "The Hypergrowth $107 price is not in a cited source (s5 covers only Growth); add it.",
+          "A 0.5% paid-deposit rate on $600 from cold email is the critical unknown; the day-18 stop at under 3 deposits limits the loss to $77."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:48:47.976Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Make $12,000 within 45 days. I can put up to $2,500 of my own money in if it pays back inside that time. Any industry is fine.",
+        "terms": "13fcd76b955da904",
+        "openings": {
+          "cop_346aa0c858d144399298": "28bff486e6c02a44",
+          "cop_481162c71db040628593": "2b3eb27f8af5e001",
+          "cop_fef88a928eaa45799bc7": "deb86aed6b34610b"
+        }
+      },
+      "at": "2026-11-27T09:49:21.224Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

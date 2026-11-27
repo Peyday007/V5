@@ -1,0 +1,1263 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_ae68930210eb4c7fb4df",
+      "words": "Collect $6,000 of settled cash within 75 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 600000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash received totals the target within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "5c6ddc2b1c12134b4a7338b0"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_ae68930210eb4c7fb4df",
+        "contractDigest": "1f57db615f615950abf851be",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the six signed hospital ASL-interpreting blocks through Signal Interpreting Collective",
+          "opportunityIds": [
+            "cop_e18e26f714cb41e4b5ca"
+          ],
+          "why": "Six hospitals have signed purchase orders (six written acceptances) at $1,100 per monthly block = $6,600, above the $6,000 target. Signal Interpreting Collective has quoted $700 per block in writing, invoiced net 60, while hospitals pay net 45 after invoicing at delivery, so the supplier is paid out of collected cash and no up-front capital is needed. Card time to first cash is 50 days against a 75-day window."
+        },
+        "alternatives": [
+          {
+            "title": "Sell more blocks to further hospitals",
+            "why": "Not needed: the six signed orders already exceed the target, and buyer volume beyond them is uncounted."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the six signed purchase orders and schedule each monthly block with the hospital",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "agreements"
+            ],
+            "priceCents": 110000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Signal Interpreting Collective delivers the six scheduled ASL interpreting blocks ($700 each, invoiced net 60)",
+            "performer": "Signal Interpreting Collective",
+            "costCents": 420000,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Signal Interpreting Collective",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice each hospital at delivery and collect on net 45",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 50,
+            "dependsOn": "s2",
+            "evidence": [
+              "price",
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 660000,
+            "label": "Six hospital payments of $1,100 (invoiced at delivery, net 45)",
+            "settlesDay": 50,
+            "stepId": "s3"
+          },
+          {
+            "day": 65,
+            "kind": "SPEND",
+            "amountCents": 420000,
+            "label": "Pay Signal Interpreting Collective 6 x $700 on its net-60 invoice",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 50,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "purchase orders",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per block",
+            "status": "EVIDENCED",
+            "value": 1100,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per block",
+            "status": "EVIDENCED",
+            "value": 700,
+            "unit": "USD",
+            "sources": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 50,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "USD",
+            "sources": [
+              "exposure"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#price",
+            "dated": "2026-11-24",
+            "claim": "Six hospitals signed purchase orders at $1,100 per monthly block; net 45 after invoicing at delivery.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Signal Interpreting Collective quoted $700 per block in writing, invoiced net 60.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $700 per block.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "50 days to first cash.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "exposure",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#exposure",
+            "dated": "2026-11-24",
+            "claim": "Exposure $0.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "payer",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer is hospital patient-access departments.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "deals": 6,
+            "price": 1100,
+            "directCost": 700,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_dff8cf612958_fbd8f1",
+        "digest": "dff8cf612958a71ecb905d85",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9300e5073302481a93a2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:35:50.355Z"
+      },
+      {
+        "goalId": "wst_ae68930210eb4c7fb4df",
+        "contractDigest": "5c6ddc2b1c12134b4a7338b0",
+        "parentRevisionId": "rev_dff8cf612958_fbd8f1",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside a 14-day window: the signed hospital blocks settle on day 50",
+          "opportunityIds": [],
+          "why": "The goal's stored window is now 14 days. The only opening (six signed hospital POs at $1,100 = $6,600, delivered by Signal Interpreting Collective at $700/block net 60) is otherwise fully established, but hospitals pay net 45 after the block is invoiced at delivery and the card's measured time to first cash is 50 days. No cash settles inside 14 days, so $0 of the $6,000 is reachable."
+        },
+        "alternatives": [
+          {
+            "title": "Ask hospitals for payment on delivery",
+            "why": "Their signed terms are net 45; nothing on record shows any hospital accepting faster payment."
+          },
+          {
+            "title": "Invoice factoring",
+            "why": "Would require advancing or discounting against receivables; no factor is on record and the goal allows no up-front capital."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Confirm with the owner whether the window is 14 days or the 75 days of the written objective; otherwise look for an opening that settles inside 14 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 50,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash",
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "window",
+            "status": "EVIDENCED",
+            "value": 14,
+            "unit": "days",
+            "sources": [],
+            "needs": null
+          },
+          {
+            "name": "signed revenue",
+            "status": "EVIDENCED",
+            "value": 6600,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#price",
+            "dated": "2026-11-24",
+            "claim": "Six hospitals signed POs at $1,100 per block; net 45 after invoicing at delivery.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "50 days to first cash.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Signal Interpreting Collective quoted $700 per block, invoiced net 60.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "SETTLES_IN_TIME: the signed revenue settles 50 days out (net 45 after delivery invoicing) against a 14-day window, so nothing is collected in time.",
+          "resolution": "Extend the window to at least 50 days (the owner's written objective says 75, which this plan meets with $6,600 from six signed POs), or find an opening that settles within 14 days.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Margin over target is thin: all six hospitals must pay.",
+            "resolution": "Moot under the 14-day window; carried into the deadline relaxation: at >=50 days all six POs must still pay to reach $6,000."
+          },
+          {
+            "finding": "Window slack is 25 days; schedule blocks early.",
+            "resolution": "Superseded: the stored window is now 14 days, under the 50-day settlement time, so the plan is NO_PLAN with a DEADLINE constraint."
+          },
+          {
+            "finding": "Confirm the supplier quote per block in writing on day 1.",
+            "resolution": "Kept for a re-plan if the window is extended; does not change the deadline verdict."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "why": "Settles 50 days out against a 14-day window."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Extend the window to at least 50 days (the owner's written objective states 75)",
+            "basis": [
+              {
+                "opportunityId": "cop_e18e26f714cb41e4b5ca",
+                "field": "timeToFirstCash"
+              },
+              {
+                "opportunityId": "cop_e18e26f714cb41e4b5ca",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_eba7b2c4c1a5_6905a8",
+        "digest": "eba7b2c4c1a5e9a8fa3e7e0b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9300e5073302481a93a2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:42:50.990Z"
+      },
+      {
+        "goalId": "wst_ae68930210eb4c7fb4df",
+        "contractDigest": "5c6ddc2b1c12134b4a7338b0",
+        "parentRevisionId": "rev_dff8cf612958_fbd8f1",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside a 14-day window: the signed hospital blocks settle on day 50",
+          "opportunityIds": [],
+          "why": "The goal's stored window is now 14 days. The only opening (six signed hospital POs at $1,100 = $6,600, delivered by Signal Interpreting Collective at $700/block net 60) is otherwise fully established, but hospitals pay net 45 after the block is invoiced at delivery and the card's measured time to first cash is 50 days. No cash settles inside 14 days, so $0 of the $6,000 is reachable."
+        },
+        "alternatives": [
+          {
+            "title": "Ask hospitals for payment on delivery",
+            "why": "Their signed terms are net 45; nothing on record shows any hospital accepting faster payment."
+          },
+          {
+            "title": "Invoice factoring",
+            "why": "Would require advancing or discounting against receivables; no factor is on record and the goal allows no up-front capital."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Confirm with the owner whether the window is 14 days or the 75 days of the written objective; otherwise look for an opening that settles inside 14 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 50,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash",
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed revenue",
+            "status": "EVIDENCED",
+            "value": 6600,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#price",
+            "dated": "2026-11-24",
+            "claim": "Six hospitals signed POs at $1,100 per block; net 45 after invoicing at delivery.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "50 days to first cash.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Signal Interpreting Collective quoted $700 per block, invoiced net 60.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "SETTLES_IN_TIME: the signed revenue settles 50 days out (net 45 after delivery invoicing) against a 14-day window, so nothing is collected in time.",
+          "resolution": "Extend the window to at least 50 days (the owner's written objective says 75, which this plan meets with $6,600 from six signed POs), or find an opening that settles within 14 days.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Margin over target is thin: all six hospitals must pay.",
+            "resolution": "Moot under the 14-day window; carried into the deadline relaxation: at >=50 days all six POs must still pay to reach $6,000."
+          },
+          {
+            "finding": "Window slack is 25 days; schedule blocks early.",
+            "resolution": "Superseded: the stored window is now 14 days, under the 50-day settlement time, so the plan is NO_PLAN with a DEADLINE constraint."
+          },
+          {
+            "finding": "Confirm the supplier quote per block in writing on day 1.",
+            "resolution": "Kept for a re-plan if the window is extended; does not change the deadline verdict."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "why": "Settles 50 days out against a 14-day window."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Extend the window to at least 50 days (the owner's written objective states 75)",
+            "basis": [
+              {
+                "opportunityId": "cop_e18e26f714cb41e4b5ca",
+                "field": "timeToFirstCash"
+              },
+              {
+                "opportunityId": "cop_e18e26f714cb41e4b5ca",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_0cc4bd7460f9_0de67a",
+        "digest": "0cc4bd7460f9c0a63d1aa099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9300e5073302481a93a2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:42:59.139Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_ae68930210eb4c7fb4df",
+      "contractDigest": "5c6ddc2b1c12134b4a7338b0",
+      "parentRevisionId": "rev_dff8cf612958_fbd8f1",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan inside a 14-day window: the signed hospital blocks settle on day 50",
+        "opportunityIds": [],
+        "why": "The goal's stored window is now 14 days. The only opening (six signed hospital POs at $1,100 = $6,600, delivered by Signal Interpreting Collective at $700/block net 60) is otherwise fully established, but hospitals pay net 45 after the block is invoiced at delivery and the card's measured time to first cash is 50 days. No cash settles inside 14 days, so $0 of the $6,000 is reachable."
+      },
+      "alternatives": [
+        {
+          "title": "Ask hospitals for payment on delivery",
+          "why": "Their signed terms are net 45; nothing on record shows any hospital accepting faster payment."
+        },
+        {
+          "title": "Invoice factoring",
+          "why": "Would require advancing or discounting against receivables; no factor is on record and the goal allows no up-front capital."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Confirm with the owner whether the window is 14 days or the 75 days of the written objective; otherwise look for an opening that settles inside 14 days",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "time to first cash",
+          "status": "EVIDENCED",
+          "value": 50,
+          "unit": "days",
+          "sources": [
+            "timeToFirstCash",
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signed revenue",
+          "status": "EVIDENCED",
+          "value": 6600,
+          "unit": "USD",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "price",
+          "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#price",
+          "dated": "2026-11-24",
+          "claim": "Six hospitals signed POs at $1,100 per block; net 45 after invoicing at delivery.",
+          "population": "Hospital patient-access departments",
+          "matchesBuyer": true,
+          "opportunityId": "cop_e18e26f714cb41e4b5ca"
+        },
+        {
+          "id": "timeToFirstCash",
+          "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "50 days to first cash.",
+          "population": "Hospital patient-access departments",
+          "matchesBuyer": true,
+          "opportunityId": "cop_e18e26f714cb41e4b5ca"
+        },
+        {
+          "id": "fulfillment",
+          "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Signal Interpreting Collective quoted $700 per block, invoiced net 60.",
+          "population": "Hospital patient-access departments",
+          "matchesBuyer": true,
+          "opportunityId": "cop_e18e26f714cb41e4b5ca"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "SETTLES_IN_TIME: the signed revenue settles 50 days out (net 45 after delivery invoicing) against a 14-day window, so nothing is collected in time.",
+        "resolution": "Extend the window to at least 50 days (the owner's written objective says 75, which this plan meets with $6,600 from six signed POs), or find an opening that settles within 14 days.",
+        "decisiveLinks": [
+          "SETTLES_IN_TIME"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Margin over target is thin: all six hospitals must pay.",
+          "resolution": "Moot under the 14-day window; carried into the deadline relaxation: at >=50 days all six POs must still pay to reach $6,000."
+        },
+        {
+          "finding": "Window slack is 25 days; schedule blocks early.",
+          "resolution": "Superseded: the stored window is now 14 days, under the 50-day settlement time, so the plan is NO_PLAN with a DEADLINE constraint."
+        },
+        {
+          "finding": "Confirm the supplier quote per block in writing on day 1.",
+          "resolution": "Kept for a re-plan if the window is extended; does not change the deadline verdict."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_e18e26f714cb41e4b5ca",
+          "missing": [
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_e18e26f714cb41e4b5ca",
+          "why": "Settles 50 days out against a 14-day window."
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [
+        {
+          "constraint": "DEADLINE",
+          "suggestion": "Extend the window to at least 50 days (the owner's written objective states 75)",
+          "basis": [
+            {
+              "opportunityId": "cop_e18e26f714cb41e4b5ca",
+              "field": "timeToFirstCash"
+            },
+            {
+              "opportunityId": "cop_e18e26f714cb41e4b5ca",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_0cc4bd7460f9_0de67a",
+      "digest": "0cc4bd7460f9c0a63d1aa099",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_9300e5073302481a93a2/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:42:59.139Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_0cc4bd7460f9_0de67a",
+      "digest": "0cc4bd7460f9c0a63d1aa099",
+      "contractDigest": "5c6ddc2b1c12134b4a7338b0",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $6,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 50 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_e18e26f714cb41e4b5ca"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "title": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 0,
+            "potentialReach": 0,
+            "card": {
+              "payer": "Hospital patient-access departments",
+              "reachableChannel": "Signed purchase orders",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:32:10.091Z",
+              "offerScope": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+              "priceCents": 110000,
+              "currency": "USD",
+              "fulfillmentOwner": "Signal Interpreting Collective (written quote: $700 per block, invoiced net 60)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "sign language interpreting",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Monthly blocks of scheduled ASL interpreting for hospital patient-access departments",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed purchase orders"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 6600 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 6600 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Signal Interpreting Collective (written quote: $700 per block, invoiced net 60) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 700, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "50 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly blocks of scheduled ASL interpreting for hospital patient-access departments to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$700",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Signal Interpreting Collective (written quote: $700 per block, invoiced net 60) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Hospital patient-access departments",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Six hospitals signed purchase orders at $1,100 per monthly block of booked ASL interpreting; payment terms net 45 after the block is invoiced at delivery.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "50 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_6d836fbaaab84634a338"
+        ],
+        "scope": {
+          "targetCents": 600000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:42:10.184Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_dff8cf612958_fbd8f1",
+        "revisionDigest": "dff8cf612958a71ecb905d85",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9300e5073302481a93a2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6644812c56fd4d08896f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Six WRITTEN_ACCEPTANCE agreements at $1,100 each are on the card: 6 x $1,100 = $6,600 >= $6,000 target; the price is this buyer's own signed purchase price, not a benchmark. Fulfilment is the recorded fulfiller (Signal Interpreting Collective, written quote $700/block, net 60): cost 6 x $700 = $4,200 < $6,600 revenue, net $2,400. Cash timing recomputed: delivery day 5, hospital invoices net 45 settle day 50 <= 75-day window; supplier paid day 65 on net 60, after receipts, so cash never goes below $0 and the $0 exposure cap holds. Every Brain chain link (reach, demand, price, conversion, volume, fulfilment, economics, settlement) is established from the card's own EVIDENCE facts and agreements; EXECUTABLE stance is right.",
+        "findings": [
+          "Margin over target is thin: collected $6,600 vs $6,000 means all six hospitals must pay; one non-payment leaves $5,500. Track each PO's payment individually.",
+          "Window slack is 25 days (settle day 50 vs 75); a hospital paying more than ~25 days late, or a block scheduled after day ~30, would fall outside the window. Schedule all six blocks in the first weeks.",
+          "The supplier quote is per block; confirm in writing on day 1 that Signal Interpreting Collective can staff all six blocks in the scheduled dates.",
+          "Send/invoice capabilities are NOT_CONNECTED; this is an execution setup step, not a plan gap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:37:07.340Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_0cc4bd7460f9_0de67a",
+        "revisionDigest": "0cc4bd7460f9c0a63d1aa099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9300e5073302481a93a2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6644812c56fd4d08896f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The contract's window is now 14 days. Recomputed: the only opening's signed revenue (6 x $1,100 = $6,600) settles net 45 after delivery invoicing, and the card's EVIDENCE timeToFirstCash is 50 days; 50 > 14, so $0 is collected in the window. This is a real constraint, not missing evidence: even with every link established, the evidenced payment terms cannot fit the deadline. NO_PLAN with a DEADLINE constraint based on timeToFirstCash and price is right and matches Brain's INFEASIBLE AS STATED. Alternatives are correctly rejected: no record of any hospital accepting faster terms, and factoring would need a provider not on record; a factor discount or advance is not established.",
+        "findings": [
+          "The suggested window of at least 50 days is the earliest settlement; the earlier 75-day plan (PASSed) would be valid again under that window.",
+          "Step r1 asks the owner to confirm the window; the stored contract is authoritative, so that question is only needed if the owner chooses to relax the deadline."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:43:56.424Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_0cc4bd7460f9_0de67a",
+      "digest": "0cc4bd7460f9c0a63d1aa099",
+      "contractDigest": "5c6ddc2b1c12134b4a7338b0",
+      "plan": {
+        "goalId": "wst_ae68930210eb4c7fb4df",
+        "contractDigest": "5c6ddc2b1c12134b4a7338b0",
+        "parentRevisionId": "rev_dff8cf612958_fbd8f1",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside a 14-day window: the signed hospital blocks settle on day 50",
+          "opportunityIds": [],
+          "why": "The goal's stored window is now 14 days. The only opening (six signed hospital POs at $1,100 = $6,600, delivered by Signal Interpreting Collective at $700/block net 60) is otherwise fully established, but hospitals pay net 45 after the block is invoiced at delivery and the card's measured time to first cash is 50 days. No cash settles inside 14 days, so $0 of the $6,000 is reachable."
+        },
+        "alternatives": [
+          {
+            "title": "Ask hospitals for payment on delivery",
+            "why": "Their signed terms are net 45; nothing on record shows any hospital accepting faster payment."
+          },
+          {
+            "title": "Invoice factoring",
+            "why": "Would require advancing or discounting against receivables; no factor is on record and the goal allows no up-front capital."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Confirm with the owner whether the window is 14 days or the 75 days of the written objective; otherwise look for an opening that settles inside 14 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 50,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash",
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed revenue",
+            "status": "EVIDENCED",
+            "value": 6600,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#price",
+            "dated": "2026-11-24",
+            "claim": "Six hospitals signed POs at $1,100 per block; net 45 after invoicing at delivery.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "50 days to first cash.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_e18e26f714cb41e4b5ca#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Signal Interpreting Collective quoted $700 per block, invoiced net 60.",
+            "population": "Hospital patient-access departments",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e18e26f714cb41e4b5ca"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "SETTLES_IN_TIME: the signed revenue settles 50 days out (net 45 after delivery invoicing) against a 14-day window, so nothing is collected in time.",
+          "resolution": "Extend the window to at least 50 days (the owner's written objective says 75, which this plan meets with $6,600 from six signed POs), or find an opening that settles within 14 days.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Margin over target is thin: all six hospitals must pay.",
+            "resolution": "Moot under the 14-day window; carried into the deadline relaxation: at >=50 days all six POs must still pay to reach $6,000."
+          },
+          {
+            "finding": "Window slack is 25 days; schedule blocks early.",
+            "resolution": "Superseded: the stored window is now 14 days, under the 50-day settlement time, so the plan is NO_PLAN with a DEADLINE constraint."
+          },
+          {
+            "finding": "Confirm the supplier quote per block in writing on day 1.",
+            "resolution": "Kept for a re-plan if the window is extended; does not change the deadline verdict."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_e18e26f714cb41e4b5ca",
+            "why": "Settles 50 days out against a 14-day window."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Extend the window to at least 50 days (the owner's written objective states 75)",
+            "basis": [
+              {
+                "opportunityId": "cop_e18e26f714cb41e4b5ca",
+                "field": "timeToFirstCash"
+              },
+              {
+                "opportunityId": "cop_e18e26f714cb41e4b5ca",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_0cc4bd7460f9_0de67a",
+        "digest": "0cc4bd7460f9c0a63d1aa099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9300e5073302481a93a2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:42:59.139Z"
+      },
+      "review": {
+        "revisionId": "rev_0cc4bd7460f9_0de67a",
+        "revisionDigest": "0cc4bd7460f9c0a63d1aa099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9300e5073302481a93a2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6644812c56fd4d08896f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The contract's window is now 14 days. Recomputed: the only opening's signed revenue (6 x $1,100 = $6,600) settles net 45 after delivery invoicing, and the card's EVIDENCE timeToFirstCash is 50 days; 50 > 14, so $0 is collected in the window. This is a real constraint, not missing evidence: even with every link established, the evidenced payment terms cannot fit the deadline. NO_PLAN with a DEADLINE constraint based on timeToFirstCash and price is right and matches Brain's INFEASIBLE AS STATED. Alternatives are correctly rejected: no record of any hospital accepting faster terms, and factoring would need a provider not on record; a factor discount or advance is not established.",
+        "findings": [
+          "The suggested window of at least 50 days is the earliest settlement; the earlier 75-day plan (PASSed) would be valid again under that window.",
+          "Step r1 asks the owner to confirm the window; the stored contract is authoritative, so that question is only needed if the owner chooses to relax the deadline."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:43:56.424Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $6,000 of settled cash within 75 days using no up-front capital.",
+        "terms": "2d90cd6aaa85a80b",
+        "openings": {
+          "cop_e18e26f714cb41e4b5ca": "8a2f08e807432b24"
+        }
+      },
+      "at": "2026-11-27T09:45:32.781Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -369,10 +369,12 @@ export async function runBrain(input: { goalId: string; actor: PlanExecutor; eva
 }
 
 /** Openings the session may plan on: those linked to the goal, and those Brain's own planner weighed for it. */
-async function admittedIds(goalId: string): Promise<string[]> {
+export async function admittedIds(goalId: string): Promise<string[]> {
   const linked = (await listLinks(goalId)).filter((l) => l.kind === 'OPPORTUNITY').map((l) => l.ref);
   const run = (await events(goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined;
-  return [...new Set([...linked, ...(run?.openings ?? []).map((o) => o.opportunityId)])];
+  // An opening Brain's planner excluded is still this goal's opening: a session may build on it once it states why the
+  // exclusion is wrong (EXCLUSION_DISPUTE_UNSTATED), so it is admitted (run 8, ah-06: all three openings excluded).
+  return [...new Set([...linked, ...(run?.openings ?? []).map((o) => o.opportunityId), ...(run?.excluded ?? []).map((x) => x.opportunityId)])];
 }
 
 // ---------------------------------------------------------------------------- executors and fulfilment
@@ -725,7 +727,7 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const weighed = [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])];
   const facts = await cardFactsOf(weighed);
   const reviewConditions = r.parentRevisionId ? await conditionsOn(goalId, r.parentRevisionId) : [];
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed) };
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: integrityFor(brainRun, r.strategy.opportunityIds), completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed) };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),
@@ -868,6 +870,21 @@ export async function planningState(goalId: string) {
     staleFinal: final && !current_ ? final : null,
     staleBecause: final && !current_ ? (changed.length ? changed : ['the published revision is no longer the current revision or its contract was superseded']) : [],
   };
+}
+
+/**
+ * The integrity findings of Brain's planner run that bear on this plan. A finding that quotes an opening the plan does not
+ * build on is about Brain's own reading of that opening, not about this plan (run 8, ai-02: a label-design route the
+ * session had set aside was "NO_FAVOURABLE_UNKNOWN" over the cap, and refused every revision, whatever it used). A finding
+ * that names no opening, or one the plan uses, still binds.
+ */
+export function integrityFor(run: BrainRunSummary, used: readonly string[]): BrainRunSummary['integrity'] {
+  const titled = [...(run.openings ?? []).map((o) => ({ id: o.opportunityId, title: o.title })), ...(run.excluded ?? []).map((x) => ({ id: x.opportunityId, title: x.title }))];
+  return (run.integrity ?? []).filter((v) => {
+    const quoted = [...v.detail.matchAll(/"([^"]{8,})"/g)].map((m) => m[1]!.replace(/…$/, '').trim());
+    const named = titled.filter((o) => quoted.some((q) => o.title.startsWith(q) || q.startsWith(o.title)));
+    return named.length === 0 || named.some((o) => used.includes(o.id));
+  });
 }
 
 /** The openings among `ids` that this goal's sessions proposed as routes (record id under the goal's route prefix). */

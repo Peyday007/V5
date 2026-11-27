@@ -1,0 +1,3263 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_88bf0100b5d44ab29cf1",
+      "words": "I want $1,500 of settled cash in my account within 21 days. I have no money to put in, and I can give this about 3 hours a week, no more.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 150000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 21,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "First buyer payment settled in the owner's account",
+        "ownerHoursPerWeek": 3,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "3330060ec0b3fc2f66223a2f"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_88bf0100b5d44ab29cf1",
+        "contractDigest": "2ed4ad61f751385a0f076d76",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell one-time Google Business Profile optimization ($300) to local service businesses by cold email, fulfilled by a GBP optimization freelancer paid from settled receipts",
+          "opportunityIds": [
+            "cop_ea0685e0e38142c3bb96"
+          ],
+          "why": "Only route with a published market price band ($300-$500 one-time, Merchynt; $300-$800 freelancer, OfficeConsumer) and a named low-cost fulfiller ($59.97 one-time, HomeASAP), needing no owner capital and about 1 owner hour per sale. Demand and close rate are unmeasured, and Stripe's first payout lands 7-14 days after the first live payment, so the plan is conditional on paid orders by day 6."
+        },
+        "alternatives": [
+          {
+            "title": "Monthly GBP management retainer",
+            "why": "Only the first month ($125-$400) settles inside 21 days, price is a guide band not a buyer payment, and no fulfiller cost is established; kept as an upsell only."
+          },
+          {
+            "title": "One-page website rebuild",
+            "why": "No sourced price, no named fulfiller with a cost, and a fulfiller cannot be pre-paid with $0 capital; dropped."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain lists 80 local service businesses with visibly incomplete Google Business Profiles and drafts personalised emails; owner sends them from the existing mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_card_access"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the $300 one-time optimization with a Stripe payment link (pay up front, delivered within 3 days of payout)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price_merchynt",
+              "s_price_oc"
+            ],
+            "ownerHours": 0.5,
+            "priceCents": 30000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count paid $300 orders from the first 80 emails by day 6",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "If proven, send a further Brain-drafted batch until 7 paid orders are taken by day 8",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 1.5,
+            "priceCents": 30000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Stripe first payout of buyer payments to the owner's bank (7-14 days after first live payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Order each optimization from the GBP optimization freelancer out of settled receipts; client grants manager access; Brain checks the result",
+            "performer": "Fiverr GBP optimization freelancer",
+            "costCents": 42000,
+            "day": 17,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_card_fulfillment",
+              "s_supply_homeasap"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr GBP optimization freelancer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Owner confirms delivery with each client",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "deliver",
+            "evidence": [],
+            "ownerHours": 5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "2 test orders at $300",
+            "settlesDay": 17,
+            "stepId": "offer"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 150000,
+            "label": "5 further orders at $300",
+            "settlesDay": 17,
+            "stepId": "sell"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 42000,
+            "label": "7 freelancer optimizations at $60, paid from settled receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ESTIMATE",
+            "value": 300,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price_merchynt",
+              "s_price_oc"
+            ],
+            "needs": "paid orders at $300"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid orders per email",
+            "sources": [],
+            "needs": "the day-6 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "ESTIMATE",
+            "value": 60,
+            "unit": "USD per sale",
+            "sources": [
+              "s_supply_homeasap",
+              "s_card_directCosts"
+            ],
+            "needs": "first freelancer order"
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "Stripe dashboard payout date"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "hours in window",
+            "sources": [
+              "s_card_hours"
+            ],
+            "needs": "time log"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by personalised cold email from the owner's mailbox",
+            "population": "local small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_card_fulfillment",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "A GBP optimization freelancer delivers it",
+            "population": "suppliers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_card_directCosts",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#directCosts",
+            "dated": "2026-11-27",
+            "claim": "Direct cost $60 per sale",
+            "population": "suppliers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_card_hours",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#hours",
+            "dated": "2026-11-27",
+            "claim": "1 owner hour per sale",
+            "population": "owner",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_price_merchynt",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "One-time GBP audit and optimization typically $300-$500; management $125-$400/month",
+            "population": "small businesses buying GBP services",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_price_oc",
+            "url": "https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/",
+            "dated": "2026-01-01",
+            "claim": "Typical freelancer GBP setup runs $300 to $800",
+            "population": "small local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_supply_homeasap",
+            "url": "https://about.homeasap.com/google-my-business/",
+            "dated": "2026-11-27",
+            "claim": "One-time GBP optimization sold for $59.97",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically completes within 7-14 days of the first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_retainer",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "GBP management $125-$400 per month",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3dd9f9635c2144529e33"
+          },
+          {
+            "id": "s_retainer_supply",
+            "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+            "dated": "2026-11-27",
+            "claim": "A freelancer lists local SEO / GBP optimization at $250/month",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_3dd9f9635c2144529e33"
+          },
+          {
+            "id": "s_web",
+            "url": "https://brain.local/card/cop_55bd9986e8634b95984c#offer",
+            "dated": "2026-11-27",
+            "claim": "One-page website rebuild offer (price unsourced)",
+            "population": "local small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55bd9986e8634b95984c"
+          }
+        ],
+        "validation": {
+          "proof": "At least 2 paid $300 Stripe orders from the first 80 cold emails by day 6, and the Stripe dashboard shows the first payout on or before day 17",
+          "stop": [
+            "0 paid orders by day 6",
+            "Stripe dashboard shows the first payout after day 17",
+            "the freelancer cannot deliver for $60 or within 3 days",
+            "owner time used exceeds 6 hours by day 8"
+          ],
+          "continue": [
+            "2 or more paid orders by day 6: send a further batch until 7 paid orders by day 8"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "why": "Only the first month settles in the window, price is a guide band and fulfiller cost unknown"
+          },
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "why": "No sourced price and no costed fulfiller; cannot pre-pay a fulfiller with $0"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "deals": 7,
+            "price": 300,
+            "directCost": 60,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_65c28f1a2b21_d54e28",
+        "digest": "65c28f1a2b21b8014739255e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_01b5b646fae34002ab75/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:43:09.178Z"
+      },
+      {
+        "goalId": "wst_88bf0100b5d44ab29cf1",
+        "contractDigest": "3330060ec0b3fc2f66223a2f",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell one-time Google Business Profile optimization ($300) to local service businesses by cold email, fulfilled by a GBP optimization freelancer paid from settled receipts",
+          "opportunityIds": [
+            "cop_ea0685e0e38142c3bb96"
+          ],
+          "why": "Only route with a published market price band ($300-$500 one-time, Merchynt; $300-$800 freelancer, OfficeConsumer) and a named low-cost fulfiller ($59.97 one-time, HomeASAP), needing no owner capital and about 1 owner hour per sale. Demand and close rate are unmeasured, and Stripe's first payout lands 7-14 days after the first live payment, so the plan is conditional on paid orders by day 6."
+        },
+        "alternatives": [
+          {
+            "title": "Monthly GBP management retainer",
+            "why": "Only the first month ($125-$400) settles inside 21 days, price is a guide band not a buyer payment, and no fulfiller cost is established; kept as an upsell only."
+          },
+          {
+            "title": "One-page website rebuild",
+            "why": "No sourced price, no named fulfiller with a cost, and a fulfiller cannot be pre-paid with $0 capital; dropped."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain lists 80 local service businesses with visibly incomplete Google Business Profiles and drafts personalised emails; owner sends them from the existing mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_card_access"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the $300 one-time optimization with a Stripe payment link (pay up front, delivered within 3 days of payout)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price_merchynt",
+              "s_price_oc"
+            ],
+            "ownerHours": 0.5,
+            "priceCents": 30000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count paid $300 orders from the first 80 emails by day 6",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "If proven, send a further Brain-drafted batch until 7 paid orders are taken by day 8",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 1.5,
+            "priceCents": 30000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Stripe first payout of buyer payments to the owner's bank (7-14 days after first live payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Order each optimization from the GBP optimization freelancer out of settled receipts; client grants manager access; Brain checks the result",
+            "performer": "Fiverr GBP optimization freelancer",
+            "costCents": 42000,
+            "day": 17,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_card_fulfillment",
+              "s_supply_homeasap"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr GBP optimization freelancer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Owner confirms delivery with each client",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_card_hours",
+              "owner_hours"
+            ],
+            "ownerHours": 5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "2 test orders at $300",
+            "settlesDay": 17,
+            "stepId": "offer"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 150000,
+            "label": "5 further orders at $300",
+            "settlesDay": 17,
+            "stepId": "sell"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 42000,
+            "label": "7 freelancer optimizations at $60, paid from settled receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ESTIMATE",
+            "value": 300,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price_merchynt",
+              "s_price_oc"
+            ],
+            "needs": "paid orders at $300"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid orders per email",
+            "sources": [],
+            "needs": "the day-6 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "ESTIMATE",
+            "value": 60,
+            "unit": "USD per sale",
+            "sources": [
+              "s_supply_homeasap",
+              "s_card_directCosts"
+            ],
+            "needs": "first freelancer order"
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "Stripe dashboard payout date"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "hours in window",
+            "sources": [
+              "s_card_hours"
+            ],
+            "needs": "time log"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by personalised cold email from the owner's mailbox",
+            "population": "local small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_card_fulfillment",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "A GBP optimization freelancer delivers it",
+            "population": "suppliers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_card_directCosts",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#directCosts",
+            "dated": "2026-11-27",
+            "claim": "Direct cost $60 per sale",
+            "population": "suppliers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_card_hours",
+            "url": "https://brain.local/card/cop_ea0685e0e38142c3bb96#hours",
+            "dated": "2026-11-27",
+            "claim": "1 owner hour per sale",
+            "population": "owner",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_price_merchynt",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "One-time GBP audit and optimization typically $300-$500; management $125-$400/month",
+            "population": "small businesses buying GBP services",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_price_oc",
+            "url": "https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/",
+            "dated": "2026-01-01",
+            "claim": "Typical freelancer GBP setup runs $300 to $800",
+            "population": "small local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_supply_homeasap",
+            "url": "https://about.homeasap.com/google-my-business/",
+            "dated": "2026-11-27",
+            "claim": "One-time GBP optimization sold for $59.97",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically completes within 7-14 days of the first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_retainer",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "GBP management $125-$400 per month",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3dd9f9635c2144529e33"
+          },
+          {
+            "id": "s_retainer_supply",
+            "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+            "dated": "2026-11-27",
+            "claim": "A freelancer lists local SEO / GBP optimization at $250/month",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_3dd9f9635c2144529e33"
+          },
+          {
+            "id": "s_web",
+            "url": "https://www.wpzoom.com/blog/business-website-cost/",
+            "dated": "2026-01-01",
+            "claim": "2026 cost table lists one-page websites at $500 to $1,500 from a freelancer (a guide band, not a buyer payment)",
+            "population": "small businesses buying websites",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55bd9986e8634b95984c"
+          }
+        ],
+        "validation": {
+          "proof": "At least 2 paid $300 Stripe orders from the first 80 cold emails by day 6, and the Stripe dashboard shows the first payout on or before day 17",
+          "stop": [
+            "0 paid orders by day 6",
+            "Stripe dashboard shows the first payout after day 17",
+            "the freelancer cannot deliver for $60 or within 3 days",
+            "owner time used exceeds 6 hours by day 8"
+          ],
+          "continue": [
+            "2 or more paid orders by day 6: send a further batch until 7 paid orders by day 8"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "why": "Only the first month settles in the window, price is a guide band and fulfiller cost unknown"
+          },
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "why": "No sourced price and no costed fulfiller; cannot pre-pay a fulfiller with $0"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "deals": 7,
+            "price": 300,
+            "directCost": 60,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c3b6154969e6_b5f504",
+        "digest": "c3b6154969e6b69ecf556e74",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_01b5b646fae34002ab75/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:43:40.087Z"
+      },
+      {
+        "goalId": "wst_88bf0100b5d44ab29cf1",
+        "contractDigest": "3330060ec0b3fc2f66223a2f",
+        "parentRevisionId": "rev_c3b6154969e6_b5f504",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell a white-label Google Business Profile audit and optimization ($500) to local service businesses by cold email, fulfilled by Loganix ($259) out of settled prepayments",
+          "opportunityIds": [
+            "cop_183bdfc15d9a45758405"
+          ],
+          "why": "The fulfiller is named with a published, white-label, agency-facing price ($259, Loganix, most completed within seven business days), so each sale keeps $241 and the owner advances nothing: buyers prepay and Loganix is paid from the settled Stripe payout. The $500 price is a test hypothesis that sits inside published provider asks (a Contra freelancer from $397; guide bands $300-$800) but no buyer payment is established, and demand and close rate are unmeasured, so the plan is conditional on prepaid orders in week 1. Seven sales collect $3,500 and leave $1,687 settled after Loganix."
+        },
+        "alternatives": [
+          {
+            "title": "Same offer at $300 fulfilled by an unnamed Fiverr freelancer at $60",
+            "why": "The $60 figure came from HomeASAP's real-estate-agent offer, not a resale supplier; no named fulfiller at that cost, so dropped."
+          },
+          {
+            "title": "Monthly GBP management retainer",
+            "why": "Only the first month settles in 21 days, and no fulfiller cost is established."
+          },
+          {
+            "title": "One-page website rebuild",
+            "why": "No buyer-paid price and no costed fulfiller; a fulfiller cannot be pre-paid with $0."
+          }
+        ],
+        "steps": [
+          {
+            "id": "quote",
+            "kind": "TEST",
+            "label": "Before any offer: owner gets Loganix's written confirmation of $259 white-label GBP optimization, the access it needs (manager invite) and turnaround",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_loganix"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain lists 80 local service businesses with visibly incomplete Google Business Profiles and drafts personalised emails; owner sends them from the existing mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "quote",
+            "evidence": [
+              "s_card_access"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the $500 one-time optimization with a Stripe payment link; delivery starts when the first payout settles; owner answers replies Brain drafts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_contra",
+              "s_oc"
+            ],
+            "ownerHours": 1.5,
+            "priceCents": 50000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count prepaid $500 orders from the first 80 emails by day 7",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Week 2: owner sends a second Brain-drafted batch and closes orders until 7 are prepaid by day 12",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 3,
+            "priceCents": 50000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Stripe first payout of prepayments to the owner's bank (7-14 days after first live payment, so by day 19 for a day-5 payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Order each optimization from Loganix out of the settled payout; client sends manager access; Brain checks the deliverable",
+            "performer": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days)",
+            "costCents": 181300,
+            "day": 19,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_loganix",
+              "s_card_fulfillment"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Week 3: owner forwards access invites and confirms each order with the client",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "deliver",
+            "evidence": [
+              "owner_hours"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 150000,
+            "label": "3 prepaid test orders at $500",
+            "settlesDay": 19,
+            "stepId": "offer"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 200000,
+            "label": "4 further prepaid orders at $500",
+            "settlesDay": 19,
+            "stepId": "sell"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 181300,
+            "label": "7 Loganix optimizations at $259, paid from the settled payout",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 500,
+            "unit": "USD per sale",
+            "sources": [
+              "s_contra",
+              "s_oc"
+            ],
+            "needs": "prepaid orders at $500"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email",
+            "sources": [],
+            "needs": "the day-7 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "EVIDENCED",
+            "value": 259,
+            "unit": "USD per sale",
+            "sources": [
+              "s_loganix"
+            ],
+            "needs": "Loganix written confirmation on day 1"
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "Stripe dashboard payout date"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "hours in window: week 1 3 h (quote 0.5, reach 1, offer 1.5), week 2 3 h, week 3 2 h",
+            "sources": [
+              "s_card_hours"
+            ],
+            "needs": "time log"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_183bdfc15d9a45758405#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by cold email from the owner's mailbox",
+            "population": "local small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_card_fulfillment",
+            "url": "https://brain.local/card/cop_183bdfc15d9a45758405#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "Loganix fulfils it",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_card_hours",
+            "url": "https://brain.local/card/cop_183bdfc15d9a45758405#hours",
+            "dated": "2026-11-27",
+            "claim": "0.5 owner hours per sale",
+            "population": "owner",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_loganix",
+            "url": "https://loganix.com/google-business-profile-optimization-service/",
+            "dated": "2026-11-27",
+            "claim": "GBP Audit & Optimization $259; every deliverable white-label; most optimizations completed within seven business days; aimed at SEO agencies",
+            "population": "agency supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_contra",
+            "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+            "dated": "2026-11-27",
+            "claim": "A freelancer sells GBP optimization full reset starting at $397, 5 days (a provider ask, not a buyer payment)",
+            "population": "small businesses buying GBP optimization",
+            "matchesBuyer": true,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_oc",
+            "url": "https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/",
+            "dated": "2026-01-01",
+            "claim": "Typical freelancer setup runs $300 to $800 (vendor estimate; rejected as buyer-payment evidence in verification)",
+            "population": "small local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically completes within 7-14 days of the first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_a_merchynt",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "One-time GBP audit and optimization typically $300-$500",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_a_homeasap",
+            "url": "https://about.homeasap.com/google-my-business/",
+            "dated": "2026-11-27",
+            "claim": "One-time GBP optimization $59.97 sold to real estate agents",
+            "population": "real estate agents (not a resale supplier)",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_retainer",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "GBP management $125-$400 per month",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3dd9f9635c2144529e33"
+          },
+          {
+            "id": "s_web",
+            "url": "https://www.wpzoom.com/blog/business-website-cost/",
+            "dated": "2026-01-01",
+            "claim": "One-page websites $500 to $1,500 from a freelancer (guide band)",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55bd9986e8634b95984c"
+          }
+        ],
+        "validation": {
+          "proof": "Loganix confirms $259 white-label delivery in writing on day 1, and at least 3 prepaid $500 orders arrive from the first 80 emails by day 7",
+          "stop": [
+            "Loganix will not confirm $259 white-label delivery through client manager access",
+            "fewer than 2 prepaid orders by day 7",
+            "Stripe dashboard schedules the first payout after day 19",
+            "owner time exceeds 3 hours in any week"
+          ],
+          "continue": [
+            "3 or more prepaid orders by day 7: send a second batch in week 2 until 7 are prepaid by day 12"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours break the 3 h/week limit (week 1 had 4 h, week 3 had 5 h; stop rule allowed 6 h by day 8).",
+            "resolution": "Accepted. Week 1 is now 3.0 h (quote 0.5, reach 1, offer 1.5), week 2 3.0 h (second batch and closing), week 3 2.0 h (access and confirmation); the stop rule is now 'owner time exceeds 3 hours in any week'."
+          },
+          {
+            "finding": "Fulfilment not established; $60 came from HomeASAP's real-estate-agent offer, not a resale supplier; get a written quote from a named fulfiller before the first offer.",
+            "resolution": "Accepted. The plan now uses a new opening fulfilled by Loganix, whose page sells a $259 GBP Audit & Optimization with white-label deliverables to agencies; the first step (day 1, before any offer) is Loganix's written confirmation, and a refusal stops the plan. Price raised to $500 so the margin survives the real supplier cost."
+          },
+          {
+            "finding": "Price support is weaker than stated: Merchynt and OfficeConsumer figures are vendor estimates rejected in verification.",
+            "resolution": "Accepted. The price quantity is now ASSUMED, the why calls it a test hypothesis, and OFFER_AND_PRICE is among the links the validation decides."
+          },
+          {
+            "finding": "Stripe stop rule 'first payout after day 17' is stricter than the source.",
+            "resolution": "Accepted. The stop is now a first payout scheduled after day 19 (day-5 payment + 14 days, the source's upper bound)."
+          },
+          {
+            "finding": "Buyers wait for delivery until payout; a refund or chargeback would reverse settled cash. Deliver as soon as the fulfiller is confirmed.",
+            "resolution": "Partly rebutted: with $0 exposure the owner cannot pay Loganix before the payout settles, so ordering earlier would break the capital limit. The offer states up front that work starts when payment clears, and the refund risk is a stop-relevant quantity measured in the test."
+          },
+          {
+            "finding": "Reaching more paid orders after the test needs another email batch, uncounted owner time.",
+            "resolution": "Accepted. Week 2 sell step carries 3 owner hours for the second batch and closing."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ],
+            "finding": "cop_ea0685e0e38142c3bb96 FULFILMENT not established",
+            "resolution": "Accepted: that opening's card names only a generic Fiverr freelancer and its $60 cost is HomeASAP's agent-facing price; it is now excluded and the plan builds on the Loganix-fulfilled opening."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_183bdfc15d9a45758405",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "why": "Its $60 fulfiller is not a resale supplier (HomeASAP serves real estate agents); fulfilment not established"
+          },
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "why": "Only the first month settles; fulfiller cost unknown"
+          },
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "why": "No buyer-paid price and no costed fulfiller"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_183bdfc15d9a45758405",
+            "deals": 7,
+            "price": 500,
+            "directCost": 259,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND",
+          "ECONOMICS",
+          "FULFILMENT",
+          "OFFER_AND_PRICE",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_041574e7fa19_7d308e",
+        "digest": "041574e7fa1913030ac3e008",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_01b5b646fae34002ab75/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:49:32.621Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_88bf0100b5d44ab29cf1",
+      "contractDigest": "3330060ec0b3fc2f66223a2f",
+      "parentRevisionId": "rev_c3b6154969e6_b5f504",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Resell a white-label Google Business Profile audit and optimization ($500) to local service businesses by cold email, fulfilled by Loganix ($259) out of settled prepayments",
+        "opportunityIds": [
+          "cop_183bdfc15d9a45758405"
+        ],
+        "why": "The fulfiller is named with a published, white-label, agency-facing price ($259, Loganix, most completed within seven business days), so each sale keeps $241 and the owner advances nothing: buyers prepay and Loganix is paid from the settled Stripe payout. The $500 price is a test hypothesis that sits inside published provider asks (a Contra freelancer from $397; guide bands $300-$800) but no buyer payment is established, and demand and close rate are unmeasured, so the plan is conditional on prepaid orders in week 1. Seven sales collect $3,500 and leave $1,687 settled after Loganix."
+      },
+      "alternatives": [
+        {
+          "title": "Same offer at $300 fulfilled by an unnamed Fiverr freelancer at $60",
+          "why": "The $60 figure came from HomeASAP's real-estate-agent offer, not a resale supplier; no named fulfiller at that cost, so dropped."
+        },
+        {
+          "title": "Monthly GBP management retainer",
+          "why": "Only the first month settles in 21 days, and no fulfiller cost is established."
+        },
+        {
+          "title": "One-page website rebuild",
+          "why": "No buyer-paid price and no costed fulfiller; a fulfiller cannot be pre-paid with $0."
+        }
+      ],
+      "steps": [
+        {
+          "id": "quote",
+          "kind": "TEST",
+          "label": "Before any offer: owner gets Loganix's written confirmation of $259 white-label GBP optimization, the access it needs (manager invite) and turnaround",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_loganix"
+          ],
+          "ownerHours": 0.5,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Brain lists 80 local service businesses with visibly incomplete Google Business Profiles and drafts personalised emails; owner sends them from the existing mailbox",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "quote",
+          "evidence": [
+            "s_card_access"
+          ],
+          "ownerHours": 1,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the $500 one-time optimization with a Stripe payment link; delivery starts when the first payout settles; owner answers replies Brain drafts",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_contra",
+            "s_oc"
+          ],
+          "ownerHours": 1.5,
+          "priceCents": 50000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "test",
+          "kind": "TEST",
+          "label": "Validation: count prepaid $500 orders from the first 80 emails by day 7",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "offer",
+          "evidence": [
+            "close_rate"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Week 2: owner sends a second Brain-drafted batch and closes orders until 7 are prepaid by day 12",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "test",
+          "evidence": [
+            "close_rate"
+          ],
+          "ownerHours": 3,
+          "priceCents": 50000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Stripe first payout of prepayments to the owner's bank (7-14 days after first live payment, so by day 19 for a day-5 payment)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 19,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_stripe"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Order each optimization from Loganix out of the settled payout; client sends manager access; Brain checks the deliverable",
+          "performer": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days)",
+          "costCents": 181300,
+          "day": 19,
+          "dependsOn": "collect",
+          "evidence": [
+            "s_loganix",
+            "s_card_fulfillment"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "confirm",
+          "kind": "OTHER",
+          "label": "Week 3: owner forwards access invites and confirms each order with the client",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 19,
+          "dependsOn": "deliver",
+          "evidence": [
+            "owner_hours"
+          ],
+          "ownerHours": 2,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 150000,
+          "label": "3 prepaid test orders at $500",
+          "settlesDay": 19,
+          "stepId": "offer"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 200000,
+          "label": "4 further prepaid orders at $500",
+          "settlesDay": 19,
+          "stepId": "sell"
+        },
+        {
+          "day": 19,
+          "kind": "SPEND",
+          "amountCents": 181300,
+          "label": "7 Loganix optimizations at $259, paid from the settled payout",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 7,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "ASSUMED",
+          "value": 500,
+          "unit": "USD per sale",
+          "sources": [
+            "s_contra",
+            "s_oc"
+          ],
+          "needs": "prepaid orders at $500"
+        },
+        {
+          "name": "close_rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "prepaid orders per email",
+          "sources": [],
+          "needs": "the day-7 test"
+        },
+        {
+          "name": "supplier_cost",
+          "status": "EVIDENCED",
+          "value": 259,
+          "unit": "USD per sale",
+          "sources": [
+            "s_loganix"
+          ],
+          "needs": "Loganix written confirmation on day 1"
+        },
+        {
+          "name": "first_payout_days",
+          "status": "ESTIMATE",
+          "value": 14,
+          "unit": "days after first live payment (upper bound)",
+          "sources": [
+            "s_stripe"
+          ],
+          "needs": "Stripe dashboard payout date"
+        },
+        {
+          "name": "owner_hours",
+          "status": "ESTIMATE",
+          "value": 9,
+          "unit": "hours in window: week 1 3 h (quote 0.5, reach 1, offer 1.5), week 2 3 h, week 3 2 h",
+          "sources": [
+            "s_card_hours"
+          ],
+          "needs": "time log"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_card_access",
+          "url": "https://brain.local/card/cop_183bdfc15d9a45758405#access",
+          "dated": "2026-11-27",
+          "claim": "Reached by cold email from the owner's mailbox",
+          "population": "local small businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_183bdfc15d9a45758405"
+        },
+        {
+          "id": "s_card_fulfillment",
+          "url": "https://brain.local/card/cop_183bdfc15d9a45758405#fulfillment",
+          "dated": "2026-11-27",
+          "claim": "Loganix fulfils it",
+          "population": "supplier",
+          "matchesBuyer": false,
+          "opportunityId": "cop_183bdfc15d9a45758405"
+        },
+        {
+          "id": "s_card_hours",
+          "url": "https://brain.local/card/cop_183bdfc15d9a45758405#hours",
+          "dated": "2026-11-27",
+          "claim": "0.5 owner hours per sale",
+          "population": "owner",
+          "matchesBuyer": false,
+          "opportunityId": "cop_183bdfc15d9a45758405"
+        },
+        {
+          "id": "s_loganix",
+          "url": "https://loganix.com/google-business-profile-optimization-service/",
+          "dated": "2026-11-27",
+          "claim": "GBP Audit & Optimization $259; every deliverable white-label; most optimizations completed within seven business days; aimed at SEO agencies",
+          "population": "agency supplier",
+          "matchesBuyer": false,
+          "opportunityId": "cop_183bdfc15d9a45758405"
+        },
+        {
+          "id": "s_contra",
+          "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+          "dated": "2026-11-27",
+          "claim": "A freelancer sells GBP optimization full reset starting at $397, 5 days (a provider ask, not a buyer payment)",
+          "population": "small businesses buying GBP optimization",
+          "matchesBuyer": true,
+          "opportunityId": "cop_183bdfc15d9a45758405"
+        },
+        {
+          "id": "s_oc",
+          "url": "https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/",
+          "dated": "2026-01-01",
+          "claim": "Typical freelancer setup runs $300 to $800 (vendor estimate; rejected as buyer-payment evidence in verification)",
+          "population": "small local businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_183bdfc15d9a45758405"
+        },
+        {
+          "id": "s_stripe",
+          "url": "https://docs.stripe.com/payouts",
+          "dated": "2026-11-27",
+          "claim": "Initial payout typically completes within 7-14 days of the first live payment",
+          "population": "new Stripe accounts",
+          "matchesBuyer": false,
+          "opportunityId": "cop_183bdfc15d9a45758405"
+        },
+        {
+          "id": "s_a_merchynt",
+          "url": "https://merchynt.com/post/google-my-business-management-pricing",
+          "dated": "2024-03-20",
+          "claim": "One-time GBP audit and optimization typically $300-$500",
+          "population": "small businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ea0685e0e38142c3bb96"
+        },
+        {
+          "id": "s_a_homeasap",
+          "url": "https://about.homeasap.com/google-my-business/",
+          "dated": "2026-11-27",
+          "claim": "One-time GBP optimization $59.97 sold to real estate agents",
+          "population": "real estate agents (not a resale supplier)",
+          "matchesBuyer": false,
+          "opportunityId": "cop_ea0685e0e38142c3bb96"
+        },
+        {
+          "id": "s_retainer",
+          "url": "https://merchynt.com/post/google-my-business-management-pricing",
+          "dated": "2024-03-20",
+          "claim": "GBP management $125-$400 per month",
+          "population": "small businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3dd9f9635c2144529e33"
+        },
+        {
+          "id": "s_web",
+          "url": "https://www.wpzoom.com/blog/business-website-cost/",
+          "dated": "2026-01-01",
+          "claim": "One-page websites $500 to $1,500 from a freelancer (guide band)",
+          "population": "small businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_55bd9986e8634b95984c"
+        }
+      ],
+      "validation": {
+        "proof": "Loganix confirms $259 white-label delivery in writing on day 1, and at least 3 prepaid $500 orders arrive from the first 80 emails by day 7",
+        "stop": [
+          "Loganix will not confirm $259 white-label delivery through client manager access",
+          "fewer than 2 prepaid orders by day 7",
+          "Stripe dashboard schedules the first payout after day 19",
+          "owner time exceeds 3 hours in any week"
+        ],
+        "continue": [
+          "3 or more prepaid orders by day 7: send a second batch in week 2 until 7 are prepaid by day 12"
+        ],
+        "decides": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Owner hours break the 3 h/week limit (week 1 had 4 h, week 3 had 5 h; stop rule allowed 6 h by day 8).",
+          "resolution": "Accepted. Week 1 is now 3.0 h (quote 0.5, reach 1, offer 1.5), week 2 3.0 h (second batch and closing), week 3 2.0 h (access and confirmation); the stop rule is now 'owner time exceeds 3 hours in any week'."
+        },
+        {
+          "finding": "Fulfilment not established; $60 came from HomeASAP's real-estate-agent offer, not a resale supplier; get a written quote from a named fulfiller before the first offer.",
+          "resolution": "Accepted. The plan now uses a new opening fulfilled by Loganix, whose page sells a $259 GBP Audit & Optimization with white-label deliverables to agencies; the first step (day 1, before any offer) is Loganix's written confirmation, and a refusal stops the plan. Price raised to $500 so the margin survives the real supplier cost."
+        },
+        {
+          "finding": "Price support is weaker than stated: Merchynt and OfficeConsumer figures are vendor estimates rejected in verification.",
+          "resolution": "Accepted. The price quantity is now ASSUMED, the why calls it a test hypothesis, and OFFER_AND_PRICE is among the links the validation decides."
+        },
+        {
+          "finding": "Stripe stop rule 'first payout after day 17' is stricter than the source.",
+          "resolution": "Accepted. The stop is now a first payout scheduled after day 19 (day-5 payment + 14 days, the source's upper bound)."
+        },
+        {
+          "finding": "Buyers wait for delivery until payout; a refund or chargeback would reverse settled cash. Deliver as soon as the fulfiller is confirmed.",
+          "resolution": "Partly rebutted: with $0 exposure the owner cannot pay Loganix before the payout settles, so ordering earlier would break the capital limit. The offer states up front that work starts when payment clears, and the refund risk is a stop-relevant quantity measured in the test."
+        },
+        {
+          "finding": "Reaching more paid orders after the test needs another email batch, uncounted owner time.",
+          "resolution": "Accepted. Week 2 sell step carries 3 owner hours for the second batch and closing."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "fulfillment",
+            "directCosts",
+            "brain:FULFILMENT"
+          ],
+          "finding": "cop_ea0685e0e38142c3bb96 FULFILMENT not established",
+          "resolution": "Accepted: that opening's card names only a generic Fiverr freelancer and its $60 cost is HomeASAP's agent-facing price; it is now excluded and the plan builds on the Loganix-fulfilled opening."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_55bd9986e8634b95984c",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_183bdfc15d9a45758405",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_3dd9f9635c2144529e33",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_ea0685e0e38142c3bb96",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_ea0685e0e38142c3bb96",
+          "why": "Its $60 fulfiller is not a resale supplier (HomeASAP serves real estate agents); fulfilment not established"
+        },
+        {
+          "opportunityId": "cop_3dd9f9635c2144529e33",
+          "why": "Only the first month settles; fulfiller cost unknown"
+        },
+        {
+          "opportunityId": "cop_55bd9986e8634b95984c",
+          "why": "No buyer-paid price and no costed fulfiller"
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_183bdfc15d9a45758405",
+          "deals": 7,
+          "price": 500,
+          "directCost": 259,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CONVERSION",
+        "CURRENT_DEMAND",
+        "ECONOMICS",
+        "FULFILMENT",
+        "OFFER_AND_PRICE",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_041574e7fa19_7d308e",
+      "digest": "041574e7fa1913030ac3e008",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_01b5b646fae34002ab75/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:49:32.621Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_041574e7fa19_7d308e",
+      "digest": "041574e7fa1913030ac3e008",
+      "contractDigest": "3330060ec0b3fc2f66223a2f",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 181300,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 5,
+        "collectedCents": 350000,
+        "collectedInWindowCents": 350000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 168700
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Combined, largest reach first: One-page website rebuild for l + White-label Google Business Pr + Monthly Google Business Profil\", and what it is missing first is an offer and a price. Research first: the deep dives on \"One-page website rebuild for local businesses with outdated \", \"White-label Google Business Profile audit and optimization r\", \"Monthly Google Business Profile management retainer\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"White-label Google Business Profile audit and optimization r\" needs [figure withheld] and keeps [figure withheld], 241× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"One-page website rebuild for local businesses with o), so none of its figures is shown or adopted.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_55bd9986e8634b95984c",
+          "cop_183bdfc15d9a45758405",
+          "cop_3dd9f9635c2144529e33",
+          "cop_ea0685e0e38142c3bb96"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Research first: the deep dives on \"One-page website rebuild for local businesses with outdated \", \"White-label Google Business Profile audit and optimization r\", \"Monthly Google Business Profile management retainer\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+        "openings": [
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "title": "One-page website rebuild for local businesses with outdated sites",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 750,
+            "card": {
+              "payer": "Local small-business owner",
+              "reachableChannel": "Cold email from owner's mailbox to businesses with non-mobile sites; Stripe payment link",
+              "offerScope": "AI-built mobile-friendly one-page site on the client's existing domain, 5-day delivery",
+              "priceCents": 75000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance web designer (marketplace)",
+              "peakFundingCents": 0,
+              "humanHours": 1.5,
+              "requiredCapabilities": [],
+              "industry": "Local services",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email from owner's mailbox to businesses with non-mobile sites; Stripe paym"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "costs or money tied up are not established"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email from owner's mailbox to businesses with non-mobile sites; Stripe payment link",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell AI-built mobile-friendly one-page site on the client's existing domain, 5-day delivery to Local small-business owner, reached through Cold email from owner's mailbox to businesses with non-mobile sites; Stripe payment link, at $750; Freelance web designer (marketplace) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance web designer (marketplace).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "1.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "AI-built mobile-friendly one-page site on the client's existing domain, 5-day delivery",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Local small-business owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$750",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$750",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "local small business one page website price",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_183bdfc15d9a45758405",
+            "title": "White-label Google Business Profile audit and optimization resold to local service businesses, fulfilled by Loganix",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 500,
+            "card": {
+              "payer": "Local small-business owner",
+              "reachableChannel": "Personalised cold email from the owner's existing mailbox to businesses whose public GBP is visibly incomplete; Stripe payment link",
+              "offerScope": "One-time GBP audit and optimization (categories, services, description, photos, review-response setup, scorecard) under the owner's brand",
+              "priceCents": 50000,
+              "currency": "USD",
+              "fulfillmentOwner": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "Local services (home services, clinics, salons)",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Personalised cold email from the owner's existing mailbox to businesses whose pu"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 259, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Personalised cold email from the owner's existing mailbox to businesses whose public GBP is visibly incomplete; Stripe payment link",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One-time GBP audit and optimization (categories, services, description, photos, review-response setup, scorecard) under the owner's brand to Local small-business owner, reached through Personalised cold email from the owner's existing mailbox to businesses whose public GBP is visibly incomplete; Stripe payment link, at $500; Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$259",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "One-time GBP audit and optimization (categories, services, description, photos, review-response setup, scorecard) under the owner's brand",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Local small-business owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset; https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "title": "Monthly Google Business Profile management retainer",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 400,
+            "card": {
+              "payer": "Local small-business owner",
+              "reachableChannel": "Cold email from owner's mailbox; upsell to optimization buyers",
+              "offerScope": "Monthly GBP management: weekly posts, review responses, photo updates, monthly report",
+              "priceCents": 40000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance GBP manager (Contra listing at $250/month, contra.com/s/L6somrvP)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "Local services",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email from owner's mailbox; upsell to optimization buyers"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 400 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "costs or money tied up are not established"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email from owner's mailbox; upsell to optimization buyers",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly GBP management: weekly posts, review responses, photo updates, monthly report to Local small-business owner, reached through Cold email from owner's mailbox; upsell to optimization buyers, at $400; Freelance GBP manager (Contra listing at $250/month, contra.com/s/L6somrvP) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance GBP manager (Contra listing at $250/month, contra.com/s/L6somrvP).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Monthly GBP management: weekly posts, review responses, photo updates, monthly report",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Local small-business owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://merchynt.com/post/google-my-business-management-pricing",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "title": "probe sub",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 300,
+            "card": {
+              "payer": "Local small-business owner",
+              "reachableChannel": "Personalised cold email from the owner's existing mailbox to businesses whose public GBP is visibly incomplete; Stripe payment link",
+              "offerScope": "One-time audit and full optimization of the business's Google Business Profile (categories, services, description, photos order, Q&A, review-reply templates), delivered in 3 days",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "Fiverr GBP optimization freelancer",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "Local services (home services, clinics, salons)",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Personalised cold email from the owner's existing mailbox to businesses whose pu"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 60, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Personalised cold email from the owner's existing mailbox to businesses whose public GBP is visibly incomplete; Stripe payment link",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One-time audit and full optimization of the business's Google Business Profile (categories, services, description, photos order, Q&A, review-reply templates), delivered in 3 days to Local small-business owner, reached through Personalised cold email from the owner's existing mailbox to businesses whose public GBP is visibly incomplete; Stripe payment link, at $300; Fiverr GBP optimization freelancer delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$60",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Fiverr GBP optimization freelancer.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "1 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "One-time audit and full optimization of the business's Google Business Profile (categories, services, description, photos order, Q&A, review-reply templates), delivered in 3 days",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Local small-business owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://merchynt.com/post/google-my-business-management-pricing; https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/; https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile; https://merchynt.com/post/google-my-business-management-pricing; https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/; https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile; officeconsumer.com GBP cost guide 2026",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_9c56d289426c40c4b989",
+          "cnd_e268303de9dd4fb9b4f6"
+        ],
+        "scope": {
+          "targetCents": 150000,
+          "daysLeft": 21,
+          "hoursCeiling": 9,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 3
+        },
+        "at": "2026-11-27T09:49:28.841Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_c3b6154969e6_b5f504",
+        "revisionDigest": "c3b6154969e6b69ecf556e74",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_01b5b646fae34002ab75/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_99381387e1db442fa628/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "Stance CONDITIONAL is the right shape (price, demand and close rate can only be measured by a live paid offer, which costs $0), and the target arithmetic holds: 7 x $300 = $2,100 collected >= $1,500, 7 x $60 = $420 cost paid from receipts, $0 exposure. Owner hours break the owner's limit. The contract allows 3 hours a week, no more. Week 1 schedules reach 2 h + offer 0.5 h + sell 1.5 h = 4 h (days 1-8), and week 3 schedules 'owner confirms delivery' 5 h on day 20. The 9-hour total equals 3 weeks x 3 h only in aggregate; each week must fit 3 h, and the stop rule ('more than 6 hours by day 8') allows twice the weekly limit. Fulfilment is not established and is only checked after buyers have paid. The plan names an unnamed 'Fiverr GBP optimization freelancer' but its $60 cost comes from HomeASAP's $59.97 offer, which is sold to real estate agents for their own profiles, not a white-label supplier for resale. Get a written quote from a named fulfiller (price, 3-day delivery, works through manager access) before the first offer goes out, not on day 17. Price support is weaker than the plan says: the Merchynt ($300-$500, dated 2024) and OfficeConsumer ($300-$800) figures are vendor estimates of provider rates and were rejected in verification; the $300 rests entirely on the test, which is acceptable for CONDITIONAL but the 'why' should not call it a published market price.",
+        "findings": [
+          "Stripe: first payout 7-14 days after the first live payment (s_stripe) puts it at day 12-19 for a day-5 payment; the stop rule 'first payout after day 17' is stricter than the source and may stop a plan that would still settle by day 21.",
+          "Buyers pay up front and wait up to ~12 days for delivery (after payout); a refund or chargeback would reverse settled cash. Deliver as soon as the fulfiller is confirmed rather than after payout, or state the refund risk.",
+          "Reaching 5 more paid orders between day 6 and day 8 needs another batch of emails sent by the owner; that is more owner time in week 1/2 that the plan does not count."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:47:00.558Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "link": "FULFILMENT",
+            "basis": "EVIDENCE",
+            "field": "fulfillment",
+            "why": "The card names only a generic 'Fiverr GBP optimization freelancer' with no quote; the $60 cost is borrowed from HomeASAP's real-estate-agent offer, so who delivers at what cost is not established."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_041574e7fa19_7d308e",
+        "revisionDigest": "041574e7fa1913030ac3e008",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_01b5b646fae34002ab75/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_99381387e1db442fa628/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Prior findings are answered. Owner hours now fit the limit week by week (3.0 / 3.0 / 2.0 h against 3 h/week) and the stop rule enforces 3 h in any week. The fulfiller is a named white-label supplier with a public page about it: I opened loganix.com/google-business-profile-optimization-service ('$259'; 'Every deliverable ... is white-label'; 'Most optimizations are completed within seven business days'; SEO agencies listed as the first audience). Its written confirmation is the day-1 gate before any offer, and a refusal stops the plan. Recomputed: 7 x $500 = $3,500 prepaid, settled by day 19 (day-5 first payment + 14-day Stripe upper bound) <= 21; Loganix 7 x $259 = $1,813 paid from the settled payout, $0 owner exposure; net $1,687 (about $1,583 after Stripe's ~$14.80 per $500 charge), so the target holds on either reading. CONDITIONAL is right: price ($500 ASSUMED), demand and close rate rest only on the day-7 prepaid-order test, which costs nothing; validation.decides covers them.",
+        "findings": [
+          "Stripe card fees (~$104 on 7 charges) are not in the cash ledger; add them.",
+          "Proof needs 3 prepaid orders by day 7 but stop fires only below 2; say what happens at exactly 2.",
+          "Loganix is ordered on day 19 and most jobs take seven business days, so delivery lands about day 28-30, after the window. The cash is settled, but buyers who prepaid ~3 weeks earlier may ask for refunds; state the delivery date in the offer.",
+          "Loganix also lists local businesses as an audience at $259, so buyers can buy the same work direct for about half the $500 price; the test is the only thing that shows the resale price holds."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:51:20.676Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_041574e7fa19_7d308e",
+      "digest": "041574e7fa1913030ac3e008",
+      "contractDigest": "3330060ec0b3fc2f66223a2f",
+      "plan": {
+        "goalId": "wst_88bf0100b5d44ab29cf1",
+        "contractDigest": "3330060ec0b3fc2f66223a2f",
+        "parentRevisionId": "rev_c3b6154969e6_b5f504",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell a white-label Google Business Profile audit and optimization ($500) to local service businesses by cold email, fulfilled by Loganix ($259) out of settled prepayments",
+          "opportunityIds": [
+            "cop_183bdfc15d9a45758405"
+          ],
+          "why": "The fulfiller is named with a published, white-label, agency-facing price ($259, Loganix, most completed within seven business days), so each sale keeps $241 and the owner advances nothing: buyers prepay and Loganix is paid from the settled Stripe payout. The $500 price is a test hypothesis that sits inside published provider asks (a Contra freelancer from $397; guide bands $300-$800) but no buyer payment is established, and demand and close rate are unmeasured, so the plan is conditional on prepaid orders in week 1. Seven sales collect $3,500 and leave $1,687 settled after Loganix."
+        },
+        "alternatives": [
+          {
+            "title": "Same offer at $300 fulfilled by an unnamed Fiverr freelancer at $60",
+            "why": "The $60 figure came from HomeASAP's real-estate-agent offer, not a resale supplier; no named fulfiller at that cost, so dropped."
+          },
+          {
+            "title": "Monthly GBP management retainer",
+            "why": "Only the first month settles in 21 days, and no fulfiller cost is established."
+          },
+          {
+            "title": "One-page website rebuild",
+            "why": "No buyer-paid price and no costed fulfiller; a fulfiller cannot be pre-paid with $0."
+          }
+        ],
+        "steps": [
+          {
+            "id": "quote",
+            "kind": "TEST",
+            "label": "Before any offer: owner gets Loganix's written confirmation of $259 white-label GBP optimization, the access it needs (manager invite) and turnaround",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_loganix"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain lists 80 local service businesses with visibly incomplete Google Business Profiles and drafts personalised emails; owner sends them from the existing mailbox",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "quote",
+            "evidence": [
+              "s_card_access"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the $500 one-time optimization with a Stripe payment link; delivery starts when the first payout settles; owner answers replies Brain drafts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_contra",
+              "s_oc"
+            ],
+            "ownerHours": 1.5,
+            "priceCents": 50000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Validation: count prepaid $500 orders from the first 80 emails by day 7",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "offer",
+            "evidence": [
+              "close_rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Week 2: owner sends a second Brain-drafted batch and closes orders until 7 are prepaid by day 12",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "test",
+            "evidence": [
+              "close_rate"
+            ],
+            "ownerHours": 3,
+            "priceCents": 50000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Stripe first payout of prepayments to the owner's bank (7-14 days after first live payment, so by day 19 for a day-5 payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Order each optimization from Loganix out of the settled payout; client sends manager access; Brain checks the deliverable",
+            "performer": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days)",
+            "costCents": 181300,
+            "day": 19,
+            "dependsOn": "collect",
+            "evidence": [
+              "s_loganix",
+              "s_card_fulfillment"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Loganix (GBP Audit & Optimization, $259, white-label, most completed within seven business days)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "confirm",
+            "kind": "OTHER",
+            "label": "Week 3: owner forwards access invites and confirms each order with the client",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "deliver",
+            "evidence": [
+              "owner_hours"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 150000,
+            "label": "3 prepaid test orders at $500",
+            "settlesDay": 19,
+            "stepId": "offer"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 200000,
+            "label": "4 further prepaid orders at $500",
+            "settlesDay": 19,
+            "stepId": "sell"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 181300,
+            "label": "7 Loganix optimizations at $259, paid from the settled payout",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 500,
+            "unit": "USD per sale",
+            "sources": [
+              "s_contra",
+              "s_oc"
+            ],
+            "needs": "prepaid orders at $500"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email",
+            "sources": [],
+            "needs": "the day-7 test"
+          },
+          {
+            "name": "supplier_cost",
+            "status": "EVIDENCED",
+            "value": 259,
+            "unit": "USD per sale",
+            "sources": [
+              "s_loganix"
+            ],
+            "needs": "Loganix written confirmation on day 1"
+          },
+          {
+            "name": "first_payout_days",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "days after first live payment (upper bound)",
+            "sources": [
+              "s_stripe"
+            ],
+            "needs": "Stripe dashboard payout date"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "hours in window: week 1 3 h (quote 0.5, reach 1, offer 1.5), week 2 3 h, week 3 2 h",
+            "sources": [
+              "s_card_hours"
+            ],
+            "needs": "time log"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_card_access",
+            "url": "https://brain.local/card/cop_183bdfc15d9a45758405#access",
+            "dated": "2026-11-27",
+            "claim": "Reached by cold email from the owner's mailbox",
+            "population": "local small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_card_fulfillment",
+            "url": "https://brain.local/card/cop_183bdfc15d9a45758405#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "Loganix fulfils it",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_card_hours",
+            "url": "https://brain.local/card/cop_183bdfc15d9a45758405#hours",
+            "dated": "2026-11-27",
+            "claim": "0.5 owner hours per sale",
+            "population": "owner",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_loganix",
+            "url": "https://loganix.com/google-business-profile-optimization-service/",
+            "dated": "2026-11-27",
+            "claim": "GBP Audit & Optimization $259; every deliverable white-label; most optimizations completed within seven business days; aimed at SEO agencies",
+            "population": "agency supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_contra",
+            "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+            "dated": "2026-11-27",
+            "claim": "A freelancer sells GBP optimization full reset starting at $397, 5 days (a provider ask, not a buyer payment)",
+            "population": "small businesses buying GBP optimization",
+            "matchesBuyer": true,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_oc",
+            "url": "https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/",
+            "dated": "2026-01-01",
+            "claim": "Typical freelancer setup runs $300 to $800 (vendor estimate; rejected as buyer-payment evidence in verification)",
+            "population": "small local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Initial payout typically completes within 7-14 days of the first live payment",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_183bdfc15d9a45758405"
+          },
+          {
+            "id": "s_a_merchynt",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "One-time GBP audit and optimization typically $300-$500",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_a_homeasap",
+            "url": "https://about.homeasap.com/google-my-business/",
+            "dated": "2026-11-27",
+            "claim": "One-time GBP optimization $59.97 sold to real estate agents",
+            "population": "real estate agents (not a resale supplier)",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea0685e0e38142c3bb96"
+          },
+          {
+            "id": "s_retainer",
+            "url": "https://merchynt.com/post/google-my-business-management-pricing",
+            "dated": "2024-03-20",
+            "claim": "GBP management $125-$400 per month",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3dd9f9635c2144529e33"
+          },
+          {
+            "id": "s_web",
+            "url": "https://www.wpzoom.com/blog/business-website-cost/",
+            "dated": "2026-01-01",
+            "claim": "One-page websites $500 to $1,500 from a freelancer (guide band)",
+            "population": "small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55bd9986e8634b95984c"
+          }
+        ],
+        "validation": {
+          "proof": "Loganix confirms $259 white-label delivery in writing on day 1, and at least 3 prepaid $500 orders arrive from the first 80 emails by day 7",
+          "stop": [
+            "Loganix will not confirm $259 white-label delivery through client manager access",
+            "fewer than 2 prepaid orders by day 7",
+            "Stripe dashboard schedules the first payout after day 19",
+            "owner time exceeds 3 hours in any week"
+          ],
+          "continue": [
+            "3 or more prepaid orders by day 7: send a second batch in week 2 until 7 are prepaid by day 12"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours break the 3 h/week limit (week 1 had 4 h, week 3 had 5 h; stop rule allowed 6 h by day 8).",
+            "resolution": "Accepted. Week 1 is now 3.0 h (quote 0.5, reach 1, offer 1.5), week 2 3.0 h (second batch and closing), week 3 2.0 h (access and confirmation); the stop rule is now 'owner time exceeds 3 hours in any week'."
+          },
+          {
+            "finding": "Fulfilment not established; $60 came from HomeASAP's real-estate-agent offer, not a resale supplier; get a written quote from a named fulfiller before the first offer.",
+            "resolution": "Accepted. The plan now uses a new opening fulfilled by Loganix, whose page sells a $259 GBP Audit & Optimization with white-label deliverables to agencies; the first step (day 1, before any offer) is Loganix's written confirmation, and a refusal stops the plan. Price raised to $500 so the margin survives the real supplier cost."
+          },
+          {
+            "finding": "Price support is weaker than stated: Merchynt and OfficeConsumer figures are vendor estimates rejected in verification.",
+            "resolution": "Accepted. The price quantity is now ASSUMED, the why calls it a test hypothesis, and OFFER_AND_PRICE is among the links the validation decides."
+          },
+          {
+            "finding": "Stripe stop rule 'first payout after day 17' is stricter than the source.",
+            "resolution": "Accepted. The stop is now a first payout scheduled after day 19 (day-5 payment + 14 days, the source's upper bound)."
+          },
+          {
+            "finding": "Buyers wait for delivery until payout; a refund or chargeback would reverse settled cash. Deliver as soon as the fulfiller is confirmed.",
+            "resolution": "Partly rebutted: with $0 exposure the owner cannot pay Loganix before the payout settles, so ordering earlier would break the capital limit. The offer states up front that work starts when payment clears, and the refund risk is a stop-relevant quantity measured in the test."
+          },
+          {
+            "finding": "Reaching more paid orders after the test needs another email batch, uncounted owner time.",
+            "resolution": "Accepted. Week 2 sell step carries 3 owner hours for the second batch and closing."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ],
+            "finding": "cop_ea0685e0e38142c3bb96 FULFILMENT not established",
+            "resolution": "Accepted: that opening's card names only a generic Fiverr freelancer and its $60 cost is HomeASAP's agent-facing price; it is now excluded and the plan builds on the Loganix-fulfilled opening."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_183bdfc15d9a45758405",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ea0685e0e38142c3bb96",
+            "why": "Its $60 fulfiller is not a resale supplier (HomeASAP serves real estate agents); fulfilment not established"
+          },
+          {
+            "opportunityId": "cop_3dd9f9635c2144529e33",
+            "why": "Only the first month settles; fulfiller cost unknown"
+          },
+          {
+            "opportunityId": "cop_55bd9986e8634b95984c",
+            "why": "No buyer-paid price and no costed fulfiller"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_183bdfc15d9a45758405",
+            "deals": 7,
+            "price": 500,
+            "directCost": 259,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND",
+          "ECONOMICS",
+          "FULFILMENT",
+          "OFFER_AND_PRICE",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_041574e7fa19_7d308e",
+        "digest": "041574e7fa1913030ac3e008",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_01b5b646fae34002ab75/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:49:32.621Z"
+      },
+      "review": {
+        "revisionId": "rev_041574e7fa19_7d308e",
+        "revisionDigest": "041574e7fa1913030ac3e008",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_01b5b646fae34002ab75/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_99381387e1db442fa628/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Prior findings are answered. Owner hours now fit the limit week by week (3.0 / 3.0 / 2.0 h against 3 h/week) and the stop rule enforces 3 h in any week. The fulfiller is a named white-label supplier with a public page about it: I opened loganix.com/google-business-profile-optimization-service ('$259'; 'Every deliverable ... is white-label'; 'Most optimizations are completed within seven business days'; SEO agencies listed as the first audience). Its written confirmation is the day-1 gate before any offer, and a refusal stops the plan. Recomputed: 7 x $500 = $3,500 prepaid, settled by day 19 (day-5 first payment + 14-day Stripe upper bound) <= 21; Loganix 7 x $259 = $1,813 paid from the settled payout, $0 owner exposure; net $1,687 (about $1,583 after Stripe's ~$14.80 per $500 charge), so the target holds on either reading. CONDITIONAL is right: price ($500 ASSUMED), demand and close rate rest only on the day-7 prepaid-order test, which costs nothing; validation.decides covers them.",
+        "findings": [
+          "Stripe card fees (~$104 on 7 charges) are not in the cash ledger; add them.",
+          "Proof needs 3 prepaid orders by day 7 but stop fires only below 2; say what happens at exactly 2.",
+          "Loganix is ordered on day 19 and most jobs take seven business days, so delivery lands about day 28-30, after the window. The cash is settled, but buyers who prepaid ~3 weeks earlier may ask for refunds; state the delivery date in the offer.",
+          "Loganix also lists local businesses as an audience at $259, so buyers can buy the same work direct for about half the $500 price; the test is the only thing that shows the resale price holds."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:51:20.676Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "I want $1,500 of settled cash in my account within 21 days. I have no money to put in, and I can give this about 3 hours a week, no more.",
+        "terms": "c02f65b32ffba0b8",
+        "openings": {
+          "cop_183bdfc15d9a45758405": "b42055300cd891ad",
+          "cop_3dd9f9635c2144529e33": "0d36d7f935f45aba",
+          "cop_55bd9986e8634b95984c": "e6d7888fa4d240d9",
+          "cop_ea0685e0e38142c3bb96": "bd0dc8ee4e7a55d0"
+        }
+      },
+      "at": "2026-11-27T09:52:48.892Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

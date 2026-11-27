@@ -60,6 +60,9 @@ describe('the audit cases that motivated it (fresh-plan audit, 2026-11-24)', () 
     expect(arrangementExclusion(varroa, goal)).toBeNull();
     expect(arrangementExclusion({ ...varroa, payer: 'Dairy farms enrolled in the federal margin coverage program' }, goal)).toBeNull();
     expect(arrangementExclusion({ ...varroa, payer: 'Contractors who are members of the state apprenticeship program' }, goal)).toBeNull();
+    // A job title naming a program is a person who buys (run 8, ah-06: "Ice rink program directors").
+    expect(arrangementExclusion({ ...varroa, payer: 'Ice rink program directors' }, goal)).toBeNull();
+    expect(arrangementExclusion({ ...varroa, payer: 'Hospital volunteer program managers' }, goal)).toBeNull();
     // Controls: a program or funder that IS the payer still pays out, and is still excluded.
     expect(arrangementExclusion({ ...varroa, payer: 'The state apiary program' }, goal)).toMatch(/not a sale/);
     expect(arrangementExclusion({ ...varroa, payer: 'Riverside community foundation, registered with the state' }, goal)).toMatch(/not a sale/);

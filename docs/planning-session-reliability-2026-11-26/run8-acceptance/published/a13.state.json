@@ -1,0 +1,1496 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_e1b4ba5065d642a9b4e6",
+      "words": "Collect $4,500 of settled cash within 30 days with no more than 3 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 450000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "Settled cash received totals the target within the window",
+        "ownerHoursPerWeek": 3,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "d4a88a9cc941c7b0bda67758"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_e1b4ba5065d642a9b4e6",
+        "contractDigest": "7dcf74c808b8b42295aff924",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Owner prepares the eight signed wildlife permit filings for taxidermy studios",
+          "opportunityIds": [
+            "cop_7d160d3964de4b63add8"
+          ],
+          "why": "Eight taxidermy studios signed engagement letters (eight written acceptances) at $650 per permit filing = $5,200, above the $4,500 target. The card names the owner as fulfiller (offer scope: 'prepared by the owner'), direct cost $0 and exposure $0, so no capital is needed; time to first cash is 7 days against 30. The owner's work is 8 x 7 = 56 hours over the window; the objective sets no owner-hours ceiling."
+        },
+        "alternatives": [
+          {
+            "title": "Find more studios",
+            "why": "Not needed: the eight signed letters exceed the target; buyer volume beyond them is uncounted."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the eight signed engagement letters and collect each studio's permit details",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "agreements"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Owner prepares and files the eight wildlife import/export permit filings (7 hours each)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "ownerHours": 56,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice each studio on filing and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "price",
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 520000,
+            "label": "Eight studio payments of $650",
+            "settlesDay": 17,
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 17,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "engagement letters",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per filing",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per filing",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "USD",
+            "sources": [
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per filing",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "hours",
+            "sources": [
+              "fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#price",
+            "dated": "2026-11-24",
+            "claim": "Eight taxidermy studios signed engagement letters at $650 per permit filing.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally (7 human hours per filing on the card).",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $0.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to first cash.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "exposure",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#exposure",
+            "dated": "2026-11-24",
+            "claim": "Exposure $0.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "payer",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer is taxidermy studio owners.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "deals": 8,
+            "price": 650,
+            "directCost": 0,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_9ad3329c9078_1a699d",
+        "digest": "9ad3329c9078eefff37674d5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6f0107f6dedc475a83df/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:14.325Z"
+      },
+      {
+        "goalId": "wst_e1b4ba5065d642a9b4e6",
+        "contractDigest": "7dcf74c808b8b42295aff924",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Owner prepares the eight signed wildlife permit filings for taxidermy studios",
+          "opportunityIds": [
+            "cop_7d160d3964de4b63add8"
+          ],
+          "why": "Eight taxidermy studios signed engagement letters (eight written acceptances) at $650 per permit filing = $5,200, above the $4,500 target. The card names the owner as fulfiller (offer scope: 'prepared by the owner'), direct cost $0 and exposure $0, so no capital is needed; time to first cash is 7 days against 30. The owner's work is 8 x 7 = 56 hours over the window; the objective sets no owner-hours ceiling."
+        },
+        "alternatives": [
+          {
+            "title": "Find more studios",
+            "why": "Not needed: the eight signed letters exceed the target; buyer volume beyond them is uncounted."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner confirms 56 hours of availability in the window and completes the first filing",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "fulfillment"
+            ],
+            "ownerHours": 7,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the eight signed engagement letters and collect each studio's permit details",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "agreements"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Owner prepares and files the remaining seven wildlife import/export permit filings (7 hours each)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "ownerHours": 49,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice each studio on filing and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "price",
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 520000,
+            "label": "Eight studio payments of $650",
+            "settlesDay": 17,
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "engagement letters",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per filing",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per filing",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "USD",
+            "sources": [
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per filing",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "hours",
+            "sources": [
+              "fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours available in window",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "hours",
+            "sources": [],
+            "needs": "The owner states how many hours they can give in the 30 days (56 needed)"
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#price",
+            "dated": "2026-11-24",
+            "claim": "Eight taxidermy studios signed engagement letters at $650 per permit filing.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally (7 human hours per filing on the card).",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $0.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to first cash.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "exposure",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#exposure",
+            "dated": "2026-11-24",
+            "claim": "Exposure $0.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "payer",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer is taxidermy studio owners.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          }
+        ],
+        "validation": {
+          "proof": "The owner confirms at least 56 hours available within the 30-day window and delivers the first filing (7 hours) by day 5, with the studio invoiced",
+          "stop": [
+            "The owner cannot commit 56 hours inside the window (fewer than 7 filings' worth, i.e. under 49 hours, cannot reach $4,500)",
+            "The first filing is not delivered by day 5"
+          ],
+          "continue": [
+            "Owner commits >= 56 hours and the first filing is delivered and invoiced by day 5"
+          ],
+          "decides": [
+            "FULFILMENT"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "deals": 8,
+            "price": 650,
+            "directCost": 0,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "link": "FULFILMENT",
+            "reason": "Brain marks FULFILMENT ok on 'The owner, personally (a person says so)', but the fulfiller is the owner and the work is 8 x 7 = 56 owner hours (card humanHours 7 per filing); the goal states no owner hours, so the owner's availability for that work is unknown until the owner commits it."
+          }
+        ],
+        "revisionId": "rev_0684eecb8e2c_46220c",
+        "digest": "0684eecb8e2c764329110055",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6f0107f6dedc475a83df/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:37.276Z"
+      },
+      {
+        "goalId": "wst_e1b4ba5065d642a9b4e6",
+        "contractDigest": "d4a88a9cc941c7b0bda67758",
+        "parentRevisionId": "rev_0684eecb8e2c_46220c",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan within 3 owner hours a week: the signed filings need 49+ owner hours",
+          "opportunityIds": [],
+          "why": "The objective now limits the owner to 3 hours a week, 13 hours over the 30-day window. The only opening's fulfiller is the owner personally at 7 hours per filing (card humanHours). Reaching $4,500 at $650 per filing needs 7 filings = 49 owner hours (all eight signed letters = 56); 13 hours covers one filing ($650). No other fulfiller is on record."
+        },
+        "alternatives": [
+          {
+            "title": "Subcontract the filings",
+            "why": "No subcontractor, quote or cost is on record for this work; the card names only the owner."
+          },
+          {
+            "title": "Do fewer filings",
+            "why": "13 hours allows one filing (13/7), $650 of the $4,500."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research a subcontracted preparer for wildlife import/export permit filings (quote, cost, turnaround) so the owner is not the fulfiller",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "fulfillment"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per filing",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "hours",
+            "sources": [
+              "fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "engagement letters",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per filing",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for the target",
+            "status": "EVIDENCED",
+            "value": 49,
+            "unit": "hours",
+            "sources": [
+              "fulfillment",
+              "price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#price",
+            "dated": "2026-11-24",
+            "claim": "Eight taxidermy studios signed engagement letters at $650 per permit filing.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally; card humanHours 7 per filing.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $0.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "FULFILMENT within the owner-hours limit: the only fulfiller is the owner at 7 hours per filing, and the target needs 7 filings (49 hours) against 13 owner hours in the window.",
+          "resolution": "Raise the owner-time allowance to at least 49 hours over the 30 days (about 11.5 hours a week; 13 hours a week for all eight letters), or find and contract another preparer for the filings at a cost below $650 each.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The first-filing test also checks the owner can actually prepare the filings, which rests only on a person's word.",
+            "resolution": "Accepted as a caveat; moot now, because the new 3 hours/week limit rules the owner-fulfilled plan out on hours alone."
+          },
+          {
+            "finding": "Seven remaining filings (49 h) by day 10 needs ~5 h/day.",
+            "resolution": "Superseded: the owner now allows 3 hours a week (13 in the window), so 49 hours cannot fit at any pace; the plan is NO_PLAN with an OWNER_HOURS constraint."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "why": "Owner-fulfilled at 7 hours per filing; 49 hours needed against 13 allowed."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 49 owner hours over the 30 days (~11.5 h/week) for 7 filings, or 56 hours for all eight",
+            "basis": [
+              {
+                "opportunityId": "cop_7d160d3964de4b63add8",
+                "field": "fulfillment"
+              },
+              {
+                "opportunityId": "cop_7d160d3964de4b63add8",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "link": "FULFILMENT",
+            "reason": "Brain marks FULFILMENT ok ('The owner, personally'), but the fulfiller's work is the owner's: 7 hours per filing (card humanHours) x 7 filings = 49 hours against the goal's 13-hour ceiling (3 h/week); the owner cannot fulfil enough deals within the limit, and Brain's own run says the agreed deals need 56 owner hours, more than 13."
+          }
+        ],
+        "revisionId": "rev_776517f91a93_289af0",
+        "digest": "776517f91a93211d978ae940",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6f0107f6dedc475a83df/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:43:18.612Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_e1b4ba5065d642a9b4e6",
+      "contractDigest": "d4a88a9cc941c7b0bda67758",
+      "parentRevisionId": "rev_0684eecb8e2c_46220c",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan within 3 owner hours a week: the signed filings need 49+ owner hours",
+        "opportunityIds": [],
+        "why": "The objective now limits the owner to 3 hours a week, 13 hours over the 30-day window. The only opening's fulfiller is the owner personally at 7 hours per filing (card humanHours). Reaching $4,500 at $650 per filing needs 7 filings = 49 owner hours (all eight signed letters = 56); 13 hours covers one filing ($650). No other fulfiller is on record."
+      },
+      "alternatives": [
+        {
+          "title": "Subcontract the filings",
+          "why": "No subcontractor, quote or cost is on record for this work; the card names only the owner."
+        },
+        {
+          "title": "Do fewer filings",
+          "why": "13 hours allows one filing (13/7), $650 of the $4,500."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Research a subcontracted preparer for wildlife import/export permit filings (quote, cost, turnaround) so the owner is not the fulfiller",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "fulfillment"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "owner hours per filing",
+          "status": "EVIDENCED",
+          "value": 7,
+          "unit": "hours",
+          "sources": [
+            "fulfillment"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signed buyers",
+          "status": "EVIDENCED",
+          "value": 8,
+          "unit": "engagement letters",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per filing",
+          "status": "EVIDENCED",
+          "value": 650,
+          "unit": "USD",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "owner hours needed for the target",
+          "status": "EVIDENCED",
+          "value": 49,
+          "unit": "hours",
+          "sources": [
+            "fulfillment",
+            "price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "price",
+          "url": "https://brain.local/card/cop_7d160d3964de4b63add8#price",
+          "dated": "2026-11-24",
+          "claim": "Eight taxidermy studios signed engagement letters at $650 per permit filing.",
+          "population": "Taxidermy studio owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_7d160d3964de4b63add8"
+        },
+        {
+          "id": "fulfillment",
+          "url": "https://brain.local/card/cop_7d160d3964de4b63add8#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "The owner does the work personally; card humanHours 7 per filing.",
+          "population": "Taxidermy studio owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_7d160d3964de4b63add8"
+        },
+        {
+          "id": "directCosts",
+          "url": "https://brain.local/card/cop_7d160d3964de4b63add8#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $0.",
+          "population": "Taxidermy studio owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_7d160d3964de4b63add8"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "FULFILMENT within the owner-hours limit: the only fulfiller is the owner at 7 hours per filing, and the target needs 7 filings (49 hours) against 13 owner hours in the window.",
+        "resolution": "Raise the owner-time allowance to at least 49 hours over the 30 days (about 11.5 hours a week; 13 hours a week for all eight letters), or find and contract another preparer for the filings at a cost below $650 each.",
+        "decisiveLinks": [
+          "FULFILMENT"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "The first-filing test also checks the owner can actually prepare the filings, which rests only on a person's word.",
+          "resolution": "Accepted as a caveat; moot now, because the new 3 hours/week limit rules the owner-fulfilled plan out on hours alone."
+        },
+        {
+          "finding": "Seven remaining filings (49 h) by day 10 needs ~5 h/day.",
+          "resolution": "Superseded: the owner now allows 3 hours a week (13 in the window), so 49 hours cannot fit at any pace; the plan is NO_PLAN with an OWNER_HOURS constraint."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_7d160d3964de4b63add8",
+          "missing": [
+            "FULFILMENT"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_7d160d3964de4b63add8",
+          "why": "Owner-fulfilled at 7 hours per filing; 49 hours needed against 13 allowed."
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "FULFILMENT"
+      ],
+      "constraints": [
+        {
+          "constraint": "OWNER_HOURS",
+          "suggestion": "Allow at least 49 owner hours over the 30 days (~11.5 h/week) for 7 filings, or 56 hours for all eight",
+          "basis": [
+            {
+              "opportunityId": "cop_7d160d3964de4b63add8",
+              "field": "fulfillment"
+            },
+            {
+              "opportunityId": "cop_7d160d3964de4b63add8",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [
+        {
+          "opportunityId": "cop_7d160d3964de4b63add8",
+          "link": "FULFILMENT",
+          "reason": "Brain marks FULFILMENT ok ('The owner, personally'), but the fulfiller's work is the owner's: 7 hours per filing (card humanHours) x 7 filings = 49 hours against the goal's 13-hour ceiling (3 h/week); the owner cannot fulfil enough deals within the limit, and Brain's own run says the agreed deals need 56 owner hours, more than 13."
+        }
+      ],
+      "revisionId": "rev_776517f91a93_289af0",
+      "digest": "776517f91a93211d978ae940",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_6f0107f6dedc475a83df/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:43:18.612Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_776517f91a93_289af0",
+      "digest": "776517f91a93211d978ae940",
+      "contractDigest": "d4a88a9cc941c7b0bda67758",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: the agreed deals need 56 owner hours, more than the 13 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4532× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Taxidermy studio owners — Wildlife import/expor\" needs [figure withheld] and keeps [figure withheld], 649× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Taxidermy studio owners\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_7d160d3964de4b63add8"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Taxidermy studio owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Taxidermy studio owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 1.2996772401581602
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 4500 USD still needed — the openings held reach at most 5200 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "title": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 4500,
+            "potentialReach": 4500,
+            "card": {
+              "payer": "Taxidermy studio owners",
+              "reachableChannel": "Signed engagement letters",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:32:15.885Z",
+              "offerScope": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+              "priceCents": 65000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 7,
+              "requiredCapabilities": [],
+              "industry": "taxidermy studios",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Wildlife import/export permit filings for taxidermy studios, prepared by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed engagement letters"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 5200 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 5200 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by The owner, personally (a person says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Wildlife import/export permit filings for taxidermy studios, prepared by the owner to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Taxidermy studio owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Eight taxidermy studios signed engagement letters at $650 per permit filing.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 450000,
+          "daysLeft": 30,
+          "hoursCeiling": 13,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 3
+        },
+        "at": "2026-11-27T09:42:15.227Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_0684eecb8e2c_46220c",
+        "revisionDigest": "0684eecb8e2c764329110055",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6f0107f6dedc475a83df/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_ca171d1110044534bdeb/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Recomputed: 8 WRITTEN_ACCEPTANCE letters x $650 = $5,200 >= $4,500; 7 filings ($4,550) is the minimum, i.e. 49 owner hours at 7 h/filing; all eight = 56 hours. Direct cost $0, exposure $0, first cash 7 days; ledger receipt $5,200 settles day 17 of 30. The fulfiller is the owner (card fulfillmentOwner 'The owner, personally', a PERSON fact), and the goal states no owner hours; unknown hours are unknown, not zero, so FULFILMENT is not established and EXECUTABLE would be wrong. The author's disagreement with Brain's FULFILMENT ok is correct. CONDITIONAL is right: everything else is evidenced, and the plan rests on one unknown measured at the start (owner commits >=56 h and delivers the first filing by day 5). Proof/stop/continue are stated and the stop threshold (under 49 h cannot reach $4,500) matches the arithmetic; validation.decides = FULFILMENT.",
+        "findings": [
+          "The first-filing test also checks the owner can actually prepare wildlife import/export permit filings, which today rests only on a person's word.",
+          "Seven remaining filings (49 h) delivered by day 10 needs ~5 h/day from day 5; if the owner commits fewer hours per day, the deliver/collect days should move but still fit before day 23 (7-day settlement)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:39:11.936Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_776517f91a93_289af0",
+        "revisionDigest": "776517f91a93211d978ae940",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6f0107f6dedc475a83df/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_ca171d1110044534bdeb/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The contract now limits the owner to 3 hours/week: 3 x 30/7 = 12.9 hours in the window. Recomputed: $4,500 at $650 needs ceil(4500/650) = 7 filings x 7 h (card humanHours) = 49 hours; 12.9 hours covers 1 filing ($650). The only recorded fulfiller is the owner personally (offer scope 'prepared by the owner'), so this is a real OWNER_HOURS constraint, not missing evidence; NO_PLAN with that constraint and FULFILMENT as the decisive link is right, matching Brain's 56 > 13 hours finding. Subcontracting is correctly not assumed: no preparer, quote or cost is on record, and the signed letters are for owner-prepared filings.",
+        "findings": [
+          "If a subcontractor is found, check that the eight studios accept a filing not prepared by the owner, since the agreed deliverable names the owner.",
+          "Precise ceiling is 12.9 hours, not 13; the conclusion is unchanged."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:44:09.427Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_776517f91a93_289af0",
+      "digest": "776517f91a93211d978ae940",
+      "contractDigest": "d4a88a9cc941c7b0bda67758",
+      "plan": {
+        "goalId": "wst_e1b4ba5065d642a9b4e6",
+        "contractDigest": "d4a88a9cc941c7b0bda67758",
+        "parentRevisionId": "rev_0684eecb8e2c_46220c",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan within 3 owner hours a week: the signed filings need 49+ owner hours",
+          "opportunityIds": [],
+          "why": "The objective now limits the owner to 3 hours a week, 13 hours over the 30-day window. The only opening's fulfiller is the owner personally at 7 hours per filing (card humanHours). Reaching $4,500 at $650 per filing needs 7 filings = 49 owner hours (all eight signed letters = 56); 13 hours covers one filing ($650). No other fulfiller is on record."
+        },
+        "alternatives": [
+          {
+            "title": "Subcontract the filings",
+            "why": "No subcontractor, quote or cost is on record for this work; the card names only the owner."
+          },
+          {
+            "title": "Do fewer filings",
+            "why": "13 hours allows one filing (13/7), $650 of the $4,500."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research a subcontracted preparer for wildlife import/export permit filings (quote, cost, turnaround) so the owner is not the fulfiller",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "fulfillment"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per filing",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "hours",
+            "sources": [
+              "fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "engagement letters",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per filing",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for the target",
+            "status": "EVIDENCED",
+            "value": 49,
+            "unit": "hours",
+            "sources": [
+              "fulfillment",
+              "price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#price",
+            "dated": "2026-11-24",
+            "claim": "Eight taxidermy studios signed engagement letters at $650 per permit filing.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally; card humanHours 7 per filing.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_7d160d3964de4b63add8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $0.",
+            "population": "Taxidermy studio owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7d160d3964de4b63add8"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "FULFILMENT within the owner-hours limit: the only fulfiller is the owner at 7 hours per filing, and the target needs 7 filings (49 hours) against 13 owner hours in the window.",
+          "resolution": "Raise the owner-time allowance to at least 49 hours over the 30 days (about 11.5 hours a week; 13 hours a week for all eight letters), or find and contract another preparer for the filings at a cost below $650 each.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The first-filing test also checks the owner can actually prepare the filings, which rests only on a person's word.",
+            "resolution": "Accepted as a caveat; moot now, because the new 3 hours/week limit rules the owner-fulfilled plan out on hours alone."
+          },
+          {
+            "finding": "Seven remaining filings (49 h) by day 10 needs ~5 h/day.",
+            "resolution": "Superseded: the owner now allows 3 hours a week (13 in the window), so 49 hours cannot fit at any pace; the plan is NO_PLAN with an OWNER_HOURS constraint."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "why": "Owner-fulfilled at 7 hours per filing; 49 hours needed against 13 allowed."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 49 owner hours over the 30 days (~11.5 h/week) for 7 filings, or 56 hours for all eight",
+            "basis": [
+              {
+                "opportunityId": "cop_7d160d3964de4b63add8",
+                "field": "fulfillment"
+              },
+              {
+                "opportunityId": "cop_7d160d3964de4b63add8",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_7d160d3964de4b63add8",
+            "link": "FULFILMENT",
+            "reason": "Brain marks FULFILMENT ok ('The owner, personally'), but the fulfiller's work is the owner's: 7 hours per filing (card humanHours) x 7 filings = 49 hours against the goal's 13-hour ceiling (3 h/week); the owner cannot fulfil enough deals within the limit, and Brain's own run says the agreed deals need 56 owner hours, more than 13."
+          }
+        ],
+        "revisionId": "rev_776517f91a93_289af0",
+        "digest": "776517f91a93211d978ae940",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6f0107f6dedc475a83df/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:43:18.612Z"
+      },
+      "review": {
+        "revisionId": "rev_776517f91a93_289af0",
+        "revisionDigest": "776517f91a93211d978ae940",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6f0107f6dedc475a83df/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_ca171d1110044534bdeb/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The contract now limits the owner to 3 hours/week: 3 x 30/7 = 12.9 hours in the window. Recomputed: $4,500 at $650 needs ceil(4500/650) = 7 filings x 7 h (card humanHours) = 49 hours; 12.9 hours covers 1 filing ($650). The only recorded fulfiller is the owner personally (offer scope 'prepared by the owner'), so this is a real OWNER_HOURS constraint, not missing evidence; NO_PLAN with that constraint and FULFILMENT as the decisive link is right, matching Brain's 56 > 13 hours finding. Subcontracting is correctly not assumed: no preparer, quote or cost is on record, and the signed letters are for owner-prepared filings.",
+        "findings": [
+          "If a subcontractor is found, check that the eight studios accept a filing not prepared by the owner, since the agreed deliverable names the owner.",
+          "Precise ceiling is 12.9 hours, not 13; the conclusion is unchanged."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:44:09.427Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,500 of settled cash within 30 days with no more than 3 hours a week of owner time.",
+        "terms": "5c9ba55e1ecb2348",
+        "openings": {
+          "cop_7d160d3964de4b63add8": "72008527e7f692cb"
+        }
+      },
+      "at": "2026-11-27T09:45:33.180Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

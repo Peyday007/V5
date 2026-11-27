@@ -319,7 +319,7 @@ const EMPLOYMENT_FRAME = /\bW-?2\b|\b\d+\s+hours (?:a|per) week\b|\b(?:with|plus
  * foundation-repair contractors read as paid by a grant-making foundation, so its price was
  * no price and the plan could not reach anything).
  */
-const FUNDER_BODY = /\b(?:foundations?(?!\s+(?:repair|repairs|crack|cracks|waterproofing|leveling|levelling|inspection|inspections|contractors?|work|works|drilling|pouring)\b)|endowments?|grantmakers?|funds?|arts councils?|development councils?|institutes?|institute of|programs?|programmes?|donors?|supporters?)\b(?!-)/i;
+const FUNDER_BODY = /\b(?:foundations?(?!\s+(?:repair|repairs|crack|cracks|waterproofing|leveling|levelling|inspection|inspections|contractors?|work|works|drilling|pouring)\b)|endowments?|grantmakers?|funds?|arts councils?|development councils?|institutes?|institute of|programs?|programmes?|donors?|supporters?)\b(?!-)(?!\s+(?:directors?|managers?|coordinators?|officers?|administrators?|leads?|staff|heads?|owners?|operators?|chairs?|supervisors?)\b)/i;
 /**
  * The body a payer phrase names, without what qualifies it: "Commercial beekeepers registered with the state apiary
  * program" names commercial beekeepers, who buy, not the program they are registered with (2026-11-27 frozen run,

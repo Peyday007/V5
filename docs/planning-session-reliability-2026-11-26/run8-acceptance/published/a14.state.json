@@ -1,0 +1,895 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_4c67fa27f2c34ae687cd",
+      "words": "Collect $100,000 of settled cash within 30 days with at most $15,000 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 10000000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": 1500000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "Settled cash received totals the target within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "f6d02e61ca2c8e48d473d4a2"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_4c67fa27f2c34ae687cd",
+        "contractDigest": "f6d02e61ca2c8e48d473d4a2",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening's whole counted market cannot reach $100,000",
+          "opportunityIds": [],
+          "why": "The drone compliance-pack opening is otherwise sound (price $480 evidenced by 16 paid pilot invoices, 16/60 measured conversion, Brain delivers a spreadsheet at $8 cost, 5 days to cash), but its market is counted whole: the state registry lists exactly 140 survey firms, each buying one pack a year. Every one of them buying at $480 brings $67,200; 16 of them already bought their annual pack in Sept-Oct 2026, leaving 124 x $480 = $59,520. $100,000 would need 209 sales. Capital ($15,000) and the deadline are not binding; the target is."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the pack to all remaining registry firms",
+            "why": "At most 124 x $480 = $59,520 (at the measured 16/60 conversion, about 33 sales = ~$15,900); cannot reach $100,000 within 30 days."
+          },
+          {
+            "title": "Raise the price",
+            "why": "No evidence any firm pays more than $480; a higher price is unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research further buyer populations (other states' registries) or a second product for the same firms that could carry the remaining ~$40,000",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "firms",
+            "sources": [
+              "buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "purchase frequency",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "packs per firm per year",
+            "sources": [
+              "buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 480,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "firms already served this year",
+            "status": "EVIDENCED",
+            "value": 16,
+            "unit": "firms",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.267,
+            "unit": "agreements per contact",
+            "sources": [
+              "conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum revenue from the counted market",
+            "status": "EVIDENCED",
+            "value": 67200,
+            "unit": "USD",
+            "sources": [
+              "buyerVolume",
+              "price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "buyerVolume",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "The state registry lists exactly 140 survey firms with business contacts; each needs one compliance pack a year.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices (Sept-Oct 2026): 16 survey firms each paid $480 for an annual compliance pack.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "conversionRates",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "16 agreements from 60 contacts.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $8.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: the counted market (140 registry firms x one $480 pack a year = $67,200 at most, $59,520 after the 16 firms already served) is below the $100,000 target, and no other opening is held.",
+          "resolution": "Lower the target to at most $59,520 (124 unserved firms x $480) for this opening, or research and count an additional buyer population (e.g. other states' commercial drone operator registries) or a second paid product for these firms that covers the remaining amount within 30 days.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_3a43f52aba9f45a79b86",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_3a43f52aba9f45a79b86",
+            "why": "Its whole counted market (140 firms x $480 = $67,200; $59,520 unserved) cannot reach the $100,000 target."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to at most $59,520 (124 not-yet-served registry firms x $480); $67,200 (all 140) is the absolute ceiling of this market",
+            "basis": [
+              {
+                "opportunityId": "cop_3a43f52aba9f45a79b86",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_3a43f52aba9f45a79b86",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_f60f16283de6_4d3481",
+        "digest": "f60f16283de6e874862c8088",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8c1ed511c8a44270beb9/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:01.925Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_4c67fa27f2c34ae687cd",
+      "contractDigest": "f6d02e61ca2c8e48d473d4a2",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the only opening's whole counted market cannot reach $100,000",
+        "opportunityIds": [],
+        "why": "The drone compliance-pack opening is otherwise sound (price $480 evidenced by 16 paid pilot invoices, 16/60 measured conversion, Brain delivers a spreadsheet at $8 cost, 5 days to cash), but its market is counted whole: the state registry lists exactly 140 survey firms, each buying one pack a year. Every one of them buying at $480 brings $67,200; 16 of them already bought their annual pack in Sept-Oct 2026, leaving 124 x $480 = $59,520. $100,000 would need 209 sales. Capital ($15,000) and the deadline are not binding; the target is."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the pack to all remaining registry firms",
+          "why": "At most 124 x $480 = $59,520 (at the measured 16/60 conversion, about 33 sales = ~$15,900); cannot reach $100,000 within 30 days."
+        },
+        {
+          "title": "Raise the price",
+          "why": "No evidence any firm pays more than $480; a higher price is unestablished."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Research further buyer populations (other states' registries) or a second product for the same firms that could carry the remaining ~$40,000",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "buyerVolume"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 140,
+          "unit": "firms",
+          "sources": [
+            "buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "purchase frequency",
+          "status": "EVIDENCED",
+          "value": 1,
+          "unit": "packs per firm per year",
+          "sources": [
+            "buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 480,
+          "unit": "USD",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "firms already served this year",
+          "status": "EVIDENCED",
+          "value": 16,
+          "unit": "firms",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.267,
+          "unit": "agreements per contact",
+          "sources": [
+            "conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "maximum revenue from the counted market",
+          "status": "EVIDENCED",
+          "value": 67200,
+          "unit": "USD",
+          "sources": [
+            "buyerVolume",
+            "price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "buyerVolume",
+          "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "The state registry lists exactly 140 survey firms with business contacts; each needs one compliance pack a year.",
+          "population": "Commercial drone survey firms in the state registry",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3a43f52aba9f45a79b86"
+        },
+        {
+          "id": "price",
+          "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#price",
+          "dated": "2026-11-24",
+          "claim": "Pilot invoices (Sept-Oct 2026): 16 survey firms each paid $480 for an annual compliance pack.",
+          "population": "Commercial drone survey firms in the state registry",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3a43f52aba9f45a79b86"
+        },
+        {
+          "id": "conversionRates",
+          "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "16 agreements from 60 contacts.",
+          "population": "Commercial drone survey firms in the state registry",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3a43f52aba9f45a79b86"
+        },
+        {
+          "id": "directCosts",
+          "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $8.",
+          "population": "Commercial drone survey firms in the state registry",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3a43f52aba9f45a79b86"
+        },
+        {
+          "id": "timeToFirstCash",
+          "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days to first cash.",
+          "population": "Commercial drone survey firms in the state registry",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3a43f52aba9f45a79b86"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "MARKET_VOLUME: the counted market (140 registry firms x one $480 pack a year = $67,200 at most, $59,520 after the 16 firms already served) is below the $100,000 target, and no other opening is held.",
+        "resolution": "Lower the target to at most $59,520 (124 unserved firms x $480) for this opening, or research and count an additional buyer population (e.g. other states' commercial drone operator registries) or a second paid product for these firms that covers the remaining amount within 30 days.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_3a43f52aba9f45a79b86",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_3a43f52aba9f45a79b86",
+          "why": "Its whole counted market (140 firms x $480 = $67,200; $59,520 unserved) cannot reach the $100,000 target."
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [
+        {
+          "constraint": "TARGET",
+          "suggestion": "Lower the target to at most $59,520 (124 not-yet-served registry firms x $480); $67,200 (all 140) is the absolute ceiling of this market",
+          "basis": [
+            {
+              "opportunityId": "cop_3a43f52aba9f45a79b86",
+              "field": "buyerVolume"
+            },
+            {
+              "opportunityId": "cop_3a43f52aba9f45a79b86",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_f60f16283de6_4d3481",
+      "digest": "f60f16283de6e874862c8088",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_8c1ed511c8a44270beb9/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:37:01.925Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_f60f16283de6_4d3481",
+      "digest": "f60f16283de6e874862c8088",
+      "contractDigest": "f6d02e61ca2c8e48d473d4a2",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 1500000,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $67,200, so they cannot reach the $100,000 still needed. To make it supportable, target: lower the target to about $67,200, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_3a43f52aba9f45a79b86"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_3a43f52aba9f45a79b86",
+            "title": "Annual Part 107 waiver and flight-log compliance packs for commercial drone survey firms",
+            "missing": [
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 67200,
+            "potentialReach": 96000,
+            "card": {
+              "payer": "Commercial drone survey firm owners",
+              "reachableChannel": "Business contacts in the state registry of commercial drone operators",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:32:21.745Z",
+              "offerScope": "Annual Part 107 waiver and flight-log compliance packs for commercial drone survey firms",
+              "priceCents": 48000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "commercial drone surveying",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Business contacts in the state registry of commercial drone operators"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 480 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 16 accepted of 60 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "141 deal(s) needed but only 140 in the window (140 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 8, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state registry of commercial drone operators lists exactly 140 survey firms with business contacts; each needs one compliance pack a year.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Annual Part 107 waiver and flight-log compliance packs for commercial drone survey firms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "16 agreements from 60 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$8",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Commercial drone survey firm owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Pilot invoices (Sept–Oct 2026): 16 survey firms each paid $480 for an annual compliance pack.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 10000000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:33:26.390Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_f60f16283de6_4d3481",
+        "revisionDigest": "f60f16283de6e874862c8088",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8c1ed511c8a44270beb9/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_def8573adbf74a058be8/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Recomputed: the card's EVIDENCE buyerVolume counts the market whole: 140 registry firms x 1 pack/year x $480 = $67,200 ceiling; 16 already bought their annual pack (Sept-Oct 2026 invoices), leaving 124 x $480 = $59,520. $100,000 needs ceil(100000/480) = 209 sales, more than exist. This is a real constraint, not missing evidence: even with every remaining buyer agreeing at the evidenced price the target cannot be reached. The $15,000 capital does not create buyers, and no higher price is evidenced. NO_PLAN with a TARGET constraint based on buyerVolume and price is right, and agrees with Brain's INFEASIBLE AS STATED. Expected sales at the measured 16/60 conversion (~33 sales, ~$15,900) are correctly shown as far short too.",
+        "findings": [
+          "Brain's lowered-target suggestion ($67,200) counts the 16 firms already served this year; the author's $59,520 is the tighter, correct ceiling for this window.",
+          "Other states' registries or a second product are named only as research directions; nothing about them is on record."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:39:12.466Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_f60f16283de6_4d3481",
+      "digest": "f60f16283de6e874862c8088",
+      "contractDigest": "f6d02e61ca2c8e48d473d4a2",
+      "plan": {
+        "goalId": "wst_4c67fa27f2c34ae687cd",
+        "contractDigest": "f6d02e61ca2c8e48d473d4a2",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening's whole counted market cannot reach $100,000",
+          "opportunityIds": [],
+          "why": "The drone compliance-pack opening is otherwise sound (price $480 evidenced by 16 paid pilot invoices, 16/60 measured conversion, Brain delivers a spreadsheet at $8 cost, 5 days to cash), but its market is counted whole: the state registry lists exactly 140 survey firms, each buying one pack a year. Every one of them buying at $480 brings $67,200; 16 of them already bought their annual pack in Sept-Oct 2026, leaving 124 x $480 = $59,520. $100,000 would need 209 sales. Capital ($15,000) and the deadline are not binding; the target is."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the pack to all remaining registry firms",
+            "why": "At most 124 x $480 = $59,520 (at the measured 16/60 conversion, about 33 sales = ~$15,900); cannot reach $100,000 within 30 days."
+          },
+          {
+            "title": "Raise the price",
+            "why": "No evidence any firm pays more than $480; a higher price is unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research further buyer populations (other states' registries) or a second product for the same firms that could carry the remaining ~$40,000",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyerVolume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "firms",
+            "sources": [
+              "buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "purchase frequency",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "packs per firm per year",
+            "sources": [
+              "buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 480,
+            "unit": "USD",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "firms already served this year",
+            "status": "EVIDENCED",
+            "value": 16,
+            "unit": "firms",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.267,
+            "unit": "agreements per contact",
+            "sources": [
+              "conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum revenue from the counted market",
+            "status": "EVIDENCED",
+            "value": 67200,
+            "unit": "USD",
+            "sources": [
+              "buyerVolume",
+              "price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "buyerVolume",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "The state registry lists exactly 140 survey firms with business contacts; each needs one compliance pack a year.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#price",
+            "dated": "2026-11-24",
+            "claim": "Pilot invoices (Sept-Oct 2026): 16 survey firms each paid $480 for an annual compliance pack.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "conversionRates",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "16 agreements from 60 contacts.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $8.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_3a43f52aba9f45a79b86#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash.",
+            "population": "Commercial drone survey firms in the state registry",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3a43f52aba9f45a79b86"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: the counted market (140 registry firms x one $480 pack a year = $67,200 at most, $59,520 after the 16 firms already served) is below the $100,000 target, and no other opening is held.",
+          "resolution": "Lower the target to at most $59,520 (124 unserved firms x $480) for this opening, or research and count an additional buyer population (e.g. other states' commercial drone operator registries) or a second paid product for these firms that covers the remaining amount within 30 days.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_3a43f52aba9f45a79b86",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_3a43f52aba9f45a79b86",
+            "why": "Its whole counted market (140 firms x $480 = $67,200; $59,520 unserved) cannot reach the $100,000 target."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to at most $59,520 (124 not-yet-served registry firms x $480); $67,200 (all 140) is the absolute ceiling of this market",
+            "basis": [
+              {
+                "opportunityId": "cop_3a43f52aba9f45a79b86",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_3a43f52aba9f45a79b86",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_f60f16283de6_4d3481",
+        "digest": "f60f16283de6e874862c8088",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8c1ed511c8a44270beb9/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:01.925Z"
+      },
+      "review": {
+        "revisionId": "rev_f60f16283de6_4d3481",
+        "revisionDigest": "f60f16283de6e874862c8088",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8c1ed511c8a44270beb9/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_def8573adbf74a058be8/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Recomputed: the card's EVIDENCE buyerVolume counts the market whole: 140 registry firms x 1 pack/year x $480 = $67,200 ceiling; 16 already bought their annual pack (Sept-Oct 2026 invoices), leaving 124 x $480 = $59,520. $100,000 needs ceil(100000/480) = 209 sales, more than exist. This is a real constraint, not missing evidence: even with every remaining buyer agreeing at the evidenced price the target cannot be reached. The $15,000 capital does not create buyers, and no higher price is evidenced. NO_PLAN with a TARGET constraint based on buyerVolume and price is right, and agrees with Brain's INFEASIBLE AS STATED. Expected sales at the measured 16/60 conversion (~33 sales, ~$15,900) are correctly shown as far short too.",
+        "findings": [
+          "Brain's lowered-target suggestion ($67,200) counts the 16 firms already served this year; the author's $59,520 is the tighter, correct ceiling for this window.",
+          "Other states' registries or a second product are named only as research directions; nothing about them is on record."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:39:12.466Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $100,000 of settled cash within 30 days with at most $15,000 of capital.",
+        "terms": "b3b5f54f891a63cd",
+        "openings": {
+          "cop_3a43f52aba9f45a79b86": "b556ae08a3a28cf8"
+        }
+      },
+      "at": "2026-11-27T09:39:36.097Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}
