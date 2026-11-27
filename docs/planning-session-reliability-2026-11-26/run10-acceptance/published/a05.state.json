@@ -1,0 +1,903 @@
+{
+ "contract": {
+  "goalId": "wst_eeb1b6e0a2284677a5b6",
+  "words": "Collect $5,000 of settled cash within 25 days with at most $1,500 of capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 500000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 25,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 150000,
+   "proofCondition": "Settled cash received reaches the target within the window",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "34f0fd267ad78bda3b4917b7"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_eeb1b6e0a2284677a5b6",
+   "contractDigest": "34f0fd267ad78bda3b4917b7",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan inside the $1,500 capital ceiling: Fraser fir loads need $6,300 paid at pickup",
+    "opportunityIds": [],
+    "why": "The only opening (three signed $9,000 trailer-load purchases, payable on delivery) requires paying Blue Ridge Fir Farms $6,300 in full at pickup before any buyer pays, so one load ties up $6,300 against a $1,500 capital ceiling. Every other chain link is established; capital alone rules every plan out."
+   },
+   "alternatives": [
+    {
+     "title": "Sell one $9,000 load with capital raised to $6,300",
+     "why": "One load settles $9,000 in about 6 days, more than the $5,000 target, if the owner allows $6,300 of capital."
+    },
+    {
+     "title": "Negotiate a buyer deposit or supplier credit",
+     "why": "No record shows a buyer deposit or supplier credit term; the supplier quote says payment in full at pickup, so this is not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask the owner whether the capital ceiling can rise to $6,300 (the per-load supplier payment at pickup), or find a supplier/buyer term that removes the up-front payment",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "supplier payment per load, due at pickup",
+     "status": "EVIDENCED",
+     "value": 630000,
+     "unit": "cents",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyer price per load, payable on delivery",
+     "status": "EVIDENCED",
+     "value": 900000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "capital ceiling",
+     "status": "EVIDENCED",
+     "value": 150000,
+     "unit": "cents",
+     "sources": [],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#price",
+     "dated": "2026-11-20",
+     "claim": "Three fundraiser-lot organisers signed to buy a 300-tree load at $9,000, payable on delivery (2026-11-20)",
+     "population": "church and school fundraiser lot organisers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#exposure",
+     "dated": "2026-11-24",
+     "claim": "One load ties up $6,300: Blue Ridge Fir Farms quoted $6,300 a load, payment in full at pickup",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $6,300 per load",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "6 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Capital: each load requires $6,300 paid to the supplier at pickup before the buyer pays on delivery, 4.2x the $1,500 capital ceiling; no recorded term (deposit, supplier credit) removes it.",
+    "resolution": "Raise the capital ceiling to at least $6,300 (one load then settles $9,000 in about 6 days, covering the $5,000 target), or obtain a written buyer deposit / supplier credit term that keeps exposure under $1,500.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ac2c276adb63453bbdb7",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_ac2c276adb63453bbdb7",
+     "why": "Peak funding $6,300 per load (supplier paid in full at pickup) exceeds the $1,500 capital ceiling."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "CAPITAL",
+     "suggestion": "Allow at least $6,300 of capital (one load's supplier payment at pickup); one $9,000 load then reaches the $5,000 target.",
+     "basis": [
+      {
+       "opportunityId": "cop_ac2c276adb63453bbdb7",
+       "field": "exposure"
+      },
+      {
+       "opportunityId": "cop_ac2c276adb63453bbdb7",
+       "field": "directCosts"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_72931115e94c_c2a206",
+   "digest": "72931115e94cdf2079dd5c35",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e7e5cde7a2ee409a8725/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:13:31.965Z"
+  },
+  {
+   "goalId": "wst_eeb1b6e0a2284677a5b6",
+   "contractDigest": "34f0fd267ad78bda3b4917b7",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan inside the $1,500 capital ceiling: Fraser fir loads need $6,300 paid at pickup",
+    "opportunityIds": [],
+    "why": "The only opening (three signed $9,000 trailer-load purchases, payable on delivery) requires paying Blue Ridge Fir Farms $6,300 in full at pickup before any buyer pays, so one load ties up $6,300 against a $1,500 capital ceiling. Every other chain link is established; capital alone rules every plan out."
+   },
+   "alternatives": [
+    {
+     "title": "Sell one $9,000 load with capital raised to $6,300",
+     "why": "One load settles $9,000 in about 6 days, more than the $5,000 target, if the owner allows $6,300 of capital."
+    },
+    {
+     "title": "Negotiate a buyer deposit or supplier credit",
+     "why": "No record shows a buyer deposit or supplier credit term; the supplier quote says payment in full at pickup, so this is not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask the owner whether the capital ceiling can rise to $6,300 (the per-load supplier payment at pickup), or find a supplier/buyer term that removes the up-front payment",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "supplier payment per load, due at pickup",
+     "status": "EVIDENCED",
+     "value": 630000,
+     "unit": "cents",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyer price per load, payable on delivery",
+     "status": "EVIDENCED",
+     "value": 900000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#price",
+     "dated": "2026-11-20",
+     "claim": "Three fundraiser-lot organisers signed to buy a 300-tree load at $9,000, payable on delivery (2026-11-20)",
+     "population": "church and school fundraiser lot organisers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#exposure",
+     "dated": "2026-11-24",
+     "claim": "One load ties up $6,300: Blue Ridge Fir Farms quoted $6,300 a load, payment in full at pickup",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $6,300 per load",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "6 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Capital: each load requires $6,300 paid to the supplier at pickup before the buyer pays on delivery, 4.2x the $1,500 capital ceiling; no recorded term (deposit, supplier credit) removes it.",
+    "resolution": "Raise the capital ceiling to at least $6,300 (one load then settles $9,000 in about 6 days, covering the $5,000 target), or obtain a written buyer deposit / supplier credit term that keeps exposure under $1,500.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ac2c276adb63453bbdb7",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_ac2c276adb63453bbdb7",
+     "why": "Peak funding $6,300 per load (supplier paid in full at pickup) exceeds the $1,500 capital ceiling."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "CAPITAL",
+     "suggestion": "Allow at least $6,300 of capital (one load's supplier payment at pickup); one $9,000 load then reaches the $5,000 target.",
+     "basis": [
+      {
+       "opportunityId": "cop_ac2c276adb63453bbdb7",
+       "field": "exposure"
+      },
+      {
+       "opportunityId": "cop_ac2c276adb63453bbdb7",
+       "field": "directCosts"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_7276c26dfd2e_597938",
+   "digest": "7276c26dfd2efaf8fb21b2ad",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e7e5cde7a2ee409a8725/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:02.804Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_eeb1b6e0a2284677a5b6",
+  "contractDigest": "34f0fd267ad78bda3b4917b7",
+  "parentRevisionId": null,
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan inside the $1,500 capital ceiling: Fraser fir loads need $6,300 paid at pickup",
+   "opportunityIds": [],
+   "why": "The only opening (three signed $9,000 trailer-load purchases, payable on delivery) requires paying Blue Ridge Fir Farms $6,300 in full at pickup before any buyer pays, so one load ties up $6,300 against a $1,500 capital ceiling. Every other chain link is established; capital alone rules every plan out."
+  },
+  "alternatives": [
+   {
+    "title": "Sell one $9,000 load with capital raised to $6,300",
+    "why": "One load settles $9,000 in about 6 days, more than the $5,000 target, if the owner allows $6,300 of capital."
+   },
+   {
+    "title": "Negotiate a buyer deposit or supplier credit",
+    "why": "No record shows a buyer deposit or supplier credit term; the supplier quote says payment in full at pickup, so this is not established."
+   }
+  ],
+  "steps": [
+   {
+    "id": "r1",
+    "kind": "RESEARCH",
+    "label": "Ask the owner whether the capital ceiling can rise to $6,300 (the per-load supplier payment at pickup), or find a supplier/buyer term that removes the up-front payment",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "s2",
+     "s3"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": null,
+  "quantities": [
+   {
+    "name": "supplier payment per load, due at pickup",
+    "status": "EVIDENCED",
+    "value": 630000,
+    "unit": "cents",
+    "sources": [
+     "s2"
+    ],
+    "needs": null
+   },
+   {
+    "name": "buyer price per load, payable on delivery",
+    "status": "EVIDENCED",
+    "value": 900000,
+    "unit": "cents",
+    "sources": [
+     "s1"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "s1",
+    "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#price",
+    "dated": "2026-11-20",
+    "claim": "Three fundraiser-lot organisers signed to buy a 300-tree load at $9,000, payable on delivery (2026-11-20)",
+    "population": "church and school fundraiser lot organisers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ac2c276adb63453bbdb7"
+   },
+   {
+    "id": "s2",
+    "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#exposure",
+    "dated": "2026-11-24",
+    "claim": "One load ties up $6,300: Blue Ridge Fir Farms quoted $6,300 a load, payment in full at pickup",
+    "population": "supplier quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ac2c276adb63453bbdb7"
+   },
+   {
+    "id": "s3",
+    "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#directCosts",
+    "dated": "2026-11-24",
+    "claim": "Direct cost $6,300 per load",
+    "population": "supplier quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ac2c276adb63453bbdb7"
+   },
+   {
+    "id": "s4",
+    "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#timeToFirstCash",
+    "dated": "2026-11-24",
+    "claim": "6 days to first cash",
+    "population": "this opening",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ac2c276adb63453bbdb7"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "Capital: each load requires $6,300 paid to the supplier at pickup before the buyer pays on delivery, 4.2x the $1,500 capital ceiling; no recorded term (deposit, supplier credit) removes it.",
+   "resolution": "Raise the capital ceiling to at least $6,300 (one load then settles $9,000 in about 6 days, covering the $5,000 target), or obtain a written buyer deposit / supplier credit term that keeps exposure under $1,500.",
+   "decisiveLinks": []
+  },
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_ac2c276adb63453bbdb7",
+    "missing": []
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_ac2c276adb63453bbdb7",
+    "why": "Peak funding $6,300 per load (supplier paid in full at pickup) exceeds the $1,500 capital ceiling."
+   }
+  ],
+  "members": [],
+  "resolves": [],
+  "constraints": [
+   {
+    "constraint": "CAPITAL",
+    "suggestion": "Allow at least $6,300 of capital (one load's supplier payment at pickup); one $9,000 load then reaches the $5,000 target.",
+    "basis": [
+     {
+      "opportunityId": "cop_ac2c276adb63453bbdb7",
+      "field": "exposure"
+     },
+     {
+      "opportunityId": "cop_ac2c276adb63453bbdb7",
+      "field": "directCosts"
+     }
+    ]
+   }
+  ],
+  "disagreements": [],
+  "revisionId": "rev_7276c26dfd2e_597938",
+  "digest": "7276c26dfd2efaf8fb21b2ad",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_e7e5cde7a2ee409a8725/author-B",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:14:02.804Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_7276c26dfd2e_597938",
+  "digest": "7276c26dfd2efaf8fb21b2ad",
+  "contractDigest": "34f0fd267ad78bda3b4917b7",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 150000,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $5,000 still needed, even with every buyer agreeing at the top price. To make it supportable, capital: allow the goal to commit at least $6,300, what the lots that reach the target need at once; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+   "acceptance": "NOT_SUPPORTED",
+   "considered": [
+    "cop_ac2c276adb63453bbdb7"
+   ],
+   "integrity": [],
+   "steps": [],
+   "nextTest": null,
+   "openings": [
+    {
+     "opportunityId": "cop_ac2c276adb63453bbdb7",
+     "title": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+     "missing": [],
+     "stage": "E_COMMITTED",
+     "supportedReach": 5000,
+     "potentialReach": 5000,
+     "card": {
+      "payer": "Volunteer organisers of church and school Christmas tree fundraiser lots",
+      "reachableChannel": "Organiser contacts listed by the regional Christmas tree growers' association",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:30.969Z",
+      "offerScope": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+      "priceCents": 900000,
+      "currency": "USD",
+      "fulfillmentOwner": "Blue Ridge Fir Farms (quoted $6,300 a load, payment in full at pickup)",
+      "peakFundingCents": 630000,
+      "humanHours": 3,
+      "requiredCapabilities": [],
+      "industry": "Christmas tree wholesale",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 900000,
+       "currency": "USD",
+       "deliverable": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 900000,
+       "currency": "USD",
+       "deliverable": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 900000,
+       "currency": "USD",
+       "deliverable": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Organiser contacts listed by the regional Christmas tree growers' association"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 27000 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 27000 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "fulfilled by Blue Ridge Fir Farms (quoted $6,300 a load, payment in full at pickup) (a source says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 6300, tied up 6300"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "6 days to usable cash against 25 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$6300",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$6300",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Blue Ridge Fir Farms (quoted $6,300 a load, payment in full at pickup) quoted to do the work.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Volunteer organisers of church and school Christmas tree fundraiser lots",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Three fundraiser-lot organisers signed to buy a 300-tree trailer load at $9,000, payable on delivery (signed purchase agreements, 2026-11-20).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "6 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [],
+   "scope": {
+    "targetCents": 500000,
+    "daysLeft": 25,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:10:58.202Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_7276c26dfd2e_597938",
+   "revisionDigest": "7276c26dfd2efaf8fb21b2ad",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e7e5cde7a2ee409a8725/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5ad81e32e8db44a6a5a7/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is correct and its decisive gap is a genuine constraint. The single opening has every link established: three signed purchase agreements at $9,000 per 300-tree load payable on delivery, a named fulfiller (Blue Ridge Fir Farms, $6,300 a load, payment in full at pickup), 6 days to cash against 25. But the supplier must be paid $6,300 before any buyer pays, so the minimum exposure of any plan using it is $6,300 = 4.2x the $1,500 ceiling; even with all the evidence in hand no schedule fits the limit, and no deposit or supplier-credit term is on the record (assuming one would read an unknown as favourable). The constraint is cited to the card's exposure and directCosts fields. Brain independently reaches the same verdict (INFEASIBLE AS STATED, capital >= $6,300). The resolution is right. One precision for the owner: one load collects $9,000 but keeps $2,700 after the $6,300 supplier payment; if the owner counts only cash beyond what they advanced, two loads run back to back (load 2 funded from load 1's day-6 receipts, peak still $6,300) keep $5,400, still inside 25 days.",
+   "findings": [
+    "INFO cop_ac2c276adb63453bbdb7 ECONOMICS: peak funding $6,300 at pickup vs $1,500 exposure cap — binding CAPITAL constraint.",
+    "LOW: resolution should state that one load nets $2,700 after supplier cost; two sequential loads (peak $6,300) net $5,400 if net cash is what the owner means."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:19:19.064Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_7276c26dfd2e_597938",
+  "digest": "7276c26dfd2efaf8fb21b2ad",
+  "contractDigest": "34f0fd267ad78bda3b4917b7",
+  "plan": {
+   "goalId": "wst_eeb1b6e0a2284677a5b6",
+   "contractDigest": "34f0fd267ad78bda3b4917b7",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan inside the $1,500 capital ceiling: Fraser fir loads need $6,300 paid at pickup",
+    "opportunityIds": [],
+    "why": "The only opening (three signed $9,000 trailer-load purchases, payable on delivery) requires paying Blue Ridge Fir Farms $6,300 in full at pickup before any buyer pays, so one load ties up $6,300 against a $1,500 capital ceiling. Every other chain link is established; capital alone rules every plan out."
+   },
+   "alternatives": [
+    {
+     "title": "Sell one $9,000 load with capital raised to $6,300",
+     "why": "One load settles $9,000 in about 6 days, more than the $5,000 target, if the owner allows $6,300 of capital."
+    },
+    {
+     "title": "Negotiate a buyer deposit or supplier credit",
+     "why": "No record shows a buyer deposit or supplier credit term; the supplier quote says payment in full at pickup, so this is not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask the owner whether the capital ceiling can rise to $6,300 (the per-load supplier payment at pickup), or find a supplier/buyer term that removes the up-front payment",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "supplier payment per load, due at pickup",
+     "status": "EVIDENCED",
+     "value": 630000,
+     "unit": "cents",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyer price per load, payable on delivery",
+     "status": "EVIDENCED",
+     "value": 900000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#price",
+     "dated": "2026-11-20",
+     "claim": "Three fundraiser-lot organisers signed to buy a 300-tree load at $9,000, payable on delivery (2026-11-20)",
+     "population": "church and school fundraiser lot organisers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#exposure",
+     "dated": "2026-11-24",
+     "claim": "One load ties up $6,300: Blue Ridge Fir Farms quoted $6,300 a load, payment in full at pickup",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $6,300 per load",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_ac2c276adb63453bbdb7#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "6 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ac2c276adb63453bbdb7"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Capital: each load requires $6,300 paid to the supplier at pickup before the buyer pays on delivery, 4.2x the $1,500 capital ceiling; no recorded term (deposit, supplier credit) removes it.",
+    "resolution": "Raise the capital ceiling to at least $6,300 (one load then settles $9,000 in about 6 days, covering the $5,000 target), or obtain a written buyer deposit / supplier credit term that keeps exposure under $1,500.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ac2c276adb63453bbdb7",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_ac2c276adb63453bbdb7",
+     "why": "Peak funding $6,300 per load (supplier paid in full at pickup) exceeds the $1,500 capital ceiling."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "CAPITAL",
+     "suggestion": "Allow at least $6,300 of capital (one load's supplier payment at pickup); one $9,000 load then reaches the $5,000 target.",
+     "basis": [
+      {
+       "opportunityId": "cop_ac2c276adb63453bbdb7",
+       "field": "exposure"
+      },
+      {
+       "opportunityId": "cop_ac2c276adb63453bbdb7",
+       "field": "directCosts"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_7276c26dfd2e_597938",
+   "digest": "7276c26dfd2efaf8fb21b2ad",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e7e5cde7a2ee409a8725/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:02.804Z"
+  },
+  "review": {
+   "revisionId": "rev_7276c26dfd2e_597938",
+   "revisionDigest": "7276c26dfd2efaf8fb21b2ad",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e7e5cde7a2ee409a8725/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5ad81e32e8db44a6a5a7/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is correct and its decisive gap is a genuine constraint. The single opening has every link established: three signed purchase agreements at $9,000 per 300-tree load payable on delivery, a named fulfiller (Blue Ridge Fir Farms, $6,300 a load, payment in full at pickup), 6 days to cash against 25. But the supplier must be paid $6,300 before any buyer pays, so the minimum exposure of any plan using it is $6,300 = 4.2x the $1,500 ceiling; even with all the evidence in hand no schedule fits the limit, and no deposit or supplier-credit term is on the record (assuming one would read an unknown as favourable). The constraint is cited to the card's exposure and directCosts fields. Brain independently reaches the same verdict (INFEASIBLE AS STATED, capital >= $6,300). The resolution is right. One precision for the owner: one load collects $9,000 but keeps $2,700 after the $6,300 supplier payment; if the owner counts only cash beyond what they advanced, two loads run back to back (load 2 funded from load 1's day-6 receipts, peak still $6,300) keep $5,400, still inside 25 days.",
+   "findings": [
+    "INFO cop_ac2c276adb63453bbdb7 ECONOMICS: peak funding $6,300 at pickup vs $1,500 exposure cap — binding CAPITAL constraint.",
+    "LOW: resolution should state that one load nets $2,700 after supplier cost; two sequential loads (peak $6,300) net $5,400 if net cash is what the owner means."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:19:19.064Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $5,000 of settled cash within 25 days with at most $1,500 of capital.",
+   "terms": "fe2c2c4d5e5d9235",
+   "openings": {
+    "cop_ac2c276adb63453bbdb7": "c728260f1e619091"
+   }
+  },
+  "at": "2026-11-27T12:21:34.122Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

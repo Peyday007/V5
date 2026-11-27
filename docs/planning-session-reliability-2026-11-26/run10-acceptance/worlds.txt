@@ -1,0 +1,16 @@
+a01 al-01-septic-pumpout-lists cases/cases.json
+a02 al-02-pt-denial-tracker cases/cases.json
+a03 al-03-process-server-owner-hours cases/cases.json
+a04 al-04-pool-log-binder-owner-hours cases/cases.json
+a05 al-05-christmas-tree-capital cases/cases.json
+a06 al-06-hospice-single-award cases/cases.json
+a07 al-07-embroidery-net cases/cases.json
+a08 al-08-forklift-objective-change cases/cases.json
+a09 al-09-crane-permit-price-contradicted cases/cases.json
+a10 al-10-insurance-agency-volume-estimate cases/cases.json
+a11 al-11-mushroom-net45-deadline cases/cases.json
+a12 al-12-pickleball-counted-market cases/cases.json
+d01 am-01-small-hours-limited cases/discovery-worlds.json
+d02 am-02-named-industry-truck-schools cases/discovery-worlds.json
+d03 am-03-large-target-capital cases/discovery-worlds.json
+d04 am-04-short-window-no-capital cases/discovery-worlds.json

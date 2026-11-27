@@ -1,0 +1,1762 @@
+{
+ "contract": {
+  "goalId": "wst_eb4ae6e5e3a84cc0a4b5",
+  "words": "I need $3,000 of settled cash within 14 days and I can't spend anything up front.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "preProofSpendCapCents": null,
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": [],
+   "targetCents": 300000,
+   "windowDays": 14,
+   "totalSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "$3,000 of settled cash within 14 days with no up-front spend"
+  },
+  "explanations": {},
+  "version": 2,
+  "digest": "49b4aa7824b88c21d844d953"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_eb4ae6e5e3a84cc0a4b5",
+   "contractDigest": "49b4aa7824b88c21d844d953",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no zero-capital channel is shown to settle $3,000 within 14 days",
+    "opportunityIds": [],
+    "why": "Both discovered openings are freelance-marketplace builds delivered by the owner. Neither has a buyer-paid price, a measured win rate for a new account, or (for Freelancer.com) settlement inside 14 days: a first withdrawal carries a 15-day hold. Upwork job pages could not be read, so its demand and price are unshown."
+   },
+   "alternatives": [
+    {
+     "title": "Freelancer.com fixed-price Shopify builds",
+     "why": "Posted budgets $250-750 face 250-287 competing bids (s1,s2); first withdrawal is held 15 days (s4), past day 14."
+    },
+    {
+     "title": "Upwork fixed-price web jobs on free Connects",
+     "why": "10 free Connects/month and a 5-day hold after approval (s6); demand, price and win rate are unshown."
+    },
+    {
+     "title": "PeoplePerHour redesigns / Freelancehunt automation builds",
+     "why": "Refused at admission: first money settles on or after day 14-15."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Owner spends the 10 free Upwork Connects on fixed-price Shopify/web jobs budgeted >= $300 posted in the last 24h",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 4,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Record hires, funded milestones and the funded amount by day 3; stop if none",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "t1",
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 3,
+   "quantities": [
+    {
+     "name": "win rate of a new account's proposals",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hires per proposal",
+     "sources": [],
+     "needs": "live proposals"
+    },
+    {
+     "name": "price buyers actually pay for a Shopify build",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": "an awarded, funded milestone"
+    },
+    {
+     "name": "Freelancer.com first-withdrawal hold",
+     "status": "EVIDENCED",
+     "value": 15,
+     "unit": "days",
+     "sources": [
+      "s4"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "Upwork hold after approval",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s6"
+     ],
+     "needs": ""
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+     "dated": "2026-11-27",
+     "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (a posted budget and supply-side bids, not a paid price).",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+     "dated": "2026-11-27",
+     "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freelancer.com/jobs/shopify-site/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com Shopify category: 78 open jobs, most average bids $19-$368 with 25-275 bids each.",
+     "population": "Freelancer.com Shopify job posters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.freelancer.co.uk/community/articles/introducing-express-withdrawal-system",
+     "dated": "2019-07-02",
+     "claim": "Freelancer.com: 'For first time users, please be aware that there is a 15-day grace period on your first withdrawal.' (updated 2019-07-02)",
+     "population": "new Freelancer.com freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s6",
+     "url": "https://wise.com/gb/blog/upwork-payments",
+     "dated": "2025-08-11",
+     "claim": "Upwork: service fee 0-15%; earnings held five days after approval; Basic plan 10 free Connects/month (dated 2025-08-11).",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No zero-capital channel has a measured win rate for a new account or a price buyers are shown to pay, and the Freelancer.com route cannot settle a first payout inside 14 days (15-day first-withdrawal hold), so $3,000 settled by day 14 is not established on any opening.",
+    "resolution": "Zero-cost 3-day test: owner sends 10 free-Connect Upwork proposals to fixed-price web jobs >= $300. Proof: >= 1 hire with a funded milestone >= $300 by day 3 (approval by day 7 settles by day 12). Stop: no hire by day 3 - report that $3,000 in 14 days with no capital is not reachable through these channels and suggest a longer window. Continue: each funded milestone, re-bid with remaining Connects; cost $0.",
+    "decisiveLinks": [
+     "CONVERSION",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_619a2543f794480fa4c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "CONVERSION",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_ccb620337bd6_da0f3e",
+   "digest": "ccb620337bd604d9d5ae69f3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4d933c9580064c3da487/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:22:36.875Z"
+  },
+  {
+   "goalId": "wst_eb4ae6e5e3a84cc0a4b5",
+   "contractDigest": "49b4aa7824b88c21d844d953",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no zero-capital channel is shown to settle $3,000 within 14 days",
+    "opportunityIds": [],
+    "why": "Both discovered openings are freelance-marketplace builds delivered by the owner. Neither has a buyer-paid price, a measured win rate for a new account, or (for Freelancer.com) settlement inside 14 days: a first withdrawal carries a 15-day hold. Upwork job pages could not be read, so its demand and price are unshown."
+   },
+   "alternatives": [
+    {
+     "title": "Freelancer.com fixed-price Shopify builds",
+     "why": "Posted budgets $250-750 face 250-287 competing bids (s1,s2); first withdrawal is held 15 days (s4), past day 14."
+    },
+    {
+     "title": "Upwork fixed-price web jobs on free Connects",
+     "why": "10 free Connects/month and a 5-day hold after approval (s6); demand, price and win rate are unshown."
+    },
+    {
+     "title": "PeoplePerHour redesigns / Freelancehunt automation builds",
+     "why": "Refused at admission: first money settles on or after day 14-15."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Owner spends the 10 free Upwork Connects on fixed-price Shopify/web jobs budgeted >= $300 posted in the last 24h",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 4,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Record hires, funded milestones and the funded amount by day 3; stop if none",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "t1",
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 3,
+   "quantities": [
+    {
+     "name": "win rate of a new account's proposals",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hires per proposal",
+     "sources": [],
+     "needs": "live proposals"
+    },
+    {
+     "name": "price buyers actually pay for a Shopify build",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": "an awarded, funded milestone"
+    },
+    {
+     "name": "Freelancer.com first-withdrawal hold",
+     "status": "EVIDENCED",
+     "value": 15,
+     "unit": "days (up to)",
+     "sources": [
+      "s4"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "Upwork hold after approval",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s6"
+     ],
+     "needs": ""
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+     "dated": "2026-11-27",
+     "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (a posted budget and supply-side bids, not a paid price).",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+     "dated": "2026-11-27",
+     "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freelancer.com/jobs/shopify-site/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com Shopify category: 78 open jobs, most average bids $19-$368 with 25-275 bids each.",
+     "population": "Freelancer.com Shopify job posters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+     "dated": "2026-11-17",
+     "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.' Freelancer.com's own help centre lists an article 'Delay on first withdrawal requests' (URL slug 15-day-delay-for-withdrawals).",
+     "population": "new Freelancer.com freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s6",
+     "url": "https://wise.com/gb/blog/upwork-payments",
+     "dated": "2025-08-11",
+     "claim": "Upwork: service fee 0-15%; earnings held five days after approval; Basic plan 10 free Connects/month (dated 2025-08-11).",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No zero-capital channel has a measured win rate for a new account or a price buyers are shown to pay, and the Freelancer.com route cannot settle a first payout inside 14 days (15-day first-withdrawal hold), so $3,000 settled by day 14 is not established on any opening.",
+    "resolution": "Zero-cost 3-day test: owner sends 10 free-Connect Upwork proposals to fixed-price web jobs >= $300. Proof: >= 1 hire with a funded milestone >= $300 by day 3 (approval by day 7 settles by day 12). Stop: no hire by day 3 - report that $3,000 in 14 days with no capital is not reachable through these channels and suggest a longer window. Continue: each funded milestone, re-bid with remaining Connects; cost $0.",
+    "decisiveLinks": [
+     "CONVERSION",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_619a2543f794480fa4c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "CONVERSION",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_618d99818749_543916",
+   "digest": "618d998187497ba7db5b0a5a",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4d933c9580064c3da487/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:23:13.841Z"
+  },
+  {
+   "goalId": "wst_eb4ae6e5e3a84cc0a4b5",
+   "contractDigest": "49b4aa7824b88c21d844d953",
+   "parentRevisionId": "rev_618d99818749_543916",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no zero-capital channel is shown to settle $3,000 within 14 days",
+    "opportunityIds": [],
+    "why": "Both discovered openings are freelance-marketplace builds delivered by the owner. Neither has a buyer-paid price, a measured win rate for a new account, or (for Freelancer.com) settlement inside 14 days: a first withdrawal carries a 15-day hold. Upwork job pages could not be read, so its demand and price are unshown. The zero-spend bid allowance is the binding fact: 10 free Upwork Connects buy at most a handful of proposals, fewer than the ~7 funded wins $3,000 needs, and buying Connects is up-front spend the owner excluded; Freelancer.com's free bids cannot settle before day 15."
+   },
+   "alternatives": [
+    {
+     "title": "Freelancer.com fixed-price Shopify builds",
+     "why": "Posted budgets $250-750 face 250-287 competing bids (s1,s2); first withdrawal is held 15 days (s4), past day 14."
+    },
+    {
+     "title": "Upwork fixed-price web jobs on free Connects",
+     "why": "10 free Connects/month and a 5-day hold after approval (s6); demand, price and win rate are unshown."
+    },
+    {
+     "title": "PeoplePerHour redesigns / Freelancehunt automation builds",
+     "why": "Refused at admission: first money settles on or after day 14-15."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Owner proposes on Upwork fixed-price web jobs >= $400 with only the 10 free Connects (as many proposals as they buy), no Connects purchased",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 3,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Owner states the build hours available over days 1-9",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Day 3 read-out: hires, funded milestones and awarded prices; decide stop or continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "t1",
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 3,
+   "quantities": [
+    {
+     "name": "win rate of a new account's proposals",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hires per proposal",
+     "sources": [],
+     "needs": "live proposals"
+    },
+    {
+     "name": "price buyers actually pay for a Shopify build",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": "an awarded, funded milestone"
+    },
+    {
+     "name": "Freelancer.com first-withdrawal hold",
+     "status": "EVIDENCED",
+     "value": 15,
+     "unit": "days (up to)",
+     "sources": [
+      "s4"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "Upwork hold after approval",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s6"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "owner hours needed",
+     "status": "ESTIMATE",
+     "value": 56,
+     "unit": "hours (7 builds x 8 h) in 14 days",
+     "sources": [],
+     "needs": "owner confirms"
+    },
+    {
+     "name": "owner hours available",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours in 14 days",
+     "sources": [],
+     "needs": "owner's statement; the goal states none"
+    },
+    {
+     "name": "Connects per Upwork proposal",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "Connects",
+     "sources": [
+      "s6"
+     ],
+     "needs": "read on each job before proposing"
+    },
+    {
+     "name": "wins needed",
+     "status": "ESTIMATE",
+     "value": 7,
+     "unit": "funded milestones at ~$500 less a 0-15% fee (~$450 net)",
+     "sources": [
+      "s6"
+     ],
+     "needs": "measured awarded price"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+     "dated": "2026-11-27",
+     "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (a posted budget and supply-side bids, not a paid price).",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+     "dated": "2026-11-27",
+     "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freelancer.com/jobs/shopify-site/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com Shopify category: 78 open jobs, most average bids $19-$368 with 25-275 bids each.",
+     "population": "Freelancer.com Shopify job posters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+     "dated": "2026-11-17",
+     "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.' Freelancer.com's own help centre lists an article 'Delay on first withdrawal requests' (URL slug 15-day-delay-for-withdrawals).",
+     "population": "new Freelancer.com freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s6",
+     "url": "https://wise.com/gb/blog/upwork-payments",
+     "dated": "2025-08-11",
+     "claim": "Upwork: service fee 0-15%; earnings held five days after approval; Basic plan 10 free Connects/month (dated 2025-08-11).",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "With no up-front spend, the only channel that can settle in 14 days (Upwork, 5-day hold after approval) gives 10 free Connects - at most ~10 and likely fewer proposals - while $3,000 needs ~7 funded wins (~$450 net each) approved by about day 9; no win rate, paid price or owner hours are measured, and Freelancer.com's free bids cannot settle before its up-to-15-day first-withdrawal hold ends.",
+    "resolution": "Zero-cost check (t1-t3): spend only the 10 free Connects on fixed-price web jobs >= $400 and have the owner state build hours. PROOF (the only result that keeps $3,000 by day 14 alive): >= 7 funded milestones averaging >= $450 net with approvals feasible by day 9 and >= 56 owner hours - not attainable from <= 10 proposals unless nearly every one wins. STOP (expected): fewer - report that $3,000 in 14 days with no up-front spend is not reachable on these channels and offer the owner two relaxations to decide: (a) allow ~$15-30 of Connects (at $0.15 each, s6-adjacent pricing unverified) for ~100-200 more Connects, or (b) a ~30-day window so Freelancer.com's free 100-bid Plus trial and its first withdrawal (held up to 15 days, s4) can settle. CONTINUE: only if proof is met.",
+    "decisiveLinks": [
+     "CONVERSION",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed: $3,000 / (~$450 net per $500 job) = 6.7 -> 7 wins; 7 x 8 h = 56 owner hours in 14 days.",
+     "resolution": "Accepted: wins needed recomputed as ~7 at ~$450 net; recorded as an ESTIMATE quantity with 56 owner hours."
+    },
+    {
+     "finding": "Bid capacity: 10 free Connects/month is the whole zero-spend allowance; Connects per proposal not established - cannot be read as 10 proposals.",
+     "resolution": "Accepted: Connects per proposal is now UNKNOWN; the test no longer equates 10 Connects with 10 proposals, and the continuation that re-bid with 'remaining Connects' is removed."
+    },
+    {
+     "finding": "Settlement: hire day 3, build, client approval, 5-day hold - the last win must be approved by about day 9 to settle by day 14.",
+     "resolution": "Accepted: the proof now requires approvals feasible by about day 9 so the 5-day hold ends by day 14."
+    },
+    {
+     "finding": "Freelancer.com route is correctly excluded by the 15-day first-withdrawal hold (s4).",
+     "resolution": "Agreed: the Freelancer.com route stays excluded from in-window cash by the up-to-15-day first-withdrawal hold; it appears only in the suggested 30-day relaxation."
+    },
+    {
+     "finding": "Upwork fee (0-15% per s6) is not deducted in the plan's figures.",
+     "resolution": "Accepted: the fee is now deducted - wins needed use ~$450 net per $500 job (0-15% fee, s6)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_619a2543f794480fa4c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "CONVERSION",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_5acf3f75bb94_c19b6c",
+   "digest": "5acf3f75bb945e07cfc9da76",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4d933c9580064c3da487/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:31:07.253Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_eb4ae6e5e3a84cc0a4b5",
+  "contractDigest": "49b4aa7824b88c21d844d953",
+  "parentRevisionId": "rev_618d99818749_543916",
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan: no zero-capital channel is shown to settle $3,000 within 14 days",
+   "opportunityIds": [],
+   "why": "Both discovered openings are freelance-marketplace builds delivered by the owner. Neither has a buyer-paid price, a measured win rate for a new account, or (for Freelancer.com) settlement inside 14 days: a first withdrawal carries a 15-day hold. Upwork job pages could not be read, so its demand and price are unshown. The zero-spend bid allowance is the binding fact: 10 free Upwork Connects buy at most a handful of proposals, fewer than the ~7 funded wins $3,000 needs, and buying Connects is up-front spend the owner excluded; Freelancer.com's free bids cannot settle before day 15."
+  },
+  "alternatives": [
+   {
+    "title": "Freelancer.com fixed-price Shopify builds",
+    "why": "Posted budgets $250-750 face 250-287 competing bids (s1,s2); first withdrawal is held 15 days (s4), past day 14."
+   },
+   {
+    "title": "Upwork fixed-price web jobs on free Connects",
+    "why": "10 free Connects/month and a 5-day hold after approval (s6); demand, price and win rate are unshown."
+   },
+   {
+    "title": "PeoplePerHour redesigns / Freelancehunt automation builds",
+    "why": "Refused at admission: first money settles on or after day 14-15."
+   }
+  ],
+  "steps": [
+   {
+    "id": "t1",
+    "kind": "TEST",
+    "label": "Owner proposes on Upwork fixed-price web jobs >= $400 with only the 10 free Connects (as many proposals as they buy), no Connects purchased",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "s6"
+    ],
+    "ownerHours": 3,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t3",
+    "kind": "TEST",
+    "label": "Owner states the build hours available over days 1-9",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [],
+    "ownerHours": 0.5,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t2",
+    "kind": "TEST",
+    "label": "Day 3 read-out: hires, funded milestones and awarded prices; decide stop or continue",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 3,
+    "dependsOn": "t1",
+    "evidence": [
+     "s6"
+    ],
+    "ownerHours": 1,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": 3,
+  "quantities": [
+   {
+    "name": "win rate of a new account's proposals",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "hires per proposal",
+    "sources": [],
+    "needs": "live proposals"
+   },
+   {
+    "name": "price buyers actually pay for a Shopify build",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "USD",
+    "sources": [
+     "s1",
+     "s2"
+    ],
+    "needs": "an awarded, funded milestone"
+   },
+   {
+    "name": "Freelancer.com first-withdrawal hold",
+    "status": "EVIDENCED",
+    "value": 15,
+    "unit": "days (up to)",
+    "sources": [
+     "s4"
+    ],
+    "needs": ""
+   },
+   {
+    "name": "Upwork hold after approval",
+    "status": "EVIDENCED",
+    "value": 5,
+    "unit": "days",
+    "sources": [
+     "s6"
+    ],
+    "needs": ""
+   },
+   {
+    "name": "owner hours needed",
+    "status": "ESTIMATE",
+    "value": 56,
+    "unit": "hours (7 builds x 8 h) in 14 days",
+    "sources": [],
+    "needs": "owner confirms"
+   },
+   {
+    "name": "owner hours available",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "hours in 14 days",
+    "sources": [],
+    "needs": "owner's statement; the goal states none"
+   },
+   {
+    "name": "Connects per Upwork proposal",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "Connects",
+    "sources": [
+     "s6"
+    ],
+    "needs": "read on each job before proposing"
+   },
+   {
+    "name": "wins needed",
+    "status": "ESTIMATE",
+    "value": 7,
+    "unit": "funded milestones at ~$500 less a 0-15% fee (~$450 net)",
+    "sources": [
+     "s6"
+    ],
+    "needs": "measured awarded price"
+   }
+  ],
+  "sources": [
+   {
+    "id": "s1",
+    "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+    "dated": "2026-11-27",
+    "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (a posted budget and supply-side bids, not a paid price).",
+    "population": "merchants posting Shopify builds on Freelancer.com",
+    "matchesBuyer": true,
+    "opportunityId": "cop_619a2543f794480fa4c1"
+   },
+   {
+    "id": "s2",
+    "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+    "dated": "2026-11-27",
+    "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+    "population": "merchants posting Shopify builds on Freelancer.com",
+    "matchesBuyer": true,
+    "opportunityId": "cop_619a2543f794480fa4c1"
+   },
+   {
+    "id": "s3",
+    "url": "https://www.freelancer.com/jobs/shopify-site/",
+    "dated": "2026-11-27",
+    "claim": "Freelancer.com Shopify category: 78 open jobs, most average bids $19-$368 with 25-275 bids each.",
+    "population": "Freelancer.com Shopify job posters",
+    "matchesBuyer": true,
+    "opportunityId": "cop_619a2543f794480fa4c1"
+   },
+   {
+    "id": "s4",
+    "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+    "dated": "2026-11-17",
+    "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.' Freelancer.com's own help centre lists an article 'Delay on first withdrawal requests' (URL slug 15-day-delay-for-withdrawals).",
+    "population": "new Freelancer.com freelancers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_619a2543f794480fa4c1"
+   },
+   {
+    "id": "s5",
+    "url": "https://www.freelancer.com/feesandcharges",
+    "dated": "2026-11-27",
+    "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+    "population": "",
+    "matchesBuyer": true,
+    "opportunityId": "cop_619a2543f794480fa4c1"
+   },
+   {
+    "id": "s6",
+    "url": "https://wise.com/gb/blog/upwork-payments",
+    "dated": "2025-08-11",
+    "claim": "Upwork: service fee 0-15%; earnings held five days after approval; Basic plan 10 free Connects/month (dated 2025-08-11).",
+    "population": "Upwork freelancers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ffbbf38d26d04d03b0d7"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "With no up-front spend, the only channel that can settle in 14 days (Upwork, 5-day hold after approval) gives 10 free Connects - at most ~10 and likely fewer proposals - while $3,000 needs ~7 funded wins (~$450 net each) approved by about day 9; no win rate, paid price or owner hours are measured, and Freelancer.com's free bids cannot settle before its up-to-15-day first-withdrawal hold ends.",
+   "resolution": "Zero-cost check (t1-t3): spend only the 10 free Connects on fixed-price web jobs >= $400 and have the owner state build hours. PROOF (the only result that keeps $3,000 by day 14 alive): >= 7 funded milestones averaging >= $450 net with approvals feasible by day 9 and >= 56 owner hours - not attainable from <= 10 proposals unless nearly every one wins. STOP (expected): fewer - report that $3,000 in 14 days with no up-front spend is not reachable on these channels and offer the owner two relaxations to decide: (a) allow ~$15-30 of Connects (at $0.15 each, s6-adjacent pricing unverified) for ~100-200 more Connects, or (b) a ~30-day window so Freelancer.com's free 100-bid Plus trial and its first withdrawal (held up to 15 days, s4) can settle. CONTINUE: only if proof is met.",
+   "decisiveLinks": [
+    "CONVERSION",
+    "SETTLES_IN_TIME"
+   ]
+  },
+  "reach": null,
+  "answers": [
+   {
+    "finding": "Recomputed: $3,000 / (~$450 net per $500 job) = 6.7 -> 7 wins; 7 x 8 h = 56 owner hours in 14 days.",
+    "resolution": "Accepted: wins needed recomputed as ~7 at ~$450 net; recorded as an ESTIMATE quantity with 56 owner hours."
+   },
+   {
+    "finding": "Bid capacity: 10 free Connects/month is the whole zero-spend allowance; Connects per proposal not established - cannot be read as 10 proposals.",
+    "resolution": "Accepted: Connects per proposal is now UNKNOWN; the test no longer equates 10 Connects with 10 proposals, and the continuation that re-bid with 'remaining Connects' is removed."
+   },
+   {
+    "finding": "Settlement: hire day 3, build, client approval, 5-day hold - the last win must be approved by about day 9 to settle by day 14.",
+    "resolution": "Accepted: the proof now requires approvals feasible by about day 9 so the 5-day hold ends by day 14."
+   },
+   {
+    "finding": "Freelancer.com route is correctly excluded by the 15-day first-withdrawal hold (s4).",
+    "resolution": "Agreed: the Freelancer.com route stays excluded from in-window cash by the up-to-15-day first-withdrawal hold; it appears only in the suggested 30-day relaxation."
+   },
+   {
+    "finding": "Upwork fee (0-15% per s6) is not deducted in the plan's figures.",
+    "resolution": "Accepted: the fee is now deducted - wins needed use ~$450 net per $500 job (0-15% fee, s6)."
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_ffbbf38d26d04d03b0d7",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_619a2543f794480fa4c1",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "CONVERSION",
+   "SETTLES_IN_TIME"
+  ],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_5acf3f75bb94_c19b6c",
+  "digest": "5acf3f75bb945e07cfc9da76",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_4d933c9580064c3da487/author-F",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:31:07.253Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_5acf3f75bb94_c19b6c",
+  "digest": "5acf3f75bb945e07cfc9da76",
+  "contractDigest": "49b4aa7824b88c21d844d953",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Upwork fixed-price Shopify/web jobs using free monthly Conne\" needs [figure withheld] and keeps [figure withheld], 450× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Fixed-price Shopify store builds won on Freelancer.c), so none of its figures is shown or adopted.",
+   "acceptance": "NO_CANDIDATE",
+   "considered": [
+    "cop_ffbbf38d26d04d03b0d7",
+    "cop_619a2543f794480fa4c1"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Establish an offer and a price",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+   "openings": [
+    {
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7",
+     "title": "Upwork fixed-price Shopify/web jobs using free monthly Connects",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 500,
+     "card": {
+      "payer": "clients posting fixed-price web jobs on Upwork",
+      "reachableChannel": "Upwork proposals (10 free Connects/month on Basic)",
+      "offerScope": "fixed-price Shopify/web build to the posted brief",
+      "priceCents": 50000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 8,
+      "requiredCapabilities": [],
+      "industry": "web development",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Upwork proposals (10 free Connects/month on Basic)"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 50, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "13 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Upwork proposals (10 free Connects/month on Basic)",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell fixed-price Shopify/web build to the posted brief to clients posting fixed-price web jobs on Upwork, reached through Upwork proposals (10 free Connects/month on Basic), at $500; the owner, building with AI tools (Claude/website builder) delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$50",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, building with AI tools (Claude/website builder).",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "8 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "fixed-price Shopify/web build to the posted brief",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "clients posting fixed-price web jobs on Upwork",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$500",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$500",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://wise.com/gb/blog/upwork-payments; upwork shopify fixed-price jobs; upwork shopify jobs",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "13 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_619a2543f794480fa4c1",
+     "title": "Fixed-price Shopify store builds won on Freelancer.com, built by Brain",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 450,
+     "card": {
+      "payer": "small e-commerce merchants posting fixed-price Shopify build projects on Freelancer.com",
+      "reachableChannel": "Freelancer.com project bids",
+      "offerScope": "complete Shopify store build (theme setup, product pages, checkout) to the posted brief",
+      "priceCents": 45000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 8,
+      "requiredCapabilities": [],
+      "industry": "e-commerce web development",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Freelancer.com project bids"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 450 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 45, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "12 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Freelancer.com project bids",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell complete Shopify store build (theme setup, product pages, checkout) to the posted brief to small e-commerce merchants posting fixed-price Shopify build projects on Freelancer.com, reached through Freelancer.com project bids, at $450; the owner, building with AI tools (Claude/website builder) delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$45",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, building with AI tools (Claude/website builder).",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "8 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "complete Shopify store build (theme setup, product pages, checkout) to the posted brief",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "small e-commerce merchants posting fixed-price Shopify build projects on Freelancer.com",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$450",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$450",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228; https://www.freelancer.com/projects/web-design/modern-shopify-website-design; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228; https://www.freelancer.com/projects/web-design/modern-shopify-website-design; https://www.freelancer.in/projects/web-development/shopify-commerce-website-build-40459391; freelancer.com Shopify projects $250-750 USD",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "12 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [],
+   "scope": {
+    "targetCents": 300000,
+    "daysLeft": 14,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:21:16.012Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_618d99818749_543916",
+   "revisionDigest": "618d998187497ba7db5b0a5a",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4d933c9580064c3da487/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_ba840c4d64f64d979a6e/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "NO_PLAN is right that no opening has a paid price or a win rate, but the test cannot lead to the target and its continuation is not executable. $3,000 settled needs about 7 Upwork wins at $500 less the service fee (~$450 net), each 8 owner hours (~56 h in 14 days, owner hours unstated and so unknown). The test spends the 10 free Connects as '10 proposals', but a proposal costs Connects (the card records only '10 free Connects/month', not one per proposal), so the free allowance buys at most 10 and likely far fewer proposals; even at 100% conversion that is short of ~7 wins, and buying more Connects is up-front spend the owner excluded. The CONTINUE rule ('re-bid with remaining Connects') has nothing left to bid with. Proof '>= 1 hire by day 3' therefore does not show $3,000 is reachable; on these channels the zero-spend bid capacity plus the 5-day Upwork hold (and Freelancer's 15-day first-withdrawal hold) looks like a constraint, and the revision should say so or show a channel that fits.",
+   "findings": [
+    "Recomputed: $3,000 / (~$450 net per $500 job) = 6.7 -> 7 wins; 7 x 8 h = 56 owner hours in 14 days.",
+    "Bid capacity: 10 free Connects/month is the whole zero-spend allowance; Connects per proposal not established - cannot be read as 10 proposals.",
+    "Settlement: hire day 3, build, client approval, 5-day hold - the last win must be approved by about day 9 to settle by day 14.",
+    "Freelancer.com route is correctly excluded by the 15-day first-withdrawal hold (s4).",
+    "Upwork fee (0-15% per s6) is not deducted in the plan's figures."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:26:19.187Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_5acf3f75bb94_c19b6c",
+   "revisionDigest": "5acf3f75bb945e07cfc9da76",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4d933c9580064c3da487/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_ba840c4d64f64d979a6e/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved. The revision now states the binding fact correctly: with no up-front spend, 10 free Upwork Connects buy at most ~10 and likely fewer proposals, fewer than the ~7 funded wins ($450 net each after the fee) that $3,000 needs with approvals by ~day 9 to clear the 5-day hold; Freelancer.com cannot settle before its up-to-15-day first-withdrawal hold. The $0 check is honest that STOP is the expected outcome and hands the owner two concrete relaxations (a small Connects spend, or a ~30-day window). Owner hours (~56 h) are asked, not assumed.",
+   "findings": [
+    "Recomputed: 7 wins x ~$450 net = ~$3,150; 7 x 8 h = 56 owner hours in 9 days.",
+    "This reads as a constraint (zero-spend bid capacity plus settlement holds) - it could be recorded in constraints[] with the Connects and hold sources as basis, not only in prose.",
+    "The $0.15/Connect price is flagged unverified - correct; verify before offering relaxation (a)."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:32:07.438Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_5acf3f75bb94_c19b6c",
+  "digest": "5acf3f75bb945e07cfc9da76",
+  "contractDigest": "49b4aa7824b88c21d844d953",
+  "plan": {
+   "goalId": "wst_eb4ae6e5e3a84cc0a4b5",
+   "contractDigest": "49b4aa7824b88c21d844d953",
+   "parentRevisionId": "rev_618d99818749_543916",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no zero-capital channel is shown to settle $3,000 within 14 days",
+    "opportunityIds": [],
+    "why": "Both discovered openings are freelance-marketplace builds delivered by the owner. Neither has a buyer-paid price, a measured win rate for a new account, or (for Freelancer.com) settlement inside 14 days: a first withdrawal carries a 15-day hold. Upwork job pages could not be read, so its demand and price are unshown. The zero-spend bid allowance is the binding fact: 10 free Upwork Connects buy at most a handful of proposals, fewer than the ~7 funded wins $3,000 needs, and buying Connects is up-front spend the owner excluded; Freelancer.com's free bids cannot settle before day 15."
+   },
+   "alternatives": [
+    {
+     "title": "Freelancer.com fixed-price Shopify builds",
+     "why": "Posted budgets $250-750 face 250-287 competing bids (s1,s2); first withdrawal is held 15 days (s4), past day 14."
+    },
+    {
+     "title": "Upwork fixed-price web jobs on free Connects",
+     "why": "10 free Connects/month and a 5-day hold after approval (s6); demand, price and win rate are unshown."
+    },
+    {
+     "title": "PeoplePerHour redesigns / Freelancehunt automation builds",
+     "why": "Refused at admission: first money settles on or after day 14-15."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Owner proposes on Upwork fixed-price web jobs >= $400 with only the 10 free Connects (as many proposals as they buy), no Connects purchased",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 3,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Owner states the build hours available over days 1-9",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Day 3 read-out: hires, funded milestones and awarded prices; decide stop or continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "t1",
+     "evidence": [
+      "s6"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 3,
+   "quantities": [
+    {
+     "name": "win rate of a new account's proposals",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hires per proposal",
+     "sources": [],
+     "needs": "live proposals"
+    },
+    {
+     "name": "price buyers actually pay for a Shopify build",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": "an awarded, funded milestone"
+    },
+    {
+     "name": "Freelancer.com first-withdrawal hold",
+     "status": "EVIDENCED",
+     "value": 15,
+     "unit": "days (up to)",
+     "sources": [
+      "s4"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "Upwork hold after approval",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s6"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "owner hours needed",
+     "status": "ESTIMATE",
+     "value": 56,
+     "unit": "hours (7 builds x 8 h) in 14 days",
+     "sources": [],
+     "needs": "owner confirms"
+    },
+    {
+     "name": "owner hours available",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours in 14 days",
+     "sources": [],
+     "needs": "owner's statement; the goal states none"
+    },
+    {
+     "name": "Connects per Upwork proposal",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "Connects",
+     "sources": [
+      "s6"
+     ],
+     "needs": "read on each job before proposing"
+    },
+    {
+     "name": "wins needed",
+     "status": "ESTIMATE",
+     "value": 7,
+     "unit": "funded milestones at ~$500 less a 0-15% fee (~$450 net)",
+     "sources": [
+      "s6"
+     ],
+     "needs": "measured awarded price"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+     "dated": "2026-11-27",
+     "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (a posted budget and supply-side bids, not a paid price).",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+     "dated": "2026-11-27",
+     "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freelancer.com/jobs/shopify-site/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com Shopify category: 78 open jobs, most average bids $19-$368 with 25-275 bids each.",
+     "population": "Freelancer.com Shopify job posters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+     "dated": "2026-11-17",
+     "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.' Freelancer.com's own help centre lists an article 'Delay on first withdrawal requests' (URL slug 15-day-delay-for-withdrawals).",
+     "population": "new Freelancer.com freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_619a2543f794480fa4c1"
+    },
+    {
+     "id": "s6",
+     "url": "https://wise.com/gb/blog/upwork-payments",
+     "dated": "2025-08-11",
+     "claim": "Upwork: service fee 0-15%; earnings held five days after approval; Basic plan 10 free Connects/month (dated 2025-08-11).",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "With no up-front spend, the only channel that can settle in 14 days (Upwork, 5-day hold after approval) gives 10 free Connects - at most ~10 and likely fewer proposals - while $3,000 needs ~7 funded wins (~$450 net each) approved by about day 9; no win rate, paid price or owner hours are measured, and Freelancer.com's free bids cannot settle before its up-to-15-day first-withdrawal hold ends.",
+    "resolution": "Zero-cost check (t1-t3): spend only the 10 free Connects on fixed-price web jobs >= $400 and have the owner state build hours. PROOF (the only result that keeps $3,000 by day 14 alive): >= 7 funded milestones averaging >= $450 net with approvals feasible by day 9 and >= 56 owner hours - not attainable from <= 10 proposals unless nearly every one wins. STOP (expected): fewer - report that $3,000 in 14 days with no up-front spend is not reachable on these channels and offer the owner two relaxations to decide: (a) allow ~$15-30 of Connects (at $0.15 each, s6-adjacent pricing unverified) for ~100-200 more Connects, or (b) a ~30-day window so Freelancer.com's free 100-bid Plus trial and its first withdrawal (held up to 15 days, s4) can settle. CONTINUE: only if proof is met.",
+    "decisiveLinks": [
+     "CONVERSION",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed: $3,000 / (~$450 net per $500 job) = 6.7 -> 7 wins; 7 x 8 h = 56 owner hours in 14 days.",
+     "resolution": "Accepted: wins needed recomputed as ~7 at ~$450 net; recorded as an ESTIMATE quantity with 56 owner hours."
+    },
+    {
+     "finding": "Bid capacity: 10 free Connects/month is the whole zero-spend allowance; Connects per proposal not established - cannot be read as 10 proposals.",
+     "resolution": "Accepted: Connects per proposal is now UNKNOWN; the test no longer equates 10 Connects with 10 proposals, and the continuation that re-bid with 'remaining Connects' is removed."
+    },
+    {
+     "finding": "Settlement: hire day 3, build, client approval, 5-day hold - the last win must be approved by about day 9 to settle by day 14.",
+     "resolution": "Accepted: the proof now requires approvals feasible by about day 9 so the 5-day hold ends by day 14."
+    },
+    {
+     "finding": "Freelancer.com route is correctly excluded by the 15-day first-withdrawal hold (s4).",
+     "resolution": "Agreed: the Freelancer.com route stays excluded from in-window cash by the up-to-15-day first-withdrawal hold; it appears only in the suggested 30-day relaxation."
+    },
+    {
+     "finding": "Upwork fee (0-15% per s6) is not deducted in the plan's figures.",
+     "resolution": "Accepted: the fee is now deducted - wins needed use ~$450 net per $500 job (0-15% fee, s6)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_ffbbf38d26d04d03b0d7",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_619a2543f794480fa4c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "CONVERSION",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_5acf3f75bb94_c19b6c",
+   "digest": "5acf3f75bb945e07cfc9da76",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4d933c9580064c3da487/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:31:07.253Z"
+  },
+  "review": {
+   "revisionId": "rev_5acf3f75bb94_c19b6c",
+   "revisionDigest": "5acf3f75bb945e07cfc9da76",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4d933c9580064c3da487/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_ba840c4d64f64d979a6e/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved. The revision now states the binding fact correctly: with no up-front spend, 10 free Upwork Connects buy at most ~10 and likely fewer proposals, fewer than the ~7 funded wins ($450 net each after the fee) that $3,000 needs with approvals by ~day 9 to clear the 5-day hold; Freelancer.com cannot settle before its up-to-15-day first-withdrawal hold. The $0 check is honest that STOP is the expected outcome and hands the owner two concrete relaxations (a small Connects spend, or a ~30-day window). Owner hours (~56 h) are asked, not assumed.",
+   "findings": [
+    "Recomputed: 7 wins x ~$450 net = ~$3,150; 7 x 8 h = 56 owner hours in 9 days.",
+    "This reads as a constraint (zero-spend bid capacity plus settlement holds) - it could be recorded in constraints[] with the Connects and hold sources as basis, not only in prose.",
+    "The $0.15/Connect price is flagged unverified - correct; verify before offering relaxation (a)."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:32:07.438Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "I need $3,000 of settled cash within 14 days and I can't spend anything up front.",
+   "terms": "0c2ef23e564aaeb1",
+   "openings": {
+    "cop_619a2543f794480fa4c1": "7397443a45d5ae35",
+    "cop_ffbbf38d26d04d03b0d7": "ed6672786c957c1e"
+   }
+  },
+  "at": "2026-11-27T12:35:23.552Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

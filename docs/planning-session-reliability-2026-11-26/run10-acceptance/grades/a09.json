@@ -1,0 +1,38 @@
+{
+  "id": "al-09-crane-permit-price-contradicted",
+  "step": 1,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 4,
+  "reviewVerdicts": [
+    "REVISE",
+    "REVISE",
+    "PASS",
+    "PASS"
+  ],
+  "revisionId": "rev_78b2f10310e6_b8020c",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_3541e5bf7cf64671ae85/fleet-2",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

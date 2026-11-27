@@ -1,0 +1,2908 @@
+{
+ "contract": {
+  "goalId": "wst_183929f9c2754f12b4ed",
+  "words": "Collect $3,000 of settled cash within 30 days in a single industry the owner names: forklift operator training, using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 300000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 30,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "Settled cash received reaches the target within the window",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [
+    "Any industry other than forklift operator training (owner names a single industry)"
+   ],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 2,
+  "digest": "b57f386e54dac135da07bca3"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_183929f9c2754f12b4ed",
+   "contractDigest": "e13aba2110a73c0ce3c06b6d",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the nine signed $400 bowling league workbooks Brain produces",
+    "opportunityIds": [
+     "cop_d6133366fd04493bbf52"
+    ],
+    "why": "Nine league coordinators signed $400 orders; Brain produces the spreadsheet itself (proved PRODUCE_SPREADSHEET) at $3 direct cost, no capital, about 5 days to cash: 9 x $400 = $3,600 settled against the $3,000 target."
+   },
+   "alternatives": [
+    {
+     "title": "Forklift certification sessions (4 signed x $950, Dale Ruiz at $520)",
+     "why": "Also established ($3,800 gross, 14 days to cash), kept as a backup; not needed and depends on an outside trainer."
+    },
+    {
+     "title": "Forklift fleet audit at $1,500",
+     "why": "Excluded: the $1,500 price is only the owner's say-so; no buyer is shown to pay it."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Confirm the nine signed $400 workbook orders and invoice each coordinator",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 40000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces and delivers the league standings and handicap workbook to each of the nine centers",
+     "performer": "BRAIN",
+     "costCents": 2700,
+     "day": 2,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Collect $400 from each of the nine coordinators",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s_deliver",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 2,
+     "kind": "SPEND",
+     "amountCents": 2700,
+     "label": "Direct cost 9 x $3",
+     "stepId": "s_deliver"
+    },
+    {
+     "day": 5,
+     "kind": "RECEIPT",
+     "amountCents": 360000,
+     "label": "9 x $400",
+     "settlesDay": 5,
+     "stepId": "s_collect"
+    }
+   ],
+   "proofDay": 5,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 9,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per order",
+     "status": "EVIDENCED",
+     "value": 40000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per order",
+     "status": "EVIDENCED",
+     "value": 300,
+     "unit": "cents",
+     "sources": [
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to first cash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#price",
+     "dated": "2026-11-24",
+     "claim": "Nine league coordinators signed $400 orders for the league workbook (signed orders, 2026-11)",
+     "population": "league coordinators at independent bowling centers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are league coordinators at independent bowling centers",
+     "population": "league coordinators at independent bowling centers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#delivery",
+     "dated": "2026-11-24",
+     "claim": "A spreadsheet Brain produces",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $3 per workbook",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "5 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_d216ae5fee8d4ed4ad80#price",
+     "dated": "2026-11-24",
+     "claim": "The owner says plants would pay about $1,500 for an audit (PERSON, not evidence)",
+     "population": "small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_d6133366fd04493bbf52",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "why": "The $1,500 price is only what the owner says plants would pay; no buyer agreement or sourced price exists."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_d6133366fd04493bbf52",
+     "deals": 9,
+     "price": 400,
+     "directCost": 3,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_3770ba17f195_d36d46",
+   "digest": "3770ba17f195308e19ef9542",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:13:33.331Z"
+  },
+  {
+   "goalId": "wst_183929f9c2754f12b4ed",
+   "contractDigest": "e13aba2110a73c0ce3c06b6d",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the nine signed $400 bowling league workbooks Brain produces",
+    "opportunityIds": [
+     "cop_d6133366fd04493bbf52"
+    ],
+    "why": "Nine league coordinators signed $400 orders; Brain produces the spreadsheet itself (proved PRODUCE_SPREADSHEET) at $3 direct cost, no capital, about 5 days to cash: 9 x $400 = $3,600 settled against the $3,000 target."
+   },
+   "alternatives": [
+    {
+     "title": "Forklift certification sessions (4 signed x $950, Dale Ruiz at $520)",
+     "why": "Also established ($3,800 gross, 14 days to cash), kept as a backup; not needed and depends on an outside trainer."
+    },
+    {
+     "title": "Forklift fleet audit at $1,500",
+     "why": "Excluded: the $1,500 price is only the owner's say-so; no buyer is shown to pay it."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Confirm the nine signed $400 workbook orders and invoice each coordinator",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 40000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces and delivers the league standings and handicap workbook to each of the nine centers",
+     "performer": "BRAIN",
+     "costCents": 2700,
+     "day": 2,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Collect $400 from each of the nine coordinators",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s_deliver",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 6,
+     "kind": "SPEND",
+     "amountCents": 2700,
+     "label": "Direct cost 9 x $3, billed after delivery",
+     "stepId": "s_deliver"
+    },
+    {
+     "day": 5,
+     "kind": "RECEIPT",
+     "amountCents": 360000,
+     "label": "9 x $400",
+     "settlesDay": 5,
+     "stepId": "s_collect"
+    }
+   ],
+   "proofDay": 5,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 9,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per order",
+     "status": "EVIDENCED",
+     "value": 40000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per order",
+     "status": "EVIDENCED",
+     "value": 300,
+     "unit": "cents",
+     "sources": [
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to first cash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#price",
+     "dated": "2026-11-24",
+     "claim": "Nine league coordinators signed $400 orders for the league workbook (signed orders, 2026-11)",
+     "population": "league coordinators at independent bowling centers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are league coordinators at independent bowling centers",
+     "population": "league coordinators at independent bowling centers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#delivery",
+     "dated": "2026-11-24",
+     "claim": "A spreadsheet Brain produces",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $3 per workbook",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_d6133366fd04493bbf52#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "5 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6133366fd04493bbf52"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_d216ae5fee8d4ed4ad80#price",
+     "dated": "2026-11-24",
+     "claim": "The owner says plants would pay about $1,500 for an audit (PERSON, not evidence)",
+     "population": "small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_d6133366fd04493bbf52",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "why": "The $1,500 price is only what the owner says plants would pay; no buyer agreement or sourced price exists."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_d6133366fd04493bbf52",
+     "deals": 9,
+     "price": 400,
+     "directCost": 3,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_d6133366fd04493bbf52",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain's basis pools three openings; its failing clause is the forklift audit's $1,500 owner guess. For this workbook the price fact (EVIDENCE) records nine signed $400 orders (signed orders, 2026-11), and nine WRITTEN_ACCEPTANCE agreements at $400 are on the card."
+    },
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain's pooled basis fails only on the audit's $1,500 guess; this opening's price fact (EVIDENCE) records four signed $950 orders, with four WRITTEN_ACCEPTANCE agreements at $950."
+    }
+   ],
+   "revisionId": "rev_79d5be8d841c_3926a3",
+   "digest": "79d5be8d841cde5720ae15c4",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:03.733Z"
+  },
+  {
+   "goalId": "wst_183929f9c2754f12b4ed",
+   "contractDigest": "b57f386e54dac135da07bca3",
+   "parentRevisionId": "rev_79d5be8d841c_3926a3",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the four signed $950 on-site forklift certification sessions through Dale Ruiz",
+    "opportunityIds": [
+     "cop_f94e1117139b4f6eb1bd"
+    ],
+    "why": "The owner now restricts the goal to forklift operator training, so the bowling workbook is out of scope. Four plant managers signed $950 orders (invoiced net 10); Dale Ruiz, an OSHA-authorised trainer, quoted $520 a session with $0 exposure, and the card measures 14 days to usable cash. 4 x $950 = $3,800 settled against the $3,000 target inside 30 days. All four must pay: three would give $2,850."
+   },
+   "alternatives": [
+    {
+     "title": "Forklift fleet inspection and records audit at $1,500",
+     "why": "Excluded: the $1,500 price is only the owner's say-so (PERSON); no buyer agreement establishes it."
+    },
+    {
+     "title": "Bowling league workbook (previous plan)",
+     "why": "Out of scope: the owner now names forklift operator training as the single industry."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Confirm the four signed $950 session orders and schedule each on-site session with the plant manager in the first December weeks",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 95000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Dale Ruiz delivers the four on-site OSHA forklift certification sessions at $520 each",
+     "performer": "Dale Ruiz, OSHA-authorised forklift trainer",
+     "costCents": 208000,
+     "day": 4,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Dale Ruiz, OSHA-authorised forklift trainer",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Invoice each plant $950 net 10 and collect",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 14,
+     "dependsOn": "s_deliver",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 380000,
+     "label": "4 x $950, net 10",
+     "settlesDay": 14,
+     "stepId": "s_collect"
+    },
+    {
+     "day": 15,
+     "kind": "SPEND",
+     "amountCents": 208000,
+     "label": "Dale Ruiz 4 x $520 (no up-front exposure per card)",
+     "stepId": "s_deliver"
+    }
+   ],
+   "proofDay": 14,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per session",
+     "status": "EVIDENCED",
+     "value": 95000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "trainer cost per session",
+     "status": "EVIDENCED",
+     "value": 52000,
+     "unit": "cents",
+     "sources": [
+      "s3",
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "exposure",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "cents",
+     "sources": [
+      "s6"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#price",
+     "dated": "2026-11-24",
+     "claim": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11)",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are plant managers and EHS coordinators at small manufacturers",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Dale Ruiz, OSHA-authorised forklift trainer, quoted $520 a session, available weekly in December",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $520 per session",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "14 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#exposure",
+     "dated": "2026-11-24",
+     "claim": "Exposure $0",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s7",
+     "url": "https://brain.local/card/cop_d216ae5fee8d4ed4ad80#price",
+     "dated": "2026-11-24",
+     "claim": "The owner says plants would pay about $1,500 for an audit (PERSON, not evidence)",
+     "population": "small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "INFO audit OFFER_AND_PRICE: owner's word is not a price",
+     "resolution": "Kept: the audit stays excluded."
+    },
+    {
+     "finding": "INFO bowling workbook OFFER_AND_PRICE established by 9 acceptances",
+     "resolution": "Moot: the owner restricted the goal to forklift operator training, so the workbook is out of scope and no longer in Brain's run."
+    },
+    {
+     "finding": "LOW bowling: SEND_A_MESSAGE / ISSUE_AN_INVOICE not connected",
+     "resolution": "Workbook dropped; the same messaging/invoicing need applies to the session orders on days 1 and 14."
+    },
+    {
+     "finding": "LOW forklift backup nets only $1,720",
+     "resolution": "The forklift sessions are now the plan; the metric is settled cash, so $3,800 collected counts against $3,000; all four must pay (three give $2,850)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "why": "The $1,500 price is only what the owner says plants would pay; no buyer agreement or sourced price."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "deals": 4,
+     "price": 950,
+     "directCost": 520,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_1cc7f6672a83_df412b",
+   "digest": "1cc7f6672a832e5f341ca407",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T13:46:18.659Z"
+  },
+  {
+   "goalId": "wst_183929f9c2754f12b4ed",
+   "contractDigest": "b57f386e54dac135da07bca3",
+   "parentRevisionId": "rev_79d5be8d841c_3926a3",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the four signed $950 on-site forklift certification sessions through Dale Ruiz",
+    "opportunityIds": [
+     "cop_f94e1117139b4f6eb1bd"
+    ],
+    "why": "The owner now restricts the goal to forklift operator training, so the bowling workbook is out of scope. Four plant managers signed $950 orders (invoiced net 10); Dale Ruiz, an OSHA-authorised trainer, quoted $520 a session with $0 exposure, and the card measures 14 days to usable cash. 4 x $950 = $3,800 settled against the $3,000 target inside 30 days. All four must pay: three would give $2,850."
+   },
+   "alternatives": [
+    {
+     "title": "Forklift fleet inspection and records audit at $1,500",
+     "why": "Excluded: the $1,500 price is only the owner's say-so (PERSON); no buyer agreement establishes it."
+    },
+    {
+     "title": "Bowling league workbook (previous plan)",
+     "why": "Out of scope: the owner now names forklift operator training as the single industry."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Confirm the four signed $950 session orders and schedule each on-site session with the plant manager in the first December weeks",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 95000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Dale Ruiz delivers the four on-site OSHA forklift certification sessions at $520 each",
+     "performer": "Dale Ruiz, OSHA-authorised forklift trainer",
+     "costCents": 208000,
+     "day": 4,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Dale Ruiz, OSHA-authorised forklift trainer",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Invoice each plant $950 net 10 and collect",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 14,
+     "dependsOn": "s_deliver",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 380000,
+     "label": "4 x $950, net 10",
+     "settlesDay": 14,
+     "stepId": "s_collect"
+    },
+    {
+     "day": 15,
+     "kind": "SPEND",
+     "amountCents": 208000,
+     "label": "Dale Ruiz 4 x $520 (no up-front exposure per card)",
+     "stepId": "s_deliver"
+    }
+   ],
+   "proofDay": 14,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per session",
+     "status": "EVIDENCED",
+     "value": 95000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "trainer cost per session",
+     "status": "EVIDENCED",
+     "value": 52000,
+     "unit": "cents",
+     "sources": [
+      "s3",
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "exposure",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "cents",
+     "sources": [
+      "s6"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#price",
+     "dated": "2026-11-24",
+     "claim": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11)",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are plant managers and EHS coordinators at small manufacturers",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Dale Ruiz, OSHA-authorised forklift trainer, quoted $520 a session, available weekly in December",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $520 per session",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "14 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#exposure",
+     "dated": "2026-11-24",
+     "claim": "Exposure $0",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s7",
+     "url": "https://brain.local/card/cop_d216ae5fee8d4ed4ad80#price",
+     "dated": "2026-11-24",
+     "claim": "The owner says plants would pay about $1,500 for an audit (PERSON, not evidence)",
+     "population": "small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "INFO audit OFFER_AND_PRICE: owner's word is not a price",
+     "resolution": "Kept: the audit stays excluded."
+    },
+    {
+     "finding": "INFO bowling workbook OFFER_AND_PRICE established by 9 acceptances",
+     "resolution": "Moot: the owner restricted the goal to forklift operator training, so the workbook is out of scope and no longer in Brain's run."
+    },
+    {
+     "finding": "LOW bowling: SEND_A_MESSAGE / ISSUE_AN_INVOICE not connected",
+     "resolution": "Workbook dropped; the same messaging/invoicing need applies to the session orders on days 1 and 14."
+    },
+    {
+     "finding": "LOW forklift backup nets only $1,720",
+     "resolution": "The forklift sessions are now the plan; the metric is settled cash, so $3,800 collected counts against $3,000; all four must pay (three give $2,850)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "why": "The $1,500 price is only what the owner says plants would pay; no buyer agreement or sourced price."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "deals": 4,
+     "price": 950,
+     "directCost": 520,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_1cc7f6672a83_986f1d",
+   "digest": "1cc7f6672a832e5f341ca407",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T13:48:56.863Z"
+  },
+  {
+   "goalId": "wst_183929f9c2754f12b4ed",
+   "contractDigest": "b57f386e54dac135da07bca3",
+   "parentRevisionId": "rev_1cc7f6672a83_df412b",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Deliver the four signed $950 on-site forklift certification sessions through Dale Ruiz",
+    "opportunityIds": [
+     "cop_f94e1117139b4f6eb1bd"
+    ],
+    "why": "Four plant managers signed $950 orders (net 10); Dale Ruiz quoted $520 a session with $0 exposure. 4 x $950 = $3,800 settled against $3,000, but all four must pay (three give $2,850), and the trainer record says only \"available weekly in December\": it does not establish four sessions delivered by day 20, which net-10 settlement by day 30 requires. The plan starts by booking the trainer's dates; that booking decides whether it continues."
+   },
+   "alternatives": [
+    {
+     "title": "Forklift fleet inspection and records audit at $1,500",
+     "why": "Excluded: the $1,500 price is only the owner's say-so (PERSON); no buyer agreement establishes it."
+    },
+    {
+     "title": "Bowling league workbook (previous plan)",
+     "why": "Out of scope: the owner now names forklift operator training as the single industry."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t_book",
+     "kind": "TEST",
+     "label": "Ask Dale Ruiz for confirmed dates for all four sessions on or before day 20 and match them to the four plants",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s3"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Confirm the four signed $950 orders and lock each plant to a confirmed trainer date",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t_book",
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 95000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Dale Ruiz delivers the four on-site OSHA forklift certification sessions at $520 each, all by day 20",
+     "performer": "Dale Ruiz, OSHA-authorised forklift trainer",
+     "costCents": 208000,
+     "day": 20,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Dale Ruiz, OSHA-authorised forklift trainer",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Invoice each plant $950 net 10 after its session and collect by day 30",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 30,
+     "dependsOn": "s_deliver",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 30,
+     "kind": "RECEIPT",
+     "amountCents": 380000,
+     "label": "4 x $950, net 10 after sessions held by day 20",
+     "settlesDay": 30,
+     "stepId": "s_collect"
+    },
+    {
+     "day": 30,
+     "kind": "SPEND",
+     "amountCents": 208000,
+     "label": "Dale Ruiz 4 x $520 after receipts (exposure $0 per card)",
+     "stepId": "s_deliver"
+    }
+   ],
+   "proofDay": 2,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per session",
+     "status": "EVIDENCED",
+     "value": 95000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "trainer cost per session",
+     "status": "EVIDENCED",
+     "value": 52000,
+     "unit": "cents",
+     "sources": [
+      "s3",
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "exposure",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "cents",
+     "sources": [
+      "s6"
+     ],
+     "needs": null
+    },
+    {
+     "name": "sessions the trainer can deliver by day 20",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "sessions",
+     "sources": [],
+     "needs": "Dale Ruiz confirms four session dates on or before day 20"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#price",
+     "dated": "2026-11-24",
+     "claim": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11)",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are plant managers and EHS coordinators at small manufacturers",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Dale Ruiz, OSHA-authorised forklift trainer, quoted $520 a session, available weekly in December",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $520 per session",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "14 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#exposure",
+     "dated": "2026-11-24",
+     "claim": "Exposure $0",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s7",
+     "url": "https://brain.local/card/cop_d216ae5fee8d4ed4ad80#price",
+     "dated": "2026-11-24",
+     "claim": "The owner says plants would pay about $1,500 for an audit (PERSON, not evidence)",
+     "population": "small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80"
+    }
+   ],
+   "validation": {
+    "proof": "Dale Ruiz confirms in writing four session dates on or before day 20, each matched to one of the four signed plants, by day 2.",
+    "stop": [
+     "Fewer than four sessions can be booked on or before day 20 (the fourth net-10 payment would settle after day 30 and the plan collects at most $2,850): stop and tell the owner on day 2.",
+     "Any of the four plants withdraws its signed order before its session (no in-scope replacement buyer at an established price)."
+    ],
+    "continue": [
+     "Four confirmed trainer dates on or before day 20 and four plants scheduled: deliver, invoice net 10, collect $3,800 by day 30."
+    ],
+    "decides": [
+     "FULFILMENT"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "HIGH FULFILMENT/SETTLES_IN_TIME: trainer capacity \"available weekly in December\" does not establish four sessions by day 20",
+     "resolution": "Accepted: the fulfillment fact states weekly availability only. Restated as CONDITIONAL; the first step books four trainer dates by day 20 and stops on day 2 if it cannot."
+    },
+    {
+     "finding": "MEDIUM zero margin: all four plants must pay",
+     "resolution": "Accepted: added a stop condition if any plant withdraws; no in-scope replacement buyer at an established price exists."
+    },
+    {
+     "finding": "INFO industry exclusion and audit exclusion correct",
+     "resolution": "Kept."
+    },
+    {
+     "finding": "LOW SEND_A_MESSAGE / ISSUE_AN_INVOICE not connected",
+     "resolution": "Noted: messaging and invoicing are needed on days 1-2 and after each session."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "timeToFirstCash",
+      "price",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "missing": [
+      "FULFILMENT"
+     ]
+    },
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "why": "The $1,500 price is only what the owner says plants would pay; no buyer agreement or sourced price."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "deals": 4,
+     "price": 950,
+     "directCost": 520,
+     "capital": 0
+    }
+   ],
+   "resolves": [
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "link": "FULFILMENT",
+     "reason": "Brain counts fulfilment as established from the trainer quote, but the card's fulfillment fact says only \"available weekly in December\"; it does not establish capacity for four sessions by day 20, which net-10 settlement by day 30 requires for the full $3,800 (three give $2,850 < $3,000)."
+    }
+   ],
+   "revisionId": "rev_9a8c776187a7_da84c6",
+   "digest": "9a8c776187a79cba83202925",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T13:49:19.910Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_183929f9c2754f12b4ed",
+  "contractDigest": "b57f386e54dac135da07bca3",
+  "parentRevisionId": "rev_1cc7f6672a83_df412b",
+  "stance": "CONDITIONAL",
+  "strategy": {
+   "title": "Deliver the four signed $950 on-site forklift certification sessions through Dale Ruiz",
+   "opportunityIds": [
+    "cop_f94e1117139b4f6eb1bd"
+   ],
+   "why": "Four plant managers signed $950 orders (net 10); Dale Ruiz quoted $520 a session with $0 exposure. 4 x $950 = $3,800 settled against $3,000, but all four must pay (three give $2,850), and the trainer record says only \"available weekly in December\": it does not establish four sessions delivered by day 20, which net-10 settlement by day 30 requires. The plan starts by booking the trainer's dates; that booking decides whether it continues."
+  },
+  "alternatives": [
+   {
+    "title": "Forklift fleet inspection and records audit at $1,500",
+    "why": "Excluded: the $1,500 price is only the owner's say-so (PERSON); no buyer agreement establishes it."
+   },
+   {
+    "title": "Bowling league workbook (previous plan)",
+    "why": "Out of scope: the owner now names forklift operator training as the single industry."
+   }
+  ],
+  "steps": [
+   {
+    "id": "t_book",
+    "kind": "TEST",
+    "label": "Ask Dale Ruiz for confirmed dates for all four sessions on or before day 20 and match them to the four plants",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "s3"
+    ],
+    "executor": {
+     "operation": "SEND_OFFER",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s_sell",
+    "kind": "SELL",
+    "label": "Confirm the four signed $950 orders and lock each plant to a confirmed trainer date",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 2,
+    "dependsOn": "t_book",
+    "evidence": [
+     "s1",
+     "s2"
+    ],
+    "priceCents": 95000,
+    "executor": {
+     "operation": "SEND_OFFER",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s_deliver",
+    "kind": "DELIVER",
+    "label": "Dale Ruiz delivers the four on-site OSHA forklift certification sessions at $520 each, all by day 20",
+    "performer": "Dale Ruiz, OSHA-authorised forklift trainer",
+    "costCents": 208000,
+    "day": 20,
+    "dependsOn": "s_sell",
+    "evidence": [
+     "s3",
+     "s4"
+    ],
+    "executor": {
+     "operation": "SUPPLIER_DELIVERS",
+     "performedBy": "PROVIDER",
+     "provider": "Dale Ruiz, OSHA-authorised forklift trainer",
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s_collect",
+    "kind": "COLLECT",
+    "label": "Invoice each plant $950 net 10 after its session and collect by day 30",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 30,
+    "dependsOn": "s_deliver",
+    "evidence": [
+     "s1",
+     "s5"
+    ],
+    "executor": {
+     "operation": "COLLECT_PAYMENT",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "ISSUE_AN_INVOICE",
+       "state": "NOT_CONNECTED"
+      }
+     ],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [
+   {
+    "day": 30,
+    "kind": "RECEIPT",
+    "amountCents": 380000,
+    "label": "4 x $950, net 10 after sessions held by day 20",
+    "settlesDay": 30,
+    "stepId": "s_collect"
+   },
+   {
+    "day": 30,
+    "kind": "SPEND",
+    "amountCents": 208000,
+    "label": "Dale Ruiz 4 x $520 after receipts (exposure $0 per card)",
+    "stepId": "s_deliver"
+   }
+  ],
+  "proofDay": 2,
+  "quantities": [
+   {
+    "name": "signed orders",
+    "status": "EVIDENCED",
+    "value": 4,
+    "unit": "orders",
+    "sources": [
+     "s1"
+    ],
+    "needs": null
+   },
+   {
+    "name": "price per session",
+    "status": "EVIDENCED",
+    "value": 95000,
+    "unit": "cents",
+    "sources": [
+     "s1"
+    ],
+    "needs": null
+   },
+   {
+    "name": "trainer cost per session",
+    "status": "EVIDENCED",
+    "value": 52000,
+    "unit": "cents",
+    "sources": [
+     "s3",
+     "s4"
+    ],
+    "needs": null
+   },
+   {
+    "name": "days to usable cash",
+    "status": "EVIDENCED",
+    "value": 14,
+    "unit": "days",
+    "sources": [
+     "s5"
+    ],
+    "needs": null
+   },
+   {
+    "name": "exposure",
+    "status": "EVIDENCED",
+    "value": 0,
+    "unit": "cents",
+    "sources": [
+     "s6"
+    ],
+    "needs": null
+   },
+   {
+    "name": "sessions the trainer can deliver by day 20",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "sessions",
+    "sources": [],
+    "needs": "Dale Ruiz confirms four session dates on or before day 20"
+   }
+  ],
+  "sources": [
+   {
+    "id": "s1",
+    "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#price",
+    "dated": "2026-11-24",
+    "claim": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11)",
+    "population": "plant managers at small manufacturers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_f94e1117139b4f6eb1bd"
+   },
+   {
+    "id": "s2",
+    "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#payer",
+    "dated": "2026-11-24",
+    "claim": "Payers are plant managers and EHS coordinators at small manufacturers",
+    "population": "plant managers at small manufacturers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_f94e1117139b4f6eb1bd"
+   },
+   {
+    "id": "s3",
+    "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#fulfillment",
+    "dated": "2026-11-24",
+    "claim": "Dale Ruiz, OSHA-authorised forklift trainer, quoted $520 a session, available weekly in December",
+    "population": "trainer quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_f94e1117139b4f6eb1bd"
+   },
+   {
+    "id": "s4",
+    "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#directCosts",
+    "dated": "2026-11-24",
+    "claim": "Direct cost $520 per session",
+    "population": "trainer quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_f94e1117139b4f6eb1bd"
+   },
+   {
+    "id": "s5",
+    "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#timeToFirstCash",
+    "dated": "2026-11-24",
+    "claim": "14 days to first cash",
+    "population": "this opening",
+    "matchesBuyer": true,
+    "opportunityId": "cop_f94e1117139b4f6eb1bd"
+   },
+   {
+    "id": "s6",
+    "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#exposure",
+    "dated": "2026-11-24",
+    "claim": "Exposure $0",
+    "population": "this opening",
+    "matchesBuyer": true,
+    "opportunityId": "cop_f94e1117139b4f6eb1bd"
+   },
+   {
+    "id": "s7",
+    "url": "https://brain.local/card/cop_d216ae5fee8d4ed4ad80#price",
+    "dated": "2026-11-24",
+    "claim": "The owner says plants would pay about $1,500 for an audit (PERSON, not evidence)",
+    "population": "small manufacturers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_d216ae5fee8d4ed4ad80"
+   }
+  ],
+  "validation": {
+   "proof": "Dale Ruiz confirms in writing four session dates on or before day 20, each matched to one of the four signed plants, by day 2.",
+   "stop": [
+    "Fewer than four sessions can be booked on or before day 20 (the fourth net-10 payment would settle after day 30 and the plan collects at most $2,850): stop and tell the owner on day 2.",
+    "Any of the four plants withdraws its signed order before its session (no in-scope replacement buyer at an established price)."
+   ],
+   "continue": [
+    "Four confirmed trainer dates on or before day 20 and four plants scheduled: deliver, invoice net 10, collect $3,800 by day 30."
+   ],
+   "decides": [
+    "FULFILMENT"
+   ]
+  },
+  "noPlan": null,
+  "reach": null,
+  "answers": [
+   {
+    "finding": "HIGH FULFILMENT/SETTLES_IN_TIME: trainer capacity \"available weekly in December\" does not establish four sessions by day 20",
+    "resolution": "Accepted: the fulfillment fact states weekly availability only. Restated as CONDITIONAL; the first step books four trainer dates by day 20 and stops on day 2 if it cannot."
+   },
+   {
+    "finding": "MEDIUM zero margin: all four plants must pay",
+    "resolution": "Accepted: added a stop condition if any plant withdraws; no in-scope replacement buyer at an established price exists."
+   },
+   {
+    "finding": "INFO industry exclusion and audit exclusion correct",
+    "resolution": "Kept."
+   },
+   {
+    "finding": "LOW SEND_A_MESSAGE / ISSUE_AN_INVOICE not connected",
+    "resolution": "Noted: messaging and invoicing are needed on days 1-2 and after each session."
+   },
+   {
+    "condition": 0,
+    "decision": "ACCEPTED",
+    "records": [
+     "fulfillment",
+     "timeToFirstCash",
+     "price",
+     "brain:FULFILMENT"
+    ]
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_f94e1117139b4f6eb1bd",
+    "missing": [
+     "FULFILMENT"
+    ]
+   },
+   {
+    "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+    "why": "The $1,500 price is only what the owner says plants would pay; no buyer agreement or sourced price."
+   }
+  ],
+  "members": [
+   {
+    "opportunityId": "cop_f94e1117139b4f6eb1bd",
+    "deals": 4,
+    "price": 950,
+    "directCost": 520,
+    "capital": 0
+   }
+  ],
+  "resolves": [
+   "FULFILMENT"
+  ],
+  "constraints": [],
+  "disagreements": [
+   {
+    "opportunityId": "cop_f94e1117139b4f6eb1bd",
+    "link": "FULFILMENT",
+    "reason": "Brain counts fulfilment as established from the trainer quote, but the card's fulfillment fact says only \"available weekly in December\"; it does not establish capacity for four sessions by day 20, which net-10 settlement by day 30 requires for the full $3,800 (three give $2,850 < $3,000)."
+   }
+  ],
+  "revisionId": "rev_9a8c776187a7_da84c6",
+  "digest": "9a8c776187a79cba83202925",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_1a74246d600f4cccbbbe/author-B",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T13:49:19.910Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_9a8c776187a7_da84c6",
+  "digest": "9a8c776187a79cba83202925",
+  "contractDigest": "b57f386e54dac135da07bca3",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 208000,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 172000,
+   "minCashDay": 30,
+   "collectedCents": 380000,
+   "collectedInWindowCents": 380000,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 172000
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "\"Only: On-site OSHA forklift operator certification sessions for sm\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"On-site OSHA forklift operator certification sessions for sm\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 55720× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Forklift fleet inspection and operator-records audit for sma\" needs [figure withheld] and keeps [figure withheld], 1200× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"On-site OSHA forklift operator certification sessions for small manufa\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_f94e1117139b4f6eb1bd",
+    "cop_d216ae5fee8d4ed4ad80"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"On-site OSHA forklift operator certification sessions for small manufacturers\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"On-site OSHA forklift operator certification sessions for small manufacturers\"",
+     "owner": "PERSON",
+     "cost": 520
+    },
+    {
+     "label": "Collect payment for \"On-site OSHA forklift operator certification sessions for small manufacturers\"",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+   "openings": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "title": "On-site OSHA forklift operator certification sessions for small manufacturers",
+     "missing": [],
+     "stage": "E_COMMITTED",
+     "supportedReach": 3000,
+     "potentialReach": 3000,
+     "card": {
+      "payer": "Plant managers and EHS coordinators at small manufacturers",
+      "reachableChannel": "The regional manufacturers' association member email list",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:47.486Z",
+      "offerScope": "On-site OSHA forklift operator certification sessions for small manufacturers",
+      "priceCents": 95000,
+      "currency": "USD",
+      "fulfillmentOwner": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available weekly in December)",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [],
+      "industry": "forklift operator training",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 95000,
+       "currency": "USD",
+       "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 95000,
+       "currency": "USD",
+       "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 95000,
+       "currency": "USD",
+       "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 95000,
+       "currency": "USD",
+       "deliverable": "On-site OSHA forklift operator certification sessions for small manufacturers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: The regional manufacturers' association member email list"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 3800 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 3800 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "fulfilled by Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available we (a source says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 520, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "14 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell On-site OSHA forklift operator certification sessions for small manufacturers to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$520",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available weekly in December) quoted to do the work.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Plant managers and EHS coordinators at small manufacturers",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "14 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "title": "Forklift fleet inspection and operator-records audit for small manufacturers",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ],
+     "stage": "D_BUYER_VALIDATED",
+     "supportedReach": 0,
+     "potentialReach": 3000,
+     "card": {
+      "payer": "Plant managers and EHS coordinators at small manufacturers",
+      "reachableChannel": "The regional manufacturers' association member email list",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:47.486Z",
+      "offerScope": "Forklift fleet inspection and operator-records audit for small manufacturers",
+      "priceCents": 150000,
+      "currency": "USD",
+      "fulfillmentOwner": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $300 an audit)",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [],
+      "industry": "forklift operator training",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: The regional manufacturers' association member email list | reach: The regional manufacturers' association member email list"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "a buyer agreed to 3800 USD | price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 3800 USD | measured on this offer's own sales: 3 accepted of 40 contacts"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer | 3 deal(s) needed, 260 available in the window (260 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "fulfilled by Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available we (a source says so) | fulfilled by Dale Ruiz, OSHA-authorised forklift trainer (quoted $300 an audit) (a source says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 520, tied up 0 | cost 300, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "14 days to usable cash against 30 left | 14 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "buyerVolume",
+       "value": "The regional manufacturers' association lists 260 member plants that run forklifts.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Forklift fleet inspection and operator-records audit for small manufacturers to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "conversionRates",
+       "value": "3 agreements from 40 contacts",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$300",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $300 an audit) quoted to do the work.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Plant managers and EHS coordinators at small manufacturers",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "The owner says plants would pay about $1,500 for a fleet inspection and records audit.",
+       "kind": "PERSON"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "14 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d6133366fd04493bbf52",
+     "title": "League standings and handicap workbook for bowling centers",
+     "reason": "left out by the goal's own terms: outside the one industry this goal names (forklift operator training): it is bowling centers",
+     "card": {
+      "payer": "League coordinators at independent bowling centers",
+      "reachableChannel": "Emails in the state bowling proprietors' association directory",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:47.486Z",
+      "offerScope": "League standings and handicap workbook for bowling centers",
+      "priceCents": 40000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 0.5,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "bowling centers",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 40000,
+       "currency": "USD",
+       "deliverable": "League standings and handicap workbook for bowling centers",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell League standings and handicap workbook for bowling centers to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$3",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "League coordinators at independent bowling centers",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Nine league coordinators signed $400 orders for the league workbook (signed orders, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "5 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "questions": [],
+   "scope": {
+    "targetCents": 300000,
+    "daysLeft": 30,
+    "hoursCeiling": null,
+    "industry": "forklift operator training",
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T13:45:33.378Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_79d5be8d841c_3926a3",
+   "revisionDigest": "79d5be8d841cde5720ae15c4",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_977c397fef6f41ecaa0a/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "EXECUTABLE is justified. The member opening has nine written acceptances at $400 on the card from its payer (bowling-league coordinators), and delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET PRESENT). Recomputed: 9 x $400 = $3,600 collected day 5; 9 x $3 = $27 billed after delivery (day 6), so exposure stays $0 under the 0 cap; net $3,573 >= $3,000; settles day 5 of 30. Margin: 8 of 9 paying still gives $3,200 gross ($3,176 net); it fails only if 2 drop, and the forklift sessions (4 written acceptances at $950, named trainer at $520, net 10, 14 days to cash = $3,800 gross / $1,720 net) remain an established backup inside the window. The audit is correctly excluded: its $1,500 price is the owner's say-so (PERSON), not a price a buyer is shown to pay. The recorded disagreement is right: Brain's OFFER_AND_PRICE false on this card comes from a pooled basis whose failing clause is the audit's guess, while this card's own agreements establish its price. I would let the owner act on it.",
+   "findings": [
+    "INFO cop_d216ae5fee8d4ed4ad80 OFFER_AND_PRICE: owner's word is not a price — exclusion correct.",
+    "INFO cop_d6133366fd04493bbf52 OFFER_AND_PRICE: Brain's displayed link basis pools the three openings; the card's 9 written acceptances at $400 establish this one.",
+    "LOW cop_d6133366fd04493bbf52: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; connect before day 1/5.",
+    "LOW cop_f94e1117139b4f6eb1bd: as a backup it alone nets $1,720 after the trainer, so it covers a shortfall of up to ~2 workbook non-payers but is not a full substitute."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:21:24.549Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_1cc7f6672a83_df412b",
+   "revisionDigest": "1cc7f6672a832e5f341ca407",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_977c397fef6f41ecaa0a/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "Scope change handled correctly: the contract now excludes every industry but forklift operator training, so the bowling workbook is out and the forklift sessions are the only in-scope opening with an established price (four written acceptances at $950, net 10); the $1,500 audit stays excluded (owner's word only). Arithmetic: 4 x $950 = $3,800 settled vs $3,000; trainer 4 x $520 = $2,080 paid after receipts, exposure $0; kept $1,720 (the metric is settled cash, so $3,800 counts). The plan has no margin: three sessions give $2,850, so all four must be delivered and paid inside 30 days. That is where it rests on an unknown treated as known. The ledger puts all four sessions on day 4 and all four receipts on day 14, but the fulfiller's only record of capacity is 'quoted $520 a session, available weekly in December'. Nothing on the card says Dale Ruiz can run four on-site sessions in one week; read at face value (one session a week from ~Dec 1), sessions land on about days 4, 11, 18, 25 and net-10 payments on days 14, 21, 28, 35, so the fourth $950 settles after day 30 and the plan collects $2,850. Every session must be delivered by about day 20 for its net-10 payment to settle by day 30. Revise by either (a) recording the trainer's confirmed dates for all four sessions on or before ~day 20 (or a quote that he can do several a week), keeping EXECUTABLE, or (b) restating as CONDITIONAL with the trainer's schedule as the deciding test: proof = four session dates on or before day 20; stop if fewer than four can be booked by day 20 (then the target is unreachable with this opening and the owner should be told on day 1-2, not day 30).",
+   "findings": [
+    "HIGH cop_f94e1117139b4f6eb1bd FULFILMENT/SETTLES_IN_TIME: trainer capacity 'available weekly in December' does not establish four sessions by day 20; at one per week the fourth payment settles ~day 35 and the plan collects $2,850 < $3,000.",
+    "MEDIUM cop_f94e1117139b4f6eb1bd: zero margin — all four plants must pay; no in-scope replacement buyer is established (buyerVolume for sessions is a parked question; the audit's 260-plant list carries no established session price).",
+    "INFO: industry exclusion applied correctly; audit exclusion correct.",
+    "LOW: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; connect before day 1/14."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T13:47:20.751Z",
+   "conditions": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "link": "FULFILMENT",
+     "basis": "EVIDENCE",
+     "field": "fulfillment",
+     "why": "The fulfillment record says the trainer is 'available weekly in December'; it does not establish capacity for four sessions by about day 20, which the plan needs for all four net-10 payments to settle by day 30 (three give $2,850 < $3,000)."
+    }
+   ]
+  },
+  {
+   "revisionId": "rev_1cc7f6672a83_986f1d",
+   "revisionDigest": "1cc7f6672a832e5f341ca407",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_977c397fef6f41ecaa0a/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "This revision is byte-for-byte the plan of rev_1cc7f6672a83_df412b (same digest 1cc7f6672a83…), resubmitted without answering that review, so the same defect stands. Scope change handled correctly: the contract now excludes every industry but forklift operator training, so the bowling workbook is out and the forklift sessions are the only in-scope opening with an established price (four written acceptances at $950, net 10); the $1,500 audit stays excluded (owner's word only). Arithmetic: 4 x $950 = $3,800 settled vs $3,000; trainer 4 x $520 = $2,080 paid after receipts, exposure $0; kept $1,720 (the metric is settled cash, so $3,800 counts). The plan has no margin: three sessions give $2,850, so all four must be delivered and paid inside 30 days. That is where it rests on an unknown treated as known. The ledger puts all four sessions on day 4 and all four receipts on day 14, but the fulfiller's only record of capacity is 'quoted $520 a session, available weekly in December'. Nothing on the card says Dale Ruiz can run four on-site sessions in one week; read at face value (one session a week from ~Dec 1), sessions land on about days 4, 11, 18, 25 and net-10 payments on days 14, 21, 28, 35, so the fourth $950 settles after day 30 and the plan collects $2,850. Every session must be delivered by about day 20 for its net-10 payment to settle by day 30. Revise by either (a) recording the trainer's confirmed dates for all four sessions on or before ~day 20 (or a quote that he can do several a week), keeping EXECUTABLE, or (b) restating as CONDITIONAL with the trainer's schedule as the deciding test: proof = four session dates on or before day 20; stop if fewer than four can be booked by day 20 (then the target is unreachable with this opening and the owner should be told on day 1-2, not day 30).",
+   "findings": [
+    "HIGH cop_f94e1117139b4f6eb1bd FULFILMENT/SETTLES_IN_TIME: trainer capacity 'available weekly in December' does not establish four sessions by day 20; at one per week the fourth payment settles ~day 35 and the plan collects $2,850 < $3,000.",
+    "MEDIUM cop_f94e1117139b4f6eb1bd: zero margin — all four plants must pay; no in-scope replacement buyer is established (buyerVolume for sessions is a parked question; the audit's 260-plant list carries no established session price).",
+    "INFO: industry exclusion applied correctly; audit exclusion correct.",
+    "LOW: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; connect before day 1/14."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T13:49:29.811Z",
+   "conditions": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "link": "FULFILMENT",
+     "basis": "EVIDENCE",
+     "field": "fulfillment",
+     "why": "The fulfillment record says the trainer is 'available weekly in December'; it does not establish capacity for four sessions by about day 20, which the plan needs for all four net-10 payments to settle by day 30 (three give $2,850 < $3,000)."
+    }
+   ]
+  },
+  {
+   "revisionId": "rev_9a8c776187a7_da84c6",
+   "revisionDigest": "9a8c776187a79cba83202925",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_977c397fef6f41ecaa0a/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "CONDITIONAL is now the right stance. Everything else is established (four written acceptances at $950 net 10 in the only in-scope industry; trainer quote $520/session; $0 exposure since the trainer is paid after receipts), and the one unknown — whether Dale Ruiz can deliver four sessions by day 20 — is exactly what a live booking measures, it is named as the decisive link (validation.decides FULFILMENT), recorded as UNKNOWN in quantities rather than assumed, and carries proof (four written dates on or before day 20 by day 2), stop (fewer than four bookable, or a plant withdraws — tell the owner day 2) and continue rules. Arithmetic: 4 x $950 = $3,800 settled by day 30 vs $3,000; 4 x $520 = $2,080 paid after; kept $1,720; three sessions give $2,850, so the stop rule at fewer than four is correctly placed. The audit (owner's word) and bowling workbook (excluded industry) are correctly out. I would let the owner act on it.",
+   "findings": [
+    "LOW cop_f94e1117139b4f6eb1bd SETTLES_IN_TIME: the ledger books all receipts on day 30, the last day; prefer trainer dates well before day 20 so a late net-10 payment still lands inside the window.",
+    "LOW: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; the day-1 test needs messaging connected.",
+    "INFO: disagreement with Brain's FULFILMENT basis is well-founded (capacity unstated)."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T13:49:57.913Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_9a8c776187a7_da84c6",
+  "digest": "9a8c776187a79cba83202925",
+  "contractDigest": "b57f386e54dac135da07bca3",
+  "plan": {
+   "goalId": "wst_183929f9c2754f12b4ed",
+   "contractDigest": "b57f386e54dac135da07bca3",
+   "parentRevisionId": "rev_1cc7f6672a83_df412b",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Deliver the four signed $950 on-site forklift certification sessions through Dale Ruiz",
+    "opportunityIds": [
+     "cop_f94e1117139b4f6eb1bd"
+    ],
+    "why": "Four plant managers signed $950 orders (net 10); Dale Ruiz quoted $520 a session with $0 exposure. 4 x $950 = $3,800 settled against $3,000, but all four must pay (three give $2,850), and the trainer record says only \"available weekly in December\": it does not establish four sessions delivered by day 20, which net-10 settlement by day 30 requires. The plan starts by booking the trainer's dates; that booking decides whether it continues."
+   },
+   "alternatives": [
+    {
+     "title": "Forklift fleet inspection and records audit at $1,500",
+     "why": "Excluded: the $1,500 price is only the owner's say-so (PERSON); no buyer agreement establishes it."
+    },
+    {
+     "title": "Bowling league workbook (previous plan)",
+     "why": "Out of scope: the owner now names forklift operator training as the single industry."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t_book",
+     "kind": "TEST",
+     "label": "Ask Dale Ruiz for confirmed dates for all four sessions on or before day 20 and match them to the four plants",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s3"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Confirm the four signed $950 orders and lock each plant to a confirmed trainer date",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t_book",
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 95000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Dale Ruiz delivers the four on-site OSHA forklift certification sessions at $520 each, all by day 20",
+     "performer": "Dale Ruiz, OSHA-authorised forklift trainer",
+     "costCents": 208000,
+     "day": 20,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Dale Ruiz, OSHA-authorised forklift trainer",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Invoice each plant $950 net 10 after its session and collect by day 30",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 30,
+     "dependsOn": "s_deliver",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 30,
+     "kind": "RECEIPT",
+     "amountCents": 380000,
+     "label": "4 x $950, net 10 after sessions held by day 20",
+     "settlesDay": 30,
+     "stepId": "s_collect"
+    },
+    {
+     "day": 30,
+     "kind": "SPEND",
+     "amountCents": 208000,
+     "label": "Dale Ruiz 4 x $520 after receipts (exposure $0 per card)",
+     "stepId": "s_deliver"
+    }
+   ],
+   "proofDay": 2,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per session",
+     "status": "EVIDENCED",
+     "value": 95000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "trainer cost per session",
+     "status": "EVIDENCED",
+     "value": 52000,
+     "unit": "cents",
+     "sources": [
+      "s3",
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "exposure",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "cents",
+     "sources": [
+      "s6"
+     ],
+     "needs": null
+    },
+    {
+     "name": "sessions the trainer can deliver by day 20",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "sessions",
+     "sources": [],
+     "needs": "Dale Ruiz confirms four session dates on or before day 20"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#price",
+     "dated": "2026-11-24",
+     "claim": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11)",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are plant managers and EHS coordinators at small manufacturers",
+     "population": "plant managers at small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Dale Ruiz, OSHA-authorised forklift trainer, quoted $520 a session, available weekly in December",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $520 per session",
+     "population": "trainer quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "14 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_f94e1117139b4f6eb1bd#exposure",
+     "dated": "2026-11-24",
+     "claim": "Exposure $0",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f94e1117139b4f6eb1bd"
+    },
+    {
+     "id": "s7",
+     "url": "https://brain.local/card/cop_d216ae5fee8d4ed4ad80#price",
+     "dated": "2026-11-24",
+     "claim": "The owner says plants would pay about $1,500 for an audit (PERSON, not evidence)",
+     "population": "small manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80"
+    }
+   ],
+   "validation": {
+    "proof": "Dale Ruiz confirms in writing four session dates on or before day 20, each matched to one of the four signed plants, by day 2.",
+    "stop": [
+     "Fewer than four sessions can be booked on or before day 20 (the fourth net-10 payment would settle after day 30 and the plan collects at most $2,850): stop and tell the owner on day 2.",
+     "Any of the four plants withdraws its signed order before its session (no in-scope replacement buyer at an established price)."
+    ],
+    "continue": [
+     "Four confirmed trainer dates on or before day 20 and four plants scheduled: deliver, invoice net 10, collect $3,800 by day 30."
+    ],
+    "decides": [
+     "FULFILMENT"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "HIGH FULFILMENT/SETTLES_IN_TIME: trainer capacity \"available weekly in December\" does not establish four sessions by day 20",
+     "resolution": "Accepted: the fulfillment fact states weekly availability only. Restated as CONDITIONAL; the first step books four trainer dates by day 20 and stops on day 2 if it cannot."
+    },
+    {
+     "finding": "MEDIUM zero margin: all four plants must pay",
+     "resolution": "Accepted: added a stop condition if any plant withdraws; no in-scope replacement buyer at an established price exists."
+    },
+    {
+     "finding": "INFO industry exclusion and audit exclusion correct",
+     "resolution": "Kept."
+    },
+    {
+     "finding": "LOW SEND_A_MESSAGE / ISSUE_AN_INVOICE not connected",
+     "resolution": "Noted: messaging and invoicing are needed on days 1-2 and after each session."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "timeToFirstCash",
+      "price",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "missing": [
+      "FULFILMENT"
+     ]
+    },
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d216ae5fee8d4ed4ad80",
+     "why": "The $1,500 price is only what the owner says plants would pay; no buyer agreement or sourced price."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "deals": 4,
+     "price": 950,
+     "directCost": 520,
+     "capital": 0
+    }
+   ],
+   "resolves": [
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_f94e1117139b4f6eb1bd",
+     "link": "FULFILMENT",
+     "reason": "Brain counts fulfilment as established from the trainer quote, but the card's fulfillment fact says only \"available weekly in December\"; it does not establish capacity for four sessions by day 20, which net-10 settlement by day 30 requires for the full $3,800 (three give $2,850 < $3,000)."
+    }
+   ],
+   "revisionId": "rev_9a8c776187a7_da84c6",
+   "digest": "9a8c776187a79cba83202925",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T13:49:19.910Z"
+  },
+  "review": {
+   "revisionId": "rev_9a8c776187a7_da84c6",
+   "revisionDigest": "9a8c776187a79cba83202925",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1a74246d600f4cccbbbe/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_977c397fef6f41ecaa0a/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "CONDITIONAL is now the right stance. Everything else is established (four written acceptances at $950 net 10 in the only in-scope industry; trainer quote $520/session; $0 exposure since the trainer is paid after receipts), and the one unknown — whether Dale Ruiz can deliver four sessions by day 20 — is exactly what a live booking measures, it is named as the decisive link (validation.decides FULFILMENT), recorded as UNKNOWN in quantities rather than assumed, and carries proof (four written dates on or before day 20 by day 2), stop (fewer than four bookable, or a plant withdraws — tell the owner day 2) and continue rules. Arithmetic: 4 x $950 = $3,800 settled by day 30 vs $3,000; 4 x $520 = $2,080 paid after; kept $1,720; three sessions give $2,850, so the stop rule at fewer than four is correctly placed. The audit (owner's word) and bowling workbook (excluded industry) are correctly out. I would let the owner act on it.",
+   "findings": [
+    "LOW cop_f94e1117139b4f6eb1bd SETTLES_IN_TIME: the ledger books all receipts on day 30, the last day; prefer trainer dates well before day 20 so a late net-10 payment still lands inside the window.",
+    "LOW: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; the day-1 test needs messaging connected.",
+    "INFO: disagreement with Brain's FULFILMENT basis is well-founded (capacity unstated)."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T13:49:57.913Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $3,000 of settled cash within 30 days in a single industry the owner names: forklift operator training, using no up-front capital.",
+   "terms": "30dc89726327948f",
+   "openings": {
+    "cop_d216ae5fee8d4ed4ad80": "7b353165454ad740",
+    "cop_d6133366fd04493bbf52": "c8c3b05bc0208052",
+    "cop_f94e1117139b4f6eb1bd": "b0051fec3c9c8633"
+   }
+  },
+  "at": "2026-11-27T13:51:42.860Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

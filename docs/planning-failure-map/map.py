@@ -789,3 +789,13 @@ for _w in WORKFLOW:
         _w.update(evidence=_w['evidence'] + '; run 9 ak-01 (critical): an hourly wage for the owner was admitted as an opening, now excluded', status='PARTIAL', remaining='Fresh acceptance on the wage repair: run 10.')
     if _w['id'] == 'W02':
         _w.update(remaining='Run 9 discovery 2/4 (1 critical: a wage admitted; 1 proof rule arithmetically insufficient). Fresh acceptance: run 10.')
+
+# ---- Run 10 (frozen a5412ec; run10-acceptance) ----
+_R10 = f'{_J}/run10-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 10 on a5412ec: 14/16 = 0.875 (Wilson 0.64-0.97), 0 critical; bench 11/12, discovery 3/4 ({_R10})', remaining='Standard (>= 0.90, zero critical) not met: al-08 (trainer capacity read as one session a week; evidence wording supports both readings) and am-03 (per-opening arithmetic incomplete; owner-only fulfilment not a decisive link).')
+    if _w['id'] == 'W12':
+        _w.update(evidence=_w['evidence'] + '; run 10: no wage or other critical route admitted', status='PASS', remaining='None from run 10.')
+    if _w['id'] == 'W02':
+        _w.update(remaining='Run 10 discovery 3/4, 0 critical; am-03 failed on incomplete per-opening arithmetic and an untested owner-fulfilment constraint.')

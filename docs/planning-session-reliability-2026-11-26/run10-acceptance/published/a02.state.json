@@ -1,0 +1,1500 @@
+{
+ "contract": {
+  "goalId": "wst_c85aacb85e474aa782e1",
+  "words": "Collect $4,000 of settled cash within 30 days with at most $3,000 of capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 400000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 30,
+   "totalSpendCapCents": 300000,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": null,
+   "proofCondition": "$4,000 of settled cash received in the owner's account within 30 days",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "1c4b397afa2888a6fcccad94"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_c85aacb85e474aa782e1",
+   "contractDigest": "1c4b397afa2888a6fcccad94",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the 7 signed denial-appeal tracker workbooks at $650 and collect net 7",
+    "opportunityIds": [
+     "cop_6d439d08f4284435b936"
+    ],
+    "why": "Seven clinic billing managers signed order forms at $650 each (signed order forms 2026-11-18 to 11-24, invoiced net 7). Brain produces the spreadsheet; direct cost $8 each, $0 exposure. 7 x $650 = $4,550 gross, $4,494 after $56 direct cost, settled by about day 12 of 30, using $56 of the $3,000 capital ceiling. No new sales are needed."
+   },
+   "alternatives": [
+    {
+     "title": "Remote therapeutic monitoring set-up at $50",
+     "why": "Excluded: the $50 is Medicare's reimbursement to clinics per patient per month (CPT 98977), not a price any clinic has paid for the set-up, and at 12/100 conversion the 480-clinic directory yields about 38 deals, far short of the 81 needed."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the denial-appeal tracker workbook to each of the 7 signed clinics",
+     "performer": "BRAIN",
+     "costCents": 5600,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "signedOrders",
+      "directCost",
+      "src_price",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "COLLECT",
+     "label": "Invoice the 7 clinics $650 each, net 7, and collect",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "daysToCash",
+      "src_price",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 2,
+     "kind": "SPEND",
+     "amountCents": 5600,
+     "label": "Direct cost $8 per workbook x 7",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 455000,
+     "label": "7 x $650 invoices, net 7",
+     "settlesDay": 10,
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "signed order forms",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 650,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days (net 7)",
+     "sources": [
+      "src_ttfc",
+      "src_price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#price",
+     "dated": "2026-11-24",
+     "claim": "Seven clinic billing managers signed order forms at $650 each, invoiced net 7 (2026-11-18 to 2026-11-24)",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $8 per workbook; exposure $0",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "7 days to first cash",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_rtm_price",
+     "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#price",
+     "dated": "2026-11",
+     "claim": "Medicare reimburses clinics about $50 per patient per month for RTM device supply (CPT 98977)",
+     "population": "Medicare reimbursement to clinics, not clinic purchases",
+     "matchesBuyer": false,
+     "opportunityId": "cop_15d4aa6d298f4aba9055"
+    },
+    {
+     "id": "src_rtm_vol",
+     "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Directory lists 480 member clinics",
+     "population": "PT association member clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_15d4aa6d298f4aba9055"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_6d439d08f4284435b936",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "why": "The $50 is a Medicare reimbursement paid to clinics (CPT 98977), not a price any clinic pays for set-up, so no price is established; and 480 clinics at 12/100 yields ~38 deals, short of the 81 the target would need."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_6d439d08f4284435b936",
+     "deals": 7,
+     "price": 650,
+     "directCost": 8,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain marks the price ok on 'price 50 USD (EVIDENCE)', but the card's price fact is Medicare's reimbursement to clinics per patient per month (CPT 98977, 2026 fee schedule) — a payment a clinic receives, not a price a clinic has paid for the set-up. No buyer price is established."
+    }
+   ],
+   "revisionId": "rev_c74962da82d3_6ca953",
+   "digest": "c74962da82d3de6464f847f5",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_950159a6414748c99c86/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:28.534Z"
+  },
+  {
+   "goalId": "wst_c85aacb85e474aa782e1",
+   "contractDigest": "1c4b397afa2888a6fcccad94",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the 7 signed denial-appeal tracker workbooks at $650 and collect net 7",
+    "opportunityIds": [
+     "cop_6d439d08f4284435b936"
+    ],
+    "why": "Seven clinic billing managers signed order forms at $650 each (signed order forms 2026-11-18 to 11-24, invoiced net 7). Brain produces the spreadsheet; direct cost $8 each, $0 exposure. 7 x $650 = $4,550 gross, $4,494 after $56 direct cost, settled by about day 12 of 30, using $56 of the $3,000 capital ceiling. No new sales are needed."
+   },
+   "alternatives": [
+    {
+     "title": "Remote therapeutic monitoring set-up at $50",
+     "why": "Excluded: the $50 is Medicare's reimbursement to clinics per patient per month (CPT 98977), not a price any clinic has paid for the set-up, and at 12/100 conversion the 480-clinic directory yields about 38 deals, far short of the 81 needed."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "SELL",
+     "label": "Confirm the 7 signed $650 order forms with each clinic's billing manager and schedule delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "signedOrders",
+      "price",
+      "src_price"
+     ],
+     "priceCents": 65000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the denial-appeal tracker workbook to each of the 7 signed clinics",
+     "performer": "BRAIN",
+     "costCents": 5600,
+     "day": 2,
+     "dependsOn": "s0",
+     "evidence": [
+      "signedOrders",
+      "directCost",
+      "src_price",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "COLLECT",
+     "label": "Invoice the 7 clinics $650 each, net 7, and collect",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "daysToCash",
+      "src_price",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 2,
+     "kind": "SPEND",
+     "amountCents": 5600,
+     "label": "Direct cost $8 per workbook x 7",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 455000,
+     "label": "7 x $650 invoices, net 7",
+     "settlesDay": 10,
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "signed order forms",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 650,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days (net 7)",
+     "sources": [
+      "src_ttfc",
+      "src_price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#price",
+     "dated": "2026-11-24",
+     "claim": "Seven clinic billing managers signed order forms at $650 each, invoiced net 7 (2026-11-18 to 2026-11-24)",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $8 per workbook; exposure $0",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "7 days to first cash",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_rtm_price",
+     "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#price",
+     "dated": "2026-11",
+     "claim": "Medicare reimburses clinics about $50 per patient per month for RTM device supply (CPT 98977)",
+     "population": "Medicare reimbursement to clinics, not clinic purchases",
+     "matchesBuyer": false,
+     "opportunityId": "cop_15d4aa6d298f4aba9055"
+    },
+    {
+     "id": "src_rtm_vol",
+     "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Directory lists 480 member clinics",
+     "population": "PT association member clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_15d4aa6d298f4aba9055"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_6d439d08f4284435b936",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "why": "The $50 is a Medicare reimbursement paid to clinics (CPT 98977), not a price any clinic pays for set-up, so no price is established; and 480 clinics at 12/100 yields ~38 deals, short of the 81 the target would need."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_6d439d08f4284435b936",
+     "deals": 7,
+     "price": 650,
+     "directCost": 8,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain marks the price ok on 'price 50 USD (EVIDENCE)', but the card's price fact is Medicare's reimbursement to clinics per patient per month (CPT 98977, 2026 fee schedule) — a payment a clinic receives, not a price a clinic has paid for the set-up. No buyer price is established."
+    }
+   ],
+   "revisionId": "rev_9a2f65fafa47_0669d2",
+   "digest": "9a2f65fafa475944e7b21ce2",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_950159a6414748c99c86/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:40.358Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_c85aacb85e474aa782e1",
+  "contractDigest": "1c4b397afa2888a6fcccad94",
+  "parentRevisionId": null,
+  "stance": "EXECUTABLE",
+  "strategy": {
+   "title": "Deliver the 7 signed denial-appeal tracker workbooks at $650 and collect net 7",
+   "opportunityIds": [
+    "cop_6d439d08f4284435b936"
+   ],
+   "why": "Seven clinic billing managers signed order forms at $650 each (signed order forms 2026-11-18 to 11-24, invoiced net 7). Brain produces the spreadsheet; direct cost $8 each, $0 exposure. 7 x $650 = $4,550 gross, $4,494 after $56 direct cost, settled by about day 12 of 30, using $56 of the $3,000 capital ceiling. No new sales are needed."
+  },
+  "alternatives": [
+   {
+    "title": "Remote therapeutic monitoring set-up at $50",
+    "why": "Excluded: the $50 is Medicare's reimbursement to clinics per patient per month (CPT 98977), not a price any clinic has paid for the set-up, and at 12/100 conversion the 480-clinic directory yields about 38 deals, far short of the 81 needed."
+   }
+  ],
+  "steps": [
+   {
+    "id": "s0",
+    "kind": "SELL",
+    "label": "Confirm the 7 signed $650 order forms with each clinic's billing manager and schedule delivery",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "signedOrders",
+     "price",
+     "src_price"
+    ],
+    "priceCents": 65000,
+    "executor": {
+     "operation": "SEND_OFFER",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s1",
+    "kind": "DELIVER",
+    "label": "Produce and deliver the denial-appeal tracker workbook to each of the 7 signed clinics",
+    "performer": "BRAIN",
+    "costCents": 5600,
+    "day": 2,
+    "dependsOn": "s0",
+    "evidence": [
+     "signedOrders",
+     "directCost",
+     "src_price",
+     "src_delivery",
+     "src_cost"
+    ],
+    "executor": {
+     "operation": "BRAIN_PRODUCES",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "PRODUCE_SPREADSHEET",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s2",
+    "kind": "COLLECT",
+    "label": "Invoice the 7 clinics $650 each, net 7, and collect",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 3,
+    "dependsOn": "s1",
+    "evidence": [
+     "price",
+     "daysToCash",
+     "src_price",
+     "src_ttfc"
+    ],
+    "executor": {
+     "operation": "COLLECT_PAYMENT",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "ISSUE_AN_INVOICE",
+       "state": "NOT_CONNECTED"
+      }
+     ],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [
+   {
+    "day": 2,
+    "kind": "SPEND",
+    "amountCents": 5600,
+    "label": "Direct cost $8 per workbook x 7",
+    "stepId": "s1"
+   },
+   {
+    "day": 3,
+    "kind": "RECEIPT",
+    "amountCents": 455000,
+    "label": "7 x $650 invoices, net 7",
+    "settlesDay": 10,
+    "stepId": "s2"
+   }
+  ],
+  "proofDay": 10,
+  "quantities": [
+   {
+    "name": "signedOrders",
+    "status": "EVIDENCED",
+    "value": 7,
+    "unit": "signed order forms",
+    "sources": [
+     "src_price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "price",
+    "status": "EVIDENCED",
+    "value": 650,
+    "unit": "USD per workbook",
+    "sources": [
+     "src_price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "directCost",
+    "status": "EVIDENCED",
+    "value": 8,
+    "unit": "USD per workbook",
+    "sources": [
+     "src_cost"
+    ],
+    "needs": null
+   },
+   {
+    "name": "daysToCash",
+    "status": "EVIDENCED",
+    "value": 7,
+    "unit": "days (net 7)",
+    "sources": [
+     "src_ttfc",
+     "src_price"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "src_price",
+    "url": "https://brain.local/card/cop_6d439d08f4284435b936#price",
+    "dated": "2026-11-24",
+    "claim": "Seven clinic billing managers signed order forms at $650 each, invoiced net 7 (2026-11-18 to 2026-11-24)",
+    "population": "billing managers at independent outpatient PT clinics",
+    "matchesBuyer": true,
+    "opportunityId": "cop_6d439d08f4284435b936"
+   },
+   {
+    "id": "src_delivery",
+    "url": "https://brain.local/card/cop_6d439d08f4284435b936#delivery",
+    "dated": "2026-11",
+    "claim": "A spreadsheet Brain produces",
+    "population": "billing managers at independent outpatient PT clinics",
+    "matchesBuyer": true,
+    "opportunityId": "cop_6d439d08f4284435b936"
+   },
+   {
+    "id": "src_cost",
+    "url": "https://brain.local/card/cop_6d439d08f4284435b936#directCosts",
+    "dated": "2026-11",
+    "claim": "Direct cost $8 per workbook; exposure $0",
+    "population": "billing managers at independent outpatient PT clinics",
+    "matchesBuyer": true,
+    "opportunityId": "cop_6d439d08f4284435b936"
+   },
+   {
+    "id": "src_ttfc",
+    "url": "https://brain.local/card/cop_6d439d08f4284435b936#timeToFirstCash",
+    "dated": "2026-11",
+    "claim": "7 days to first cash",
+    "population": "billing managers at independent outpatient PT clinics",
+    "matchesBuyer": true,
+    "opportunityId": "cop_6d439d08f4284435b936"
+   },
+   {
+    "id": "src_rtm_price",
+    "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#price",
+    "dated": "2026-11",
+    "claim": "Medicare reimburses clinics about $50 per patient per month for RTM device supply (CPT 98977)",
+    "population": "Medicare reimbursement to clinics, not clinic purchases",
+    "matchesBuyer": false,
+    "opportunityId": "cop_15d4aa6d298f4aba9055"
+   },
+   {
+    "id": "src_rtm_vol",
+    "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#buyerVolume",
+    "dated": "2026-11",
+    "claim": "Directory lists 480 member clinics",
+    "population": "PT association member clinics",
+    "matchesBuyer": true,
+    "opportunityId": "cop_15d4aa6d298f4aba9055"
+   }
+  ],
+  "validation": null,
+  "noPlan": null,
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_6d439d08f4284435b936",
+    "missing": []
+   },
+   {
+    "opportunityId": "cop_15d4aa6d298f4aba9055",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_15d4aa6d298f4aba9055",
+    "why": "The $50 is a Medicare reimbursement paid to clinics (CPT 98977), not a price any clinic pays for set-up, so no price is established; and 480 clinics at 12/100 yields ~38 deals, short of the 81 the target would need."
+   }
+  ],
+  "members": [
+   {
+    "opportunityId": "cop_6d439d08f4284435b936",
+    "deals": 7,
+    "price": 650,
+    "directCost": 8,
+    "capital": 0
+   }
+  ],
+  "resolves": [],
+  "constraints": [],
+  "disagreements": [
+   {
+    "opportunityId": "cop_15d4aa6d298f4aba9055",
+    "link": "OFFER_AND_PRICE",
+    "reason": "Brain marks the price ok on 'price 50 USD (EVIDENCE)', but the card's price fact is Medicare's reimbursement to clinics per patient per month (CPT 98977, 2026 fee schedule) — a payment a clinic receives, not a price a clinic has paid for the set-up. No buyer price is established."
+   }
+  ],
+  "revisionId": "rev_9a2f65fafa47_0669d2",
+  "digest": "9a2f65fafa475944e7b21ce2",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_950159a6414748c99c86/author-A",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:14:40.358Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_9a2f65fafa47_0669d2",
+  "digest": "9a2f65fafa475944e7b21ce2",
+  "contractDigest": "1c4b397afa2888a6fcccad94",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 5600,
+   "committedOpenCents": 0,
+   "preProofCents": 5600,
+   "maxExposureCents": 5600,
+   "minCashCents": 294400,
+   "minCashDay": 2,
+   "collectedCents": 455000,
+   "collectedInWindowCents": 455000,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 449400
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "\"Only: Insurance-denial appeal tracker workbook for outpatient phys\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Insurance-denial appeal tracker workbook for outpatient phys\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost)) it would reach 100% (p50 $28,400): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Insurance-denial appeal tracker workbook for outpatient physical thera\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_6d439d08f4284435b936",
+    "cop_15d4aa6d298f4aba9055"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"Insurance-denial appeal tracker workbook for outpatient physical therapy clinics\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"Insurance-denial appeal tracker workbook for outpatient physical therapy clinics\"",
+     "owner": "PERSON",
+     "cost": 8
+    },
+    {
+     "label": "Collect payment for \"Insurance-denial appeal tracker workbook for outpatient physical therapy clinics\"",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+   "openings": [
+    {
+     "opportunityId": "cop_6d439d08f4284435b936",
+     "title": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+     "missing": [],
+     "stage": "E_COMMITTED",
+     "supportedReach": 4000,
+     "potentialReach": 4000,
+     "card": {
+      "payer": "Billing managers at independent outpatient PT clinics",
+      "reachableChannel": "Billing-manager emails in the state physical therapy association's member directory",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:14.871Z",
+      "offerScope": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "priceCents": 65000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "outpatient physical therapy",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 65000,
+       "currency": "USD",
+       "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 65000,
+       "currency": "USD",
+       "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 65000,
+       "currency": "USD",
+       "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 65000,
+       "currency": "USD",
+       "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 65000,
+       "currency": "USD",
+       "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 65000,
+       "currency": "USD",
+       "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 65000,
+       "currency": "USD",
+       "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Billing-manager emails in the state physical therapy association's member direct"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 4550 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 4550 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "no new deals needed"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 8, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "7 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Insurance-denial appeal tracker workbook for outpatient physical therapy clinics to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$8",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Billing managers at independent outpatient PT clinics",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Seven clinic billing managers signed order forms at $650 each for the denial-appeal tracker, invoiced net 7 (signed order forms, 2026-11-18 to 2026-11-24).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "7 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "title": "Remote therapeutic monitoring set-up for PT clinics",
+     "missing": [
+      "MARKET_VOLUME"
+     ],
+     "stage": "D_BUYER_VALIDATED",
+     "supportedReach": 4000,
+     "potentialReach": 4000,
+     "card": {
+      "payer": "Clinic owners at outpatient PT practices",
+      "reachableChannel": "Billing-manager emails in the state physical therapy association's member directory",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:14.871Z",
+      "offerScope": "Remote therapeutic monitoring set-up for PT clinics",
+      "priceCents": 5000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 0.5,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "outpatient physical therapy",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Billing-manager emails in the state physical therapy association's member direct | reach: Billing-manager emails in the state physical therapy association's member direct"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 4550 USD | price 50 USD (EVIDENCE)"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 4550 USD | measured on this offer's own sales: 12 accepted of 100 contacts"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": false,
+       "basis": "no new deals needed | 81 deal(s) needed at the measured rate means asking 1017 prospects, but the market holds only 480 (480 reachable buyers, each holding one subscription at the price per period (its own service frequency is inside that price)): at that rate it yields about 38.2"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 8, tied up 0 | cost 5, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "7 days to usable cash against 30 left | 7 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "buyerVolume",
+       "value": "The state physical therapy association's directory lists 480 member clinics; each treats Medicare patients weekly.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Remote therapeutic monitoring set-up for PT clinics to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "conversionRates",
+       "value": "12 agreements from 100 contacts",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$5",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Clinic owners at outpatient PT practices",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Medicare reimburses clinics about $50 per patient per month for remote therapeutic monitoring device supply (CPT 98977, 2026 physician fee schedule).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "7 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_c7b29e5639a04425b065"
+   ],
+   "scope": {
+    "targetCents": 400000,
+    "daysLeft": 30,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:11:46.898Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_9a2f65fafa47_0669d2",
+   "revisionDigest": "9a2f65fafa475944e7b21ce2",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_950159a6414748c99c86/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_fd3a479c2eeb4151b2ef/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "EXECUTABLE is justified. The price is a purchase price this buyer committed to: seven written acceptances (signed order forms, 2026-11-18 to 11-24) at $650 each are recorded as agreements on the card, from the payer named on the card (PT clinic billing managers); no new sales, conversion or market volume is needed. Fulfilment is a spreadsheet Brain produces (PRODUCE_SPREADSHEET PRESENT). Arithmetic recomputed: 7 x $650 = $4,550 gross; 7 x $8 = $56 direct cost; net $4,494 >= $4,000; spend $56 <= $3,000 cap; min cash $2,944 positive after day-2 spend... (trace minCash shown positive); invoiced day 3 net 7, settles day 10 of 30, inside the window. The RTM alternative is correctly excluded: its $50 is a Medicare reimbursement to clinics, not a price a clinic pays, and 480 clinics x 12% ~ 38 deals < 81 needed; the disagreement with Brain's OFFER_AND_PRICE basis for it is right. Caveat that does not change the verdict: the plan has no margin on collection — 6 of 7 paying yields $3,852 net, below target — so every signed clinic must pay; recommend arming a backup sale to the same association directory if any invoice is unpaid by day 12.",
+   "findings": [
+    "LOW cop_6d439d08f4284435b936 SETTLES_IN_TIME: zero collection margin — one non-paying clinic (6 x $650 - $48 = $3,852) misses $4,000; keep 18 days of window for a backup sale.",
+    "LOW cop_6d439d08f4284435b936 FULFILMENT: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected before s0/s2. Brain's own step list labels delivery PERSON while the plan says BRAIN; card humanHours 1 per deal (~7 owner hours) should be stated, though the contract sets no hours ceiling.",
+    "INFO cop_15d4aa6d298f4aba9055 OFFER_AND_PRICE: exclusion and disagreement correct — Medicare reimbursement is not a clinic's purchase price."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:16:58.392Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_9a2f65fafa47_0669d2",
+  "digest": "9a2f65fafa475944e7b21ce2",
+  "contractDigest": "1c4b397afa2888a6fcccad94",
+  "plan": {
+   "goalId": "wst_c85aacb85e474aa782e1",
+   "contractDigest": "1c4b397afa2888a6fcccad94",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the 7 signed denial-appeal tracker workbooks at $650 and collect net 7",
+    "opportunityIds": [
+     "cop_6d439d08f4284435b936"
+    ],
+    "why": "Seven clinic billing managers signed order forms at $650 each (signed order forms 2026-11-18 to 11-24, invoiced net 7). Brain produces the spreadsheet; direct cost $8 each, $0 exposure. 7 x $650 = $4,550 gross, $4,494 after $56 direct cost, settled by about day 12 of 30, using $56 of the $3,000 capital ceiling. No new sales are needed."
+   },
+   "alternatives": [
+    {
+     "title": "Remote therapeutic monitoring set-up at $50",
+     "why": "Excluded: the $50 is Medicare's reimbursement to clinics per patient per month (CPT 98977), not a price any clinic has paid for the set-up, and at 12/100 conversion the 480-clinic directory yields about 38 deals, far short of the 81 needed."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "SELL",
+     "label": "Confirm the 7 signed $650 order forms with each clinic's billing manager and schedule delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "signedOrders",
+      "price",
+      "src_price"
+     ],
+     "priceCents": 65000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the denial-appeal tracker workbook to each of the 7 signed clinics",
+     "performer": "BRAIN",
+     "costCents": 5600,
+     "day": 2,
+     "dependsOn": "s0",
+     "evidence": [
+      "signedOrders",
+      "directCost",
+      "src_price",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "COLLECT",
+     "label": "Invoice the 7 clinics $650 each, net 7, and collect",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "daysToCash",
+      "src_price",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 2,
+     "kind": "SPEND",
+     "amountCents": 5600,
+     "label": "Direct cost $8 per workbook x 7",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 455000,
+     "label": "7 x $650 invoices, net 7",
+     "settlesDay": 10,
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "signed order forms",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 650,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days (net 7)",
+     "sources": [
+      "src_ttfc",
+      "src_price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#price",
+     "dated": "2026-11-24",
+     "claim": "Seven clinic billing managers signed order forms at $650 each, invoiced net 7 (2026-11-18 to 2026-11-24)",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $8 per workbook; exposure $0",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_6d439d08f4284435b936#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "7 days to first cash",
+     "population": "billing managers at independent outpatient PT clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d439d08f4284435b936"
+    },
+    {
+     "id": "src_rtm_price",
+     "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#price",
+     "dated": "2026-11",
+     "claim": "Medicare reimburses clinics about $50 per patient per month for RTM device supply (CPT 98977)",
+     "population": "Medicare reimbursement to clinics, not clinic purchases",
+     "matchesBuyer": false,
+     "opportunityId": "cop_15d4aa6d298f4aba9055"
+    },
+    {
+     "id": "src_rtm_vol",
+     "url": "https://brain.local/card/cop_15d4aa6d298f4aba9055#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Directory lists 480 member clinics",
+     "population": "PT association member clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_15d4aa6d298f4aba9055"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_6d439d08f4284435b936",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "why": "The $50 is a Medicare reimbursement paid to clinics (CPT 98977), not a price any clinic pays for set-up, so no price is established; and 480 clinics at 12/100 yields ~38 deals, short of the 81 the target would need."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_6d439d08f4284435b936",
+     "deals": 7,
+     "price": 650,
+     "directCost": 8,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_15d4aa6d298f4aba9055",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain marks the price ok on 'price 50 USD (EVIDENCE)', but the card's price fact is Medicare's reimbursement to clinics per patient per month (CPT 98977, 2026 fee schedule) — a payment a clinic receives, not a price a clinic has paid for the set-up. No buyer price is established."
+    }
+   ],
+   "revisionId": "rev_9a2f65fafa47_0669d2",
+   "digest": "9a2f65fafa475944e7b21ce2",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_950159a6414748c99c86/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:40.358Z"
+  },
+  "review": {
+   "revisionId": "rev_9a2f65fafa47_0669d2",
+   "revisionDigest": "9a2f65fafa475944e7b21ce2",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_950159a6414748c99c86/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_fd3a479c2eeb4151b2ef/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "EXECUTABLE is justified. The price is a purchase price this buyer committed to: seven written acceptances (signed order forms, 2026-11-18 to 11-24) at $650 each are recorded as agreements on the card, from the payer named on the card (PT clinic billing managers); no new sales, conversion or market volume is needed. Fulfilment is a spreadsheet Brain produces (PRODUCE_SPREADSHEET PRESENT). Arithmetic recomputed: 7 x $650 = $4,550 gross; 7 x $8 = $56 direct cost; net $4,494 >= $4,000; spend $56 <= $3,000 cap; min cash $2,944 positive after day-2 spend... (trace minCash shown positive); invoiced day 3 net 7, settles day 10 of 30, inside the window. The RTM alternative is correctly excluded: its $50 is a Medicare reimbursement to clinics, not a price a clinic pays, and 480 clinics x 12% ~ 38 deals < 81 needed; the disagreement with Brain's OFFER_AND_PRICE basis for it is right. Caveat that does not change the verdict: the plan has no margin on collection — 6 of 7 paying yields $3,852 net, below target — so every signed clinic must pay; recommend arming a backup sale to the same association directory if any invoice is unpaid by day 12.",
+   "findings": [
+    "LOW cop_6d439d08f4284435b936 SETTLES_IN_TIME: zero collection margin — one non-paying clinic (6 x $650 - $48 = $3,852) misses $4,000; keep 18 days of window for a backup sale.",
+    "LOW cop_6d439d08f4284435b936 FULFILMENT: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected before s0/s2. Brain's own step list labels delivery PERSON while the plan says BRAIN; card humanHours 1 per deal (~7 owner hours) should be stated, though the contract sets no hours ceiling.",
+    "INFO cop_15d4aa6d298f4aba9055 OFFER_AND_PRICE: exclusion and disagreement correct — Medicare reimbursement is not a clinic's purchase price."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:16:58.392Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $4,000 of settled cash within 30 days with at most $3,000 of capital.",
+   "terms": "5a6264efae0d535b",
+   "openings": {
+    "cop_15d4aa6d298f4aba9055": "0fd910a1754aaac0",
+    "cop_6d439d08f4284435b936": "e1b817293582c66c"
+   }
+  },
+  "at": "2026-11-27T12:18:53.155Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

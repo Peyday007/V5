@@ -1,0 +1,727 @@
+{
+ "contract": {
+  "goalId": "wst_80a47a9fd1b74da5b95f",
+  "words": "Collect $40,000 of settled cash within 30 days using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 4000000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 30,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "40000 USD of settled cash collected within 30 days",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "bc68e5ce33fa8fc2458af5f9"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_80a47a9fd1b74da5b95f",
+   "contractDigest": "bc68e5ce33fa8fc2458af5f9",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the whole counted market is worth $25,500, below the $40,000 target",
+    "opportunityIds": [],
+    "why": "The state association directory counts 85 member clubs in total, each needing one workbook, at an evidenced $300: every club buying yields $25,500 gross ($25,160 net of $4 costs) against $40,000; 134 sales would be needed."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the workbook to the 85 clubs for a lower target",
+     "why": "Conversion is 25% (10/40), so ~21 sales (~$6,300) is the measured expectation; only a reduced target is supportable."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Search for further openings or buyer populations beyond the 85 counted clubs, or have the owner lower the target",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyerVolume",
+      "price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 85,
+     "unit": "clubs, one purchase each",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 300,
+     "unit": "USD",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "maximum market value",
+     "status": "EVIDENCED",
+     "value": 25500,
+     "unit": "USD",
+     "sources": [
+      "buyerVolume",
+      "price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#buyerVolume",
+     "dated": "2026-11",
+     "claim": "The state pickleball association's directory counts 85 member clubs in total; each needs one workbook",
+     "population": "Club managers and league directors at pickleball clubs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0566e61b428a4796bd6d"
+    },
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#price",
+     "dated": "2026-11",
+     "claim": "Pickleball club managers pay $300 for comparable court-booking workbooks (marketplace listings)",
+     "population": "Club managers and league directors at pickleball clubs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0566e61b428a4796bd6d"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#conversionRates",
+     "dated": "2026-11",
+     "claim": "10 agreements from 40 contacts",
+     "population": "Club managers and league directors at pickleball clubs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0566e61b428a4796bd6d"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "MARKET_VOLUME: 134 sales at $300 are needed but the counted market is 85 clubs buying once each, a ceiling of $25,500.",
+    "resolution": "Lower the target to at most $25,500 (realistically ~$6,300 at the measured 25% conversion) or find additional counted buyer populations or openings.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_0566e61b428a4796bd6d",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to at most $25,500 (85 clubs x $300, one purchase each).",
+     "basis": [
+      {
+       "opportunityId": "cop_0566e61b428a4796bd6d",
+       "field": "buyerVolume"
+      },
+      {
+       "opportunityId": "cop_0566e61b428a4796bd6d",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_209eab9e13ff_aeb44e",
+   "digest": "209eab9e13fff5ff3f9f6884",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_ae2ecf4abda047818d54/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:06.163Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_80a47a9fd1b74da5b95f",
+  "contractDigest": "bc68e5ce33fa8fc2458af5f9",
+  "parentRevisionId": null,
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan: the whole counted market is worth $25,500, below the $40,000 target",
+   "opportunityIds": [],
+   "why": "The state association directory counts 85 member clubs in total, each needing one workbook, at an evidenced $300: every club buying yields $25,500 gross ($25,160 net of $4 costs) against $40,000; 134 sales would be needed."
+  },
+  "alternatives": [
+   {
+    "title": "Sell the workbook to the 85 clubs for a lower target",
+    "why": "Conversion is 25% (10/40), so ~21 sales (~$6,300) is the measured expectation; only a reduced target is supportable."
+   }
+  ],
+  "steps": [
+   {
+    "id": "research",
+    "kind": "RESEARCH",
+    "label": "Search for further openings or buyer populations beyond the 85 counted clubs, or have the owner lower the target",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "buyerVolume",
+     "price"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": null,
+  "quantities": [
+   {
+    "name": "reachable buyers",
+    "status": "EVIDENCED",
+    "value": 85,
+    "unit": "clubs, one purchase each",
+    "sources": [
+     "buyerVolume"
+    ],
+    "needs": null
+   },
+   {
+    "name": "price",
+    "status": "EVIDENCED",
+    "value": 300,
+    "unit": "USD",
+    "sources": [
+     "price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "maximum market value",
+    "status": "EVIDENCED",
+    "value": 25500,
+    "unit": "USD",
+    "sources": [
+     "buyerVolume",
+     "price"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "buyerVolume",
+    "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#buyerVolume",
+    "dated": "2026-11",
+    "claim": "The state pickleball association's directory counts 85 member clubs in total; each needs one workbook",
+    "population": "Club managers and league directors at pickleball clubs",
+    "matchesBuyer": true,
+    "opportunityId": "cop_0566e61b428a4796bd6d"
+   },
+   {
+    "id": "price",
+    "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#price",
+    "dated": "2026-11",
+    "claim": "Pickleball club managers pay $300 for comparable court-booking workbooks (marketplace listings)",
+    "population": "Club managers and league directors at pickleball clubs",
+    "matchesBuyer": true,
+    "opportunityId": "cop_0566e61b428a4796bd6d"
+   },
+   {
+    "id": "conversionRates",
+    "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#conversionRates",
+    "dated": "2026-11",
+    "claim": "10 agreements from 40 contacts",
+    "population": "Club managers and league directors at pickleball clubs",
+    "matchesBuyer": true,
+    "opportunityId": "cop_0566e61b428a4796bd6d"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "MARKET_VOLUME: 134 sales at $300 are needed but the counted market is 85 clubs buying once each, a ceiling of $25,500.",
+   "resolution": "Lower the target to at most $25,500 (realistically ~$6,300 at the measured 25% conversion) or find additional counted buyer populations or openings.",
+   "decisiveLinks": [
+    "MARKET_VOLUME"
+   ]
+  },
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_0566e61b428a4796bd6d",
+    "missing": [
+     "MARKET_VOLUME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "MARKET_VOLUME"
+  ],
+  "constraints": [
+   {
+    "constraint": "TARGET",
+    "suggestion": "Lower the target to at most $25,500 (85 clubs x $300, one purchase each).",
+    "basis": [
+     {
+      "opportunityId": "cop_0566e61b428a4796bd6d",
+      "field": "buyerVolume"
+     },
+     {
+      "opportunityId": "cop_0566e61b428a4796bd6d",
+      "field": "price"
+     }
+    ]
+   }
+  ],
+  "disagreements": [],
+  "revisionId": "rev_209eab9e13ff_aeb44e",
+  "digest": "209eab9e13fff5ff3f9f6884",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_ae2ecf4abda047818d54/author-C",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:14:06.163Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_209eab9e13ff_aeb44e",
+  "digest": "209eab9e13fff5ff3f9f6884",
+  "contractDigest": "bc68e5ce33fa8fc2458af5f9",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $25,500, so they cannot reach the $40,000 still needed. To make it supportable, target: lower the target to about $25,500, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+   "acceptance": "NOT_SUPPORTED",
+   "considered": [
+    "cop_0566e61b428a4796bd6d"
+   ],
+   "integrity": [],
+   "steps": [],
+   "nextTest": null,
+   "openings": [
+    {
+     "opportunityId": "cop_0566e61b428a4796bd6d",
+     "title": "Court-booking and league-ladder workbook for pickleball clubs",
+     "missing": [
+      "MARKET_VOLUME"
+     ],
+     "stage": "D_BUYER_VALIDATED",
+     "supportedReach": 25500,
+     "potentialReach": 40000,
+     "card": {
+      "payer": "Club managers and league directors at pickleball clubs",
+      "reachableChannel": "Emails in the state pickleball association's member-club directory",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:10:09.713Z",
+      "offerScope": "Court-booking and league-ladder workbook for pickleball clubs",
+      "priceCents": 30000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 0.5,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "pickleball clubs",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Emails in the state pickleball association's member-club directory"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "price 300 USD (EVIDENCE)"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "measured on this offer's own sales: 10 accepted of 40 contacts"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": false,
+       "basis": "86 deal(s) needed but only 85 in the window (85 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 4, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "3 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "buyerVolume",
+       "value": "The state pickleball association's directory counts 85 member clubs in total; each needs one workbook.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Court-booking and league-ladder workbook for pickleball clubs to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "conversionRates",
+       "value": "10 agreements from 40 contacts",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$4",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Club managers and league directors at pickleball clubs",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Pickleball club managers pay $300 for comparable court-booking workbooks (marketplace listings, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "3 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [],
+   "scope": {
+    "targetCents": 4000000,
+    "daysLeft": 30,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:12:10.604Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_209eab9e13ff_aeb44e",
+   "revisionDigest": "209eab9e13fff5ff3f9f6884",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_ae2ecf4abda047818d54/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_f44a10c39efd45ba8fa1/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is correct: the constraint holds even with all evidence in. The association directory counts 85 member clubs in total, each needing one workbook; at the evidenced $300 the whole market is 85 x $300 = $25,500 gross ($25,160 net of $4 each), below $40,000, which needs 134 sales (133 x 300 = 39,900). Every other link (reach, demand, price, 25% conversion, Brain fulfilment, $0 exposure, 3-day settlement) is established; MARKET_VOLUME is decisive and is a ceiling, not missing evidence.",
+   "findings": [
+    "Recomputed: 134 sales needed vs 85 buyers buying once.",
+    "Measured expectation at 25% conversion of 85 = ~21 sales (~$6,375), consistent with the author's ~$6,300 note.",
+    "If the 10 recorded agreements are among the 85 clubs, the remaining ceiling is lower still; the conclusion is unchanged.",
+    "TARGET constraint suggestion (<= $25,500) is grounded in buyerVolume and price facts and matches Brain's NOT_VIABLE."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:40.677Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_209eab9e13ff_aeb44e",
+  "digest": "209eab9e13fff5ff3f9f6884",
+  "contractDigest": "bc68e5ce33fa8fc2458af5f9",
+  "plan": {
+   "goalId": "wst_80a47a9fd1b74da5b95f",
+   "contractDigest": "bc68e5ce33fa8fc2458af5f9",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the whole counted market is worth $25,500, below the $40,000 target",
+    "opportunityIds": [],
+    "why": "The state association directory counts 85 member clubs in total, each needing one workbook, at an evidenced $300: every club buying yields $25,500 gross ($25,160 net of $4 costs) against $40,000; 134 sales would be needed."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the workbook to the 85 clubs for a lower target",
+     "why": "Conversion is 25% (10/40), so ~21 sales (~$6,300) is the measured expectation; only a reduced target is supportable."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Search for further openings or buyer populations beyond the 85 counted clubs, or have the owner lower the target",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyerVolume",
+      "price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 85,
+     "unit": "clubs, one purchase each",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 300,
+     "unit": "USD",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "maximum market value",
+     "status": "EVIDENCED",
+     "value": 25500,
+     "unit": "USD",
+     "sources": [
+      "buyerVolume",
+      "price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#buyerVolume",
+     "dated": "2026-11",
+     "claim": "The state pickleball association's directory counts 85 member clubs in total; each needs one workbook",
+     "population": "Club managers and league directors at pickleball clubs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0566e61b428a4796bd6d"
+    },
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#price",
+     "dated": "2026-11",
+     "claim": "Pickleball club managers pay $300 for comparable court-booking workbooks (marketplace listings)",
+     "population": "Club managers and league directors at pickleball clubs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0566e61b428a4796bd6d"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_0566e61b428a4796bd6d#conversionRates",
+     "dated": "2026-11",
+     "claim": "10 agreements from 40 contacts",
+     "population": "Club managers and league directors at pickleball clubs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0566e61b428a4796bd6d"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "MARKET_VOLUME: 134 sales at $300 are needed but the counted market is 85 clubs buying once each, a ceiling of $25,500.",
+    "resolution": "Lower the target to at most $25,500 (realistically ~$6,300 at the measured 25% conversion) or find additional counted buyer populations or openings.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_0566e61b428a4796bd6d",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to at most $25,500 (85 clubs x $300, one purchase each).",
+     "basis": [
+      {
+       "opportunityId": "cop_0566e61b428a4796bd6d",
+       "field": "buyerVolume"
+      },
+      {
+       "opportunityId": "cop_0566e61b428a4796bd6d",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_209eab9e13ff_aeb44e",
+   "digest": "209eab9e13fff5ff3f9f6884",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_ae2ecf4abda047818d54/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:06.163Z"
+  },
+  "review": {
+   "revisionId": "rev_209eab9e13ff_aeb44e",
+   "revisionDigest": "209eab9e13fff5ff3f9f6884",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_ae2ecf4abda047818d54/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_f44a10c39efd45ba8fa1/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is correct: the constraint holds even with all evidence in. The association directory counts 85 member clubs in total, each needing one workbook; at the evidenced $300 the whole market is 85 x $300 = $25,500 gross ($25,160 net of $4 each), below $40,000, which needs 134 sales (133 x 300 = 39,900). Every other link (reach, demand, price, 25% conversion, Brain fulfilment, $0 exposure, 3-day settlement) is established; MARKET_VOLUME is decisive and is a ceiling, not missing evidence.",
+   "findings": [
+    "Recomputed: 134 sales needed vs 85 buyers buying once.",
+    "Measured expectation at 25% conversion of 85 = ~21 sales (~$6,375), consistent with the author's ~$6,300 note.",
+    "If the 10 recorded agreements are among the 85 clubs, the remaining ceiling is lower still; the conclusion is unchanged.",
+    "TARGET constraint suggestion (<= $25,500) is grounded in buyerVolume and price facts and matches Brain's NOT_VIABLE."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:40.677Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $40,000 of settled cash within 30 days using no up-front capital.",
+   "terms": "ce48c92ca67d83a4",
+   "openings": {
+    "cop_0566e61b428a4796bd6d": "b078fb1d709b9943"
+   }
+  },
+  "at": "2026-11-27T12:19:50.640Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

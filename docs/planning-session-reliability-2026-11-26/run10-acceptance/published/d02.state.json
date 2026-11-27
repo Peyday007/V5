@@ -1,0 +1,1913 @@
+{
+ "contract": {
+  "goalId": "wst_0c4d0015e0104d2aa2e7",
+  "words": "Generate $5,000 within 30 days in a single industry I name: commercial truck driving (CDL) schools. I can put in up to $1,000 if it's needed.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 500000,
+   "currency": "USD",
+   "metric": "COLLECTED_CASH",
+   "windowDays": 30,
+   "totalSpendCapCents": 100000,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": null,
+   "proofCondition": "A CDL school pays a first invoice and the cash is collected within the 30-day window; spend beyond validation only after that proof",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "16ad9f5126a88d4d69b22a44"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_0c4d0015e0104d2aa2e7",
+   "contractDigest": "16ad9f5126a88d4d69b22a44",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: test whether CDL schools under FMCSA registry review will pay $750 for an ELDT audit-readiness file review",
+    "opportunityIds": [],
+    "why": "The pain is real and current (FMCSA removed 10,000+ providers from the Training Provider Registry since December 2025 and keeps reviewing), but no CDL school is shown paying for any of the three offers at the planned price: the verifier rejected consulting hourly rates and PTDI's curriculum list price as a different offer, and rejected the registry counts as not matching the buyer population. With no established price, buying signal or close rate, $5,000 in 30 days (7 reviews, 11 kits or 5 ad setups) is not established."
+   },
+   "alternatives": [
+    {
+     "title": "ELDT lesson-plan and record-template kit at $495",
+     "why": "Competes with PTDI's $650 kit / $999 package from an established institute; 11 sales needed and no buyer is shown paying a new seller."
+    },
+    {
+     "title": "Enrollment search-ad campaign setup at $1,000",
+     "why": "Only generic education-agency pricing (from about $3,000/month) exists; no CDL school is shown buying this at $1,000 and the owner's ability to deliver it is not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain compiles 150 CDL training providers from the public TPR search with published email or phone, prioritising independent schools",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_tpr"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner emails/calls the 150 providers offering a $750 ELDT audit-readiness file review (curriculum, range-maneuver logs, student files vs 49 CFR 380), paid up front by Stripe invoice",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close_rate",
+      "q_price"
+     ],
+     "ownerHours": 6,
+     "priceCents": 75000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Owner completes one review for the first paying school to time the work and confirm the owner can deliver it",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_fulfil_hours"
+     ],
+     "ownerHours": 4,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "OTHER",
+     "label": "Day 10 decision: count paid invoices and interested replies; apply stop/continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid reviews per provider contacted",
+     "sources": [],
+     "needs": "Live offer to 150 TPR-listed providers; count invoices paid by day 10"
+    },
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per review",
+     "sources": [
+      "src_eco",
+      "src_ptdi"
+     ],
+     "needs": "A school paying the $750 review"
+    },
+    {
+     "name": "q_fulfil_hours",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours per review",
+     "sources": [],
+     "needs": "Timing the first delivered review"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_fw",
+     "url": "https://freightwaves.com/news/fmcsa-removes-10000-plus-driver-training-providers-amid-safety-push",
+     "dated": "2026-10-28",
+     "claim": "FMCSA: more than 10,000 providers removed from the Training Provider Registry since December 2025; reviews continue",
+     "population": "CDL training providers on the TPR",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_ts",
+     "url": "https://trucksafe.com/post/fmcsa-cleans-house-3-000-cdl-schools-removed-from-the-training-provider-registry",
+     "dated": "2025-12-03",
+     "claim": "About 3,000 providers removed and 4,500 placed on notice for noncompliance (roughly 17% of the registry)",
+     "population": "CDL training providers on the TPR",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_cps",
+     "url": "https://www.cdlpowersuite.com/cdl-school-crackdown-what-is-required-to-pass-an-audit-stay-compliant",
+     "dated": "2025-12-10",
+     "claim": "Missing documents are the #1 reason schools were removed from the TPR; removal reasons include incomplete ELDT curriculum and missing training records",
+     "population": "CDL schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_eco",
+     "url": "https://eco-trains.com/rates-fees/",
+     "dated": "2026-10-01",
+     "claim": "A CDL training-compliance provider lists on-site consultation/training guidance at $200/hour, 4-hour minimum (seller list price, not this offer)",
+     "population": "Client training sites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_tpr",
+     "url": "https://tpr.fmcsa.dot.gov/",
+     "dated": "2026-11-27",
+     "claim": "FMCSA's public Training Provider Registry lists registered training providers and locations",
+     "population": "CDL training providers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_ptdi",
+     "url": "https://fs27.formsite.com/aHBEuk/sr771ifnsq/index.html",
+     "dated": "2026-11-27",
+     "claim": "PTDI sells an Entry Level Driver Training Package for $999 and a CDL-A Curriculum Training Kit for $650",
+     "population": "CDL training providers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3550002437fd4daca807"
+    },
+    {
+     "id": "src_webfx",
+     "url": "https://www.webfx.com/industries/education/agency/",
+     "dated": "2026-11-27",
+     "claim": "An education marketing agency sells enrollment marketing plans starting at about $3,000/month",
+     "population": "Education institutions (not CDL-specific)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_7ab85c881c2a4c49858c"
+    },
+    {
+     "id": "src_amsive",
+     "url": "https://education.amsive.com/career-trade/",
+     "dated": "2026-11-27",
+     "claim": "Amsive markets enrollment marketing to career/trade schools including Truck Driving & CDL Programs",
+     "population": "Career and trade schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7ab85c881c2a4c49858c"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No CDL school is shown paying for an ELDT audit-readiness review (or either alternative) at the planned price, and no close rate exists: whether at least 7 TPR-listed schools will pay $750 within 30 days (OFFER_AND_PRICE, CONVERSION) decides whether any plan exists.",
+    "resolution": "Costed experiment, $0 of the $1,000 and about 10 owner hours: Brain compiles 150 TPR-listed providers with public contacts; owner offers a $750 prepaid ELDT audit-readiness file review on day 2 and delivers the first one to time it. PROOF: at least 2 paid invoices by day 10 and the first review delivered in 6 owner hours or less -> CONTINUE with 300 more providers to reach 7 paid reviews by day 25. STOP: no paid invoice and fewer than 5 interested replies by day 10 -> stop and report the target not reachable in this industry in 30 days. CONTINUE-ONCE: interest but no payment -> test a $395 price on 100 more providers, decide day 15.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_7ab85c881c2a4c49858c",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_3550002437fd4daca807",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_76a41fb92f2b4247852a",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "CURRENT_DEMAND",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_c83c4182401e_d72000",
+   "digest": "c83c4182401e1e433c012db9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_bb0c0256d5d14d6f9749/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:24:54.709Z"
+  },
+  {
+   "goalId": "wst_0c4d0015e0104d2aa2e7",
+   "contractDigest": "16ad9f5126a88d4d69b22a44",
+   "parentRevisionId": "rev_c83c4182401e_d72000",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: test whether CDL schools under FMCSA registry review will pay $750 for an ELDT audit-readiness file review",
+    "opportunityIds": [],
+    "why": "The pain is real and current (FMCSA removed 10,000+ providers from the Training Provider Registry since December 2025 and keeps reviewing), but no CDL school is shown paying for any of the three offers at the planned price: the verifier rejected consulting hourly rates and PTDI's curriculum list price as a different offer, and rejected the registry counts as not matching the buyer population. With no established price, buying signal or close rate, $5,000 in 30 days (7 reviews, 11 kits or 5 ad setups) is not established."
+   },
+   "alternatives": [
+    {
+     "title": "ELDT lesson-plan and record-template kit at $495",
+     "why": "Competes with PTDI's $650 kit / $999 package from an established institute; 11 sales needed and no buyer is shown paying a new seller."
+    },
+    {
+     "title": "Enrollment search-ad campaign setup at $1,000",
+     "why": "Only generic education-agency pricing (from about $3,000/month) exists; no CDL school is shown buying this at $1,000 and the owner's ability to deliver it is not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain compiles 150 CDL training providers from the public TPR search with published email or phone, prioritising independent schools",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_tpr"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner emails/calls the 150 providers offering a $750 ELDT audit-readiness file review (curriculum, range-maneuver logs, student files vs 49 CFR 380), paid up front by Stripe invoice",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close_rate",
+      "q_price"
+     ],
+     "ownerHours": 6,
+     "priceCents": 75000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Owner completes one review for the first paying school to time the work and confirm the owner can deliver it",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_fulfil_hours"
+     ],
+     "ownerHours": 4,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "OTHER",
+     "label": "Day 10 decision: count paid invoices and interested replies; apply stop/continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t5",
+     "kind": "OTHER",
+     "label": "Owner confirms availability of ~45 hours over the window (outreach to up to 450 providers plus 7 reviews at 4-6 h) before CONTINUE",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "t4",
+     "evidence": [
+      "q_fulfil_hours"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid reviews per provider contacted",
+     "sources": [],
+     "needs": "Live offer to 150 TPR-listed providers; count invoices paid by day 10"
+    },
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per review",
+     "sources": [
+      "src_eco",
+      "src_ptdi"
+     ],
+     "needs": "A school paying the $750 review"
+    },
+    {
+     "name": "q_fulfil_hours",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours per review",
+     "sources": [],
+     "needs": "Timing the first delivered review"
+    },
+    {
+     "name": "q_owner_hours_total",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours available in 30 days",
+     "sources": [],
+     "needs": "Owner's objective states no hour limit; the plan needs ~45 h and the owner must confirm it"
+    },
+    {
+     "name": "q_buyer_count",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "current TPR-listed providers reachable",
+     "sources": [
+      "src_ts",
+      "src_fw"
+     ],
+     "needs": "Count of currently registered providers with public contacts, from the TPR search"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_fw",
+     "url": "https://freightwaves.com/news/fmcsa-removes-10000-plus-driver-training-providers-amid-safety-push",
+     "dated": "2026-10-28",
+     "claim": "FMCSA: more than 10,000 providers removed from the Training Provider Registry since December 2025; reviews continue",
+     "population": "CDL training providers on the TPR",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_ts",
+     "url": "https://trucksafe.com/post/fmcsa-cleans-house-3-000-cdl-schools-removed-from-the-training-provider-registry",
+     "dated": "2025-12-03",
+     "claim": "About 3,000 providers removed and 4,500 placed on notice for noncompliance (roughly 17% of the registry)",
+     "population": "CDL training providers on the TPR",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_cps",
+     "url": "https://www.cdlpowersuite.com/cdl-school-crackdown-what-is-required-to-pass-an-audit-stay-compliant",
+     "dated": "2025-12-10",
+     "claim": "Missing documents are the #1 reason schools were removed from the TPR; removal reasons include incomplete ELDT curriculum and missing training records",
+     "population": "CDL schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_eco",
+     "url": "https://eco-trains.com/rates-fees/",
+     "dated": "2026-10-01",
+     "claim": "A CDL training-compliance provider lists on-site consultation/training guidance at $200/hour, 4-hour minimum (seller list price, not this offer)",
+     "population": "Client training sites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_tpr",
+     "url": "https://tpr.fmcsa.dot.gov/",
+     "dated": "2026-11-27",
+     "claim": "FMCSA's public Training Provider Registry lists registered training providers and locations",
+     "population": "CDL training providers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_ptdi",
+     "url": "https://fs27.formsite.com/aHBEuk/sr771ifnsq/index.html",
+     "dated": "2026-11-27",
+     "claim": "PTDI sells an Entry Level Driver Training Package for $999 and a CDL-A Curriculum Training Kit for $650",
+     "population": "CDL training providers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3550002437fd4daca807"
+    },
+    {
+     "id": "src_webfx",
+     "url": "https://www.webfx.com/industries/education/agency/",
+     "dated": "2026-11-27",
+     "claim": "An education marketing agency sells enrollment marketing plans starting at about $3,000/month",
+     "population": "Education institutions (not CDL-specific)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_7ab85c881c2a4c49858c"
+    },
+    {
+     "id": "src_amsive",
+     "url": "https://education.amsive.com/career-trade/",
+     "dated": "2026-11-27",
+     "claim": "Amsive markets enrollment marketing to career/trade schools including Truck Driving & CDL Programs",
+     "population": "Career and trade schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7ab85c881c2a4c49858c"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No CDL school is shown paying for an ELDT audit-readiness review (or either alternative) at the planned price, no close rate exists, and the current number of reachable registered providers is not established (the registry figures are a December 2025 sweep and later removals): whether at least 7 TPR-listed schools will pay $750 and the cash is collected by day 30 decides whether any plan exists (OFFER_AND_PRICE, CONVERSION, MARKET_VOLUME).",
+    "resolution": "Costed experiment, $0 of the $1,000 and about 10 owner hours: Brain compiles 150 currently registered TPR providers with public contacts (also counting how many are listed); owner offers a $750 prepaid ELDT audit-readiness file review on day 2 and delivers the first one to time it. PROOF (day 10): at least 3 paid invoices from 150 (2%, which over 450 contacts gives ~9 >= 7 needed), the first review delivered in <= 6 owner hours, and the owner confirms ~45 hours -> CONTINUE to 300 more providers to collect 7 paid reviews by day 25; sales after day 25 count only if collected (paid by card/Stripe invoice) by day 30. STOP: no paid invoice and fewer than 5 interested replies by day 10 -> stop and report the target not reachable in this industry in 30 days. CONTINUE-ONCE: interest but fewer than 3 paid -> offer $395 to 100 more providers; since $395 needs 13 sales ($5,135), proceed only if >= 3 of those 100 pay (3%, ~13 from 450), else stop on day 15.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "7 sales needed at $750; $0 spend; capital cap respected.",
+     "resolution": "Agreed: 7 sales at $750, $0 spend, inside the $1,000 cap."
+    },
+    {
+     "finding": "Proof miscalibrated: 2/150 -> 6 total from 450 contacts, short of 7.",
+     "resolution": "Accepted: proof raised to >= 3 paid of 150 (2%), which yields ~9 from 450 contacts, above the 7 needed."
+    },
+    {
+     "finding": "$395 fallback needs 13 sales - its threshold should be derived from that.",
+     "resolution": "Accepted: the $395 fallback threshold is now derived from 13 sales: >= 3 paid of 100 (3%), else stop."
+    },
+    {
+     "finding": "Owner hours 28-42 h of delivery plus outreach, against unstated owner hours - ask or state as an unknown the test must measure (it does time the first review, good).",
+     "resolution": "Accepted: owner hours are an unknown the owner must confirm (~45 h); added step t5 and quantity q_owner_hours_total; the test still times the first review."
+    },
+    {
+     "finding": "Decisive links OFFER_AND_PRICE and CONVERSION are correctly the live-test unknowns; MARKET_VOLUME on the review opening also remains unestablished (the registry counts I verified are a Dec-2025 sweep and removals, not current buyers) and should be listed.",
+     "resolution": "Accepted: MARKET_VOLUME added to decisiveLinks and resolves; the test counts currently registered reachable providers."
+    },
+    {
+     "finding": "Collection timing",
+     "resolution": "Metric is COLLECTED_CASH; sales after ~day 25 count only if collected by day 30, now stated in the resolution."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_7ab85c881c2a4c49858c",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_3550002437fd4daca807",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_76a41fb92f2b4247852a",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "MARKET_VOLUME",
+    "CURRENT_DEMAND",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_a8c79b875ccf_0a445e",
+   "digest": "a8c79b875ccfb85bde234f6f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_bb0c0256d5d14d6f9749/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:29:14.921Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_0c4d0015e0104d2aa2e7",
+  "contractDigest": "16ad9f5126a88d4d69b22a44",
+  "parentRevisionId": "rev_c83c4182401e_d72000",
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan yet: test whether CDL schools under FMCSA registry review will pay $750 for an ELDT audit-readiness file review",
+   "opportunityIds": [],
+   "why": "The pain is real and current (FMCSA removed 10,000+ providers from the Training Provider Registry since December 2025 and keeps reviewing), but no CDL school is shown paying for any of the three offers at the planned price: the verifier rejected consulting hourly rates and PTDI's curriculum list price as a different offer, and rejected the registry counts as not matching the buyer population. With no established price, buying signal or close rate, $5,000 in 30 days (7 reviews, 11 kits or 5 ad setups) is not established."
+  },
+  "alternatives": [
+   {
+    "title": "ELDT lesson-plan and record-template kit at $495",
+    "why": "Competes with PTDI's $650 kit / $999 package from an established institute; 11 sales needed and no buyer is shown paying a new seller."
+   },
+   {
+    "title": "Enrollment search-ad campaign setup at $1,000",
+    "why": "Only generic education-agency pricing (from about $3,000/month) exists; no CDL school is shown buying this at $1,000 and the owner's ability to deliver it is not established."
+   }
+  ],
+  "steps": [
+   {
+    "id": "t1",
+    "kind": "RESEARCH",
+    "label": "Brain compiles 150 CDL training providers from the public TPR search with published email or phone, prioritising independent schools",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "src_tpr"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   },
+   {
+    "id": "t2",
+    "kind": "TEST",
+    "label": "Owner emails/calls the 150 providers offering a $750 ELDT audit-readiness file review (curriculum, range-maneuver logs, student files vs 49 CFR 380), paid up front by Stripe invoice",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 2,
+    "dependsOn": "t1",
+    "evidence": [
+     "q_close_rate",
+     "q_price"
+    ],
+    "ownerHours": 6,
+    "priceCents": 75000,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t3",
+    "kind": "TEST",
+    "label": "Owner completes one review for the first paying school to time the work and confirm the owner can deliver it",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 8,
+    "dependsOn": "t2",
+    "evidence": [
+     "q_fulfil_hours"
+    ],
+    "ownerHours": 4,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t4",
+    "kind": "OTHER",
+    "label": "Day 10 decision: count paid invoices and interested replies; apply stop/continue",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 10,
+    "dependsOn": "t2",
+    "evidence": [
+     "q_close_rate"
+    ],
+    "ownerHours": 0.5,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t5",
+    "kind": "OTHER",
+    "label": "Owner confirms availability of ~45 hours over the window (outreach to up to 450 providers plus 7 reviews at 4-6 h) before CONTINUE",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 10,
+    "dependsOn": "t4",
+    "evidence": [
+     "q_fulfil_hours"
+    ],
+    "ownerHours": 0.25,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": 10,
+  "quantities": [
+   {
+    "name": "q_close_rate",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "paid reviews per provider contacted",
+    "sources": [],
+    "needs": "Live offer to 150 TPR-listed providers; count invoices paid by day 10"
+   },
+   {
+    "name": "q_price",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "USD per review",
+    "sources": [
+     "src_eco",
+     "src_ptdi"
+    ],
+    "needs": "A school paying the $750 review"
+   },
+   {
+    "name": "q_fulfil_hours",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "owner hours per review",
+    "sources": [],
+    "needs": "Timing the first delivered review"
+   },
+   {
+    "name": "q_owner_hours_total",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "owner hours available in 30 days",
+    "sources": [],
+    "needs": "Owner's objective states no hour limit; the plan needs ~45 h and the owner must confirm it"
+   },
+   {
+    "name": "q_buyer_count",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "current TPR-listed providers reachable",
+    "sources": [
+     "src_ts",
+     "src_fw"
+    ],
+    "needs": "Count of currently registered providers with public contacts, from the TPR search"
+   }
+  ],
+  "sources": [
+   {
+    "id": "src_fw",
+    "url": "https://freightwaves.com/news/fmcsa-removes-10000-plus-driver-training-providers-amid-safety-push",
+    "dated": "2026-10-28",
+    "claim": "FMCSA: more than 10,000 providers removed from the Training Provider Registry since December 2025; reviews continue",
+    "population": "CDL training providers on the TPR",
+    "matchesBuyer": true,
+    "opportunityId": "cop_76a41fb92f2b4247852a"
+   },
+   {
+    "id": "src_ts",
+    "url": "https://trucksafe.com/post/fmcsa-cleans-house-3-000-cdl-schools-removed-from-the-training-provider-registry",
+    "dated": "2025-12-03",
+    "claim": "About 3,000 providers removed and 4,500 placed on notice for noncompliance (roughly 17% of the registry)",
+    "population": "CDL training providers on the TPR",
+    "matchesBuyer": true,
+    "opportunityId": "cop_76a41fb92f2b4247852a"
+   },
+   {
+    "id": "src_cps",
+    "url": "https://www.cdlpowersuite.com/cdl-school-crackdown-what-is-required-to-pass-an-audit-stay-compliant",
+    "dated": "2025-12-10",
+    "claim": "Missing documents are the #1 reason schools were removed from the TPR; removal reasons include incomplete ELDT curriculum and missing training records",
+    "population": "CDL schools",
+    "matchesBuyer": true,
+    "opportunityId": "cop_76a41fb92f2b4247852a"
+   },
+   {
+    "id": "src_eco",
+    "url": "https://eco-trains.com/rates-fees/",
+    "dated": "2026-10-01",
+    "claim": "A CDL training-compliance provider lists on-site consultation/training guidance at $200/hour, 4-hour minimum (seller list price, not this offer)",
+    "population": "Client training sites",
+    "matchesBuyer": false,
+    "opportunityId": "cop_76a41fb92f2b4247852a"
+   },
+   {
+    "id": "src_tpr",
+    "url": "https://tpr.fmcsa.dot.gov/",
+    "dated": "2026-11-27",
+    "claim": "FMCSA's public Training Provider Registry lists registered training providers and locations",
+    "population": "CDL training providers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_76a41fb92f2b4247852a"
+   },
+   {
+    "id": "src_ptdi",
+    "url": "https://fs27.formsite.com/aHBEuk/sr771ifnsq/index.html",
+    "dated": "2026-11-27",
+    "claim": "PTDI sells an Entry Level Driver Training Package for $999 and a CDL-A Curriculum Training Kit for $650",
+    "population": "CDL training providers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_3550002437fd4daca807"
+   },
+   {
+    "id": "src_webfx",
+    "url": "https://www.webfx.com/industries/education/agency/",
+    "dated": "2026-11-27",
+    "claim": "An education marketing agency sells enrollment marketing plans starting at about $3,000/month",
+    "population": "Education institutions (not CDL-specific)",
+    "matchesBuyer": false,
+    "opportunityId": "cop_7ab85c881c2a4c49858c"
+   },
+   {
+    "id": "src_amsive",
+    "url": "https://education.amsive.com/career-trade/",
+    "dated": "2026-11-27",
+    "claim": "Amsive markets enrollment marketing to career/trade schools including Truck Driving & CDL Programs",
+    "population": "Career and trade schools",
+    "matchesBuyer": true,
+    "opportunityId": "cop_7ab85c881c2a4c49858c"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "No CDL school is shown paying for an ELDT audit-readiness review (or either alternative) at the planned price, no close rate exists, and the current number of reachable registered providers is not established (the registry figures are a December 2025 sweep and later removals): whether at least 7 TPR-listed schools will pay $750 and the cash is collected by day 30 decides whether any plan exists (OFFER_AND_PRICE, CONVERSION, MARKET_VOLUME).",
+   "resolution": "Costed experiment, $0 of the $1,000 and about 10 owner hours: Brain compiles 150 currently registered TPR providers with public contacts (also counting how many are listed); owner offers a $750 prepaid ELDT audit-readiness file review on day 2 and delivers the first one to time it. PROOF (day 10): at least 3 paid invoices from 150 (2%, which over 450 contacts gives ~9 >= 7 needed), the first review delivered in <= 6 owner hours, and the owner confirms ~45 hours -> CONTINUE to 300 more providers to collect 7 paid reviews by day 25; sales after day 25 count only if collected (paid by card/Stripe invoice) by day 30. STOP: no paid invoice and fewer than 5 interested replies by day 10 -> stop and report the target not reachable in this industry in 30 days. CONTINUE-ONCE: interest but fewer than 3 paid -> offer $395 to 100 more providers; since $395 needs 13 sales ($5,135), proceed only if >= 3 of those 100 pay (3%, ~13 from 450), else stop on day 15.",
+   "decisiveLinks": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "MARKET_VOLUME"
+   ]
+  },
+  "reach": null,
+  "answers": [
+   {
+    "finding": "7 sales needed at $750; $0 spend; capital cap respected.",
+    "resolution": "Agreed: 7 sales at $750, $0 spend, inside the $1,000 cap."
+   },
+   {
+    "finding": "Proof miscalibrated: 2/150 -> 6 total from 450 contacts, short of 7.",
+    "resolution": "Accepted: proof raised to >= 3 paid of 150 (2%), which yields ~9 from 450 contacts, above the 7 needed."
+   },
+   {
+    "finding": "$395 fallback needs 13 sales - its threshold should be derived from that.",
+    "resolution": "Accepted: the $395 fallback threshold is now derived from 13 sales: >= 3 paid of 100 (3%), else stop."
+   },
+   {
+    "finding": "Owner hours 28-42 h of delivery plus outreach, against unstated owner hours - ask or state as an unknown the test must measure (it does time the first review, good).",
+    "resolution": "Accepted: owner hours are an unknown the owner must confirm (~45 h); added step t5 and quantity q_owner_hours_total; the test still times the first review."
+   },
+   {
+    "finding": "Decisive links OFFER_AND_PRICE and CONVERSION are correctly the live-test unknowns; MARKET_VOLUME on the review opening also remains unestablished (the registry counts I verified are a Dec-2025 sweep and removals, not current buyers) and should be listed.",
+    "resolution": "Accepted: MARKET_VOLUME added to decisiveLinks and resolves; the test counts currently registered reachable providers."
+   },
+   {
+    "finding": "Collection timing",
+    "resolution": "Metric is COLLECTED_CASH; sales after ~day 25 count only if collected by day 30, now stated in the resolution."
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_7ab85c881c2a4c49858c",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_3550002437fd4daca807",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_76a41fb92f2b4247852a",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "OFFER_AND_PRICE",
+   "CONVERSION",
+   "MARKET_VOLUME",
+   "CURRENT_DEMAND",
+   "FULFILMENT"
+  ],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_a8c79b875ccf_0a445e",
+  "digest": "a8c79b875ccfb85bde234f6f",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_bb0c0256d5d14d6f9749/author-E",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:29:14.921Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_a8c79b875ccf_0a445e",
+  "digest": "a8c79b875ccfb85bde234f6f",
+  "contractDigest": "16ad9f5126a88d4d69b22a44",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 100000,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"ELDT / Training Provider Registry audit-readiness file revie\", \"Student-enrollment search ad campaign setup for CDL schools\", \"Custom ELDT lesson-plan and training-record template kit for\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 2 unmeasured assumption(s) hold (Sell \"ELDT / Training Provider Registry audit-readiness file review for CDL schools af\" through a partner who already…; Ask for a deposit of 30–50% at signing (assumed accepted)) it would reach 61% (p50 $6,418): a hypothesis to test by running each one's kill criterion, not evidence.",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_76a41fb92f2b4247852a",
+    "cop_7ab85c881c2a4c49858c",
+    "cop_3550002437fd4daca807"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Establish an offer and a price",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Research first: the deep dives on \"ELDT / Training Provider Registry audit-readiness file revie\", \"Student-enrollment search ad campaign setup for CDL schools\", \"Custom ELDT lesson-plan and training-record template kit for\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+   "openings": [
+    {
+     "opportunityId": "cop_7ab85c881c2a4c49858c",
+     "title": "Student-enrollment search ad campaign setup for CDL schools",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 1000,
+     "card": {
+      "payer": "Independent CDL schools that recruit self-pay or WIOA-funded students",
+      "reachableChannel": "Email and phone to TPR-listed providers",
+      "offerScope": "Google search campaign build plus first month of management; ad spend paid by the school",
+      "priceCents": 100000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 6,
+      "requiredCapabilities": [],
+      "industry": "Commercial truck driving (CDL) schools",
+      "mechanism": "CAPABILITY_ARBITRAGE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Email and phone to TPR-listed providers"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 0, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "12 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Email and phone to TPR-listed providers",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Google search campaign build plus first month of management; ad spend paid by the school to Independent CDL schools that recruit self-pay or WIOA-funded students, reached through Email and phone to TPR-listed providers, at $1,000; Owner using AI-drafted campaigns delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Owner using AI-drafted campaigns.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "6 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "Google search campaign build plus first month of management; ad spend paid by the school",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "Independent CDL schools that recruit self-pay or WIOA-funded students",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$1,000",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$1,000",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://www.webfx.com/industries/education/agency/; https://cufinder.io/blog/lead-generation-industry/education/technical-schools/; https://education.amsive.com/career-trade/; https://tpr.fmcsa.dot.gov/",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "12 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_3550002437fd4daca807",
+     "title": "Custom ELDT lesson-plan and training-record template kit for small CDL schools",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 495,
+     "card": {
+      "payer": "Small independent CDL schools on the TPR",
+      "reachableChannel": "Email to TPR-listed providers",
+      "offerScope": "School-branded ELDT theory and range lesson plans plus timestamped training-log templates, priced under PTDI's $999 ELDT package",
+      "priceCents": 49500,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 3,
+      "requiredCapabilities": [],
+      "industry": "Commercial truck driving (CDL) schools",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Email to TPR-listed providers"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 495 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 0, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "10 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Email to TPR-listed providers",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell School-branded ELDT theory and range lesson plans plus timestamped training-log templates, priced under PTDI's $999 ELDT package to Small independent CDL schools on the TPR, reached through Email to TPR-listed providers, at $495; Owner assembling AI-drafted documents mapped to 49 CFR 380 Appendix A/B delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Owner assembling AI-drafted documents mapped to 49 CFR 380 Appendix A/B.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "3 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "School-branded ELDT theory and range lesson plans plus timestamped training-log templates, priced under PTDI's $999 ELDT package",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "Small independent CDL schools on the TPR",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$495",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$495",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://fs27.formsite.com/aHBEuk/sr771ifnsq/index.html; https://www.cdlpowersuite.com/cdl-school-crackdown-what-is-required-to-pass-an-audit-stay-compliant; https://tpr.fmcsa.dot.gov/",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "10 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_76a41fb92f2b4247852a",
+     "title": "ELDT / Training Provider Registry audit-readiness file review for CDL schools after FMCSA's registry purge",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 5000,
+     "card": {
+      "payer": "CDL training providers listed on FMCSA's Training Provider Registry, especially those placed on notice",
+      "reachableChannel": "Email and phone to providers listed in the public TPR search at tpr.fmcsa.dot.gov",
+      "offerScope": "Review of a school's ELDT curriculum, range-maneuver logs and student files against 49 CFR 380 requirements, with a written gap list and corrected record templates",
+      "priceCents": 75000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 4,
+      "requiredCapabilities": [],
+      "industry": "Commercial truck driving (CDL) schools",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Email and phone to providers listed in the public TPR search at tpr.fmcsa.dot.go"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "28 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": false,
+       "basis": "7 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 0, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "10 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Email and phone to providers listed in the public TPR search at tpr.fmcsa.dot.gov",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "buyerVolume",
+       "value": "4,500 CDL training providers listed on FMCSA's Training Provider Registry, especially those placed on notice (About 4,500 providers placed on notice for noncompliance (Trucksafe, 2025-12-03); FMCSA reviewing all providers and had removed 10,000+ by 2026-10-28 (FreightWaves))",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Review of a school's ELDT curriculum, range-maneuver logs and student files against 49 CFR 380 requirements, with a written gap list and corrected record templates to CDL training providers listed on FMCSA's Training Provider Registry, especially those placed on notice, reached through Email and phone to providers listed in the public TPR search at tpr.fmcsa.dot.gov, at $750; Owner, using AI-drafted checklists against 49 CFR Part 380 Subpart F and Appendices A-B delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Owner, using AI-drafted checklists against 49 CFR Part 380 Subpart F and Appendices A-B.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "4 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "Review of a school's ELDT curriculum, range-maneuver logs and student files against 49 CFR 380 requirements, with a written gap list and corrected record templates",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "CDL training providers listed on FMCSA's Training Provider Registry, especially those placed on notice",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$750",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$750",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://fs27.formsite.com/aHBEuk/sr771ifnsq/index.html; https://www.jjkeller.com/shop/Product/ELDT-Program-Assessment; https://trucksafe.com/post/fmcsa-cleans-house-3-000-cdl-schools-removed-from-the-training-provider-registry; https://www.cdlpowersuite.com/cdl-school-crackdown-what-is-required-to-pass-an-audit-stay-compliant; https://freightwaves.com/news/fmcsa-removes-10000-plus-driver-training-providers-amid-safety-push; https://tpr.fmcsa.dot.gov/",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "10 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [],
+   "scope": {
+    "targetCents": 500000,
+    "daysLeft": 30,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:22:37.982Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_c83c4182401e_d72000",
+   "revisionDigest": "c83c4182401e1e433c012db9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_bb0c0256d5d14d6f9749/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_2882769177224df29c7e/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "NO_PLAN with a costed test is the right shape: no CDL school is shown paying for any of the three offers (I verified the ECO hourly rate and PTDI kit list price as other sellers' prices for different offers), and no close rate exists. Recomputed: $5,000 / $750 = 6.67 -> 7 paid reviews, $0 direct cost, inside the $1,000 cap. But the CONTINUE threshold does not imply the target: '>= 2 paid of 150 by day 10' is a 1.3% rate, and 300 more contacts at that rate yield 4 more - 6 in total, $4,500 < $5,000. The proof should be >= 3 paid of 150 (2%, giving ~9 from 450) or the continuation should contact ~375+ more. The CONTINUE-ONCE at $395 needs 13 sales ($5,135), i.e. a far higher rate, and should say so. Owner hours are unstated (unknown, not zero): 150-450 owner emails/calls plus 7 reviews at 4-6 h (28-42 h) must be named as a requirement the owner confirms. Stripe's first payout (7-14 days per the d03/d01 record) is irrelevant only because the metric is COLLECTED_CASH - state that sales after day ~25 still count only if collected by day 30.",
+   "findings": [
+    "7 sales needed at $750; $0 spend; capital cap respected.",
+    "Proof miscalibrated: 2/150 -> 6 total from 450 contacts, short of 7.",
+    "$395 fallback needs 13 sales - its threshold should be derived from that.",
+    "Owner hours 28-42 h of delivery plus outreach, against unstated owner hours - ask or state as an unknown the test must measure (it does time the first review, good).",
+    "Decisive links OFFER_AND_PRICE and CONVERSION are correctly the live-test unknowns; MARKET_VOLUME on the review opening also remains unestablished (the registry counts I verified are a Dec-2025 sweep and removals, not current buyers) and should be listed."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:27:11.291Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_a8c79b875ccf_0a445e",
+   "revisionDigest": "a8c79b875ccfb85bde234f6f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_bb0c0256d5d14d6f9749/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_2882769177224df29c7e/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved. NO_PLAN with a costed $0 test is right: no CDL school is shown paying for any of the three offers, no close rate exists, and the current reachable provider count is unestablished (now in decisiveLinks). Recomputed: 7 x $750 = $5,250 >= $5,000; proof >= 3 paid of 150 (2%) gives ~9 from 450 contacts; the $395 fallback needs 13 sales ($5,135) and its >= 3% threshold gives ~13.5 from 450; spend $0 inside the $1,000 cap; collection by day 30 is stated for the COLLECTED_CASH metric; owner hours (~45 h) are asked of the owner before continuing rather than assumed.",
+   "findings": [
+    "Thresholds derived from the target and consistent.",
+    "Owner time is an explicit confirmation step (t5) - good.",
+    "If the $395 fallback is entered, 250 of the 450 contacts are already used at other terms; the ~13 from 450 projection is slightly optimistic - hold the day-15 stop."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:29:52.617Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_a8c79b875ccf_0a445e",
+  "digest": "a8c79b875ccfb85bde234f6f",
+  "contractDigest": "16ad9f5126a88d4d69b22a44",
+  "plan": {
+   "goalId": "wst_0c4d0015e0104d2aa2e7",
+   "contractDigest": "16ad9f5126a88d4d69b22a44",
+   "parentRevisionId": "rev_c83c4182401e_d72000",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: test whether CDL schools under FMCSA registry review will pay $750 for an ELDT audit-readiness file review",
+    "opportunityIds": [],
+    "why": "The pain is real and current (FMCSA removed 10,000+ providers from the Training Provider Registry since December 2025 and keeps reviewing), but no CDL school is shown paying for any of the three offers at the planned price: the verifier rejected consulting hourly rates and PTDI's curriculum list price as a different offer, and rejected the registry counts as not matching the buyer population. With no established price, buying signal or close rate, $5,000 in 30 days (7 reviews, 11 kits or 5 ad setups) is not established."
+   },
+   "alternatives": [
+    {
+     "title": "ELDT lesson-plan and record-template kit at $495",
+     "why": "Competes with PTDI's $650 kit / $999 package from an established institute; 11 sales needed and no buyer is shown paying a new seller."
+    },
+    {
+     "title": "Enrollment search-ad campaign setup at $1,000",
+     "why": "Only generic education-agency pricing (from about $3,000/month) exists; no CDL school is shown buying this at $1,000 and the owner's ability to deliver it is not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain compiles 150 CDL training providers from the public TPR search with published email or phone, prioritising independent schools",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_tpr"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner emails/calls the 150 providers offering a $750 ELDT audit-readiness file review (curriculum, range-maneuver logs, student files vs 49 CFR 380), paid up front by Stripe invoice",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close_rate",
+      "q_price"
+     ],
+     "ownerHours": 6,
+     "priceCents": 75000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Owner completes one review for the first paying school to time the work and confirm the owner can deliver it",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_fulfil_hours"
+     ],
+     "ownerHours": 4,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "OTHER",
+     "label": "Day 10 decision: count paid invoices and interested replies; apply stop/continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t5",
+     "kind": "OTHER",
+     "label": "Owner confirms availability of ~45 hours over the window (outreach to up to 450 providers plus 7 reviews at 4-6 h) before CONTINUE",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "t4",
+     "evidence": [
+      "q_fulfil_hours"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid reviews per provider contacted",
+     "sources": [],
+     "needs": "Live offer to 150 TPR-listed providers; count invoices paid by day 10"
+    },
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per review",
+     "sources": [
+      "src_eco",
+      "src_ptdi"
+     ],
+     "needs": "A school paying the $750 review"
+    },
+    {
+     "name": "q_fulfil_hours",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours per review",
+     "sources": [],
+     "needs": "Timing the first delivered review"
+    },
+    {
+     "name": "q_owner_hours_total",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours available in 30 days",
+     "sources": [],
+     "needs": "Owner's objective states no hour limit; the plan needs ~45 h and the owner must confirm it"
+    },
+    {
+     "name": "q_buyer_count",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "current TPR-listed providers reachable",
+     "sources": [
+      "src_ts",
+      "src_fw"
+     ],
+     "needs": "Count of currently registered providers with public contacts, from the TPR search"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_fw",
+     "url": "https://freightwaves.com/news/fmcsa-removes-10000-plus-driver-training-providers-amid-safety-push",
+     "dated": "2026-10-28",
+     "claim": "FMCSA: more than 10,000 providers removed from the Training Provider Registry since December 2025; reviews continue",
+     "population": "CDL training providers on the TPR",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_ts",
+     "url": "https://trucksafe.com/post/fmcsa-cleans-house-3-000-cdl-schools-removed-from-the-training-provider-registry",
+     "dated": "2025-12-03",
+     "claim": "About 3,000 providers removed and 4,500 placed on notice for noncompliance (roughly 17% of the registry)",
+     "population": "CDL training providers on the TPR",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_cps",
+     "url": "https://www.cdlpowersuite.com/cdl-school-crackdown-what-is-required-to-pass-an-audit-stay-compliant",
+     "dated": "2025-12-10",
+     "claim": "Missing documents are the #1 reason schools were removed from the TPR; removal reasons include incomplete ELDT curriculum and missing training records",
+     "population": "CDL schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_eco",
+     "url": "https://eco-trains.com/rates-fees/",
+     "dated": "2026-10-01",
+     "claim": "A CDL training-compliance provider lists on-site consultation/training guidance at $200/hour, 4-hour minimum (seller list price, not this offer)",
+     "population": "Client training sites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_tpr",
+     "url": "https://tpr.fmcsa.dot.gov/",
+     "dated": "2026-11-27",
+     "claim": "FMCSA's public Training Provider Registry lists registered training providers and locations",
+     "population": "CDL training providers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_76a41fb92f2b4247852a"
+    },
+    {
+     "id": "src_ptdi",
+     "url": "https://fs27.formsite.com/aHBEuk/sr771ifnsq/index.html",
+     "dated": "2026-11-27",
+     "claim": "PTDI sells an Entry Level Driver Training Package for $999 and a CDL-A Curriculum Training Kit for $650",
+     "population": "CDL training providers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3550002437fd4daca807"
+    },
+    {
+     "id": "src_webfx",
+     "url": "https://www.webfx.com/industries/education/agency/",
+     "dated": "2026-11-27",
+     "claim": "An education marketing agency sells enrollment marketing plans starting at about $3,000/month",
+     "population": "Education institutions (not CDL-specific)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_7ab85c881c2a4c49858c"
+    },
+    {
+     "id": "src_amsive",
+     "url": "https://education.amsive.com/career-trade/",
+     "dated": "2026-11-27",
+     "claim": "Amsive markets enrollment marketing to career/trade schools including Truck Driving & CDL Programs",
+     "population": "Career and trade schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7ab85c881c2a4c49858c"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No CDL school is shown paying for an ELDT audit-readiness review (or either alternative) at the planned price, no close rate exists, and the current number of reachable registered providers is not established (the registry figures are a December 2025 sweep and later removals): whether at least 7 TPR-listed schools will pay $750 and the cash is collected by day 30 decides whether any plan exists (OFFER_AND_PRICE, CONVERSION, MARKET_VOLUME).",
+    "resolution": "Costed experiment, $0 of the $1,000 and about 10 owner hours: Brain compiles 150 currently registered TPR providers with public contacts (also counting how many are listed); owner offers a $750 prepaid ELDT audit-readiness file review on day 2 and delivers the first one to time it. PROOF (day 10): at least 3 paid invoices from 150 (2%, which over 450 contacts gives ~9 >= 7 needed), the first review delivered in <= 6 owner hours, and the owner confirms ~45 hours -> CONTINUE to 300 more providers to collect 7 paid reviews by day 25; sales after day 25 count only if collected (paid by card/Stripe invoice) by day 30. STOP: no paid invoice and fewer than 5 interested replies by day 10 -> stop and report the target not reachable in this industry in 30 days. CONTINUE-ONCE: interest but fewer than 3 paid -> offer $395 to 100 more providers; since $395 needs 13 sales ($5,135), proceed only if >= 3 of those 100 pay (3%, ~13 from 450), else stop on day 15.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "7 sales needed at $750; $0 spend; capital cap respected.",
+     "resolution": "Agreed: 7 sales at $750, $0 spend, inside the $1,000 cap."
+    },
+    {
+     "finding": "Proof miscalibrated: 2/150 -> 6 total from 450 contacts, short of 7.",
+     "resolution": "Accepted: proof raised to >= 3 paid of 150 (2%), which yields ~9 from 450 contacts, above the 7 needed."
+    },
+    {
+     "finding": "$395 fallback needs 13 sales - its threshold should be derived from that.",
+     "resolution": "Accepted: the $395 fallback threshold is now derived from 13 sales: >= 3 paid of 100 (3%), else stop."
+    },
+    {
+     "finding": "Owner hours 28-42 h of delivery plus outreach, against unstated owner hours - ask or state as an unknown the test must measure (it does time the first review, good).",
+     "resolution": "Accepted: owner hours are an unknown the owner must confirm (~45 h); added step t5 and quantity q_owner_hours_total; the test still times the first review."
+    },
+    {
+     "finding": "Decisive links OFFER_AND_PRICE and CONVERSION are correctly the live-test unknowns; MARKET_VOLUME on the review opening also remains unestablished (the registry counts I verified are a Dec-2025 sweep and removals, not current buyers) and should be listed.",
+     "resolution": "Accepted: MARKET_VOLUME added to decisiveLinks and resolves; the test counts currently registered reachable providers."
+    },
+    {
+     "finding": "Collection timing",
+     "resolution": "Metric is COLLECTED_CASH; sales after ~day 25 count only if collected by day 30, now stated in the resolution."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_7ab85c881c2a4c49858c",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_3550002437fd4daca807",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_76a41fb92f2b4247852a",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "MARKET_VOLUME",
+    "CURRENT_DEMAND",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_a8c79b875ccf_0a445e",
+   "digest": "a8c79b875ccfb85bde234f6f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_bb0c0256d5d14d6f9749/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:29:14.921Z"
+  },
+  "review": {
+   "revisionId": "rev_a8c79b875ccf_0a445e",
+   "revisionDigest": "a8c79b875ccfb85bde234f6f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_bb0c0256d5d14d6f9749/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_2882769177224df29c7e/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved. NO_PLAN with a costed $0 test is right: no CDL school is shown paying for any of the three offers, no close rate exists, and the current reachable provider count is unestablished (now in decisiveLinks). Recomputed: 7 x $750 = $5,250 >= $5,000; proof >= 3 paid of 150 (2%) gives ~9 from 450 contacts; the $395 fallback needs 13 sales ($5,135) and its >= 3% threshold gives ~13.5 from 450; spend $0 inside the $1,000 cap; collection by day 30 is stated for the COLLECTED_CASH metric; owner hours (~45 h) are asked of the owner before continuing rather than assumed.",
+   "findings": [
+    "Thresholds derived from the target and consistent.",
+    "Owner time is an explicit confirmation step (t5) - good.",
+    "If the $395 fallback is entered, 250 of the 450 contacts are already used at other terms; the ~13 from 450 projection is slightly optimistic - hold the day-15 stop."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:29:52.617Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Generate $5,000 within 30 days in a single industry I name: commercial truck driving (CDL) schools. I can put in up to $1,000 if it's needed.",
+   "terms": "053776f32fdcd648",
+   "openings": {
+    "cop_3550002437fd4daca807": "231a672498cd74be",
+    "cop_76a41fb92f2b4247852a": "d5aa14e5ab393f4c",
+    "cop_7ab85c881c2a4c49858c": "40d8b1eb48b1c2c1"
+   }
+  },
+  "at": "2026-11-27T12:31:28.210Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

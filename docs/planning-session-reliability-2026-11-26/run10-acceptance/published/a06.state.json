@@ -1,0 +1,868 @@
+{
+ "contract": {
+  "goalId": "wst_c647a2341bce45d6aaae",
+  "words": "Collect $10,000 of settled cash within 45 days using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 1000000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 45,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "Settled cash received reaches the target within the window",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "df0f3a77158fcea837de7039"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_c647a2341bce45d6aaae",
+   "contractDigest": "df0f3a77158fcea837de7039",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan reaches $10,000: the only opening is one $3,800 contract",
+    "opportunityIds": [],
+    "why": "Cedar Valley Hospice awarded a single $3,800 contract (award letter 2026-11-15). It is one buyer and one contract, so the established reach is $3,800 against a $10,000 target; no other buyer or opening is on record."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver the $3,800 hospice contract alone",
+     "why": "Fully established (award letter, PrintPost Direct at $400, no capital, 30 days to cash inside 45), but reaches only $3,800 of the $10,000 target."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Lower the target to $3,800, or discover additional established openings worth the remaining $6,200 within 45 days without up-front capital",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "contract price",
+     "status": "EVIDENCED",
+     "value": 380000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers counted",
+     "status": "EVIDENCED",
+     "value": 1,
+     "unit": "buyers",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#price",
+     "dated": "2026-11-15",
+     "claim": "Cedar Valley Hospice awarded a single $3,800 contract for a 13-month bereavement mailing program (award letter, 2026-11-15)",
+     "population": "one hospice",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#payer",
+     "dated": "2026-11-24",
+     "claim": "The payer is Cedar Valley Hospice alone",
+     "population": "one hospice",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#directCosts",
+     "dated": "2026-11-24",
+     "claim": "PrintPost Direct cost $400",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "30 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Target: one counted buyer x the established $3,800 price = $3,800, short of $10,000; the opening is a single solicitation, so no further buyers exist in it.",
+    "resolution": "Lower the target to $3,800 (deliverable in full: $400 print/postage, no capital, 30 days to cash), or keep the $10,000 target and have Brain discover and establish further openings for the remaining $6,200.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "why": "A single $3,800 contract cannot reach the $10,000 target."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to $3,800 (1 awarded contract x $3,800).",
+     "basis": [
+      {
+       "opportunityId": "cop_ae1b8974f399461ea3ac",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_4a0b333fc713_b6e3a2",
+   "digest": "4a0b333fc7131f2056576343",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_495d66efa23c44ababdb/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:13:32.421Z"
+  },
+  {
+   "goalId": "wst_c647a2341bce45d6aaae",
+   "contractDigest": "df0f3a77158fcea837de7039",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan reaches $10,000: the only opening is one $3,800 contract",
+    "opportunityIds": [],
+    "why": "Cedar Valley Hospice awarded a single $3,800 contract (award letter 2026-11-15). It is one buyer and one contract, so the established reach is $3,800 against a $10,000 target; no other buyer or opening is on record."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver the $3,800 hospice contract alone",
+     "why": "Fully established (award letter, PrintPost Direct at $400, no capital, 30 days to cash inside 45), but reaches only $3,800 of the $10,000 target."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Research and count further buyers of bereavement mailing programs reachable within 45 days (sourced prices, settlement), to establish MARKET_VOLUME for the remaining $6,200",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "contract price",
+     "status": "EVIDENCED",
+     "value": 380000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers counted",
+     "status": "EVIDENCED",
+     "value": 1,
+     "unit": "buyers",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#price",
+     "dated": "2026-11-15",
+     "claim": "Cedar Valley Hospice awarded a single $3,800 contract for a 13-month bereavement mailing program (award letter, 2026-11-15)",
+     "population": "one hospice",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#payer",
+     "dated": "2026-11-24",
+     "claim": "The payer is Cedar Valley Hospice alone",
+     "population": "one hospice",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#directCosts",
+     "dated": "2026-11-24",
+     "claim": "PrintPost Direct cost $400",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "30 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Market volume: the only established buyer is Cedar Valley Hospice, one $3,800 contract; no counted population of further buyers (other hospices or payers for this program) exists on record to carry the remaining $6,200 within 45 days without capital.",
+    "resolution": "Brain researches and counts further buyers of bereavement mailing programs (other hospices reachable within 45 days, with sourced prices and settlement times), and establishes each as an opening; failing that, the owner can lower the target to $3,800, which the awarded contract delivers in full ($400 print/postage, no capital, 30 days to cash).",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "why": "A single $3,800 contract cannot reach the $10,000 target and no further buyers are counted."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "link": "MARKET_VOLUME",
+     "reason": "Brain treats it as a one-off needing one buyer, but the goal needs $10,000 and the one awarded contract is $3,800 (price fact: a single award letter); no buyerVolume fact counts any further buyer, so the volume needed for the target is not established."
+    }
+   ],
+   "revisionId": "rev_f83242b24a5a_bfcead",
+   "digest": "f83242b24a5af5364c6c2ca9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_495d66efa23c44ababdb/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:03.281Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_c647a2341bce45d6aaae",
+  "contractDigest": "df0f3a77158fcea837de7039",
+  "parentRevisionId": null,
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan reaches $10,000: the only opening is one $3,800 contract",
+   "opportunityIds": [],
+   "why": "Cedar Valley Hospice awarded a single $3,800 contract (award letter 2026-11-15). It is one buyer and one contract, so the established reach is $3,800 against a $10,000 target; no other buyer or opening is on record."
+  },
+  "alternatives": [
+   {
+    "title": "Deliver the $3,800 hospice contract alone",
+    "why": "Fully established (award letter, PrintPost Direct at $400, no capital, 30 days to cash inside 45), but reaches only $3,800 of the $10,000 target."
+   }
+  ],
+  "steps": [
+   {
+    "id": "r1",
+    "kind": "RESEARCH",
+    "label": "Research and count further buyers of bereavement mailing programs reachable within 45 days (sourced prices, settlement), to establish MARKET_VOLUME for the remaining $6,200",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "s1"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": null,
+  "quantities": [
+   {
+    "name": "contract price",
+    "status": "EVIDENCED",
+    "value": 380000,
+    "unit": "cents",
+    "sources": [
+     "s1"
+    ],
+    "needs": null
+   },
+   {
+    "name": "buyers counted",
+    "status": "EVIDENCED",
+    "value": 1,
+    "unit": "buyers",
+    "sources": [
+     "s1",
+     "s2"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "s1",
+    "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#price",
+    "dated": "2026-11-15",
+    "claim": "Cedar Valley Hospice awarded a single $3,800 contract for a 13-month bereavement mailing program (award letter, 2026-11-15)",
+    "population": "one hospice",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ae1b8974f399461ea3ac"
+   },
+   {
+    "id": "s2",
+    "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#payer",
+    "dated": "2026-11-24",
+    "claim": "The payer is Cedar Valley Hospice alone",
+    "population": "one hospice",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ae1b8974f399461ea3ac"
+   },
+   {
+    "id": "s3",
+    "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#directCosts",
+    "dated": "2026-11-24",
+    "claim": "PrintPost Direct cost $400",
+    "population": "supplier quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ae1b8974f399461ea3ac"
+   },
+   {
+    "id": "s4",
+    "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#timeToFirstCash",
+    "dated": "2026-11-24",
+    "claim": "30 days to first cash",
+    "population": "this opening",
+    "matchesBuyer": true,
+    "opportunityId": "cop_ae1b8974f399461ea3ac"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "Market volume: the only established buyer is Cedar Valley Hospice, one $3,800 contract; no counted population of further buyers (other hospices or payers for this program) exists on record to carry the remaining $6,200 within 45 days without capital.",
+   "resolution": "Brain researches and counts further buyers of bereavement mailing programs (other hospices reachable within 45 days, with sourced prices and settlement times), and establishes each as an opening; failing that, the owner can lower the target to $3,800, which the awarded contract delivers in full ($400 print/postage, no capital, 30 days to cash).",
+   "decisiveLinks": [
+    "MARKET_VOLUME"
+   ]
+  },
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_ae1b8974f399461ea3ac",
+    "missing": [
+     "MARKET_VOLUME"
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_ae1b8974f399461ea3ac",
+    "why": "A single $3,800 contract cannot reach the $10,000 target and no further buyers are counted."
+   }
+  ],
+  "members": [],
+  "resolves": [
+   "MARKET_VOLUME"
+  ],
+  "constraints": [],
+  "disagreements": [
+   {
+    "opportunityId": "cop_ae1b8974f399461ea3ac",
+    "link": "MARKET_VOLUME",
+    "reason": "Brain treats it as a one-off needing one buyer, but the goal needs $10,000 and the one awarded contract is $3,800 (price fact: a single award letter); no buyerVolume fact counts any further buyer, so the volume needed for the target is not established."
+   }
+  ],
+  "revisionId": "rev_f83242b24a5a_bfcead",
+  "digest": "f83242b24a5af5364c6c2ca9",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_495d66efa23c44ababdb/author-B",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:14:03.281Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_f83242b24a5a_bfcead",
+  "digest": "f83242b24a5af5364c6c2ca9",
+  "contractDigest": "df0f3a77158fcea837de7039",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "No modelled strategy can work under the current limits: cannot reach the 10000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 3800). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6344× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 3400× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Bereavement follow-up mailing program for Cedar Valley Hospice\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_ae1b8974f399461ea3ac"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"Bereavement follow-up mailing program for Cedar Valley Hospice\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"Bereavement follow-up mailing program for Cedar Valley Hospice\"",
+     "owner": "PERSON",
+     "cost": 400
+    },
+    {
+     "label": "Collect payment for \"Bereavement follow-up mailing program for Cedar Valley Hospice\"",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Discover, construct and research openings that can reach the 10000 USD still needed — the openings held reach at most 3800 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+   "openings": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "title": "Bereavement follow-up mailing program for Cedar Valley Hospice",
+     "missing": [],
+     "stage": "E_COMMITTED",
+     "supportedReach": 3800,
+     "potentialReach": 3800,
+     "card": {
+      "payer": "Cedar Valley Hospice (bereavement program coordinator)",
+      "reachableChannel": "The contact named in Cedar Valley Hospice's solicitation",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:36.205Z",
+      "offerScope": "Bereavement follow-up mailing program for Cedar Valley Hospice",
+      "priceCents": 380000,
+      "currency": "USD",
+      "fulfillmentOwner": "PrintPost Direct (quoted $400 for print and postage)",
+      "peakFundingCents": 0,
+      "humanHours": 2,
+      "requiredCapabilities": [],
+      "industry": "hospice care",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 380000,
+       "currency": "USD",
+       "deliverable": "Bereavement follow-up mailing program for Cedar Valley Hospice",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: The contact named in Cedar Valley Hospice's solicitation"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 3800 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 3800 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "fulfilled by PrintPost Direct (quoted $400 for print and postage) (a source says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 400, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "30 days to usable cash against 45 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Bereavement follow-up mailing program for Cedar Valley Hospice to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$400",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "PrintPost Direct (quoted $400 for print and postage) quoted to do the work.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Cedar Valley Hospice (bereavement program coordinator)",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Cedar Valley Hospice awarded a single $3,800 contract for a 13-month bereavement mailing program (award letter, 2026-11-15).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "30 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_3f03335ce66341418fb4"
+   ],
+   "scope": {
+    "targetCents": 1000000,
+    "daysLeft": 45,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:10:58.051Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_f83242b24a5a_bfcead",
+   "revisionDigest": "f83242b24a5af5364c6c2ca9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_495d66efa23c44ababdb/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_f9d54cf895934dbfb935/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is right and names the decisive missing evidence (MARKET_VOLUME). The only opening is one awarded $3,800 contract from one hospice (award letter 2026-11-15, written acceptance on the card), fulfilled by PrintPost Direct at $400 with $0 exposure and 30 days to cash. One organisation is not a population: the card has no buyerVolume fact, so nothing establishes the further buyers the remaining $6,200 needs (at $3,800 per contract, at least two more awards inside 45 days). Brain's 'a one-off needs its one buyer' MARKET_VOLUME basis is satisfied for the contract but not for the target, and the recorded disagreement says exactly that; Brain's own verdict (at most $3,800 reachable) agrees. This is missing evidence rather than a constraint, and the plan treats it so: the next step researches and counts other hospices with sourced prices and settlement, and the alternative (deliver the $3,800 contract, or lower the target to it) is offered without pretending it meets $10,000. Arithmetic: $3,800 - $400 = $3,400 net; 3,800/10,000 = 38% of target.",
+   "findings": [
+    "INFO cop_ae1b8974f399461ea3ac MARKET_VOLUME: single buyer, no buyerVolume fact — decisive gap correctly named.",
+    "LOW cop_ae1b8974f399461ea3ac SETTLES_IN_TIME: the contract is a 13-month programme; the card does not say whether the full $3,800 is paid on award or spread over 13 months, so even the $3,800 alternative should state how much settles inside 45 days before the owner relies on it."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:20:14.878Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_f83242b24a5a_bfcead",
+  "digest": "f83242b24a5af5364c6c2ca9",
+  "contractDigest": "df0f3a77158fcea837de7039",
+  "plan": {
+   "goalId": "wst_c647a2341bce45d6aaae",
+   "contractDigest": "df0f3a77158fcea837de7039",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan reaches $10,000: the only opening is one $3,800 contract",
+    "opportunityIds": [],
+    "why": "Cedar Valley Hospice awarded a single $3,800 contract (award letter 2026-11-15). It is one buyer and one contract, so the established reach is $3,800 against a $10,000 target; no other buyer or opening is on record."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver the $3,800 hospice contract alone",
+     "why": "Fully established (award letter, PrintPost Direct at $400, no capital, 30 days to cash inside 45), but reaches only $3,800 of the $10,000 target."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Research and count further buyers of bereavement mailing programs reachable within 45 days (sourced prices, settlement), to establish MARKET_VOLUME for the remaining $6,200",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "contract price",
+     "status": "EVIDENCED",
+     "value": 380000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers counted",
+     "status": "EVIDENCED",
+     "value": 1,
+     "unit": "buyers",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#price",
+     "dated": "2026-11-15",
+     "claim": "Cedar Valley Hospice awarded a single $3,800 contract for a 13-month bereavement mailing program (award letter, 2026-11-15)",
+     "population": "one hospice",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#payer",
+     "dated": "2026-11-24",
+     "claim": "The payer is Cedar Valley Hospice alone",
+     "population": "one hospice",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#directCosts",
+     "dated": "2026-11-24",
+     "claim": "PrintPost Direct cost $400",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_ae1b8974f399461ea3ac#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "30 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ae1b8974f399461ea3ac"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Market volume: the only established buyer is Cedar Valley Hospice, one $3,800 contract; no counted population of further buyers (other hospices or payers for this program) exists on record to carry the remaining $6,200 within 45 days without capital.",
+    "resolution": "Brain researches and counts further buyers of bereavement mailing programs (other hospices reachable within 45 days, with sourced prices and settlement times), and establishes each as an opening; failing that, the owner can lower the target to $3,800, which the awarded contract delivers in full ($400 print/postage, no capital, 30 days to cash).",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "why": "A single $3,800 contract cannot reach the $10,000 target and no further buyers are counted."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_ae1b8974f399461ea3ac",
+     "link": "MARKET_VOLUME",
+     "reason": "Brain treats it as a one-off needing one buyer, but the goal needs $10,000 and the one awarded contract is $3,800 (price fact: a single award letter); no buyerVolume fact counts any further buyer, so the volume needed for the target is not established."
+    }
+   ],
+   "revisionId": "rev_f83242b24a5a_bfcead",
+   "digest": "f83242b24a5af5364c6c2ca9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_495d66efa23c44ababdb/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:03.281Z"
+  },
+  "review": {
+   "revisionId": "rev_f83242b24a5a_bfcead",
+   "revisionDigest": "f83242b24a5af5364c6c2ca9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_495d66efa23c44ababdb/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_f9d54cf895934dbfb935/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is right and names the decisive missing evidence (MARKET_VOLUME). The only opening is one awarded $3,800 contract from one hospice (award letter 2026-11-15, written acceptance on the card), fulfilled by PrintPost Direct at $400 with $0 exposure and 30 days to cash. One organisation is not a population: the card has no buyerVolume fact, so nothing establishes the further buyers the remaining $6,200 needs (at $3,800 per contract, at least two more awards inside 45 days). Brain's 'a one-off needs its one buyer' MARKET_VOLUME basis is satisfied for the contract but not for the target, and the recorded disagreement says exactly that; Brain's own verdict (at most $3,800 reachable) agrees. This is missing evidence rather than a constraint, and the plan treats it so: the next step researches and counts other hospices with sourced prices and settlement, and the alternative (deliver the $3,800 contract, or lower the target to it) is offered without pretending it meets $10,000. Arithmetic: $3,800 - $400 = $3,400 net; 3,800/10,000 = 38% of target.",
+   "findings": [
+    "INFO cop_ae1b8974f399461ea3ac MARKET_VOLUME: single buyer, no buyerVolume fact — decisive gap correctly named.",
+    "LOW cop_ae1b8974f399461ea3ac SETTLES_IN_TIME: the contract is a 13-month programme; the card does not say whether the full $3,800 is paid on award or spread over 13 months, so even the $3,800 alternative should state how much settles inside 45 days before the owner relies on it."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:20:14.878Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $10,000 of settled cash within 45 days using no up-front capital.",
+   "terms": "e4f694358250ad17",
+   "openings": {
+    "cop_ae1b8974f399461ea3ac": "af75fef034c3a90b"
+   }
+  },
+  "at": "2026-11-27T12:21:34.578Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

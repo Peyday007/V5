@@ -1,0 +1,2022 @@
+{
+ "contract": {
+  "goalId": "wst_9e755d0bbd5e4b4b9365",
+  "words": "Make $1,500 in settled cash in the next 21 days. I have no money to put in, and I can give it about 3 hours a week, no more.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 150000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 21,
+   "totalSpendCapCents": 0,
+   "preProofSpendCapCents": 0,
+   "exposureCapCents": 0,
+   "proofCondition": "A first buyer pays and the payment settles in the owner's account within the 21-day window, with no owner money advanced",
+   "ownerHoursPerWeek": 3,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "d9d93f181391575da43d26d2"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_9e755d0bbd5e4b4b9365",
+   "contractDigest": "d9d93f181391575da43d26d2",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: test whether local businesses without a website will pay a $600 deposit-first build before committing the owner's 9 hours",
+    "opportunityIds": [],
+    "why": "None of the three discovered openings has a price any buyer is shown paying for this exact offer (the verifier rejected published freelancer price ranges as a different definition), no buying signal, no measured close rate for a new sender, and no established subcontractor. At $0 capital and 9 owner hours, $1,500 settled in 21 days needs 3 website sales, 6 GBP sales or 5 Upwork wins with no evidence for any of them, so no executable or conditional plan is established."
+   },
+   "alternatives": [
+    {
+     "title": "Resell Google Business Profile optimisation at $250",
+     "why": "Marketplace sellers list the same work from about $50-$199, so a $250 resale price is not shown to be paid; 6 sales at 0.75 h plus outreach would consume the 9-hour budget."
+    },
+    {
+     "title": "Answer Upwork fixed-price requests with subcontracted fulfilment",
+     "why": "Only 10 free Connects a month limit a new profile to a few proposals; client review plus the 5-day security hold puts cash near or past day 21; no win rate is established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain lists 60 businesses on Google Maps with a claimed listing but no working website and drafts a personalised offer email for each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_web_volume"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner sends the 60 Brain-drafted emails from their own mailbox offering a 5-page site at $600 with a 50% Stripe deposit",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 1.5,
+     "priceCents": 60000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Brain obtains a written fixed quote and delivery time from two marketplace web designers for the 5-page package (no order placed)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "OTHER",
+     "label": "Day 7 decision: count paid deposits and replies; apply stop/continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid deposits per email sent",
+     "sources": [],
+     "needs": "Live send of 60 offer emails; count deposits settled by day 7"
+    },
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [
+      "src_web_price"
+     ],
+     "needs": "A buyer paying the $600 deposit-first offer"
+    },
+    {
+     "name": "q_fulfil_cost",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [],
+     "needs": "Written quotes from two designers"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_web_volume",
+     "url": "https://www.techradar.com/pro/a-third-of-businesses-on-google-maps-have-no-working-website-and-many-of-those-that-do-are-struggling-to-keep-them-up-to-date",
+     "dated": "2026-11-12",
+     "claim": "Of 6,266 owner-claimed Google listings in 12 UK towns, 2,095 (33%) had no working website",
+     "population": "UK local businesses on Google Maps",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_web_price",
+     "url": "https://www.wpzoom.com/blog/business-website-cost/",
+     "dated": "2026-09-28",
+     "claim": "Freelancers typically charge $1,500-$7,000 for a small business website (seller-side ranges, not a price this offer is shown to get)",
+     "population": "Small businesses buying websites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_gbp_offer",
+     "url": "https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788",
+     "dated": "2026-11-27",
+     "claim": "Google Business Profile optimisation is sold as a marketplace package in $49/$99/$199 tiers",
+     "population": "Local businesses buying GBP optimisation on Upwork",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_gbp_need",
+     "url": "https://www.brightlocal.com/research/smb-marketing-2025/",
+     "dated": "2025-08-01",
+     "claim": "BrightLocal SMB marketing survey 2025 reports how many SMBs maintain a Google Business Profile",
+     "population": "SMBs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_upw_pay",
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+     "dated": "2026-11-27",
+     "claim": "Fixed-price funds are released on approval (or auto-release after 14 days) and then held 5 days before withdrawal",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    },
+    {
+     "id": "src_upw_connects",
+     "url": "https://www.upwork.com/resources/is-upwork-free",
+     "dated": "2026-11-27",
+     "claim": "Freelancer Basic is free with 10 Connects per month; extra Connects cost $0.15 each",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No buyer is shown paying for any of the three offers at the planned price, and no close rate for a new sender exists: whether 3 local businesses will pay a $600 deposit-first website build within 21 days (OFFER_AND_PRICE, CONVERSION) decides whether any plan exists.",
+    "resolution": "Costed experiment, $0 and 2 owner hours: Brain drafts 60 personalised emails to businesses with a claimed Google listing and no working website; owner sends them on day 2 offering a $600 5-page site with a 50% Stripe deposit; Brain gets two designer quotes. PROOF: at least 1 deposit settled by day 7 and a designer quote at or below $300 -> CONTINUE with 120 more emails to reach 3 sales by day 11. STOP: no deposit and fewer than 3 interested replies by day 7 -> stop, report the target unreachable in 21 days at $0/9h. CONTINUE-ONCE: interested replies but no deposit -> one follow-up round, decide day 10.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_c9c3d89fbc96460b93c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_c33ed7bd39124144a06e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_d6530bbab814455db45b",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_2bff79542377_3f9c05",
+   "digest": "2bff795423778af9d036b656",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:24:15.088Z"
+  },
+  {
+   "goalId": "wst_9e755d0bbd5e4b4b9365",
+   "contractDigest": "d9d93f181391575da43d26d2",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: test whether local businesses without a website will pay a $600 deposit-first build before committing the owner's 9 hours",
+    "opportunityIds": [],
+    "why": "None of the three discovered openings has a price any buyer is shown paying for this exact offer (the verifier rejected published freelancer price ranges as a different definition), no buying signal, no measured close rate for a new sender, and no established subcontractor. At $0 capital and 9 owner hours, $1,500 settled in 21 days needs 3 website sales, 6 GBP sales or 5 Upwork wins with no evidence for any of them, so no executable or conditional plan is established."
+   },
+   "alternatives": [
+    {
+     "title": "Resell Google Business Profile optimisation at $250",
+     "why": "Marketplace sellers list the same work from about $50-$199, so a $250 resale price is not shown to be paid; 6 sales at 0.75 h plus outreach would consume the 9-hour budget."
+    },
+    {
+     "title": "Answer Upwork fixed-price requests with subcontracted fulfilment",
+     "why": "Only 10 free Connects a month limit a new profile to a few proposals; client review plus the 5-day security hold puts cash near or past day 21; no win rate is established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain lists 60 businesses on Google Maps with a claimed listing but no working website and drafts a personalised offer email for each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_web_volume"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner sends the 60 Brain-drafted emails from their own mailbox offering a 5-page site at $600 with a 50% Stripe deposit",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 1.5,
+     "priceCents": 60000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Brain obtains a written fixed quote and delivery time from two marketplace web designers for the 5-page package (no order placed)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "OTHER",
+     "label": "Day 7 decision: count paid deposits and replies; apply stop/continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid deposits per email sent",
+     "sources": [],
+     "needs": "Live send of 60 offer emails; count deposits settled by day 7"
+    },
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [
+      "src_web_price"
+     ],
+     "needs": "A buyer paying the $600 deposit-first offer"
+    },
+    {
+     "name": "q_fulfil_cost",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [],
+     "needs": "Written quotes from two designers"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_web_volume",
+     "url": "https://www.techradar.com/pro/a-third-of-businesses-on-google-maps-have-no-working-website-and-many-of-those-that-do-are-struggling-to-keep-them-up-to-date",
+     "dated": "2026-11-12",
+     "claim": "Of 6,266 owner-claimed Google listings in 12 UK towns, 2,095 (33%) had no working website",
+     "population": "UK local businesses on Google Maps",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_web_price",
+     "url": "https://www.wpzoom.com/blog/business-website-cost/",
+     "dated": "2026-09-28",
+     "claim": "Freelancers typically charge $1,500-$7,000 for a small business website (seller-side ranges, not a price this offer is shown to get)",
+     "population": "Small businesses buying websites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_gbp_offer",
+     "url": "https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788",
+     "dated": "2026-11-27",
+     "claim": "Google Business Profile optimisation is sold as a marketplace package in $49/$99/$199 tiers",
+     "population": "Local businesses buying GBP optimisation on Upwork",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_gbp_need",
+     "url": "https://www.brightlocal.com/research/smb-marketing-2025/",
+     "dated": "2025-08-01",
+     "claim": "BrightLocal SMB marketing survey 2025 reports how many SMBs maintain a Google Business Profile",
+     "population": "SMBs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_upw_pay",
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+     "dated": "2026-11-27",
+     "claim": "Fixed-price funds are released on approval (or auto-release after 14 days) and then held 5 days before withdrawal",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    },
+    {
+     "id": "src_upw_connects",
+     "url": "https://www.upwork.com/resources/is-upwork-free",
+     "dated": "2026-11-27",
+     "claim": "Freelancer Basic is free with 10 Connects per month; extra Connects cost $0.15 each",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No buyer is shown paying for any of the three offers at the planned price, and no close rate for a new sender exists: whether 3 local businesses will pay a $600 deposit-first website build within 21 days (OFFER_AND_PRICE, CONVERSION) decides whether any plan exists.",
+    "resolution": "Costed experiment, $0 and 2 owner hours: Brain drafts 60 personalised emails to businesses with a claimed Google listing and no working website; owner sends them on day 2 offering a $600 5-page site with a 50% Stripe deposit; Brain gets two designer quotes. PROOF: at least 1 deposit settled by day 7 and a designer quote at or below $300 -> CONTINUE with 120 more emails to reach 3 sales by day 11. STOP: no deposit and fewer than 3 interested replies by day 7 -> stop, report the target unreachable in 21 days at $0/9h. CONTINUE-ONCE: interested replies but no deposit -> one follow-up round, decide day 10.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_c9c3d89fbc96460b93c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_c33ed7bd39124144a06e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_d6530bbab814455db45b",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_2bff79542377_181d9c",
+   "digest": "2bff795423778af9d036b656",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:24:19.907Z"
+  },
+  {
+   "goalId": "wst_9e755d0bbd5e4b4b9365",
+   "contractDigest": "d9d93f181391575da43d26d2",
+   "parentRevisionId": "rev_2bff79542377_181d9c",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: test whether local businesses without a website will pay a $600 deposit-first build before committing the owner's 9 hours",
+    "opportunityIds": [],
+    "why": "None of the three discovered openings has a price any buyer is shown paying for this exact offer (the verifier rejected published freelancer price ranges as a different definition), no buying signal, no measured close rate for a new sender, and no established subcontractor. At $0 capital and 9 owner hours, $1,500 settled in 21 days needs 5 website sales (net $350 each after a $250 designer), 6 GBP sales or 5 Upwork wins with no evidence for any of them, so no executable or conditional plan is established."
+   },
+   "alternatives": [
+    {
+     "title": "Resell Google Business Profile optimisation at $250",
+     "why": "Marketplace sellers list the same work from about $50-$199, so a $250 resale price is not shown to be paid; 6 sales at 0.75 h plus outreach would consume the 9-hour budget."
+    },
+    {
+     "title": "Answer Upwork fixed-price requests with subcontracted fulfilment",
+     "why": "Only 10 free Connects a month limit a new profile to a few proposals; client review plus the 5-day security hold puts cash near or past day 21; no win rate is established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain lists 60 US local businesses whose claimed Google Maps listing shows no working website and drafts a personalised offer email for each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_web_volume"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner sends the 60 Brain-drafted emails from their own mailbox offering a 5-page site at $600 (USD) with a 50% Stripe deposit",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 1,
+     "priceCents": 60000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Owner requests (Brain-drafted) a written fixed quote and delivery time from two marketplace web designers for the 5-page package; no order placed",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "OTHER",
+     "label": "Day 6 decision: count settled deposits, replies, designer quotes and owner hours used on the first sale; apply stop/continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_close_rate",
+      "q_owner_hours"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 6,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid deposits per email sent",
+     "sources": [],
+     "needs": "Live send of 60 emails; 5 sales from ~180 emails requires >= 2.8%"
+    },
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [
+      "src_web_price"
+     ],
+     "needs": "A buyer paying the $600 deposit-first offer"
+    },
+    {
+     "name": "q_fulfil_cost",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [],
+     "needs": "Written quotes from two designers; must be <= $250 for 5 sales to net >= $1,500"
+    },
+    {
+     "name": "q_owner_hours",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours per sale",
+     "sources": [],
+     "needs": "Timing of the first sale; 5 sales fit the 9 h only at <= 1.2 h each (6 h + 2.5 h test/continuation + 0.25 h)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_web_volume",
+     "url": "https://www.techradar.com/pro/a-third-of-businesses-on-google-maps-have-no-working-website-and-many-of-those-that-do-are-struggling-to-keep-them-up-to-date",
+     "dated": "2026-11-12",
+     "claim": "Of 6,266 owner-claimed Google listings in 12 UK towns, 2,095 (33%) had no working website (UK prevalence evidence only; the test emails US businesses, priced in USD)",
+     "population": "UK local businesses on Google Maps",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_web_price",
+     "url": "https://www.wpzoom.com/blog/business-website-cost/",
+     "dated": "2026-09-28",
+     "claim": "Freelancers typically charge $1,500-$7,000 for a small business website (seller-side ranges, not a price this offer is shown to get)",
+     "population": "Small businesses buying websites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_gbp_offer",
+     "url": "https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788",
+     "dated": "2026-11-27",
+     "claim": "Google Business Profile optimisation is sold as a marketplace package in $49/$99/$199 tiers",
+     "population": "Local businesses buying GBP optimisation on Upwork",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_gbp_need",
+     "url": "https://www.brightlocal.com/research/smb-marketing-2025/",
+     "dated": "2025-08-01",
+     "claim": "BrightLocal SMB marketing survey 2025 reports how many SMBs maintain a Google Business Profile",
+     "population": "SMBs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_upw_pay",
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+     "dated": "2026-11-27",
+     "claim": "Fixed-price funds are released on approval (or auto-release after 14 days) and then held 5 days before withdrawal",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    },
+    {
+     "id": "src_upw_connects",
+     "url": "https://www.upwork.com/resources/is-upwork-free",
+     "dated": "2026-11-27",
+     "claim": "Freelancer Basic is free with 10 Connects per month; extra Connects cost $0.15 each",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No buyer is shown paying for any of the three offers at the planned price and no close rate for a new sender exists: whether 5 US local businesses will pay a $600 deposit-first website build (net $350 each after a <= $250 designer) by about day 11, handled in <= 1.2 owner hours each so the 9-hour limit holds, decides whether any plan exists (OFFER_AND_PRICE, CONVERSION).",
+    "resolution": "Costed experiment, $0 and 1.5 owner hours: Brain drafts 60 personalised emails to US businesses with a claimed Google listing and no working website; owner sends them on day 2 offering a $600 5-page site with a 50% Stripe deposit, and asks two designers for fixed quotes. PROOF (day 6): at least 2 deposits settled from the 60 emails (>= 3.3%, above the 2.8% that 5 sales from 180 emails need), a designer quote <= $250, and the first sale handled in <= 1.2 owner hours -> CONTINUE: owner sends 120 more Brain-drafted emails on day 6 (1 h) to close 5 sales by day 11; total owner time 1.5 + 1 + 5 x 1.2 = 8.5 h <= 9 h. STOP: fewer than 2 deposits, or quotes above $250, or the first sale takes more than 1.2 owner hours -> stop and report $1,500 net not reachable in 21 days at $0 and 9 hours. No continue-once round: the hours budget does not allow one.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Gross vs net: 3 x $600 = $1,800 gross but 3 x ($600 - $250) = $1,050 net < $1,500; 5 sales needed ($1,750 net).",
+     "resolution": "Accepted: target counted net; 5 sales x $350 = $1,750 needed (3 gives $1,050); the gap and test now say 5."
+    },
+    {
+     "finding": "Owner hours: limit 9 h total; 5 sales x 1.5 h = 7.5 h + 2 h sending = 9.5 h before follow-ups and the 120-email continuation - the hours constraint may decide this goal and should be stated.",
+     "resolution": "Accepted: owner hours checked explicitly; the test now requires <= 1.2 h per sale so 5 sales + 2.5 h outreach + 0.25 h decision = 8.75 h <= 9 h, and stops otherwise. Not listed as a constraint because the 1.5 h/sale is my estimate (RECOMMENDATION), not an evidenced figure."
+    },
+    {
+     "finding": "Proof threshold (1 deposit by day 7 + designer quote <= $300) does not show 5 sales by ~day 11 are reachable; with balance-on-delivery and 10 days to usable cash, the last sale must close by about day 11 - state the needed close rate (5 sales from ~180 emails = ~2.8%).",
+     "resolution": "Accepted: proof now requires >= 2 deposits from 60 (3.3%) against the 2.8% needed for 5 sales from 180 emails by ~day 11."
+    },
+    {
+     "finding": "Designer quote <= $300 leaves $300 margin, making 5 sales exactly $1,500; the continue rule should require <= $250 or more sales.",
+     "resolution": "Accepted: continue now requires a designer quote <= $250."
+    },
+    {
+     "finding": "Alternatives' rejection reasons (GBP resale price unshown, Upwork Connects and 5-day hold) are consistent with the sources.",
+     "resolution": "Agreed; alternatives unchanged."
+    },
+    {
+     "finding": "Which market is emailed (UK study vs USD offer)",
+     "resolution": "US businesses are emailed in USD; the TechRadar/Digital Royalty UK figure is cited only as prevalence evidence."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_c9c3d89fbc96460b93c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_c33ed7bd39124144a06e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_d6530bbab814455db45b",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_d0fb02872735_3cdc2d",
+   "digest": "d0fb0287273558d2a459987c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:29:14.494Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_9e755d0bbd5e4b4b9365",
+  "contractDigest": "d9d93f181391575da43d26d2",
+  "parentRevisionId": "rev_2bff79542377_181d9c",
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan yet: test whether local businesses without a website will pay a $600 deposit-first build before committing the owner's 9 hours",
+   "opportunityIds": [],
+   "why": "None of the three discovered openings has a price any buyer is shown paying for this exact offer (the verifier rejected published freelancer price ranges as a different definition), no buying signal, no measured close rate for a new sender, and no established subcontractor. At $0 capital and 9 owner hours, $1,500 settled in 21 days needs 5 website sales (net $350 each after a $250 designer), 6 GBP sales or 5 Upwork wins with no evidence for any of them, so no executable or conditional plan is established."
+  },
+  "alternatives": [
+   {
+    "title": "Resell Google Business Profile optimisation at $250",
+    "why": "Marketplace sellers list the same work from about $50-$199, so a $250 resale price is not shown to be paid; 6 sales at 0.75 h plus outreach would consume the 9-hour budget."
+   },
+   {
+    "title": "Answer Upwork fixed-price requests with subcontracted fulfilment",
+    "why": "Only 10 free Connects a month limit a new profile to a few proposals; client review plus the 5-day security hold puts cash near or past day 21; no win rate is established."
+   }
+  ],
+  "steps": [
+   {
+    "id": "t1",
+    "kind": "RESEARCH",
+    "label": "Brain lists 60 US local businesses whose claimed Google Maps listing shows no working website and drafts a personalised offer email for each",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "src_web_volume"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   },
+   {
+    "id": "t2",
+    "kind": "TEST",
+    "label": "Owner sends the 60 Brain-drafted emails from their own mailbox offering a 5-page site at $600 (USD) with a 50% Stripe deposit",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 2,
+    "dependsOn": "t1",
+    "evidence": [
+     "q_close_rate"
+    ],
+    "ownerHours": 1,
+    "priceCents": 60000,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t3",
+    "kind": "TEST",
+    "label": "Owner requests (Brain-drafted) a written fixed quote and delivery time from two marketplace web designers for the 5-page package; no order placed",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 2,
+    "dependsOn": null,
+    "evidence": [
+     "q_fulfil_cost"
+    ],
+    "ownerHours": 0.25,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t4",
+    "kind": "OTHER",
+    "label": "Day 6 decision: count settled deposits, replies, designer quotes and owner hours used on the first sale; apply stop/continue",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 6,
+    "dependsOn": "t2",
+    "evidence": [
+     "q_close_rate",
+     "q_owner_hours"
+    ],
+    "ownerHours": 0.25,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": 6,
+  "quantities": [
+   {
+    "name": "q_close_rate",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "paid deposits per email sent",
+    "sources": [],
+    "needs": "Live send of 60 emails; 5 sales from ~180 emails requires >= 2.8%"
+   },
+   {
+    "name": "q_price",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "USD per site",
+    "sources": [
+     "src_web_price"
+    ],
+    "needs": "A buyer paying the $600 deposit-first offer"
+   },
+   {
+    "name": "q_fulfil_cost",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "USD per site",
+    "sources": [],
+    "needs": "Written quotes from two designers; must be <= $250 for 5 sales to net >= $1,500"
+   },
+   {
+    "name": "q_owner_hours",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "owner hours per sale",
+    "sources": [],
+    "needs": "Timing of the first sale; 5 sales fit the 9 h only at <= 1.2 h each (6 h + 2.5 h test/continuation + 0.25 h)"
+   }
+  ],
+  "sources": [
+   {
+    "id": "src_web_volume",
+    "url": "https://www.techradar.com/pro/a-third-of-businesses-on-google-maps-have-no-working-website-and-many-of-those-that-do-are-struggling-to-keep-them-up-to-date",
+    "dated": "2026-11-12",
+    "claim": "Of 6,266 owner-claimed Google listings in 12 UK towns, 2,095 (33%) had no working website (UK prevalence evidence only; the test emails US businesses, priced in USD)",
+    "population": "UK local businesses on Google Maps",
+    "matchesBuyer": true,
+    "opportunityId": "cop_c9c3d89fbc96460b93c1"
+   },
+   {
+    "id": "src_web_price",
+    "url": "https://www.wpzoom.com/blog/business-website-cost/",
+    "dated": "2026-09-28",
+    "claim": "Freelancers typically charge $1,500-$7,000 for a small business website (seller-side ranges, not a price this offer is shown to get)",
+    "population": "Small businesses buying websites",
+    "matchesBuyer": false,
+    "opportunityId": "cop_c9c3d89fbc96460b93c1"
+   },
+   {
+    "id": "src_gbp_offer",
+    "url": "https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788",
+    "dated": "2026-11-27",
+    "claim": "Google Business Profile optimisation is sold as a marketplace package in $49/$99/$199 tiers",
+    "population": "Local businesses buying GBP optimisation on Upwork",
+    "matchesBuyer": true,
+    "opportunityId": "cop_d6530bbab814455db45b"
+   },
+   {
+    "id": "src_gbp_need",
+    "url": "https://www.brightlocal.com/research/smb-marketing-2025/",
+    "dated": "2025-08-01",
+    "claim": "BrightLocal SMB marketing survey 2025 reports how many SMBs maintain a Google Business Profile",
+    "population": "SMBs",
+    "matchesBuyer": true,
+    "opportunityId": "cop_d6530bbab814455db45b"
+   },
+   {
+    "id": "src_upw_pay",
+    "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+    "dated": "2026-11-27",
+    "claim": "Fixed-price funds are released on approval (or auto-release after 14 days) and then held 5 days before withdrawal",
+    "population": "Upwork freelancers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_c33ed7bd39124144a06e"
+   },
+   {
+    "id": "src_upw_connects",
+    "url": "https://www.upwork.com/resources/is-upwork-free",
+    "dated": "2026-11-27",
+    "claim": "Freelancer Basic is free with 10 Connects per month; extra Connects cost $0.15 each",
+    "population": "Upwork freelancers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_c33ed7bd39124144a06e"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "No buyer is shown paying for any of the three offers at the planned price and no close rate for a new sender exists: whether 5 US local businesses will pay a $600 deposit-first website build (net $350 each after a <= $250 designer) by about day 11, handled in <= 1.2 owner hours each so the 9-hour limit holds, decides whether any plan exists (OFFER_AND_PRICE, CONVERSION).",
+   "resolution": "Costed experiment, $0 and 1.5 owner hours: Brain drafts 60 personalised emails to US businesses with a claimed Google listing and no working website; owner sends them on day 2 offering a $600 5-page site with a 50% Stripe deposit, and asks two designers for fixed quotes. PROOF (day 6): at least 2 deposits settled from the 60 emails (>= 3.3%, above the 2.8% that 5 sales from 180 emails need), a designer quote <= $250, and the first sale handled in <= 1.2 owner hours -> CONTINUE: owner sends 120 more Brain-drafted emails on day 6 (1 h) to close 5 sales by day 11; total owner time 1.5 + 1 + 5 x 1.2 = 8.5 h <= 9 h. STOP: fewer than 2 deposits, or quotes above $250, or the first sale takes more than 1.2 owner hours -> stop and report $1,500 net not reachable in 21 days at $0 and 9 hours. No continue-once round: the hours budget does not allow one.",
+   "decisiveLinks": [
+    "OFFER_AND_PRICE",
+    "CONVERSION"
+   ]
+  },
+  "reach": null,
+  "answers": [
+   {
+    "finding": "Gross vs net: 3 x $600 = $1,800 gross but 3 x ($600 - $250) = $1,050 net < $1,500; 5 sales needed ($1,750 net).",
+    "resolution": "Accepted: target counted net; 5 sales x $350 = $1,750 needed (3 gives $1,050); the gap and test now say 5."
+   },
+   {
+    "finding": "Owner hours: limit 9 h total; 5 sales x 1.5 h = 7.5 h + 2 h sending = 9.5 h before follow-ups and the 120-email continuation - the hours constraint may decide this goal and should be stated.",
+    "resolution": "Accepted: owner hours checked explicitly; the test now requires <= 1.2 h per sale so 5 sales + 2.5 h outreach + 0.25 h decision = 8.75 h <= 9 h, and stops otherwise. Not listed as a constraint because the 1.5 h/sale is my estimate (RECOMMENDATION), not an evidenced figure."
+   },
+   {
+    "finding": "Proof threshold (1 deposit by day 7 + designer quote <= $300) does not show 5 sales by ~day 11 are reachable; with balance-on-delivery and 10 days to usable cash, the last sale must close by about day 11 - state the needed close rate (5 sales from ~180 emails = ~2.8%).",
+    "resolution": "Accepted: proof now requires >= 2 deposits from 60 (3.3%) against the 2.8% needed for 5 sales from 180 emails by ~day 11."
+   },
+   {
+    "finding": "Designer quote <= $300 leaves $300 margin, making 5 sales exactly $1,500; the continue rule should require <= $250 or more sales.",
+    "resolution": "Accepted: continue now requires a designer quote <= $250."
+   },
+   {
+    "finding": "Alternatives' rejection reasons (GBP resale price unshown, Upwork Connects and 5-day hold) are consistent with the sources.",
+    "resolution": "Agreed; alternatives unchanged."
+   },
+   {
+    "finding": "Which market is emailed (UK study vs USD offer)",
+    "resolution": "US businesses are emailed in USD; the TechRadar/Digital Royalty UK figure is cited only as prevalence evidence."
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_c9c3d89fbc96460b93c1",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_c33ed7bd39124144a06e",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_d6530bbab814455db45b",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "OFFER_AND_PRICE",
+   "CONVERSION",
+   "FULFILMENT"
+  ],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_d0fb02872735_3cdc2d",
+  "digest": "d0fb0287273558d2a459987c",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_2cf6190b5af44119b6e3/author-E",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:29:14.494Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_d0fb02872735_3cdc2d",
+  "digest": "d0fb0287273558d2a459987c",
+  "contractDigest": "d9d93f181391575da43d26d2",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "No modelled strategy can work under the current limits: cannot reach the 1500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Answer posted Upwork fixed-price requests as an agency with \" needs [figure withheld] and keeps [figure withheld], 150× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Resell small-business website builds, fulfilled by a), so none of its figures is shown or adopted.",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_c9c3d89fbc96460b93c1",
+    "cop_c33ed7bd39124144a06e",
+    "cop_d6530bbab814455db45b"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Establish an offer and a price",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Discover, construct and research openings that can reach the 1500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+   "openings": [
+    {
+     "opportunityId": "cop_c9c3d89fbc96460b93c1",
+     "title": "Resell small-business website builds, fulfilled by a marketplace web designer",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 600,
+     "card": {
+      "payer": "Local businesses with no or outdated website",
+      "reachableChannel": "Direct email from the owner's mailbox to businesses whose Google listing has no website",
+      "offerScope": "5-page website build, 50% deposit then balance, paid by Stripe link",
+      "priceCents": 60000,
+      "currency": "USD",
+      "fulfillmentOwner": "Fiverr/Upwork web designer at a fixed package price",
+      "peakFundingCents": 0,
+      "humanHours": 1.5,
+      "requiredCapabilities": [],
+      "industry": "Small business web design",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Direct email from the owner's mailbox to businesses whose Google listing has no "
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 250, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "10 days to usable cash against 21 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Direct email from the owner's mailbox to businesses whose Google listing has no website",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell 5-page website build, 50% deposit then balance, paid by Stripe link to Local businesses with no or outdated website, reached through Direct email from the owner's mailbox to businesses whose Google listing has no website, at $600; Fiverr/Upwork web designer at a fixed package price delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$250",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Fiverr/Upwork web designer at a fixed package price.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "1.5 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "5-page website build, 50% deposit then balance, paid by Stripe link",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "Local businesses with no or outdated website",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$600",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$600",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://clutch.co/web-designers/packages?page=12; https://profitworks.ca/blog/949-web-design-packages-pricing-examples-good-and-bad; https://colorwhistle.com/website-cost-features/school-website-cost-usa/; https://docs.stripe.com/payouts",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "10 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_c33ed7bd39124144a06e",
+     "title": "Answer posted Upwork fixed-price requests as an agency with subcontracted fulfilment",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 300,
+     "card": {
+      "payer": "Clients posting fixed-price jobs on Upwork",
+      "reachableChannel": "Upwork proposals using 10 free monthly Connects",
+      "offerScope": "Fixed-price deliverables for posted jobs, fulfilled by a subcontracted freelancer",
+      "priceCents": 30000,
+      "currency": "USD",
+      "fulfillmentOwner": "Subcontracted freelancer paid from the released milestone",
+      "peakFundingCents": 0,
+      "humanHours": 1.5,
+      "requiredCapabilities": [],
+      "industry": "Freelance digital services",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Upwork proposals using 10 free monthly Connects"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 150, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "17 days to usable cash against 21 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Upwork proposals using 10 free monthly Connects",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Fixed-price deliverables for posted jobs, fulfilled by a subcontracted freelancer to Clients posting fixed-price jobs on Upwork, reached through Upwork proposals using 10 free monthly Connects, at $300; Subcontracted freelancer paid from the released milestone delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$150",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Subcontracted freelancer paid from the released milestone.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "1.5 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "Fixed-price deliverables for posted jobs, fulfilled by a subcontracted freelancer",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "Clients posting fixed-price jobs on Upwork",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$300",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$300",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts; https://www.upwork.com/resources/is-upwork-free; https://www.upwork.com/resources/how-to-get-free-connects",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "17 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_d6530bbab814455db45b",
+     "title": "Resell one-time Google Business Profile optimisation to local businesses, fulfilled by a marketplace freelancer",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 250,
+     "card": {
+      "payer": "Local service businesses with incomplete Google Business Profiles",
+      "reachableChannel": "Direct email from the owner's own mailbox to businesses found on Google Maps",
+      "offerScope": "One-time Google Business Profile audit and optimisation, paid up front by Stripe payment link",
+      "priceCents": 25000,
+      "currency": "USD",
+      "fulfillmentOwner": "Fiverr Google Business Profile optimisation seller (gigs listed from about $50)",
+      "peakFundingCents": 0,
+      "humanHours": 0.75,
+      "requiredCapabilities": [],
+      "industry": "Local services marketing",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Direct email from the owner's own mailbox to businesses found on Google Maps"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 60, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "7 days to usable cash against 21 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Direct email from the owner's own mailbox to businesses found on Google Maps",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell One-time Google Business Profile audit and optimisation, paid up front by Stripe payment link to Local service businesses with incomplete Google Business Profiles, reached through Direct email from the owner's own mailbox to businesses found on Google Maps, at $250; Fiverr Google Business Profile optimisation seller (gigs listed from about $50) delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$60",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Fiverr Google Business Profile optimisation seller (gigs listed from about $50).",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "0.75 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "One-time Google Business Profile audit and optimisation, paid up front by Stripe payment link",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "Local service businesses with incomplete Google Business Profiles",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$250",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$250",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://clutch.co/profile/small-business-seo-services-1; https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788; https://fiverr.com/eweba1pro/rank-your-business-on-google-maps-for-more-local-leads; https://www.webfx.com/local-seo-pricing.html; https://docs.stripe.com/payouts",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "7 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [],
+   "scope": {
+    "targetCents": 150000,
+    "daysLeft": 21,
+    "hoursCeiling": 9,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": 3
+   },
+   "at": "2026-11-27T12:22:30.975Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_2bff79542377_3f9c05",
+   "revisionDigest": "2bff795423778af9d036b656",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_484cb0b581b34d3a97ac/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "NO_PLAN is a defensible stance (no buyer-paid price, no close rate, no established subcontractor on any opening), but the arithmetic the test is calibrated on is wrong and the owner-hour limit is not checked. Settled cash is what the owner keeps: each $600 website sale pays a $250 designer, leaving $350, so $1,500 needs 5 sales (4 x 350 = $1,400), not 3 (3 sales = $1,050 net). At the card's 1.5 owner hours per sale, 5 sales take 7.5 h plus the test's 2 h of sending = 9.5 h against the 9 h the owner gave (3 h/week x 3 weeks), and the CONTINUE step adds 120 more owner-sent emails with no hours counted. The test's CONTINUE ('120 more emails to reach 3 sales by day 11') therefore stops short of the target even if it works, and its hours may exceed the ceiling. The 60 prospects would come from a UK-only study population (the TechRadar sample) while the offer is in USD by Stripe - say which market is emailed.",
+   "findings": [
+    "Gross vs net: 3 x $600 = $1,800 gross but 3 x ($600 - $250) = $1,050 net < $1,500; 5 sales needed ($1,750 net).",
+    "Owner hours: limit 9 h total; 5 sales x 1.5 h = 7.5 h + 2 h sending = 9.5 h before follow-ups and the 120-email continuation - the hours constraint may decide this goal and should be stated.",
+    "Proof threshold (1 deposit by day 7 + designer quote <= $300) does not show 5 sales by ~day 11 are reachable; with balance-on-delivery and 10 days to usable cash, the last sale must close by about day 11 - state the needed close rate (5 sales from ~180 emails = ~2.8%).",
+    "Designer quote <= $300 leaves $300 margin, making 5 sales exactly $1,500; the continue rule should require <= $250 or more sales.",
+    "Alternatives' rejection reasons (GBP resale price unshown, Upwork Connects and 5-day hold) are consistent with the sources."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:26:18.308Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_2bff79542377_181d9c",
+   "revisionDigest": "2bff795423778af9d036b656",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_484cb0b581b34d3a97ac/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "Same content as rev_2bff79542377_3f9c05 (identical digest), so the same judgement: NO_PLAN is a defensible stance (no buyer-paid price, no close rate, no established subcontractor on any opening), but the arithmetic the test is calibrated on is wrong and the owner-hour limit is not checked. Settled cash is what the owner keeps: each $600 website sale pays a $250 designer, leaving $350, so $1,500 needs 5 sales (4 x 350 = $1,400), not 3 (3 sales = $1,050 net). At the card's 1.5 owner hours per sale, 5 sales take 7.5 h plus the test's 2 h of sending = 9.5 h against the 9 h the owner gave (3 h/week x 3 weeks), and the CONTINUE step adds 120 more owner-sent emails with no hours counted. The test's CONTINUE ('120 more emails to reach 3 sales by day 11') therefore stops short of the target even if it works, and its hours may exceed the ceiling. The 60 prospects would come from a UK-only study population (the TechRadar sample) while the offer is in USD by Stripe - say which market is emailed.",
+   "findings": [
+    "Gross vs net: 3 x $600 = $1,800 gross but 3 x ($600 - $250) = $1,050 net < $1,500; 5 sales needed ($1,750 net).",
+    "Owner hours: limit 9 h total; 5 sales x 1.5 h = 7.5 h + 2 h sending = 9.5 h before follow-ups and the 120-email continuation - the hours constraint may decide this goal and should be stated.",
+    "Proof threshold (1 deposit by day 7 + designer quote <= $300) does not show 5 sales by ~day 11 are reachable; with balance-on-delivery and 10 days to usable cash, the last sale must close by about day 11 - state the needed close rate (5 sales from ~180 emails = ~2.8%).",
+    "Designer quote <= $300 leaves $300 margin, making 5 sales exactly $1,500; the continue rule should require <= $250 or more sales.",
+    "Alternatives' rejection reasons (GBP resale price unshown, Upwork Connects and 5-day hold) are consistent with the sources."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:27:10.888Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_d0fb02872735_3cdc2d",
+   "revisionDigest": "d0fb0287273558d2a459987c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_484cb0b581b34d3a97ac/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved. NO_PLAN is right (no buyer-paid price, no close rate, no established designer). Recomputed: net $350 per sale after a <= $250 designer, so 5 sales = $1,750 >= $1,500 (4 = $1,400). Owner hours: 1.5 h test + 1 h continuation + 5 x 1.2 h = 8.5 h <= 9 h (3 h/week x 3 weeks); the test stops if the first sale exceeds 1.2 h. Proof >= 2 deposits of 60 (3.3%) exceeds the 2.8% that 5 sales from 180 emails need; designer <= $250 is required. Deposits ($300) cover the designer, so no owner money is advanced. The market emailed is now the US in USD. The test is startable at $0 and its stop rule reports honestly.",
+   "findings": [
+    "Arithmetic and hours recomputed and consistent.",
+    "Timing: last sale ~day 11 plus 10 days to usable cash = day 21 - at the edge of the window; the day-11 cutoff should be held strictly.",
+    "Owner hours per sale (1.5 h) remains a RECOMMENDATION; the test measures it before continuing - correct."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:29:52.181Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_d0fb02872735_3cdc2d",
+  "digest": "d0fb0287273558d2a459987c",
+  "contractDigest": "d9d93f181391575da43d26d2",
+  "plan": {
+   "goalId": "wst_9e755d0bbd5e4b4b9365",
+   "contractDigest": "d9d93f181391575da43d26d2",
+   "parentRevisionId": "rev_2bff79542377_181d9c",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: test whether local businesses without a website will pay a $600 deposit-first build before committing the owner's 9 hours",
+    "opportunityIds": [],
+    "why": "None of the three discovered openings has a price any buyer is shown paying for this exact offer (the verifier rejected published freelancer price ranges as a different definition), no buying signal, no measured close rate for a new sender, and no established subcontractor. At $0 capital and 9 owner hours, $1,500 settled in 21 days needs 5 website sales (net $350 each after a $250 designer), 6 GBP sales or 5 Upwork wins with no evidence for any of them, so no executable or conditional plan is established."
+   },
+   "alternatives": [
+    {
+     "title": "Resell Google Business Profile optimisation at $250",
+     "why": "Marketplace sellers list the same work from about $50-$199, so a $250 resale price is not shown to be paid; 6 sales at 0.75 h plus outreach would consume the 9-hour budget."
+    },
+    {
+     "title": "Answer Upwork fixed-price requests with subcontracted fulfilment",
+     "why": "Only 10 free Connects a month limit a new profile to a few proposals; client review plus the 5-day security hold puts cash near or past day 21; no win rate is established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain lists 60 US local businesses whose claimed Google Maps listing shows no working website and drafts a personalised offer email for each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_web_volume"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner sends the 60 Brain-drafted emails from their own mailbox offering a 5-page site at $600 (USD) with a 50% Stripe deposit",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 1,
+     "priceCents": 60000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Owner requests (Brain-drafted) a written fixed quote and delivery time from two marketplace web designers for the 5-page package; no order placed",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "OTHER",
+     "label": "Day 6 decision: count settled deposits, replies, designer quotes and owner hours used on the first sale; apply stop/continue",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_close_rate",
+      "q_owner_hours"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 6,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid deposits per email sent",
+     "sources": [],
+     "needs": "Live send of 60 emails; 5 sales from ~180 emails requires >= 2.8%"
+    },
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [
+      "src_web_price"
+     ],
+     "needs": "A buyer paying the $600 deposit-first offer"
+    },
+    {
+     "name": "q_fulfil_cost",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per site",
+     "sources": [],
+     "needs": "Written quotes from two designers; must be <= $250 for 5 sales to net >= $1,500"
+    },
+    {
+     "name": "q_owner_hours",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours per sale",
+     "sources": [],
+     "needs": "Timing of the first sale; 5 sales fit the 9 h only at <= 1.2 h each (6 h + 2.5 h test/continuation + 0.25 h)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_web_volume",
+     "url": "https://www.techradar.com/pro/a-third-of-businesses-on-google-maps-have-no-working-website-and-many-of-those-that-do-are-struggling-to-keep-them-up-to-date",
+     "dated": "2026-11-12",
+     "claim": "Of 6,266 owner-claimed Google listings in 12 UK towns, 2,095 (33%) had no working website (UK prevalence evidence only; the test emails US businesses, priced in USD)",
+     "population": "UK local businesses on Google Maps",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_web_price",
+     "url": "https://www.wpzoom.com/blog/business-website-cost/",
+     "dated": "2026-09-28",
+     "claim": "Freelancers typically charge $1,500-$7,000 for a small business website (seller-side ranges, not a price this offer is shown to get)",
+     "population": "Small businesses buying websites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_c9c3d89fbc96460b93c1"
+    },
+    {
+     "id": "src_gbp_offer",
+     "url": "https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788",
+     "dated": "2026-11-27",
+     "claim": "Google Business Profile optimisation is sold as a marketplace package in $49/$99/$199 tiers",
+     "population": "Local businesses buying GBP optimisation on Upwork",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_gbp_need",
+     "url": "https://www.brightlocal.com/research/smb-marketing-2025/",
+     "dated": "2025-08-01",
+     "claim": "BrightLocal SMB marketing survey 2025 reports how many SMBs maintain a Google Business Profile",
+     "population": "SMBs",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d6530bbab814455db45b"
+    },
+    {
+     "id": "src_upw_pay",
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+     "dated": "2026-11-27",
+     "claim": "Fixed-price funds are released on approval (or auto-release after 14 days) and then held 5 days before withdrawal",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    },
+    {
+     "id": "src_upw_connects",
+     "url": "https://www.upwork.com/resources/is-upwork-free",
+     "dated": "2026-11-27",
+     "claim": "Freelancer Basic is free with 10 Connects per month; extra Connects cost $0.15 each",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c33ed7bd39124144a06e"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No buyer is shown paying for any of the three offers at the planned price and no close rate for a new sender exists: whether 5 US local businesses will pay a $600 deposit-first website build (net $350 each after a <= $250 designer) by about day 11, handled in <= 1.2 owner hours each so the 9-hour limit holds, decides whether any plan exists (OFFER_AND_PRICE, CONVERSION).",
+    "resolution": "Costed experiment, $0 and 1.5 owner hours: Brain drafts 60 personalised emails to US businesses with a claimed Google listing and no working website; owner sends them on day 2 offering a $600 5-page site with a 50% Stripe deposit, and asks two designers for fixed quotes. PROOF (day 6): at least 2 deposits settled from the 60 emails (>= 3.3%, above the 2.8% that 5 sales from 180 emails need), a designer quote <= $250, and the first sale handled in <= 1.2 owner hours -> CONTINUE: owner sends 120 more Brain-drafted emails on day 6 (1 h) to close 5 sales by day 11; total owner time 1.5 + 1 + 5 x 1.2 = 8.5 h <= 9 h. STOP: fewer than 2 deposits, or quotes above $250, or the first sale takes more than 1.2 owner hours -> stop and report $1,500 net not reachable in 21 days at $0 and 9 hours. No continue-once round: the hours budget does not allow one.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Gross vs net: 3 x $600 = $1,800 gross but 3 x ($600 - $250) = $1,050 net < $1,500; 5 sales needed ($1,750 net).",
+     "resolution": "Accepted: target counted net; 5 sales x $350 = $1,750 needed (3 gives $1,050); the gap and test now say 5."
+    },
+    {
+     "finding": "Owner hours: limit 9 h total; 5 sales x 1.5 h = 7.5 h + 2 h sending = 9.5 h before follow-ups and the 120-email continuation - the hours constraint may decide this goal and should be stated.",
+     "resolution": "Accepted: owner hours checked explicitly; the test now requires <= 1.2 h per sale so 5 sales + 2.5 h outreach + 0.25 h decision = 8.75 h <= 9 h, and stops otherwise. Not listed as a constraint because the 1.5 h/sale is my estimate (RECOMMENDATION), not an evidenced figure."
+    },
+    {
+     "finding": "Proof threshold (1 deposit by day 7 + designer quote <= $300) does not show 5 sales by ~day 11 are reachable; with balance-on-delivery and 10 days to usable cash, the last sale must close by about day 11 - state the needed close rate (5 sales from ~180 emails = ~2.8%).",
+     "resolution": "Accepted: proof now requires >= 2 deposits from 60 (3.3%) against the 2.8% needed for 5 sales from 180 emails by ~day 11."
+    },
+    {
+     "finding": "Designer quote <= $300 leaves $300 margin, making 5 sales exactly $1,500; the continue rule should require <= $250 or more sales.",
+     "resolution": "Accepted: continue now requires a designer quote <= $250."
+    },
+    {
+     "finding": "Alternatives' rejection reasons (GBP resale price unshown, Upwork Connects and 5-day hold) are consistent with the sources.",
+     "resolution": "Agreed; alternatives unchanged."
+    },
+    {
+     "finding": "Which market is emailed (UK study vs USD offer)",
+     "resolution": "US businesses are emailed in USD; the TechRadar/Digital Royalty UK figure is cited only as prevalence evidence."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_c9c3d89fbc96460b93c1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_c33ed7bd39124144a06e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_d6530bbab814455db45b",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_d0fb02872735_3cdc2d",
+   "digest": "d0fb0287273558d2a459987c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:29:14.494Z"
+  },
+  "review": {
+   "revisionId": "rev_d0fb02872735_3cdc2d",
+   "revisionDigest": "d0fb0287273558d2a459987c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2cf6190b5af44119b6e3/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_484cb0b581b34d3a97ac/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved. NO_PLAN is right (no buyer-paid price, no close rate, no established designer). Recomputed: net $350 per sale after a <= $250 designer, so 5 sales = $1,750 >= $1,500 (4 = $1,400). Owner hours: 1.5 h test + 1 h continuation + 5 x 1.2 h = 8.5 h <= 9 h (3 h/week x 3 weeks); the test stops if the first sale exceeds 1.2 h. Proof >= 2 deposits of 60 (3.3%) exceeds the 2.8% that 5 sales from 180 emails need; designer <= $250 is required. Deposits ($300) cover the designer, so no owner money is advanced. The market emailed is now the US in USD. The test is startable at $0 and its stop rule reports honestly.",
+   "findings": [
+    "Arithmetic and hours recomputed and consistent.",
+    "Timing: last sale ~day 11 plus 10 days to usable cash = day 21 - at the edge of the window; the day-11 cutoff should be held strictly.",
+    "Owner hours per sale (1.5 h) remains a RECOMMENDATION; the test measures it before continuing - correct."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:29:52.181Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Make $1,500 in settled cash in the next 21 days. I have no money to put in, and I can give it about 3 hours a week, no more.",
+   "terms": "c02f65b32ffba0b8",
+   "openings": {
+    "cop_c33ed7bd39124144a06e": "c5ad02d1186ccb39",
+    "cop_c9c3d89fbc96460b93c1": "e77d83b4292ed47f",
+    "cop_d6530bbab814455db45b": "6fa1e09a59e75231"
+   }
+  },
+  "at": "2026-11-27T12:31:27.784Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}
