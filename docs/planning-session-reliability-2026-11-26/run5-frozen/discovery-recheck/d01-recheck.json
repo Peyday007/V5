@@ -1,0 +1,32 @@
+{
+ "checkedOn": "frozen build 465ec4c",
+ "status": 200,
+ "isError": false,
+ "problems": [],
+ "revisionId": "rev_f7b832e024a3_d14133",
+ "parentRevisionId": "rev_ee5787b67010_2f2ade",
+ "stance": "NO_PLAN",
+ "noPlan": {
+  "decisiveGap": "ECONOMICS is contradicted by the accepted evidence for the strongest route (cop_e0716d82a55d4527b332): published costs to deliver (remediation ~$2,000-$10,000 per site, s2; freelance audit $2,000-$8,000, s3) are at or above the $1,500 price (audit benchmark $1,500-$4,000, s1), so 7 sales would need a fulfiller at about $257 per sale, roughly one-eighth of the benchmark lows, to fit the $2,000 total cap; no such fulfiller is established, nor buyer count or close rate.",
+  "resolution": "This route stays ruled out unless a step below passes; no money is spent before step (3) proof. (1) Fulfiller, no spend, by day 2: obtain a fixed written quote from a named accessibility provider. Audit+remediation at $1,500 needs a quote <= $257 per site (7 sales, ($2,000 - $197)/7). Alternatively re-scope to audit-only priced at the s1 top ($4,000): 3 sales reach $12,000, and the quote must be <= ($2,000 - $197)/3 = about $600 per audit. Both bars sit far below the accepted benchmarks (s2 $2,000+, s3 $2,000+), so if no named provider quotes under the bar, the route is ruled out by ECONOMICS and the total-spend cap. (2) Buyer count, no spend, by day 2: a count of reachable small-business sites of the target kind from a published directory or marketplace category, plus a source stating US prices or buyers (s1-s3 state no geography). (3) Pre-proof test inside the $300 cap, line by line: Instantly Growth $47 + sending domains/mailboxes <= $150 + Brain-built lead list $0 + delivery $0 before proof = <= $197; outreach sending by day 3. Proof of demand = by day 10, at least 2 buyers have each paid the full offer price and the charge has succeeded (payment captured, not a promise or invoice); with the card's 14 days to usable cash those two settle by about day 24. (4) Timing: every remaining sale must have payment captured by day 16 so its about 14-day path to usable cash ends by day 30; if sending has not started by day 3, proof is not met by day 10, or the sales count needed cannot be captured by day 16, the 30-day window rules the route out and spending stops. Only after proof is any provider ordered, paid from receipts inside the $2,000 total.",
+  "decisiveLinks": [
+   "ECONOMICS",
+   "FULFILMENT",
+   "MARKET_VOLUME",
+   "CONVERSION"
+  ]
+ },
+ "trace": {
+  "totalSpentCents": 0,
+  "committedOpenCents": 0,
+  "preProofCents": 0,
+  "maxExposureCents": 0,
+  "minCashCents": 200000,
+  "minCashDay": null,
+  "collectedCents": 0,
+  "collectedInWindowCents": 0,
+  "refundsCents": 0,
+  "ownerFundedCents": 0,
+  "netCents": 0
+ }
+}
