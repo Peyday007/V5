@@ -1,0 +1,38 @@
+{
+  "id": "aj-07-audiology-price-contradicted",
+  "step": 1,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 4,
+  "reviews": 4,
+  "reviewVerdicts": [
+    "REVISE",
+    "REVISE",
+    "PASS",
+    "PASS"
+  ],
+  "revisionId": "rev_b1e0ec7d68a7_911caf",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_e4d2cb636cdd4d5ca9e1/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

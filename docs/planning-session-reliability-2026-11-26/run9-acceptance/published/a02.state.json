@@ -1,0 +1,1593 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_22fd96bf6580414cb57f",
+      "words": "Keep $3,000 of net cash after direct costs within 30 days with at most $500 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "CONTRIBUTION",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 50000,
+        "proofCondition": "$3,000 of net cash after direct costs kept within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "75f64c3b375a9bbc7faf29ef"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_22fd96bf6580414cb57f",
+        "contractDigest": "75f64c3b375a9bbc7faf29ef",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell subcontracted documentation and coding audits to chiropractic clinics",
+          "opportunityIds": [
+            "cop_5e34a78215304eb1af1a"
+          ],
+          "why": "Every link is evidenced on the card: paid-invoice price $650, conversion measured on this offer (12 of 80 = 15%), 220 reachable clinics, a named CPC-credentialed subcontractor with a written $300 quote, $0 exposure, 10 days to cash. 9 audits x $350 net = $3,150 kept after direct costs, settling by day 23 of 30; 9 sales need about 60 of 220 contacts. The coder is paid out of the clinic payment, so no capital is tied up."
+        },
+        "alternatives": [
+          {
+            "title": "Refurbished decompression-table resale",
+            "why": "A signed $14,500 agreement with $5,000 margin, but $9,500 is paid to the refurbisher on order, far above the $500 capital limit."
+          },
+          {
+            "title": "Add the five signed postcard mailings",
+            "why": "Adds only $400 net; not needed to reach the target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails 60 buyers from the published channel",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the product at $650",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 9 sales at $650 (measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Keystone Coding Services (CPC-credentialed coders) performs 9 audits at the quoted $300 each",
+            "performer": "Keystone Coding Services",
+            "costCents": 270000,
+            "day": 13,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Keystone Coding Services",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment for each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 23,
+            "kind": "SPEND",
+            "amountCents": 270000,
+            "label": "Direct cost $300 x 9",
+            "stepId": "deliver"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 585000,
+            "label": "9 x $650",
+            "settlesDay": 23,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 23,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 220,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#price",
+            "dated": "2026-11-24",
+            "claim": "Four clinics paid $650 per documentation audit in the last 60 days (paid invoices)",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "12 agreements from 80 contacts on this offer",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "220 licensed clinics with a published office contact; payer rules make clinics audit yearly",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Office-manager contacts from the state chiropractic board licensee lookup",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$300 direct cost per audit",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Keystone Coding Services, CPC-credentialed coders, written quote $300 per audit",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5e34a78215304eb1af1a",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_47aec02421574824beee",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_68350c667df54e3f9bf4",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_47aec02421574824beee",
+            "why": "CAPITAL: the refurbisher MedEquip Refurb is paid $9,500 on order (card fulfillmentOwner, peakFundingCents 950000, exposure $9500) before the clinic pays, against the $500 capital the objective allows."
+          },
+          {
+            "opportunityId": "cop_68350c667df54e3f9bf4",
+            "why": "Not needed: each mailing nets only $80 ($900 price less the $820 mail-house quote), $400 across the five signed orders; the audits alone carry the $3,000 net target, so the plan stays on one opening."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_5e34a78215304eb1af1a",
+            "deals": 9,
+            "price": 650,
+            "directCost": 300,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_af6d0dcf26d6_bed550",
+        "digest": "af6d0dcf26d6bfe528621a95",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_815dbce7890a4acf8f27/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:59:05.913Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_22fd96bf6580414cb57f",
+      "contractDigest": "75f64c3b375a9bbc7faf29ef",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell subcontracted documentation and coding audits to chiropractic clinics",
+        "opportunityIds": [
+          "cop_5e34a78215304eb1af1a"
+        ],
+        "why": "Every link is evidenced on the card: paid-invoice price $650, conversion measured on this offer (12 of 80 = 15%), 220 reachable clinics, a named CPC-credentialed subcontractor with a written $300 quote, $0 exposure, 10 days to cash. 9 audits x $350 net = $3,150 kept after direct costs, settling by day 23 of 30; 9 sales need about 60 of 220 contacts. The coder is paid out of the clinic payment, so no capital is tied up."
+      },
+      "alternatives": [
+        {
+          "title": "Refurbished decompression-table resale",
+          "why": "A signed $14,500 agreement with $5,000 margin, but $9,500 is paid to the refurbisher on order, far above the $500 capital limit."
+        },
+        {
+          "title": "Add the five signed postcard mailings",
+          "why": "Adds only $400 net; not needed to reach the target."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Brain emails 60 buyers from the published channel",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_volume",
+            "s_channel"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the product at $650",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 65000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Close 9 sales at $650 (measured conversion)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 12,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conv",
+            "s_price"
+          ],
+          "priceCents": 65000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Keystone Coding Services (CPC-credentialed coders) performs 9 audits at the quoted $300 each",
+          "performer": "Keystone Coding Services",
+          "costCents": 270000,
+          "day": 13,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_cost",
+            "s_delivery"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Keystone Coding Services",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect payment for each sale",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 13,
+          "dependsOn": "deliver",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 23,
+          "kind": "SPEND",
+          "amountCents": 270000,
+          "label": "Direct cost $300 x 9",
+          "stepId": "deliver"
+        },
+        {
+          "day": 13,
+          "kind": "RECEIPT",
+          "amountCents": 585000,
+          "label": "9 x $650",
+          "settlesDay": 23,
+          "stepId": "collect"
+        }
+      ],
+      "proofDay": 23,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 650,
+          "unit": "USD per sale",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.15,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerVolume",
+          "status": "EVIDENCED",
+          "value": 220,
+          "unit": "buyers",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 300,
+          "unit": "USD per sale",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 9,
+          "unit": "sales",
+          "sources": [
+            "s_conv",
+            "s_volume"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#price",
+          "dated": "2026-11-24",
+          "claim": "Four clinics paid $650 per documentation audit in the last 60 days (paid invoices)",
+          "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5e34a78215304eb1af1a"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "12 agreements from 80 contacts on this offer",
+          "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5e34a78215304eb1af1a"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "220 licensed clinics with a published office contact; payer rules make clinics audit yearly",
+          "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5e34a78215304eb1af1a"
+        },
+        {
+          "id": "s_channel",
+          "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Office-manager contacts from the state chiropractic board licensee lookup",
+          "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5e34a78215304eb1af1a"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$300 direct cost per audit",
+          "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5e34a78215304eb1af1a"
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Keystone Coding Services, CPC-credentialed coders, written quote $300 per audit",
+          "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5e34a78215304eb1af1a"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "10 days to first cash",
+          "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+          "matchesBuyer": true,
+          "opportunityId": "cop_5e34a78215304eb1af1a"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_5e34a78215304eb1af1a",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_47aec02421574824beee",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_68350c667df54e3f9bf4",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_47aec02421574824beee",
+          "why": "CAPITAL: the refurbisher MedEquip Refurb is paid $9,500 on order (card fulfillmentOwner, peakFundingCents 950000, exposure $9500) before the clinic pays, against the $500 capital the objective allows."
+        },
+        {
+          "opportunityId": "cop_68350c667df54e3f9bf4",
+          "why": "Not needed: each mailing nets only $80 ($900 price less the $820 mail-house quote), $400 across the five signed orders; the audits alone carry the $3,000 net target, so the plan stays on one opening."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_5e34a78215304eb1af1a",
+          "deals": 9,
+          "price": 650,
+          "directCost": 300,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_af6d0dcf26d6_bed550",
+      "digest": "af6d0dcf26d6bfe528621a95",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_815dbce7890a4acf8f27/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T10:59:05.913Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_af6d0dcf26d6_bed550",
+      "digest": "af6d0dcf26d6bfe528621a95",
+      "contractDigest": "75f64c3b375a9bbc7faf29ef",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 270000,
+        "committedOpenCents": 0,
+        "preProofCents": 270000,
+        "maxExposureCents": 0,
+        "minCashCents": 50000,
+        "minCashDay": 13,
+        "collectedCents": 585000,
+        "collectedInWindowCents": 585000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 315000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Documentation and coding audit by a certified professional c\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_68350c667df54e3f9bf4",
+          "cop_47aec02421574824beee",
+          "cop_5e34a78215304eb1af1a"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Documentation and coding audit by a certified professional coder for chiropracti\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Documentation and coding audit by a certified professional coder for chiropracti\"",
+            "owner": "PERSON",
+            "cost": 300
+          },
+          {
+            "label": "Collect payment for \"Documentation and coding audit by a certified professional coder for chiropracti\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_47aec02421574824beee",
+            "title": "Resale of refurbished spinal-decompression tables to chiropractic clinics",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Owner-chiropractors expanding treatment rooms",
+              "reachableChannel": "Signed purchase agreement",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:00.341Z",
+              "offerScope": "Resale of refurbished spinal-decompression tables to chiropractic clinics",
+              "priceCents": 1450000,
+              "currency": "USD",
+              "fulfillmentOwner": "MedEquip Refurb (quoted $9,500, paid on order)",
+              "peakFundingCents": 950000,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "chiropractic clinics",
+              "mechanism": "SUPPLY_DEMAND_MISMATCH",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 1450000,
+                "currency": "USD",
+                "deliverable": "Resale of refurbished spinal-decompression tables to chiropractic clinics",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed mailing orders | reach: Signed purchase agreement"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 4500 USD | a buyer agreed to 14500 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 4500 USD | buyers have agreed to 14500 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer | a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Tri-County Mail House (quoted $820 per 2,000-piece mailing incl. postage) (a source says so) | fulfilled by MedEquip Refurb (quoted $9,500, paid on order) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 820, tied up 0 | cost 9500, tied up 9500"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "12 days to usable cash against 30 left | 18 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Resale of refurbished spinal-decompression tables to chiropractic clinics to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$9500",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$9500",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "MedEquip Refurb (quoted $9,500, paid on order) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Owner-chiropractors expanding treatment rooms",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "One clinic signed a purchase agreement at $14,500 for a refurbished decompression table.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "18 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_5e34a78215304eb1af1a",
+            "title": "Documentation and coding audit by a certified professional coder for chiropractic clinics",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Chiropractic clinic office managers",
+              "reachableChannel": "Office-manager contacts from the state chiropractic board's licensee lookup",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:00.341Z",
+              "offerScope": "Documentation and coding audit by a certified professional coder for chiropractic clinics",
+              "priceCents": 65000,
+              "currency": "USD",
+              "fulfillmentOwner": "Keystone Coding Services, CPC-credentialed coders (written quote: $300 per audit)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "chiropractic clinics",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state chiropractic board lists 220 licensed clinics with a published office contact; payer rules make clinics audit their documentation at least yearly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Documentation and coding audit by a certified professional coder for chiropractic clinics to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "12 agreements from 80 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$300",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Keystone Coding Services, CPC-credentialed coders (written quote: $300 per audit) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Chiropractic clinic office managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four clinics paid $650 per documentation audit in the last 60 days (paid invoices).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_68350c667df54e3f9bf4",
+            "title": "Patient-reactivation postcard mailings for chiropractic clinics",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 400,
+            "potentialReach": 400,
+            "card": {
+              "payer": "Chiropractic clinic owners",
+              "reachableChannel": "Signed mailing orders",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:00.341Z",
+              "offerScope": "Patient-reactivation postcard mailings for chiropractic clinics",
+              "priceCents": 90000,
+              "currency": "USD",
+              "fulfillmentOwner": "Tri-County Mail House (quoted $820 per 2,000-piece mailing incl. postage)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "chiropractic clinics",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Patient-reactivation postcard mailings for chiropractic clinics",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Patient-reactivation postcard mailings for chiropractic clinics",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Patient-reactivation postcard mailings for chiropractic clinics",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Patient-reactivation postcard mailings for chiropractic clinics",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Patient-reactivation postcard mailings for chiropractic clinics",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed mailing orders | reach: Signed purchase agreement"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 4500 USD | a buyer agreed to 14500 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 4500 USD | buyers have agreed to 14500 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer | a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Tri-County Mail House (quoted $820 per 2,000-piece mailing incl. postage) (a source says so) | fulfilled by MedEquip Refurb (quoted $9,500, paid on order) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 820, tied up 0 | cost 9500, tied up 9500"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "12 days to usable cash against 30 left | 18 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Patient-reactivation postcard mailings for chiropractic clinics to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$820",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Tri-County Mail House (quoted $820 per 2,000-piece mailing incl. postage) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Chiropractic clinic owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Five clinics signed mailing orders at $900 each.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_0eae0f737def465796ca"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:56:03.726Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_af6d0dcf26d6_bed550",
+        "revisionDigest": "af6d0dcf26d6bfe528621a95",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_815dbce7890a4acf8f27/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e374a548711341d0b974/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE holds. Recomputed: price $650 is paid invoices from four clinics in the same state-licensee population (a real purchase price for this buyer); direct cost $300 is Keystone's written quote, and Keystone is the card's recorded fulfiller, matching the deliver step's performer; net $350/audit; $3,000 / $350 = 8.6, so 9 audits are needed and 9 give $3,150 contribution. Conversion 12/80 = 15% measured on this offer; 220 licensed clinics reachable through the board lookup, yearly audit cycle, so 9 sales is about 4% of the reachable population. Exposure $0 (card) against the $500 capital limit; the coder is paid from the clinic payment. Settlement 10 days, last receipt day 23 of 30. No owner-hours limit in the contract. Exclusions are right: the decompression table needs $9,500 paid on order against $500 capital; the postcards are optional.",
+        "findings": [
+          "No slack on volume: 60 contacts x 15% = exactly the 9 sales needed. Contact more of the 220 (e.g. 80-100) from day 1 rather than discovering a shortfall at day 12; the window still allows a second wave (day 12 + 10 settle = day 22 for a wave sent by ~day 8).",
+          "The five signed postcard orders ($900 each, $820 mail-house cost) add $400 of already-agreed contribution settling in 12 days; including them gives headroom ($3,550) at no capital, worth adding as a backstop.",
+          "Ledger: the $2,700 Keystone SPEND is dated day 23 while the deliver step is day 13; consistent only if Keystone is paid out of the clinic receipts as stated - confirm Keystone's quote allows payment after the clinic pays, else the $300 per audit is capital tied up (9 x $300 = $2,700 > $500).",
+          "Keystone's capacity to complete 9 audits in one day (sell day 12, deliver day 13) is not on the card; stagger deliveries as sales close.",
+          "Outreach (SEND_A_MESSAGE) and invoicing (ISSUE_AN_INVOICE) are NOT_CONNECTED and must be connected before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:08:16.534Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_af6d0dcf26d6_bed550",
+      "digest": "af6d0dcf26d6bfe528621a95",
+      "contractDigest": "75f64c3b375a9bbc7faf29ef",
+      "plan": {
+        "goalId": "wst_22fd96bf6580414cb57f",
+        "contractDigest": "75f64c3b375a9bbc7faf29ef",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell subcontracted documentation and coding audits to chiropractic clinics",
+          "opportunityIds": [
+            "cop_5e34a78215304eb1af1a"
+          ],
+          "why": "Every link is evidenced on the card: paid-invoice price $650, conversion measured on this offer (12 of 80 = 15%), 220 reachable clinics, a named CPC-credentialed subcontractor with a written $300 quote, $0 exposure, 10 days to cash. 9 audits x $350 net = $3,150 kept after direct costs, settling by day 23 of 30; 9 sales need about 60 of 220 contacts. The coder is paid out of the clinic payment, so no capital is tied up."
+        },
+        "alternatives": [
+          {
+            "title": "Refurbished decompression-table resale",
+            "why": "A signed $14,500 agreement with $5,000 margin, but $9,500 is paid to the refurbisher on order, far above the $500 capital limit."
+          },
+          {
+            "title": "Add the five signed postcard mailings",
+            "why": "Adds only $400 net; not needed to reach the target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails 60 buyers from the published channel",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the product at $650",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 9 sales at $650 (measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Keystone Coding Services (CPC-credentialed coders) performs 9 audits at the quoted $300 each",
+            "performer": "Keystone Coding Services",
+            "costCents": 270000,
+            "day": 13,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Keystone Coding Services",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment for each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 23,
+            "kind": "SPEND",
+            "amountCents": 270000,
+            "label": "Direct cost $300 x 9",
+            "stepId": "deliver"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 585000,
+            "label": "9 x $650",
+            "settlesDay": 23,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 23,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 220,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#price",
+            "dated": "2026-11-24",
+            "claim": "Four clinics paid $650 per documentation audit in the last 60 days (paid invoices)",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "12 agreements from 80 contacts on this offer",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "220 licensed clinics with a published office contact; payer rules make clinics audit yearly",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Office-manager contacts from the state chiropractic board licensee lookup",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$300 direct cost per audit",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Keystone Coding Services, CPC-credentialed coders, written quote $300 per audit",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_5e34a78215304eb1af1a#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "Office managers of the 220 licensed chiropractic clinics in the state chiropractic board licensee lookup",
+            "matchesBuyer": true,
+            "opportunityId": "cop_5e34a78215304eb1af1a"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5e34a78215304eb1af1a",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_47aec02421574824beee",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_68350c667df54e3f9bf4",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_47aec02421574824beee",
+            "why": "CAPITAL: the refurbisher MedEquip Refurb is paid $9,500 on order (card fulfillmentOwner, peakFundingCents 950000, exposure $9500) before the clinic pays, against the $500 capital the objective allows."
+          },
+          {
+            "opportunityId": "cop_68350c667df54e3f9bf4",
+            "why": "Not needed: each mailing nets only $80 ($900 price less the $820 mail-house quote), $400 across the five signed orders; the audits alone carry the $3,000 net target, so the plan stays on one opening."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_5e34a78215304eb1af1a",
+            "deals": 9,
+            "price": 650,
+            "directCost": 300,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_af6d0dcf26d6_bed550",
+        "digest": "af6d0dcf26d6bfe528621a95",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_815dbce7890a4acf8f27/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:59:05.913Z"
+      },
+      "review": {
+        "revisionId": "rev_af6d0dcf26d6_bed550",
+        "revisionDigest": "af6d0dcf26d6bfe528621a95",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_815dbce7890a4acf8f27/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e374a548711341d0b974/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE holds. Recomputed: price $650 is paid invoices from four clinics in the same state-licensee population (a real purchase price for this buyer); direct cost $300 is Keystone's written quote, and Keystone is the card's recorded fulfiller, matching the deliver step's performer; net $350/audit; $3,000 / $350 = 8.6, so 9 audits are needed and 9 give $3,150 contribution. Conversion 12/80 = 15% measured on this offer; 220 licensed clinics reachable through the board lookup, yearly audit cycle, so 9 sales is about 4% of the reachable population. Exposure $0 (card) against the $500 capital limit; the coder is paid from the clinic payment. Settlement 10 days, last receipt day 23 of 30. No owner-hours limit in the contract. Exclusions are right: the decompression table needs $9,500 paid on order against $500 capital; the postcards are optional.",
+        "findings": [
+          "No slack on volume: 60 contacts x 15% = exactly the 9 sales needed. Contact more of the 220 (e.g. 80-100) from day 1 rather than discovering a shortfall at day 12; the window still allows a second wave (day 12 + 10 settle = day 22 for a wave sent by ~day 8).",
+          "The five signed postcard orders ($900 each, $820 mail-house cost) add $400 of already-agreed contribution settling in 12 days; including them gives headroom ($3,550) at no capital, worth adding as a backstop.",
+          "Ledger: the $2,700 Keystone SPEND is dated day 23 while the deliver step is day 13; consistent only if Keystone is paid out of the clinic receipts as stated - confirm Keystone's quote allows payment after the clinic pays, else the $300 per audit is capital tied up (9 x $300 = $2,700 > $500).",
+          "Keystone's capacity to complete 9 audits in one day (sell day 12, deliver day 13) is not on the card; stagger deliveries as sales close.",
+          "Outreach (SEND_A_MESSAGE) and invoicing (ISSUE_AN_INVOICE) are NOT_CONNECTED and must be connected before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:08:16.534Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Keep $3,000 of net cash after direct costs within 30 days with at most $500 of capital.",
+        "terms": "41345f88fbafc5e1",
+        "openings": {
+          "cop_47aec02421574824beee": "48573df1d3b30e69",
+          "cop_5e34a78215304eb1af1a": "0cf68a90f1d383de",
+          "cop_68350c667df54e3f9bf4": "4623048a12075705"
+        }
+      },
+      "at": "2026-11-27T11:08:31.270Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "aj-04-objective-change-tutoring-to-bakeries",
+  "step": 1,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "PASS",
+    "PASS"
+  ],
+  "revisionId": "rev_cb84b7e7c820_5ef39e",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_96c61965c33b49438c6e/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [bakeryReview] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

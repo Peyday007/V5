@@ -69,6 +69,16 @@ describe('the audit cases that motivated it (fresh-plan audit, 2026-11-24)', () 
   });
 });
 
+describe('the owner’s own hourly work for one platform is a wage, not a sale (run 9, ak-01)', () => {
+  it('excludes an hourly gig performed by the owner, and keeps owner-delivered fixed-price deliverables and hourly services sold to buyers', () => {
+    const gig = { title: 'Paid AI-training contract work (DataAnnotation) performed by the owner', payer: 'DataAnnotation (AI training data platform)', offerScope: 'Hourly AI-response evaluation/writing tasks performed by the owner' };
+    expect(arrangementExclusion(gig, goal)).toMatch(/wage/);
+    // Controls: a fixed-price deliverable the owner delivers to clients is a sale; so is a priced service sold per hour to buyers by a provider.
+    expect(arrangementExclusion({ title: 'Upwork fixed-price research deliverables', payer: 'Upwork clients who post fixed-price jobs', offerScope: 'Fixed-price written deliverables drafted by Brain, checked by the owner' }, goal)).toBeNull();
+    expect(arrangementExclusion({ title: 'Bookkeeping catch-up for small firms', payer: 'Small business owners', offerScope: 'Catch-up bookkeeping billed at $60 per hour, done by a contracted bookkeeper' }, goal)).toBeNull();
+  });
+});
+
 describe('a price filed for a buyer population is never a fee the selling side pays', () => {
   it('refuses seller fees, input costs and payouts, and keeps a population buying', () => {
     expect(wrongWayPrice('Etsy charges sellers $0.20 per listing.', 'Etsy shoppers')?.direction).toBe('PAID_BY_SELLER');

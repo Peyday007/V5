@@ -442,5 +442,12 @@ export function arrangementExclusion(arrangement: ArrangementFields, goalText: s
   if (payerPaysOut(arrangement.payer) && nonCommercialExclusion(`${arrangement.payer} $1`, goalText) !== null) return `not a sale: its payer pays out rather than buys ("${(arrangement.payer ?? '').slice(0, 80)}"); a revenue goal's strategies are commercial purchases`;
   const funder = payerHead(arrangement.payer).match(FUNDER_BODY)?.[0];
   if (funder && !SUPPLIER_SIGNAL(text)) return `not a sale: its payer is a ${funder.toLowerCase()} ("${(arrangement.payer ?? '').slice(0, 80)}") and nothing in the opening shows it paying a supplier for a deliverable; a revenue goal's strategies are commercial purchases`;
+  // The owner's own hours, paid by the hour by one platform or employer, are a wage for labour, not a deliverable sold
+  // to buyers (run 9, ak-01: "Hourly AI-response evaluation/writing tasks performed by the owner" for one platform).
+  const wage = text.match(OWNER_HOURLY_WORK)?.[0];
+  if (wage) return `not a sale: it pays the owner by the hour for the owner's own work ("${wage.slice(0, 80)}"), a wage rather than a price a buyer pays a supplier for a deliverable; a revenue goal's strategies are commercial purchases`;
   return null;
 }
+
+/** An opening that is the owner's own work paid by the hour: "hourly … tasks performed by the owner", "paid per hour … the owner works". */
+const OWNER_HOURLY_WORK = /\b(?:hourly|per hour|an hour|\/\s?h(?:ou)?r)\b[^.]{0,100}\b(?:performed|done|worked|completed) by the owner\b|\b(?:performed|done|worked|completed) by the owner\b[^.]{0,100}\b(?:hourly|per hour|an hour)\b|\bthe owner (?:is paid|earns|gets paid) (?:by the hour|hourly|per hour)\b/i;

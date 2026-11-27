@@ -779,3 +779,13 @@ for _w in WORKFLOW:
         _w.update(status='PASS', evidence=_w['evidence'] + '; run 8: ah-11 (one authority) MARKET_VOLUME and ah-14 (counted market) TARGET both correct', remaining='—')
     if _w['id'] == 'W02':
         _w.update(evidence=_w['evidence'] + '; run 8: ai-01 and ai-03 pass with 3-4 cited discovered openings each', remaining='Run 8 discovery 2/4 (one Brain integrity defect, one harness failure). Fresh acceptance: run 9.')
+
+# ---- Run 9 (frozen dc5b81e; run9-acceptance) ----
+_R9 = f'{_J}/run9-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 9 on dc5b81e: 14/16 = 0.875 (Wilson 0.64-0.97), 1 critical; bench 12/12 ({_R9})', remaining='Run 10 on the build excluding owner hourly wages as openings; standard needs >= 0.90 with zero critical.')
+    if _w['id'] == 'W12':
+        _w.update(evidence=_w['evidence'] + '; run 9 ak-01 (critical): an hourly wage for the owner was admitted as an opening, now excluded', status='PARTIAL', remaining='Fresh acceptance on the wage repair: run 10.')
+    if _w['id'] == 'W02':
+        _w.update(remaining='Run 9 discovery 2/4 (1 critical: a wage admitted; 1 proof rule arithmetically insufficient). Fresh acceptance: run 10.')

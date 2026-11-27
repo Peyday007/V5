@@ -1,0 +1,1881 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_15e14775fd1944ca8d71",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,000 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "70d9951f23b72b878adac254"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_15e14775fd1944ca8d71",
+        "contractDigest": "70d9951f23b72b878adac254",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the $225 inspection price is only the owner's word",
+          "opportunityIds": [],
+          "why": "The only opening (brokered Level 2 chimney inspections for listing agents) has a reachable roster, a dated demand signal, a quoted CSIA-certified fulfiller at $140, zero capital need and 7-day settlement, but its $225 price is a PERSON fact (the owner says agents will pay it). With no evidenced price the deal count (~14 at $225), the margin over the $140 subcontract cost and therefore whether $3,000 is reachable are all undetermined."
+        },
+        "alternatives": [
+          {
+            "title": "Run the brokered inspection offer at $225 anyway",
+            "why": "Would rest the whole target on an unevidenced price; it becomes executable only once agents are shown to pay a price above $140."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "RESEARCH",
+            "label": "Establish the price listing agents pay for a Level 2 pre-listing chimney inspection: collect written, money-committed orders at $225 from agents on the county roster (and the existing pre-order holders), and gather published local Level 2 inspection prices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price agents pay per inspection",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "written money-committed orders or published prices from listing agents"
+          },
+          {
+            "name": "supplier cost per inspection",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "active listing agents",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "agents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "new listings per month",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "listings",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#price",
+            "dated": "2026-11-24",
+            "claim": "The owner says listing agents will pay $225 per pre-listing inspection (PERSON, not evidence).",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "County association roster lists 900 active listing agents; MLS recorded 310 new listings in October.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 paid pre-orders from 240 unique visitors.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Hearthside Sweeps, CSIA-certified, quoted $140 per Level 2 inspection.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidenced price: the $225 per inspection is only what the owner says listing agents will pay, so whether any price clears the $140 subcontract cost by enough to reach $3,000 in 30 days is undetermined.",
+          "resolution": "Offer the brokered Level 2 inspection at $225 to listing agents from the county REALTOR roster and record written, money-committed orders (or collect published local Level 2 inspection prices) to establish the price; re-plan once a price above $140 is evidenced.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "link": "MARKET_VOLUME",
+            "reason": "The card's EVIDENCE buyerVolume fact establishes a population: 900 active listing agents on the county roster and 310 new listings recorded in October (a monthly purchase occasion), against ~14 deals needed at $225; the offer's own page also took 18 money-committed pre-orders. Volume is not what is missing; price is."
+          }
+        ],
+        "revisionId": "rev_424601d850b0_73eaab",
+        "digest": "424601d850b092946c1a7527",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_59c7f0ad537843098463/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:58:28.597Z"
+      },
+      {
+        "goalId": "wst_15e14775fd1944ca8d71",
+        "contractDigest": "70d9951f23b72b878adac254",
+        "parentRevisionId": "rev_424601d850b0_73eaab",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Live-test the brokered Level 2 chimney inspection at $225 with roster listing agents, fulfilled by Hearthside",
+          "opportunityIds": [
+            "cop_da20b9bc46d44891920e"
+          ],
+          "why": "Every link except price is established: 900 roster agents and 310 new listings a month (EVIDENCE), a dated demand signal, Hearthside Sweeps (CSIA-certified) quoted $140 per Level 2 inspection, $0 capital tied up, 7 days to usable cash. The $225 price is only the owner's word, so the plan starts with a zero-capital live offer at $225 that measures it: 14 money-committed orders x $225 = $3,150 >= $3,000, margin $85 each over the $140 subcontract. Hearthside is paid out of each agent's settled payment, so no owner capital is used. First, read the price paid on the 18 recorded pre-orders, which may establish the price outright."
+        },
+        "alternatives": [
+          {
+            "title": "NO_PLAN until a price is researched",
+            "why": "The unknown is measurable directly by a zero-capital live offer to the reachable roster within the window; published benchmarks from other sellers would not establish what these agents pay."
+          }
+        ],
+        "steps": [
+          {
+            "id": "q1",
+            "kind": "RESEARCH",
+            "label": "Read the price paid on the 18 recorded money-committed pre-orders (conversionRates fact)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Email listing agents from the county REALTOR association roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "q1",
+            "evidence": [
+              "s2",
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer the brokered Level 2 pre-listing chimney inspection at $225, payment committed at order",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "r1",
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 22500,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure money-committed orders at $225 through day 8 (proof/stop rule) and confirm Hearthside accepts payment after the agent pays",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1",
+              "s4"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sl",
+            "kind": "SELL",
+            "label": "Close 14 money-committed orders at $225",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 22500,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Hearthside Sweeps performs 14 Level 2 inspections at $140 each, paid from settled agent payments",
+            "performer": "Hearthside Sweeps",
+            "costCents": 196000,
+            "day": 17,
+            "dependsOn": "sl",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Hearthside Sweeps",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $225 from each of 14 agents (usable 7 days after order)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "sl",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 315000,
+            "label": "14 agents x $225",
+            "settlesDay": 17,
+            "stepId": "c1"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 196000,
+            "label": "Hearthside 14 x $140",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price agents pay per inspection",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "money-committed orders at $225 from roster agents in the live offer, or the price on the 18 recorded pre-orders"
+          },
+          {
+            "name": "orders needed at $225",
+            "status": "ASSUMED",
+            "value": 14,
+            "unit": "orders",
+            "sources": [
+              "s1"
+            ],
+            "needs": "holds only if $225 is confirmed"
+          },
+          {
+            "name": "supplier cost per inspection",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "active listing agents",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "agents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "new listings per month",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "listings",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "paid pre-order rate",
+            "status": "EVIDENCED",
+            "value": 0.075,
+            "unit": "orders per visitor",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#price",
+            "dated": "2026-11-24",
+            "claim": "The owner says listing agents will pay $225 per pre-listing inspection (PERSON, not evidence).",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "County association roster lists 900 active listing agents; MLS recorded 310 new listings in October.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 paid pre-orders from 240 unique visitors on this offer's own inbound page.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Hearthside Sweeps, CSIA-certified, quoted $140 per Level 2 inspection.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Agent emails from the county REALTOR association roster.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to usable cash.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          }
+        ],
+        "validation": {
+          "proof": "By day 8, at least 5 written money-committed orders at $225 (or more) from roster listing agents, or the 18 recorded pre-orders shown paid at >= $225 — establishing a price above the $140 subcontract cost — and Hearthside confirming payment out of settled agent funds.",
+          "stop": [
+            "Fewer than 3 money-committed orders at a price above $140 by day 8",
+            "Agents commit only at a price at or below $140 (no margin over Hearthside)",
+            "Hearthside requires payment before the agent's payment settles (would need capital the goal forbids)"
+          ],
+          "continue": [
+            "Price confirmed at >= $225: close the remaining orders up to 14 by day 10 and deliver via Hearthside",
+            "Price confirmed above $140 but below $225: recompute orders needed (3000 / price) and continue only if achievable by day 13 from the 900-agent roster"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stance: NO_PLAN is reserved for a gap the evidence decides against the limits; should be CONDITIONAL with validation.decides = OFFER_AND_PRICE.",
+            "resolution": "Accepted: the price is measurable by a zero-capital live offer to the reachable roster within the window; revised to CONDITIONAL with proof/stop/continue and decides OFFER_AND_PRICE."
+          },
+          {
+            "finding": "The price paid on the 18 recorded pre-orders is not stated and is the cheapest route to an evidenced price.",
+            "resolution": "Accepted: the card's conversionRates fact records 18 paid pre-orders but no price; step q1 reads that price first, and the proof accepts it if it is >= $225."
+          },
+          {
+            "finding": "Arithmetic at the owner's price; confirm Hearthside accepts payment after the agent pays.",
+            "resolution": "Accepted: 14 x $225 = $3,150 receipts, Hearthside 14 x $140 = $1,960 paid on day 17 from settled payments; confirming Hearthside's payment terms is part of test t1 and a stop condition."
+          },
+          {
+            "finding": "The author's disagreement on MARKET_VOLUME is correct.",
+            "resolution": "Kept: the MARKET_VOLUME disagreement with Brain's basis stands, citing buyerVolume."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "finding": "OFFER_AND_PRICE: the price fact is kind PERSON.",
+            "resolution": "Checked: price fact is kind PERSON (the owner's word) and conversionRates states no price; Brain's link basis also says the $225 is an assumption. OFFER_AND_PRICE stays missing and is what the live test decides.",
+            "records": [
+              "price",
+              "conversionRates",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "deals": 14,
+            "price": 225,
+            "directCost": 140,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "link": "MARKET_VOLUME",
+            "reason": "The card's EVIDENCE buyerVolume fact establishes a population: 900 active listing agents on the county roster and 310 new listings recorded in October (a monthly purchase occasion), against ~14 deals needed at $225; the offer's own page also took 18 money-committed pre-orders. Volume is not what is missing; price is."
+          }
+        ],
+        "revisionId": "rev_bdb08127b0ee_6edb69",
+        "digest": "bdb08127b0eef7d114c77040",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_59c7f0ad537843098463/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:14:31.553Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_15e14775fd1944ca8d71",
+      "contractDigest": "70d9951f23b72b878adac254",
+      "parentRevisionId": "rev_424601d850b0_73eaab",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Live-test the brokered Level 2 chimney inspection at $225 with roster listing agents, fulfilled by Hearthside",
+        "opportunityIds": [
+          "cop_da20b9bc46d44891920e"
+        ],
+        "why": "Every link except price is established: 900 roster agents and 310 new listings a month (EVIDENCE), a dated demand signal, Hearthside Sweeps (CSIA-certified) quoted $140 per Level 2 inspection, $0 capital tied up, 7 days to usable cash. The $225 price is only the owner's word, so the plan starts with a zero-capital live offer at $225 that measures it: 14 money-committed orders x $225 = $3,150 >= $3,000, margin $85 each over the $140 subcontract. Hearthside is paid out of each agent's settled payment, so no owner capital is used. First, read the price paid on the 18 recorded pre-orders, which may establish the price outright."
+      },
+      "alternatives": [
+        {
+          "title": "NO_PLAN until a price is researched",
+          "why": "The unknown is measurable directly by a zero-capital live offer to the reachable roster within the window; published benchmarks from other sellers would not establish what these agents pay."
+        }
+      ],
+      "steps": [
+        {
+          "id": "q1",
+          "kind": "RESEARCH",
+          "label": "Read the price paid on the 18 recorded money-committed pre-orders (conversionRates fact)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s3"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "r1",
+          "kind": "REACH",
+          "label": "Email listing agents from the county REALTOR association roster",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "q1",
+          "evidence": [
+            "s2",
+            "s5"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "o1",
+          "kind": "OFFER",
+          "label": "Offer the brokered Level 2 pre-listing chimney inspection at $225, payment committed at order",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "r1",
+          "evidence": [
+            "s1"
+          ],
+          "priceCents": 22500,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Measure money-committed orders at $225 through day 8 (proof/stop rule) and confirm Hearthside accepts payment after the agent pays",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "o1",
+          "evidence": [
+            "s1",
+            "s4"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sl",
+          "kind": "SELL",
+          "label": "Close 14 money-committed orders at $225",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "t1",
+          "evidence": [
+            "s3"
+          ],
+          "priceCents": 22500,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d1",
+          "kind": "DELIVER",
+          "label": "Hearthside Sweeps performs 14 Level 2 inspections at $140 each, paid from settled agent payments",
+          "performer": "Hearthside Sweeps",
+          "costCents": 196000,
+          "day": 17,
+          "dependsOn": "sl",
+          "evidence": [
+            "s4"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Hearthside Sweeps",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c1",
+          "kind": "COLLECT",
+          "label": "Collect $225 from each of 14 agents (usable 7 days after order)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 17,
+          "dependsOn": "sl",
+          "evidence": [
+            "s6"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 315000,
+          "label": "14 agents x $225",
+          "settlesDay": 17,
+          "stepId": "c1"
+        },
+        {
+          "day": 17,
+          "kind": "SPEND",
+          "amountCents": 196000,
+          "label": "Hearthside 14 x $140",
+          "stepId": "d1"
+        }
+      ],
+      "proofDay": 8,
+      "quantities": [
+        {
+          "name": "price agents pay per inspection",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": "money-committed orders at $225 from roster agents in the live offer, or the price on the 18 recorded pre-orders"
+        },
+        {
+          "name": "orders needed at $225",
+          "status": "ASSUMED",
+          "value": 14,
+          "unit": "orders",
+          "sources": [
+            "s1"
+          ],
+          "needs": "holds only if $225 is confirmed"
+        },
+        {
+          "name": "supplier cost per inspection",
+          "status": "EVIDENCED",
+          "value": 140,
+          "unit": "USD",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "active listing agents",
+          "status": "EVIDENCED",
+          "value": 900,
+          "unit": "agents",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "new listings per month",
+          "status": "EVIDENCED",
+          "value": 310,
+          "unit": "listings",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "paid pre-order rate",
+          "status": "EVIDENCED",
+          "value": 0.075,
+          "unit": "orders per visitor",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 7,
+          "unit": "days",
+          "sources": [
+            "s6"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_da20b9bc46d44891920e#price",
+          "dated": "2026-11-24",
+          "claim": "The owner says listing agents will pay $225 per pre-listing inspection (PERSON, not evidence).",
+          "population": "Residential listing agents",
+          "matchesBuyer": true,
+          "opportunityId": "cop_da20b9bc46d44891920e"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_da20b9bc46d44891920e#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "County association roster lists 900 active listing agents; MLS recorded 310 new listings in October.",
+          "population": "Residential listing agents",
+          "matchesBuyer": true,
+          "opportunityId": "cop_da20b9bc46d44891920e"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_da20b9bc46d44891920e#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "18 paid pre-orders from 240 unique visitors on this offer's own inbound page.",
+          "population": "Residential listing agents",
+          "matchesBuyer": true,
+          "opportunityId": "cop_da20b9bc46d44891920e"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_da20b9bc46d44891920e#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Hearthside Sweeps, CSIA-certified, quoted $140 per Level 2 inspection.",
+          "population": "Residential listing agents",
+          "matchesBuyer": true,
+          "opportunityId": "cop_da20b9bc46d44891920e"
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_da20b9bc46d44891920e#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Agent emails from the county REALTOR association roster.",
+          "population": "Residential listing agents",
+          "matchesBuyer": true,
+          "opportunityId": "cop_da20b9bc46d44891920e"
+        },
+        {
+          "id": "s6",
+          "url": "https://brain.local/card/cop_da20b9bc46d44891920e#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "7 days to usable cash.",
+          "population": "Residential listing agents",
+          "matchesBuyer": true,
+          "opportunityId": "cop_da20b9bc46d44891920e"
+        }
+      ],
+      "validation": {
+        "proof": "By day 8, at least 5 written money-committed orders at $225 (or more) from roster listing agents, or the 18 recorded pre-orders shown paid at >= $225 — establishing a price above the $140 subcontract cost — and Hearthside confirming payment out of settled agent funds.",
+        "stop": [
+          "Fewer than 3 money-committed orders at a price above $140 by day 8",
+          "Agents commit only at a price at or below $140 (no margin over Hearthside)",
+          "Hearthside requires payment before the agent's payment settles (would need capital the goal forbids)"
+        ],
+        "continue": [
+          "Price confirmed at >= $225: close the remaining orders up to 14 by day 10 and deliver via Hearthside",
+          "Price confirmed above $140 but below $225: recompute orders needed (3000 / price) and continue only if achievable by day 13 from the 900-agent roster"
+        ],
+        "decides": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Stance: NO_PLAN is reserved for a gap the evidence decides against the limits; should be CONDITIONAL with validation.decides = OFFER_AND_PRICE.",
+          "resolution": "Accepted: the price is measurable by a zero-capital live offer to the reachable roster within the window; revised to CONDITIONAL with proof/stop/continue and decides OFFER_AND_PRICE."
+        },
+        {
+          "finding": "The price paid on the 18 recorded pre-orders is not stated and is the cheapest route to an evidenced price.",
+          "resolution": "Accepted: the card's conversionRates fact records 18 paid pre-orders but no price; step q1 reads that price first, and the proof accepts it if it is >= $225."
+        },
+        {
+          "finding": "Arithmetic at the owner's price; confirm Hearthside accepts payment after the agent pays.",
+          "resolution": "Accepted: 14 x $225 = $3,150 receipts, Hearthside 14 x $140 = $1,960 paid on day 17 from settled payments; confirming Hearthside's payment terms is part of test t1 and a stop condition."
+        },
+        {
+          "finding": "The author's disagreement on MARKET_VOLUME is correct.",
+          "resolution": "Kept: the MARKET_VOLUME disagreement with Brain's basis stands, citing buyerVolume."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "finding": "OFFER_AND_PRICE: the price fact is kind PERSON.",
+          "resolution": "Checked: price fact is kind PERSON (the owner's word) and conversionRates states no price; Brain's link basis also says the $225 is an assumption. OFFER_AND_PRICE stays missing and is what the live test decides.",
+          "records": [
+            "price",
+            "conversionRates",
+            "brain:OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_da20b9bc46d44891920e",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_da20b9bc46d44891920e",
+          "deals": 14,
+          "price": 225,
+          "directCost": 140,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_da20b9bc46d44891920e",
+          "link": "MARKET_VOLUME",
+          "reason": "The card's EVIDENCE buyerVolume fact establishes a population: 900 active listing agents on the county roster and 310 new listings recorded in October (a monthly purchase occasion), against ~14 deals needed at $225; the offer's own page also took 18 money-committed pre-orders. Volume is not what is missing; price is."
+        }
+      ],
+      "revisionId": "rev_bdb08127b0ee_6edb69",
+      "digest": "bdb08127b0eef7d114c77040",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_59c7f0ad537843098463/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:14:31.553Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_bdb08127b0ee_6edb69",
+      "digest": "bdb08127b0eef7d114c77040",
+      "contractDigest": "70d9951f23b72b878adac254",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 196000,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 10,
+        "collectedCents": 315000,
+        "collectedInWindowCents": 315000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 119000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3910× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Brokered Level 2 chimney inspections for residential listing\" needs [figure withheld] and keeps [figure withheld], 85× the [figure withheld] behind the plan (bound ×20), on a price no buye), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_da20b9bc46d44891920e"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Brokered Level 2 chimney inspections for residential listing agents\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Brokered Level 2 chimney inspections for residential listing agents\"",
+            "owner": "PERSON",
+            "cost": 140
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the supply",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Get written terms from a supplier",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Validate the offer with buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Collect payment for \"Brokered Level 2 chimney inspections for residential listing agents\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Order the run from the supplier",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "title": "Brokered Level 2 chimney inspections for residential listing agents",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Residential listing agents",
+              "reachableChannel": "Agent emails from the county REALTOR association roster",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:23.075Z",
+              "offerScope": "Brokered Level 2 chimney inspections for residential listing agents",
+              "priceCents": 22500,
+              "currency": "USD",
+              "fulfillmentOwner": "Hearthside Sweeps, CSIA-certified (quoted $140 per Level 2 inspection)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "chimney sweeping",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Agent emails from the county REALTOR association roster"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 225 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own inbound page: 18 money-committed pre-orders from 240 unique visitors"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "11 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Hearthside Sweeps, CSIA-certified (quoted $140 per Level 2 inspection) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 140, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The county association roster lists 900 active listing agents; the MLS recorded 310 new listings in October.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Brokered Level 2 chimney inspections for residential listing agents to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "18 paid pre-orders from 240 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$140",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Hearthside Sweeps, CSIA-certified (quoted $140 per Level 2 inspection) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Residential listing agents",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The owner says listing agents will pay $225 per pre-listing inspection.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_32ed04546de047ba9ce2"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:54:53.910Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_424601d850b0_73eaab",
+        "revisionDigest": "424601d850b092946c1a7527",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_59c7f0ad537843098463/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0a7fb782e6fb42de8024/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The decisive gap is correctly identified (OFFER_AND_PRICE: the $225 is a PERSON fact, the owner's word), but the stance is wrong. Missing evidence is not a constraint: nothing in the evidence shows that $3,000 cannot fit the limits. Every other link is established (roster of 900 agents with 310 new listings/month - the author's disagreement with Brain's MARKET_VOLUME basis is right; CSIA-certified fulfiller quoted $140; $0 exposure against the $0 capital limit with the sweep paid from the agent's payment; 7-day settlement in a 30-day window). The unknown is exactly what a live offer measures, at no capital, so this is a CONDITIONAL plan: offer the brokered Level 2 inspection at $225 to roster agents on day 1, proof = written money-committed orders at >= $225 (14 x $225 = $3,150 gross; 14 needed since $3,000/$225 = 13.3), stop = fewer than ~3 committed orders at a price above $140 by ~day 8 (the last date at which 14 orders can still be delivered and settle by day 30), continue = deliver via Hearthside as orders arrive. Also look first at the 18 paid pre-orders already recorded on the card (conversionRates fact, EVIDENCE): the amount those agents paid is a purchase price from this buyer and may settle the price outright; the revision should state it or record it as the first question. Published local Level 2 prices would only be other sellers' benchmarks, not what these agents pay.",
+        "findings": [
+          "Stance: NO_PLAN is reserved for a gap the evidence decides against the limits; here the price is unknown and measurable by a zero-capital live test, so the revision should be CONDITIONAL with validation.decides = OFFER_AND_PRICE and explicit proof/stop/continue.",
+          "The card records 18 paid pre-orders from 240 visitors; the price paid on those pre-orders is not stated anywhere in the revision and is the cheapest route to an evidenced price.",
+          "Arithmetic at the owner's price: 14 x $225 = $3,150 collected, $1,190 margin after $140 x 14 = $1,960 paid to Hearthside; settled cash target counts gross receipts, but with $0 capital Hearthside must be paid out of each agent's payment - confirm Hearthside accepts payment after the agent pays.",
+          "The author's disagreement on MARKET_VOLUME is correct: the EVIDENCE buyerVolume fact establishes 900 agents / 310 listings a month, far above ~14 deals."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:09:38.063Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The card's price fact is kind PERSON ('The owner says listing agents will pay $225'), so no purchase price from this buyer is established; the plan must measure it in a live offer (or read the price paid on the 18 recorded pre-orders)."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_bdb08127b0ee_6edb69",
+        "revisionDigest": "bdb08127b0eef7d114c77040",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_59c7f0ad537843098463/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0a7fb782e6fb42de8024/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now the right stance and the plan is startable at $0 capital. The one unknown, OFFER_AND_PRICE (the $225 is a PERSON fact), is named in validation.decides and measured by a live offer to the 900-agent roster, after first reading the price on the 18 recorded paid pre-orders. Proof (>= 5 money-committed orders at >= $225 by day 8 plus Hearthside accepting payment after the agent pays), stop (fewer than 3 commitments above $140 by day 8; price <= $140; Hearthside demanding prepayment) and continue (recompute 3000/price if the price lands between $140 and $225) are explicit and bear on the decisive link. Recomputed: 14 x $225 = $3,150 settled >= $3,000; Hearthside 14 x $140 = $1,960 paid on day 17 out of payments that settled that day, so peak exposure is $0; orders by day 10 settle day 17, leaving 13 days of slack (orders up to ~day 23 still settle in window, ~day 22 if Hearthside must be paid from them first). The performer of delivery is Hearthside, the card's recorded fulfiller. Other links stand on card evidence, and the MARKET_VOLUME disagreement with Brain's basis is right.",
+        "findings": [
+          "The 7.5% paid pre-order rate is from the offer's inbound page; conversion of cold roster email is unmeasured, which the day-8 test also measures - say so in the proof so a low email rate is read as a channel result, not a price result.",
+          "Proof threshold of 5 orders by day 8 vs 14 needed by day 10 is a big jump; the continue branch should allow closing the remaining orders through ~day 20 (settling by day 27) rather than by day 10.",
+          "Settled-cash target counts gross receipts ($3,150); the owner keeps $1,190 after Hearthside - worth stating to the owner."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:15:51.278Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_bdb08127b0ee_6edb69",
+      "digest": "bdb08127b0eef7d114c77040",
+      "contractDigest": "70d9951f23b72b878adac254",
+      "plan": {
+        "goalId": "wst_15e14775fd1944ca8d71",
+        "contractDigest": "70d9951f23b72b878adac254",
+        "parentRevisionId": "rev_424601d850b0_73eaab",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Live-test the brokered Level 2 chimney inspection at $225 with roster listing agents, fulfilled by Hearthside",
+          "opportunityIds": [
+            "cop_da20b9bc46d44891920e"
+          ],
+          "why": "Every link except price is established: 900 roster agents and 310 new listings a month (EVIDENCE), a dated demand signal, Hearthside Sweeps (CSIA-certified) quoted $140 per Level 2 inspection, $0 capital tied up, 7 days to usable cash. The $225 price is only the owner's word, so the plan starts with a zero-capital live offer at $225 that measures it: 14 money-committed orders x $225 = $3,150 >= $3,000, margin $85 each over the $140 subcontract. Hearthside is paid out of each agent's settled payment, so no owner capital is used. First, read the price paid on the 18 recorded pre-orders, which may establish the price outright."
+        },
+        "alternatives": [
+          {
+            "title": "NO_PLAN until a price is researched",
+            "why": "The unknown is measurable directly by a zero-capital live offer to the reachable roster within the window; published benchmarks from other sellers would not establish what these agents pay."
+          }
+        ],
+        "steps": [
+          {
+            "id": "q1",
+            "kind": "RESEARCH",
+            "label": "Read the price paid on the 18 recorded money-committed pre-orders (conversionRates fact)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Email listing agents from the county REALTOR association roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "q1",
+            "evidence": [
+              "s2",
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer the brokered Level 2 pre-listing chimney inspection at $225, payment committed at order",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "r1",
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 22500,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure money-committed orders at $225 through day 8 (proof/stop rule) and confirm Hearthside accepts payment after the agent pays",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1",
+              "s4"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sl",
+            "kind": "SELL",
+            "label": "Close 14 money-committed orders at $225",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 22500,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Hearthside Sweeps performs 14 Level 2 inspections at $140 each, paid from settled agent payments",
+            "performer": "Hearthside Sweeps",
+            "costCents": 196000,
+            "day": 17,
+            "dependsOn": "sl",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Hearthside Sweeps",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $225 from each of 14 agents (usable 7 days after order)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "sl",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 315000,
+            "label": "14 agents x $225",
+            "settlesDay": 17,
+            "stepId": "c1"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 196000,
+            "label": "Hearthside 14 x $140",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price agents pay per inspection",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "money-committed orders at $225 from roster agents in the live offer, or the price on the 18 recorded pre-orders"
+          },
+          {
+            "name": "orders needed at $225",
+            "status": "ASSUMED",
+            "value": 14,
+            "unit": "orders",
+            "sources": [
+              "s1"
+            ],
+            "needs": "holds only if $225 is confirmed"
+          },
+          {
+            "name": "supplier cost per inspection",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "active listing agents",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "agents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "new listings per month",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "listings",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "paid pre-order rate",
+            "status": "EVIDENCED",
+            "value": 0.075,
+            "unit": "orders per visitor",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#price",
+            "dated": "2026-11-24",
+            "claim": "The owner says listing agents will pay $225 per pre-listing inspection (PERSON, not evidence).",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "County association roster lists 900 active listing agents; MLS recorded 310 new listings in October.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 paid pre-orders from 240 unique visitors on this offer's own inbound page.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Hearthside Sweeps, CSIA-certified, quoted $140 per Level 2 inspection.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Agent emails from the county REALTOR association roster.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_da20b9bc46d44891920e#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to usable cash.",
+            "population": "Residential listing agents",
+            "matchesBuyer": true,
+            "opportunityId": "cop_da20b9bc46d44891920e"
+          }
+        ],
+        "validation": {
+          "proof": "By day 8, at least 5 written money-committed orders at $225 (or more) from roster listing agents, or the 18 recorded pre-orders shown paid at >= $225 — establishing a price above the $140 subcontract cost — and Hearthside confirming payment out of settled agent funds.",
+          "stop": [
+            "Fewer than 3 money-committed orders at a price above $140 by day 8",
+            "Agents commit only at a price at or below $140 (no margin over Hearthside)",
+            "Hearthside requires payment before the agent's payment settles (would need capital the goal forbids)"
+          ],
+          "continue": [
+            "Price confirmed at >= $225: close the remaining orders up to 14 by day 10 and deliver via Hearthside",
+            "Price confirmed above $140 but below $225: recompute orders needed (3000 / price) and continue only if achievable by day 13 from the 900-agent roster"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stance: NO_PLAN is reserved for a gap the evidence decides against the limits; should be CONDITIONAL with validation.decides = OFFER_AND_PRICE.",
+            "resolution": "Accepted: the price is measurable by a zero-capital live offer to the reachable roster within the window; revised to CONDITIONAL with proof/stop/continue and decides OFFER_AND_PRICE."
+          },
+          {
+            "finding": "The price paid on the 18 recorded pre-orders is not stated and is the cheapest route to an evidenced price.",
+            "resolution": "Accepted: the card's conversionRates fact records 18 paid pre-orders but no price; step q1 reads that price first, and the proof accepts it if it is >= $225."
+          },
+          {
+            "finding": "Arithmetic at the owner's price; confirm Hearthside accepts payment after the agent pays.",
+            "resolution": "Accepted: 14 x $225 = $3,150 receipts, Hearthside 14 x $140 = $1,960 paid on day 17 from settled payments; confirming Hearthside's payment terms is part of test t1 and a stop condition."
+          },
+          {
+            "finding": "The author's disagreement on MARKET_VOLUME is correct.",
+            "resolution": "Kept: the MARKET_VOLUME disagreement with Brain's basis stands, citing buyerVolume."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "finding": "OFFER_AND_PRICE: the price fact is kind PERSON.",
+            "resolution": "Checked: price fact is kind PERSON (the owner's word) and conversionRates states no price; Brain's link basis also says the $225 is an assumption. OFFER_AND_PRICE stays missing and is what the live test decides.",
+            "records": [
+              "price",
+              "conversionRates",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "deals": 14,
+            "price": 225,
+            "directCost": 140,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_da20b9bc46d44891920e",
+            "link": "MARKET_VOLUME",
+            "reason": "The card's EVIDENCE buyerVolume fact establishes a population: 900 active listing agents on the county roster and 310 new listings recorded in October (a monthly purchase occasion), against ~14 deals needed at $225; the offer's own page also took 18 money-committed pre-orders. Volume is not what is missing; price is."
+          }
+        ],
+        "revisionId": "rev_bdb08127b0ee_6edb69",
+        "digest": "bdb08127b0eef7d114c77040",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_59c7f0ad537843098463/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:14:31.553Z"
+      },
+      "review": {
+        "revisionId": "rev_bdb08127b0ee_6edb69",
+        "revisionDigest": "bdb08127b0eef7d114c77040",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_59c7f0ad537843098463/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0a7fb782e6fb42de8024/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now the right stance and the plan is startable at $0 capital. The one unknown, OFFER_AND_PRICE (the $225 is a PERSON fact), is named in validation.decides and measured by a live offer to the 900-agent roster, after first reading the price on the 18 recorded paid pre-orders. Proof (>= 5 money-committed orders at >= $225 by day 8 plus Hearthside accepting payment after the agent pays), stop (fewer than 3 commitments above $140 by day 8; price <= $140; Hearthside demanding prepayment) and continue (recompute 3000/price if the price lands between $140 and $225) are explicit and bear on the decisive link. Recomputed: 14 x $225 = $3,150 settled >= $3,000; Hearthside 14 x $140 = $1,960 paid on day 17 out of payments that settled that day, so peak exposure is $0; orders by day 10 settle day 17, leaving 13 days of slack (orders up to ~day 23 still settle in window, ~day 22 if Hearthside must be paid from them first). The performer of delivery is Hearthside, the card's recorded fulfiller. Other links stand on card evidence, and the MARKET_VOLUME disagreement with Brain's basis is right.",
+        "findings": [
+          "The 7.5% paid pre-order rate is from the offer's inbound page; conversion of cold roster email is unmeasured, which the day-8 test also measures - say so in the proof so a low email rate is read as a channel result, not a price result.",
+          "Proof threshold of 5 orders by day 8 vs 14 needed by day 10 is a big jump; the continue branch should allow closing the remaining orders through ~day 20 (settling by day 27) rather than by day 10.",
+          "Settled-cash target counts gross receipts ($3,150); the owner keeps $1,190 after Hearthside - worth stating to the owner."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:15:51.278Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "30dc89726327948f",
+        "openings": {
+          "cop_da20b9bc46d44891920e": "d4fe2353c6c1f164"
+        }
+      },
+      "at": "2026-11-27T11:21:05.723Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

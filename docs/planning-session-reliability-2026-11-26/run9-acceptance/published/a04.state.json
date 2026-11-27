@@ -1,0 +1,1515 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_7985088d37014e589993",
+      "words": "Collect $2,200 within 30 days in a single industry the owner names: wholesale bakeries.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 220000,
+        "currency": "USD",
+        "metric": "COLLECTED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$2,200 collected within 30 days from wholesale bakeries",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "d95c132df8b595e3dd0a97a3"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_7985088d37014e589993",
+        "contractDigest": "eb2a1d24bc29a11085e6765b",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the state-test score tracker workbook to registered tutoring centers",
+          "opportunityIds": [
+            "cop_ed03394b34fb42589377"
+          ],
+          "why": "Inside the named industry, and every link is evidenced on the card: paid-invoice price $300, conversion measured on this offer (10 of 50 = 20%), 150 reachable directors, Brain produces the workbook itself, $4 cost, $0 exposure, 5 days to cash. 8 sales x $300 = $2,400 collected by day 18 of 30 ($2,368 after cost); 8 sales need about 40 of 150 contacts."
+        },
+        "alternatives": [
+          {
+            "title": "Bakery allergen-label review",
+            "why": "Four signed $600 orders, but outside tutoring centers, the only industry the owner allows."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails 40 buyers from the published channel",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the product at $300",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 8 sales at $300 (measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 8 copies",
+            "performer": "BRAIN",
+            "costCents": 3200,
+            "day": 13,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment for each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 3200,
+            "label": "Direct cost $4 x 8",
+            "stepId": "deliver"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 240000,
+            "label": "8 x $300",
+            "settlesDay": 18,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 18,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.2,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 150,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_ed03394b34fb42589377#price",
+            "dated": "2026-11-24",
+            "claim": "Five tutoring centers paid $300 each for the score tracker in November (paid invoices)",
+            "population": "Directors of the 150 registered tutoring centers in the state's supplemental-education provider list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ed03394b34fb42589377"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_ed03394b34fb42589377#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "10 agreements from 50 contacts on this offer",
+            "population": "Directors of the 150 registered tutoring centers in the state's supplemental-education provider list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ed03394b34fb42589377"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_ed03394b34fb42589377#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "150 registered tutoring centers, each with a named director and email, in the state's provider list",
+            "population": "Directors of the 150 registered tutoring centers in the state's supplemental-education provider list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ed03394b34fb42589377"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_ed03394b34fb42589377#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Director emails in the state's registered supplemental-education provider list",
+            "population": "Directors of the 150 registered tutoring centers in the state's supplemental-education provider list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ed03394b34fb42589377"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_ed03394b34fb42589377#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4 direct cost per sale",
+            "population": "Directors of the 150 registered tutoring centers in the state's supplemental-education provider list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ed03394b34fb42589377"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_ed03394b34fb42589377#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Directors of the 150 registered tutoring centers in the state's supplemental-education provider list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ed03394b34fb42589377"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_ed03394b34fb42589377#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Directors of the 150 registered tutoring centers in the state's supplemental-education provider list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ed03394b34fb42589377"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ed03394b34fb42589377",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_707c63b63ee341409e29",
+            "why": "Outside the one industry the owner named (tutoring centers): it serves wholesale bakeries."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ed03394b34fb42589377",
+            "deals": 8,
+            "price": 300,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_ab170a2aab38_1f4b22",
+        "digest": "ab170a2aab384c2804e9b5bc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b76f3a815e2a4dca8bcb/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:59:46.786Z"
+      },
+      {
+        "goalId": "wst_7985088d37014e589993",
+        "contractDigest": "d95c132df8b595e3dd0a97a3",
+        "parentRevisionId": "rev_ab170a2aab38_1f4b22",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver and collect the four signed allergen-label compliance reviews for wholesale bakeries",
+          "opportunityIds": [
+            "cop_707c63b63ee341409e29"
+          ],
+          "why": "The owner now names wholesale bakeries. Four bakeries have signed written review orders at $600 each (card price fact EVIDENCE; four WRITTEN_ACCEPTANCE agreements), so no new buyers are needed: 4 x $600 = $2,400 collected against the $2,200 target ($2,340 after the $15 per-review cost). Brain produces the review spreadsheet itself (PRODUCE_SPREADSHEET proved; no fulfillmentOwner), $0 exposure, 10 days to cash, so all four settle by day 15 of 30."
+        },
+        "alternatives": [
+          {
+            "title": "Tutoring-center score tracker",
+            "why": "Outside the one industry the owner now names (wholesale bakeries)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the four signed $600 review orders with each bakery and collect their label files",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_agree",
+              "s_price"
+            ],
+            "priceCents": 60000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the four allergen-label and nutrition-panel review spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 5,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect 4 x $600",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 240000,
+            "label": "4 x $600 signed review orders",
+            "settlesDay": 15,
+            "stepId": "collect"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "$15 x 4 direct cost, paid from the receipts (card exposure $0)",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "USD per review",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signedOrders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "signed orders",
+            "sources": [
+              "s_agree",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "USD per review",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#price",
+            "dated": "2026-11-24",
+            "claim": "Four wholesale bakeries signed review orders at $600 each",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#agreements",
+            "dated": "2026-11-24",
+            "claim": "Four WRITTEN_ACCEPTANCE agreements of $600 each recorded against this opening",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$15 direct cost per review",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0 exposure",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "staleFinal",
+            "resolution": "The owner's objective changed from $2,000 in tutoring centers to $2,200 in wholesale bakeries; the contract was re-recorded and the plan rebuilt on the bakery opening."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_707c63b63ee341409e29",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ed03394b34fb42589377",
+            "why": "Outside the one industry the owner now names (wholesale bakeries): it serves tutoring centers."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_707c63b63ee341409e29",
+            "deals": 4,
+            "price": 600,
+            "directCost": 15,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_cb84b7e7c820_5ef39e",
+        "digest": "cb84b7e7c820d3a1424c7106",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b76f3a815e2a4dca8bcb/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:14:49.852Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_7985088d37014e589993",
+      "contractDigest": "d95c132df8b595e3dd0a97a3",
+      "parentRevisionId": "rev_ab170a2aab38_1f4b22",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Deliver and collect the four signed allergen-label compliance reviews for wholesale bakeries",
+        "opportunityIds": [
+          "cop_707c63b63ee341409e29"
+        ],
+        "why": "The owner now names wholesale bakeries. Four bakeries have signed written review orders at $600 each (card price fact EVIDENCE; four WRITTEN_ACCEPTANCE agreements), so no new buyers are needed: 4 x $600 = $2,400 collected against the $2,200 target ($2,340 after the $15 per-review cost). Brain produces the review spreadsheet itself (PRODUCE_SPREADSHEET proved; no fulfillmentOwner), $0 exposure, 10 days to cash, so all four settle by day 15 of 30."
+      },
+      "alternatives": [
+        {
+          "title": "Tutoring-center score tracker",
+          "why": "Outside the one industry the owner now names (wholesale bakeries)."
+        }
+      ],
+      "steps": [
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the four signed $600 review orders with each bakery and collect their label files",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_agree",
+            "s_price"
+          ],
+          "priceCents": 60000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Brain produces and delivers the four allergen-label and nutrition-panel review spreadsheets",
+          "performer": "BRAIN",
+          "costCents": 6000,
+          "day": 5,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_cost",
+            "s_delivery"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Invoice and collect 4 x $600",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "deliver",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 240000,
+          "label": "4 x $600 signed review orders",
+          "settlesDay": 15,
+          "stepId": "collect"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 6000,
+          "label": "$15 x 4 direct cost, paid from the receipts (card exposure $0)",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 15,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "USD per review",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signedOrders",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "signed orders",
+          "sources": [
+            "s_agree",
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 15,
+          "unit": "USD per review",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_707c63b63ee341409e29#price",
+          "dated": "2026-11-24",
+          "claim": "Four wholesale bakeries signed review orders at $600 each",
+          "population": "The four wholesale bakeries that signed review orders (production managers)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_707c63b63ee341409e29"
+        },
+        {
+          "id": "s_agree",
+          "url": "https://brain.local/card/cop_707c63b63ee341409e29#agreements",
+          "dated": "2026-11-24",
+          "claim": "Four WRITTEN_ACCEPTANCE agreements of $600 each recorded against this opening",
+          "population": "The four wholesale bakeries that signed review orders (production managers)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_707c63b63ee341409e29"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_707c63b63ee341409e29#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$15 direct cost per review",
+          "population": "The four wholesale bakeries that signed review orders (production managers)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_707c63b63ee341409e29"
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_707c63b63ee341409e29#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "The four wholesale bakeries that signed review orders (production managers)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_707c63b63ee341409e29"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_707c63b63ee341409e29#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "10 days to first cash",
+          "population": "The four wholesale bakeries that signed review orders (production managers)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_707c63b63ee341409e29"
+        },
+        {
+          "id": "s_exposure",
+          "url": "https://brain.local/card/cop_707c63b63ee341409e29#exposure",
+          "dated": "2026-11-24",
+          "claim": "$0 exposure",
+          "population": "The four wholesale bakeries that signed review orders (production managers)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_707c63b63ee341409e29"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "staleFinal",
+          "resolution": "The owner's objective changed from $2,000 in tutoring centers to $2,200 in wholesale bakeries; the contract was re-recorded and the plan rebuilt on the bakery opening."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_707c63b63ee341409e29",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_ed03394b34fb42589377",
+          "why": "Outside the one industry the owner now names (wholesale bakeries): it serves tutoring centers."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_707c63b63ee341409e29",
+          "deals": 4,
+          "price": 600,
+          "directCost": 15,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_cb84b7e7c820_5ef39e",
+      "digest": "cb84b7e7c820d3a1424c7106",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_b76f3a815e2a4dca8bcb/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:14:49.852Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_cb84b7e7c820_5ef39e",
+      "digest": "cb84b7e7c820d3a1424c7106",
+      "contractDigest": "d95c132df8b595e3dd0a97a3",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 6000,
+        "committedOpenCents": 0,
+        "preProofCents": 6000,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 5,
+        "collectedCents": 240000,
+        "collectedInWindowCents": 240000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 234000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Allergen-label and nutrition-panel compliance review for who\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Allergen-label and nutrition-panel compliance review for who\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5699× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Wholesale bakery production managers — Allergen\" needs [figure withheld] and keeps [figure withheld], 574× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Allergen-label and nutrition-panel compliance review for wholesale bak\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_707c63b63ee341409e29"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Allergen-label and nutrition-panel compliance review for wholesale bakeries\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Allergen-label and nutrition-panel compliance review for wholesale bakeries\"",
+            "owner": "PERSON",
+            "cost": 15
+          },
+          {
+            "label": "Collect payment for \"Allergen-label and nutrition-panel compliance review for wholesale bakeries\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_707c63b63ee341409e29",
+            "title": "Allergen-label and nutrition-panel compliance review for wholesale bakeries",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2200,
+            "potentialReach": 2200,
+            "card": {
+              "payer": "Wholesale bakery production managers",
+              "reachableChannel": "Signed review orders by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:11.866Z",
+              "offerScope": "Allergen-label and nutrition-panel compliance review for wholesale bakeries",
+              "priceCents": 60000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "wholesale bakeries",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Allergen-label and nutrition-panel compliance review for wholesale bakeries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Allergen-label and nutrition-panel compliance review for wholesale bakeries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Allergen-label and nutrition-panel compliance review for wholesale bakeries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Allergen-label and nutrition-panel compliance review for wholesale bakeries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed review orders by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 2400 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 2400 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 15, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Allergen-label and nutrition-panel compliance review for wholesale bakeries to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$15",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Wholesale bakery production managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four wholesale bakeries signed review orders at $600 each.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ed03394b34fb42589377",
+            "title": "State-test practice score tracker workbook for tutoring centers",
+            "reason": "left out by the goal's own terms: outside the one industry this goal names (wholesale bakeries): it is tutoring centers",
+            "card": {
+              "payer": "Tutoring center directors",
+              "reachableChannel": "Director emails in the state's registered supplemental-education provider list",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:11.866Z",
+              "offerScope": "State-test practice score tracker workbook for tutoring centers",
+              "priceCents": 30000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "tutoring centers",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state's supplemental-education provider list counts 150 registered tutoring centers, each with a named director and email.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell State-test practice score tracker workbook for tutoring centers to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "10 agreements from 50 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Tutoring center directors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Five tutoring centers paid $300 each for the score tracker in November (paid invoices).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          "cnd_0f99a9beb954475d8a36"
+        ],
+        "scope": {
+          "targetCents": 220000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": "wholesale bakeries",
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T11:14:10.606Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_ab170a2aab38_1f4b22",
+        "revisionDigest": "ab170a2aab384c2804e9b5bc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b76f3a815e2a4dca8bcb/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_96c61965c33b49438c6e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right and the plan stays inside the one industry the owner named. Recomputed: price $300 is paid invoices from five tutoring centers in November (the same registered-provider population, a real purchase price for this buyer); conversion 10/50 = 20% measured on this offer; $2,000 / $300 = 6.7, so 7 sales are needed, the plan books 8 = $2,400 collected ($2,368 after $4 costs); 8 sales at 20% need 40 contacts of 150 registered centers with published director emails, no repeat purchase assumed. Exposure $0, no capital or hours limit in the contract. Brain produces the workbook (PRODUCE_SPREADSHEET proved) and the deliver step's performer is BRAIN, matching the card. Settlement 5 days: collected by day 18 of 30, leaving 12 days for a second wave. The bakery review is correctly excluded as outside tutoring centers despite its four signed orders.",
+        "findings": [
+          "Contact slack is one sale: 40 contacts x 20% = 8 against 7 needed. Email 50-60 of the 150 on day 1 (or plan a second wave by ~day 12) rather than exactly 40.",
+          "Ledger: the $32 direct-cost SPEND is dated day 18 while the deliver step is day 13; date it with delivery (immaterial: no capital limit).",
+          "Outreach (SEND_A_MESSAGE) and collection (ISSUE_AN_INVOICE) are NOT_CONNECTED; connect before day 1.",
+          "Card humanHours 0.5 per deal (~4 h total) is not stated in the plan; no owner-hours limit applies, but the owner should know."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:09:10.500Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_cb84b7e7c820_5ef39e",
+        "revisionDigest": "cb84b7e7c820d3a1424c7106",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b76f3a815e2a4dca8bcb/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_96c61965c33b49438c6e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Rebuilt correctly on the changed objective ($2,200 within 30 days, wholesale bakeries only). Recomputed: four WRITTEN_ACCEPTANCE agreements (AGREED) at $600 from wholesale bakeries for this deliverable = $2,400 collected >= $2,200; cost $15 x 4 = $60, paid from receipts (card exposure $0); no new buyers, conversion or market volume needed. Brain produces the review spreadsheet (card delivery fact; PRODUCE_SPREADSHEET proved; no fulfillmentOwner), and the deliver step's performer is BRAIN. 10-day settlement from day-5 delivery: collected by day 15 of 30. The tutoring tracker is correctly excluded now as outside the named industry.",
+        "findings": [
+          "Headroom is $200: one non-paying bakery leaves $1,800 < $2,200. With 15 days of slack, plan a fallback (a fifth bakery order from the same channel) if any bakery has not confirmed by ~day 5.",
+          "Card humanHours 1 per review (4 h) is not mentioned; no owner-hours limit applies.",
+          "Sending and invoicing capabilities are NOT_CONNECTED and must be connected on day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:15:33.520Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_cb84b7e7c820_5ef39e",
+      "digest": "cb84b7e7c820d3a1424c7106",
+      "contractDigest": "d95c132df8b595e3dd0a97a3",
+      "plan": {
+        "goalId": "wst_7985088d37014e589993",
+        "contractDigest": "d95c132df8b595e3dd0a97a3",
+        "parentRevisionId": "rev_ab170a2aab38_1f4b22",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver and collect the four signed allergen-label compliance reviews for wholesale bakeries",
+          "opportunityIds": [
+            "cop_707c63b63ee341409e29"
+          ],
+          "why": "The owner now names wholesale bakeries. Four bakeries have signed written review orders at $600 each (card price fact EVIDENCE; four WRITTEN_ACCEPTANCE agreements), so no new buyers are needed: 4 x $600 = $2,400 collected against the $2,200 target ($2,340 after the $15 per-review cost). Brain produces the review spreadsheet itself (PRODUCE_SPREADSHEET proved; no fulfillmentOwner), $0 exposure, 10 days to cash, so all four settle by day 15 of 30."
+        },
+        "alternatives": [
+          {
+            "title": "Tutoring-center score tracker",
+            "why": "Outside the one industry the owner now names (wholesale bakeries)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the four signed $600 review orders with each bakery and collect their label files",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_agree",
+              "s_price"
+            ],
+            "priceCents": 60000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the four allergen-label and nutrition-panel review spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 5,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect 4 x $600",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 240000,
+            "label": "4 x $600 signed review orders",
+            "settlesDay": 15,
+            "stepId": "collect"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "$15 x 4 direct cost, paid from the receipts (card exposure $0)",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "USD per review",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signedOrders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "signed orders",
+            "sources": [
+              "s_agree",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "USD per review",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#price",
+            "dated": "2026-11-24",
+            "claim": "Four wholesale bakeries signed review orders at $600 each",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#agreements",
+            "dated": "2026-11-24",
+            "claim": "Four WRITTEN_ACCEPTANCE agreements of $600 each recorded against this opening",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$15 direct cost per review",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_707c63b63ee341409e29#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0 exposure",
+            "population": "The four wholesale bakeries that signed review orders (production managers)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_707c63b63ee341409e29"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "staleFinal",
+            "resolution": "The owner's objective changed from $2,000 in tutoring centers to $2,200 in wholesale bakeries; the contract was re-recorded and the plan rebuilt on the bakery opening."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_707c63b63ee341409e29",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ed03394b34fb42589377",
+            "why": "Outside the one industry the owner now names (wholesale bakeries): it serves tutoring centers."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_707c63b63ee341409e29",
+            "deals": 4,
+            "price": 600,
+            "directCost": 15,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_cb84b7e7c820_5ef39e",
+        "digest": "cb84b7e7c820d3a1424c7106",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b76f3a815e2a4dca8bcb/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:14:49.852Z"
+      },
+      "review": {
+        "revisionId": "rev_cb84b7e7c820_5ef39e",
+        "revisionDigest": "cb84b7e7c820d3a1424c7106",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b76f3a815e2a4dca8bcb/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_96c61965c33b49438c6e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Rebuilt correctly on the changed objective ($2,200 within 30 days, wholesale bakeries only). Recomputed: four WRITTEN_ACCEPTANCE agreements (AGREED) at $600 from wholesale bakeries for this deliverable = $2,400 collected >= $2,200; cost $15 x 4 = $60, paid from receipts (card exposure $0); no new buyers, conversion or market volume needed. Brain produces the review spreadsheet (card delivery fact; PRODUCE_SPREADSHEET proved; no fulfillmentOwner), and the deliver step's performer is BRAIN. 10-day settlement from day-5 delivery: collected by day 15 of 30. The tutoring tracker is correctly excluded now as outside the named industry.",
+        "findings": [
+          "Headroom is $200: one non-paying bakery leaves $1,800 < $2,200. With 15 days of slack, plan a fallback (a fifth bakery order from the same channel) if any bakery has not confirmed by ~day 5.",
+          "Card humanHours 1 per review (4 h) is not mentioned; no owner-hours limit applies.",
+          "Sending and invoicing capabilities are NOT_CONNECTED and must be connected on day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:15:33.520Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $2,200 within 30 days in a single industry the owner names: wholesale bakeries.",
+        "terms": "7b95baa9da12c193",
+        "openings": {
+          "cop_707c63b63ee341409e29": "4c475ecda754a7cc",
+          "cop_ed03394b34fb42589377": "42d4380fbca6fa00"
+        }
+      },
+      "at": "2026-11-27T11:17:03.796Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,2120 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_c6bc34df08b9497095a4",
+      "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$4,000 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "adcacb0aca8012adccd1443e"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_c6bc34df08b9497095a4",
+        "contractDigest": "adcacb0aca8012adccd1443e",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the hearing-aid claim tracker to 9 audiology clinics at $500",
+          "opportunityIds": [
+            "cop_958bff42c6f44e85bbf0"
+          ],
+          "why": "Price $500 is evidenced by a supplier's 2026 price list; conversion was measured on this offer's own sales (12 of 100 contacts); 310 reachable clinics each file claims monthly; Brain produces the spreadsheet; $8 direct cost; no capital tied up; cash usable 5 days after sale. Contacting 100 of the 310 clinics yields ~12 deals at the measured rate; 9 deals ($4,500) cover the $4,000 target. Delivery costs are paid only after receipts settle, so no up-front capital is used."
+        },
+        "alternatives": [
+          {
+            "title": "Sell exactly 8 deals",
+            "why": "8 x $500 = $4,000 meets the target with zero margin; planning 9 leaves room for one slipped payment."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Email 100 practice managers from the state licensing board clinic list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer the claim tracker at $500 per clinic",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "r1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sl",
+            "kind": "SELL",
+            "label": "Close 9 clinics at the measured 12% acceptance rate",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "o1",
+            "evidence": [
+              "s4"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $500 from each of the 9 clinics (usable 5 days after sale)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "sl",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 9 claim-tracker spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 8,
+            "dependsOn": "c1",
+            "evidence": [
+              "s6",
+              "s7"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 450000,
+            "label": "9 clinics x $500",
+            "settlesDay": 8,
+            "stepId": "c1"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost 9 x $8",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price per clinic",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "acceptance rate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable clinics",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "clinics",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "deals",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "USD",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Practice-manager emails from the state audiology licensing board's clinic list.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "310 clinics with a named practice manager; each files warranty and loss-and-damage claims monthly.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#price",
+            "dated": "2026-11-24",
+            "claim": "A hearing-clinic supplier's 2026 price list shows the claim tracker at $500 per clinic.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "12 agreements from 100 contacts on this offer's own sales.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to usable cash.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $8 per deal.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s7",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET).",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "deals": 9,
+            "price": 500,
+            "directCost": 8,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_27e4c82fbe38_c3eaa4",
+        "digest": "27e4c82fbe3864a3ed10affe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:44.546Z"
+      },
+      {
+        "goalId": "wst_c6bc34df08b9497095a4",
+        "contractDigest": "adcacb0aca8012adccd1443e",
+        "parentRevisionId": "rev_27e4c82fbe38_c3eaa4",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the hearing-aid claim tracker to 9 audiology clinics at $500",
+          "opportunityIds": [
+            "cop_958bff42c6f44e85bbf0"
+          ],
+          "why": "Price $500 is evidenced by a supplier's 2026 price list; conversion was measured on this offer's own sales (12 of 100 contacts); 310 reachable clinics each file claims monthly; Brain produces the spreadsheet; $8 direct cost; no capital tied up; cash usable 5 days after sale; closes are planned by day 10, leaving 15 days of slack for a second wave to the remaining 210 clinics. Contacting 100 of the 310 clinics yields ~12 deals at the measured rate; 9 deals ($4,500) cover the $4,000 target. Delivery costs are paid only after receipts settle, so no up-front capital is used."
+        },
+        "alternatives": [
+          {
+            "title": "Sell exactly 8 deals",
+            "why": "8 x $500 = $4,000 meets the target with zero margin; planning 9 leaves room for one slipped payment."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Email 100 practice managers from the state licensing board clinic list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer the claim tracker at $500 per clinic",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "r1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sl",
+            "kind": "SELL",
+            "label": "Close 9 clinics at the measured 12% acceptance rate (planned by day 10; not itself measured)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "o1",
+            "evidence": [
+              "s4"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $500 from each of the 9 clinics (usable 5 days after sale)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "sl",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 9 claim-tracker spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 15,
+            "dependsOn": "c1",
+            "evidence": [
+              "s6",
+              "s7"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 450000,
+            "label": "9 clinics x $500",
+            "settlesDay": 15,
+            "stepId": "c1"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost 9 x $8",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price per clinic",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "acceptance rate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable clinics",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "clinics",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "deals",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "USD",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Practice-manager emails from the state audiology licensing board's clinic list.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "310 clinics with a named practice manager; each files warranty and loss-and-damage claims monthly.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#price",
+            "dated": "2026-11-24",
+            "claim": "A hearing-clinic supplier's 2026 price list shows the claim tracker at $500 per clinic.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "12 agreements from 100 contacts on this offer's own sales.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to usable cash.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $8 per deal.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s7",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET).",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "OFFER_AND_PRICE: price evidence is a supplier's price list (another seller's figure), not this buyer's payment.",
+            "resolution": "Rebutted (see condition 0): the card's price fact is kind EVIDENCE, a dated 2026 published price list for this same claim tracker sold to hearing clinics (the same buyer population) at $500 per clinic; that is a sourced market price buyers pay, not a figure somebody only said, an estimate, or a grant. The offer's own sales then measured 12 agreements from 100 contacts on this card's $500 offer. Brain's OFFER_AND_PRICE and CONVERSION links agree."
+          },
+          {
+            "finding": "If the 12 agreements were at $500, record them as agreements with amounts.",
+            "resolution": "The 12 agreements are recorded in the card's conversionRates fact (EVIDENCE) for this offer, whose card price is $500; Brain's CONVERSION basis reads them as this offer's own sales. Plan unchanged."
+          },
+          {
+            "finding": "MARKET_VOLUME: treat it as one purchase per clinic.",
+            "resolution": "Accepted: one purchase per clinic; 310 reachable clinics against 9 deals needed (about 75 contacts at 12%), so the link still holds."
+          },
+          {
+            "finding": "Schedule: 9 closes by day 3 is fast; sell day should not be presented as measured.",
+            "resolution": "Accepted: closes moved to day 10, receipts usable day 15, labelled as planned; 15 days of slack remain for a second wave."
+          },
+          {
+            "finding": "Outreach and invoicing capabilities are NOT_CONNECTED.",
+            "resolution": "Acknowledged: Brain's steps are routine BRAIN operations; connecting the sending and invoicing channels is the day-0 setup of steps r1 and c1, and the 15-day slack absorbs a delay."
+          },
+          {
+            "condition": 0,
+            "decision": "REBUTTED",
+            "finding": "Price fact is another seller's price list, not a price these clinics paid.",
+            "resolution": "The records establish the price: the price fact is EVIDENCE (a 2026 published price list for this claim tracker to hearing clinics at $500), the conversionRates fact is EVIDENCE of 12 agreements from 100 contacts on this offer's own sales at its $500 card price, and Brain's OFFER_AND_PRICE basis is 'price 500 USD (EVIDENCE)'. Nothing on the card contradicts $500; none of the brief's disqualifiers (said-only, estimate, grant, single organisation) applies.",
+            "records": [
+              "price",
+              "conversionRates",
+              "brain:OFFER_AND_PRICE",
+              "brain:CONVERSION"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "deals": 9,
+            "price": 500,
+            "directCost": 8,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1e2d01429f92_c34e18",
+        "digest": "1e2d01429f9204b62dd003a6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:14:46.985Z"
+      },
+      {
+        "goalId": "wst_c6bc34df08b9497095a4",
+        "contractDigest": "adcacb0aca8012adccd1443e",
+        "parentRevisionId": "rev_1e2d01429f92_c34e18",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Live-test the hearing-aid claim tracker at $500 with licensing-board clinics, then sell 9",
+          "opportunityIds": [
+            "cop_958bff42c6f44e85bbf0"
+          ],
+          "why": "Reach (310 clinics on the licensing-board list), current demand, a measured 12-of-100 acceptance on this offer's own outreach, Brain fulfilment (PRODUCE_SPREADSHEET), $8 cost, $0 exposure and 5-day settlement are established. The only price record is a supplier's 2026 list price of $500 - another seller's asking price, not a price these clinics paid - and the 12 agreements carry no amount, so the price is measured by a zero-capital live offer at $500: 8 money-committed orders reach $4,000; 9 ($4,500) leave room for one slip. Costs are paid from settled receipts."
+        },
+        "alternatives": [
+          {
+            "title": "EXECUTABLE at $500",
+            "why": "Rejected: no paid invoice, agreement amount or money-committed order from these clinics is on the card; the $500 is a supplier's list price."
+          },
+          {
+            "title": "NO_PLAN until the price is researched",
+            "why": "The price is measurable directly by a zero-capital live offer to the reachable list well within the 30-day window."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Email the first 50 practice managers from the licensing-board clinic list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer the claim tracker at $500 per clinic, payment committed at order",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "r1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure money-committed orders at $500 from the first 50 contacts (proof/stop rule); read the amounts on the 12 recorded agreements",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sl",
+            "kind": "SELL",
+            "label": "Continue to the remaining clinics and close 9 money-committed orders at $500 (planned by day 10)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s4"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $500 from each of the 9 clinics (usable 5 days after sale)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "sl",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 9 claim-tracker spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 15,
+            "dependsOn": "c1",
+            "evidence": [
+              "s6",
+              "s7"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 450000,
+            "label": "9 clinics x $500",
+            "settlesDay": 15,
+            "stepId": "c1"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost 9 x $8",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "price per clinic",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": "money-committed orders at $500 from these clinics in the live offer, or amounts on the 12 recorded agreements"
+          },
+          {
+            "name": "acceptance rate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable clinics",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "clinics",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed",
+            "status": "ASSUMED",
+            "value": 9,
+            "unit": "deals",
+            "sources": [
+              "s3"
+            ],
+            "needs": "holds only if $500 is confirmed"
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "USD",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Practice-manager emails from the state audiology licensing board's clinic list.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "310 clinics with a named practice manager; each files warranty and loss-and-damage claims monthly.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#price",
+            "dated": "2026-11-24",
+            "claim": "A hearing-clinic supplier's 2026 price list shows the claim tracker at $500 per clinic (another seller's asking price, not a price these clinics paid).",
+            "population": "A hearing-clinic supplier's list price",
+            "matchesBuyer": false,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "12 agreements from 100 contacts on this offer's own sales.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to usable cash.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $8 per deal.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s7",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET).",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          }
+        ],
+        "validation": {
+          "proof": "By day 6, at least 4 written money-committed orders at $500 from the first 50 licensing-board contacts (or the 12 recorded agreements shown at >= $500).",
+          "stop": [
+            "Fewer than 3 money-committed orders at $500 from the first 50 contacts: stop and re-price",
+            "Clinics commit only at a price that would need more than the ~37 orders the remaining 260 clinics yield at 12% to reach $4,000"
+          ],
+          "continue": [
+            "Price confirmed at $500: email the remaining clinics and close 9 orders by day 10, deliver from settled receipts",
+            "Price confirmed lower but above $8: recompute orders needed (4000 / price) and continue only if reachable from 310 clinics at 12% by day 20"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "OFFER_AND_PRICE remains unestablished: the only price record is a supplier's list price.",
+            "resolution": "Accepted: stance changed to CONDITIONAL; a live offer at $500 measures the price, validation.decides OFFER_AND_PRICE."
+          },
+          {
+            "finding": "The 12 agreements carry no amount.",
+            "resolution": "Accepted: test t1 reads their amounts first; the proof accepts them only if they are at >= $500."
+          },
+          {
+            "finding": "Schedule and volume fixes accepted.",
+            "resolution": "Kept: closes day 10, settlement day 15, one purchase per clinic against 310."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "finding": "Price fact is a supplier's list price; conversionRates states no amount.",
+            "resolution": "Checked the price fact text (a supplier's 2026 list price), the conversionRates fact (12 agreements, no amount), the absence of agreement rows, and Brain's OFFER_AND_PRICE basis (taken from the same fact): no price these clinics paid is recorded, so OFFER_AND_PRICE is missing.",
+            "records": [
+              "price",
+              "conversionRates",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "deals": 9,
+            "price": 500,
+            "directCost": 8,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "link": "OFFER_AND_PRICE",
+            "reason": "Brain's basis 'price 500 USD (EVIDENCE)' rests on the card's price fact, whose text is a hearing-clinic supplier's 2026 list price - another seller's asking price - with no payment, agreement amount or committed order from these clinics; the conversionRates agreements state no amount."
+          }
+        ],
+        "revisionId": "rev_8e1b42548be6_86e684",
+        "digest": "8e1b42548be6f8887fcf4235",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:21:30.445Z"
+      },
+      {
+        "goalId": "wst_c6bc34df08b9497095a4",
+        "contractDigest": "adcacb0aca8012adccd1443e",
+        "parentRevisionId": "rev_8e1b42548be6_86e684",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the claim tracker's price is contradicted ($500 on the card, $50 in the sourced price fact)",
+          "opportunityIds": [],
+          "why": "The opening's record changed: its price fact now reads '$50' (EVIDENCE) while the card's priceCents still says $500, and there are no agreement rows or amounts. With two conflicting figures no price is established. The difference decides the plan: at $500, 9 orders from 310 clinics at the measured 12% reach $4,000; at $50, 80 orders are needed but 310 clinics x 12% yield about 37 (about $1,860), so $4,000 is out of reach. Reach, demand, conversion rate, Brain fulfilment, $8 cost, $0 exposure and 5-day settlement remain established."
+        },
+        "alternatives": [
+          {
+            "title": "Keep the CONDITIONAL $500 live test",
+            "why": "A sourced record now says $50, contradicting $500; the price must be resolved before a test at $500 is a plan."
+          },
+          {
+            "title": "Declare a TARGET constraint at $50",
+            "why": "The $50 figure is contradicted by the card's $500, so it is not established and sets no ceiling."
+          }
+        ],
+        "steps": [
+          {
+            "id": "q1",
+            "kind": "RESEARCH",
+            "label": "Resolve the price contradiction: read the source behind the $50 price fact and the card's $500, and the amounts on the 12 recorded agreements; then take written money-committed orders from licensing-board clinics at the stated price",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per clinic",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "resolution of the $50 (price fact) vs $500 (card) contradiction, ideally by committed orders from these clinics"
+          },
+          {
+            "name": "reachable clinics",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "clinics",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "acceptance rate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "orders reachable in window",
+            "status": "ESTIMATE",
+            "value": 37,
+            "unit": "orders",
+            "sources": [
+              "s3",
+              "s4"
+            ],
+            "needs": "one purchase per clinic, 310 x 12%"
+          },
+          {
+            "name": "minimum price for $4,000 at 37 orders",
+            "status": "ESTIMATE",
+            "value": 108,
+            "unit": "USD",
+            "sources": [
+              "s3",
+              "s4"
+            ],
+            "needs": "4000 / 37"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#price",
+            "dated": "2026-11-27",
+            "claim": "Price fact now reads '$50' (EVIDENCE).",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#priceCents",
+            "dated": "2026-11-27",
+            "claim": "Card priceCents is 50000 ($500), contradicting the $50 price fact.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#conversionRates",
+            "dated": "2026-11-27",
+            "claim": "12 agreements from 100 contacts (no amount stated).",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#buyerVolume",
+            "dated": "2026-11-27",
+            "claim": "310 clinics with a named practice manager on the state licensing board list.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No established price: the opening's sourced price fact now says $50 while the card says $500, and no agreement records an amount. At $500 the target needs 9 orders (reachable); at $50 it needs 80, but 310 clinics at the measured 12% yield about 37 (about $1,860), so which figure is true decides whether any plan exists.",
+          "resolution": "Read the source behind the $50 price fact and the amounts on the 12 recorded agreements; then offer the tracker to licensing-board practice managers at a stated price and record written money-committed orders. Re-plan as a live sale if clinics commit at >= ~$108 per tracker (4000 / 37); if $50 is confirmed, the $4,000 target is unreachable from this list in 30 days (about $1,860) and the owner would need to lower the target or add openings.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Proof (>= 4 orders) and stop (< 3 orders) leave 3 orders undefined.",
+            "resolution": "Superseded: the opening's price record changed to a contradicted $50/$500, so the plan is now NO_PLAN with no live test at $500; the threshold is restated as a minimum committed price of ~$108."
+          },
+          {
+            "finding": "Stop clause arithmetic: remaining 260 clinics yield ~31 orders, not ~37.",
+            "resolution": "Accepted and applied: 37 is the whole list of 310 at 12%; the revision uses 37 only as the window maximum for the full list (minimum price ~$108), and a test spending some contacts first would raise the floor toward ~$130."
+          },
+          {
+            "finding": "The continue branch's 'price above $8' should read 'price at which 4000/price orders are reachable'.",
+            "resolution": "Accepted: the resolution now states the binding test as committed orders at a price where 4000/price orders are reachable (>= ~$108)."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b1e0ec7d68a7_911caf",
+        "digest": "b1e0ec7d68a7ee7adff5d9a3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:30:51.821Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_c6bc34df08b9497095a4",
+      "contractDigest": "adcacb0aca8012adccd1443e",
+      "parentRevisionId": "rev_8e1b42548be6_86e684",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the claim tracker's price is contradicted ($500 on the card, $50 in the sourced price fact)",
+        "opportunityIds": [],
+        "why": "The opening's record changed: its price fact now reads '$50' (EVIDENCE) while the card's priceCents still says $500, and there are no agreement rows or amounts. With two conflicting figures no price is established. The difference decides the plan: at $500, 9 orders from 310 clinics at the measured 12% reach $4,000; at $50, 80 orders are needed but 310 clinics x 12% yield about 37 (about $1,860), so $4,000 is out of reach. Reach, demand, conversion rate, Brain fulfilment, $8 cost, $0 exposure and 5-day settlement remain established."
+      },
+      "alternatives": [
+        {
+          "title": "Keep the CONDITIONAL $500 live test",
+          "why": "A sourced record now says $50, contradicting $500; the price must be resolved before a test at $500 is a plan."
+        },
+        {
+          "title": "Declare a TARGET constraint at $50",
+          "why": "The $50 figure is contradicted by the card's $500, so it is not established and sets no ceiling."
+        }
+      ],
+      "steps": [
+        {
+          "id": "q1",
+          "kind": "RESEARCH",
+          "label": "Resolve the price contradiction: read the source behind the $50 price fact and the card's $500, and the amounts on the 12 recorded agreements; then take written money-committed orders from licensing-board clinics at the stated price",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per clinic",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": "resolution of the $50 (price fact) vs $500 (card) contradiction, ideally by committed orders from these clinics"
+        },
+        {
+          "name": "reachable clinics",
+          "status": "EVIDENCED",
+          "value": 310,
+          "unit": "clinics",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "acceptance rate",
+          "status": "EVIDENCED",
+          "value": 0.12,
+          "unit": "agreements per contact",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "orders reachable in window",
+          "status": "ESTIMATE",
+          "value": 37,
+          "unit": "orders",
+          "sources": [
+            "s3",
+            "s4"
+          ],
+          "needs": "one purchase per clinic, 310 x 12%"
+        },
+        {
+          "name": "minimum price for $4,000 at 37 orders",
+          "status": "ESTIMATE",
+          "value": 108,
+          "unit": "USD",
+          "sources": [
+            "s3",
+            "s4"
+          ],
+          "needs": "4000 / 37"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#price",
+          "dated": "2026-11-27",
+          "claim": "Price fact now reads '$50' (EVIDENCE).",
+          "population": "Audiology clinic practice managers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_958bff42c6f44e85bbf0"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#priceCents",
+          "dated": "2026-11-27",
+          "claim": "Card priceCents is 50000 ($500), contradicting the $50 price fact.",
+          "population": "Audiology clinic practice managers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_958bff42c6f44e85bbf0"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#conversionRates",
+          "dated": "2026-11-27",
+          "claim": "12 agreements from 100 contacts (no amount stated).",
+          "population": "Audiology clinic practice managers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_958bff42c6f44e85bbf0"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#buyerVolume",
+          "dated": "2026-11-27",
+          "claim": "310 clinics with a named practice manager on the state licensing board list.",
+          "population": "Audiology clinic practice managers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_958bff42c6f44e85bbf0"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "No established price: the opening's sourced price fact now says $50 while the card says $500, and no agreement records an amount. At $500 the target needs 9 orders (reachable); at $50 it needs 80, but 310 clinics at the measured 12% yield about 37 (about $1,860), so which figure is true decides whether any plan exists.",
+        "resolution": "Read the source behind the $50 price fact and the amounts on the 12 recorded agreements; then offer the tracker to licensing-board practice managers at a stated price and record written money-committed orders. Re-plan as a live sale if clinics commit at >= ~$108 per tracker (4000 / 37); if $50 is confirmed, the $4,000 target is unreachable from this list in 30 days (about $1,860) and the owner would need to lower the target or add openings.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Proof (>= 4 orders) and stop (< 3 orders) leave 3 orders undefined.",
+          "resolution": "Superseded: the opening's price record changed to a contradicted $50/$500, so the plan is now NO_PLAN with no live test at $500; the threshold is restated as a minimum committed price of ~$108."
+        },
+        {
+          "finding": "Stop clause arithmetic: remaining 260 clinics yield ~31 orders, not ~37.",
+          "resolution": "Accepted and applied: 37 is the whole list of 310 at 12%; the revision uses 37 only as the window maximum for the full list (minimum price ~$108), and a test spending some contacts first would raise the floor toward ~$130."
+        },
+        {
+          "finding": "The continue branch's 'price above $8' should read 'price at which 4000/price orders are reachable'.",
+          "resolution": "Accepted: the resolution now states the binding test as committed orders at a price where 4000/price orders are reachable (>= ~$108)."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_958bff42c6f44e85bbf0",
+          "missing": [
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE",
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_b1e0ec7d68a7_911caf",
+      "digest": "b1e0ec7d68a7ee7adff5d9a3",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:30:51.821Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_b1e0ec7d68a7_911caf",
+      "digest": "b1e0ec7d68a7ee7adff5d9a3",
+      "contractDigest": "adcacb0aca8012adccd1443e",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 20693× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Hearing-aid warranty and loss-and-damage claim tracker for a\" needs [figure withheld] and keeps [figure withheld], 267× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Audiology clinic practice managers\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_958bff42c6f44e85bbf0"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Hearing-aid warranty and loss-and-damage claim tracker for audiology clinics\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Hearing-aid warranty and loss-and-damage claim tracker for audiology clinics\"",
+            "owner": "PERSON",
+            "cost": 8
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Audiology clinic practice managers",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Audiology clinic practice managers",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 15.963292285043744
+          },
+          {
+            "label": "Collect payment for \"Hearing-aid warranty and loss-and-damage claim tracker for audiology clinics\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "title": "Hearing-aid warranty and loss-and-damage claim tracker for audiology clinics",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Audiology clinic practice managers",
+              "reachableChannel": "Practice-manager emails from the state audiology licensing board's clinic list",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:28.819Z",
+              "offerScope": "Hearing-aid warranty and loss-and-damage claim tracker for audiology clinics",
+              "priceCents": 50000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "audiology clinics",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Practice-manager emails from the state audiology licensing board's clinic list"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 12 accepted of 100 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "81 deal(s) needed at the measured rate means asking 1017 prospects, but the market holds only 310 (310 reachable buyers, each buying about every 30 days, so 1 purchase(s) each in 30 days): at that rate it yields about 24.6"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 8, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state audiology licensing board lists 310 clinics with a named practice manager; each files manufacturer warranty and loss-and-damage claims monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Hearing-aid warranty and loss-and-damage claim tracker for audiology clinics to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "12 agreements from 100 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$8",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Audiology clinic practice managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$50",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_db9052094d814fb7b4db"
+        ],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T11:30:02.944Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_27e4c82fbe38_c3eaa4",
+        "revisionDigest": "27e4c82fbe3864a3ed10affe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e4d2cb636cdd4d5ca9e1/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "EXECUTABLE rests on a price that is not a purchase price from this buyer. The card's price fact reads 'A hearing-clinic supplier's 2026 price list shows the claim tracker at $500 per clinic' - that is what another seller lists, a benchmark, not what these practice managers have paid this offer. No agreement rows or paid invoices are on the card. The conversion fact (12 agreements from 100 contacts) does not state the price those agreements were at, so it cannot stand in for the price either. With OFFER_AND_PRICE unestablished, the whole $4,500 rests on an unknown, and this is a CONDITIONAL plan, not an executable one: it is startable at $0 capital (spreadsheet Brain produces, $8 cost paid after receipts), so offer at $500 to the licensing-board list, proof = 8+ money-committed orders at $500 (8 x $500 = $4,000; 9 for one slip), stop/re-price if fewer than ~3 commitments from the first 50 contacts, continue to the remaining 210 clinics. The rest recomputes: 9 x $500 = $4,500, costs $72, 310 reachable clinics, 5-day settlement, receipts by day 8 of 30, so there is ample time for the live test and a second wave.",
+        "findings": [
+          "OFFER_AND_PRICE: price evidence is a supplier's price list (another seller's figure), not this buyer's payment; Brain's link basis 'price 500 USD (EVIDENCE)' is contradicted by the text of the card's own price fact.",
+          "If the 12 agreements on this offer were at $500, record them as agreements with amounts - that would establish the price and make the plan executable.",
+          "MARKET_VOLUME: 'files claims monthly' is how often clinics file claims, not how often a clinic buys a tracker; treat it as one purchase per clinic (310 is still far above 9).",
+          "Schedule: 9 closes by day 3 from a day-0/1 email is fast; the 22 days of slack make this non-decisive, but the sell day should not be presented as measured.",
+          "Outreach and invoicing capabilities are NOT_CONNECTED."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:10:03.510Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The card's price fact is a hearing-clinic supplier's 2026 price list - what another seller charges - not a price these clinics paid or agreed to for this offer."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_1e2d01429f92_c34e18",
+        "revisionDigest": "1e2d01429f9204b62dd003a6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e4d2cb636cdd4d5ca9e1/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The rebuttal does not settle the price. 'EVIDENCE' says the fact is sourced, not that it is this buyer's purchase price. The card's price fact reads, verbatim, 'A hearing-clinic supplier's 2026 price list shows the claim tracker at $500 per clinic': that is what a supplier asks, a list price another seller publishes. It records no clinic paying it and no clinic agreeing to it with this offer; a benchmark of what someone else charges is not what this buyer pays. The conversion fact ('12 agreements from 100 contacts') states no amount, and the card holds no agreement rows; inferring that those agreements were at $500 because the card's priceCents is $500 is circular, since that priceCents comes from the same supplier list. Brain's OFFER_AND_PRICE basis 'price 500 USD (EVIDENCE)' is taken from the same fact, and the fact's own text is the specific contradicting record. The fix is cheap and keeps the target: either record the 12 agreements with their amounts (if they are at $500, the plan becomes EXECUTABLE as written), or restate as CONDITIONAL - live offer at $500 to the licensing-board list, proof = 8 money-committed orders at $500 by ~day 12, stop/re-price if fewer than ~3 from the first 50 contacts, continue to the remaining 210 clinics. Everything else recomputes and the schedule changes are good: 9 x $500 = $4,500, $72 cost from receipts, $0 exposure, closes by day 10, settled day 15 of 30, one purchase per clinic against 310 reachable.",
+        "findings": [
+          "OFFER_AND_PRICE remains unestablished: the only price record is a supplier's list price; no paid invoice, agreement amount or money-committed order from these clinics is on the card.",
+          "The 12 agreements are cited as evidence of price but carry no amount; recording them as agreements with amounts is the shortest path to EXECUTABLE.",
+          "Schedule and volume fixes accepted: closes day 10, settlement day 15, 15 days of slack, one purchase per clinic."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:16:12.986Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The price fact's own text is a hearing-clinic supplier's 2026 price list (another seller's asking price); it records no payment or agreement by these clinics, and the conversionRates fact states no amount."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_8e1b42548be6_86e684",
+        "revisionDigest": "8e1b42548be6f8887fcf4235",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e4d2cb636cdd4d5ca9e1/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance: the supplier's list price is now marked matchesBuyer false and OFFER_AND_PRICE is the named unknown in validation.decides, measured by a zero-capital live offer at $500 (and by reading the amounts on the 12 recorded agreements). The plan is startable: Brain produces the spreadsheet, $8 cost paid from settled receipts, $0 exposure against the $0 limit. Recomputed: 50 first contacts x 12% = ~6 expected commitments vs the 4 the proof asks for by day 6; at $500, 8 orders = $4,000 and 9 = $4,500; 310 x 12% = ~37 reachable orders in total, so even a price near $110 ($4,000/37) could still reach the target and the recompute branch is real; closes by day 10 settle by day 15 of 30, leaving room for a second wave.",
+        "findings": [
+          "Proof (>= 4 orders) and stop (< 3 orders) leave 3 orders undefined; say what 3 means (e.g. extend the test to 100 contacts by day 9).",
+          "Stop clause arithmetic: the remaining 260 clinics at 12% yield ~31 orders, not ~37 (37 is all 310); with 31, the floor price for $4,000 is ~$130 rather than ~$108.",
+          "The continue branch's 'price above $8' should read 'price at which 4000/price orders are reachable', which is the binding test."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:23:14.928Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_b1e0ec7d68a7_911caf",
+        "revisionDigest": "b1e0ec7d68a7ee7adff5d9a3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e4d2cb636cdd4d5ca9e1/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right after the opening's record changed. The card's price fact now reads '$50' (EVIDENCE); the earlier $500 was only a supplier's list price (already judged not this buyer's price), and the card's priceCents 50000 is a stale card field, not a fact. Either way no price these clinics pay supports the target: at $50, 310 clinics x 12% = ~37 orders x $50 = ~$1,860 (minus $8 costs) in the window, far short of $4,000 (81 orders needed, ~675 contacts at 12% against 310 reachable), and Brain's own MARKET_VOLUME basis agrees the list cannot yield the orders. A live test at $500 would now be a bet against the only sourced price, not the measurement of an unknown, so withdrawing the CONDITIONAL plan is correct. The decisive gap and threshold are stated: the target is reachable from this list only if clinics commit at >= ~$108 (4000/37), and $50 makes it unreachable. Other links remain established (reach, demand, 12% acceptance, Brain fulfilment, $8 cost, $0 exposure, 5-day settlement).",
+        "findings": [
+          "If the $50 fact is confirmed as what these clinics pay, this is a constraint, not just missing evidence: even every reachable clinic at the measured rate yields ~$1,860 < $4,000. Record it in constraints with MARKET_VOLUME (and name MARKET_VOLUME in decisiveLinks alongside OFFER_AND_PRICE) so the owner sees the target, not the evidence, is what fails.",
+          "The source behind the '$50' fact is not identified on the card (no population or date beyond the fact); step q1 reading it is the right first move.",
+          "With 310 x $50 = $15,500 at 100% conversion the gap is conversion-driven; a higher-converting channel would be a different, unevidenced plan and is correctly not assumed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:32:22.360Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_b1e0ec7d68a7_911caf",
+      "digest": "b1e0ec7d68a7ee7adff5d9a3",
+      "contractDigest": "adcacb0aca8012adccd1443e",
+      "plan": {
+        "goalId": "wst_c6bc34df08b9497095a4",
+        "contractDigest": "adcacb0aca8012adccd1443e",
+        "parentRevisionId": "rev_8e1b42548be6_86e684",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the claim tracker's price is contradicted ($500 on the card, $50 in the sourced price fact)",
+          "opportunityIds": [],
+          "why": "The opening's record changed: its price fact now reads '$50' (EVIDENCE) while the card's priceCents still says $500, and there are no agreement rows or amounts. With two conflicting figures no price is established. The difference decides the plan: at $500, 9 orders from 310 clinics at the measured 12% reach $4,000; at $50, 80 orders are needed but 310 clinics x 12% yield about 37 (about $1,860), so $4,000 is out of reach. Reach, demand, conversion rate, Brain fulfilment, $8 cost, $0 exposure and 5-day settlement remain established."
+        },
+        "alternatives": [
+          {
+            "title": "Keep the CONDITIONAL $500 live test",
+            "why": "A sourced record now says $50, contradicting $500; the price must be resolved before a test at $500 is a plan."
+          },
+          {
+            "title": "Declare a TARGET constraint at $50",
+            "why": "The $50 figure is contradicted by the card's $500, so it is not established and sets no ceiling."
+          }
+        ],
+        "steps": [
+          {
+            "id": "q1",
+            "kind": "RESEARCH",
+            "label": "Resolve the price contradiction: read the source behind the $50 price fact and the card's $500, and the amounts on the 12 recorded agreements; then take written money-committed orders from licensing-board clinics at the stated price",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per clinic",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "resolution of the $50 (price fact) vs $500 (card) contradiction, ideally by committed orders from these clinics"
+          },
+          {
+            "name": "reachable clinics",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "clinics",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "acceptance rate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "orders reachable in window",
+            "status": "ESTIMATE",
+            "value": 37,
+            "unit": "orders",
+            "sources": [
+              "s3",
+              "s4"
+            ],
+            "needs": "one purchase per clinic, 310 x 12%"
+          },
+          {
+            "name": "minimum price for $4,000 at 37 orders",
+            "status": "ESTIMATE",
+            "value": 108,
+            "unit": "USD",
+            "sources": [
+              "s3",
+              "s4"
+            ],
+            "needs": "4000 / 37"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#price",
+            "dated": "2026-11-27",
+            "claim": "Price fact now reads '$50' (EVIDENCE).",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#priceCents",
+            "dated": "2026-11-27",
+            "claim": "Card priceCents is 50000 ($500), contradicting the $50 price fact.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#conversionRates",
+            "dated": "2026-11-27",
+            "claim": "12 agreements from 100 contacts (no amount stated).",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_958bff42c6f44e85bbf0#buyerVolume",
+            "dated": "2026-11-27",
+            "claim": "310 clinics with a named practice manager on the state licensing board list.",
+            "population": "Audiology clinic practice managers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_958bff42c6f44e85bbf0"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No established price: the opening's sourced price fact now says $50 while the card says $500, and no agreement records an amount. At $500 the target needs 9 orders (reachable); at $50 it needs 80, but 310 clinics at the measured 12% yield about 37 (about $1,860), so which figure is true decides whether any plan exists.",
+          "resolution": "Read the source behind the $50 price fact and the amounts on the 12 recorded agreements; then offer the tracker to licensing-board practice managers at a stated price and record written money-committed orders. Re-plan as a live sale if clinics commit at >= ~$108 per tracker (4000 / 37); if $50 is confirmed, the $4,000 target is unreachable from this list in 30 days (about $1,860) and the owner would need to lower the target or add openings.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Proof (>= 4 orders) and stop (< 3 orders) leave 3 orders undefined.",
+            "resolution": "Superseded: the opening's price record changed to a contradicted $50/$500, so the plan is now NO_PLAN with no live test at $500; the threshold is restated as a minimum committed price of ~$108."
+          },
+          {
+            "finding": "Stop clause arithmetic: remaining 260 clinics yield ~31 orders, not ~37.",
+            "resolution": "Accepted and applied: 37 is the whole list of 310 at 12%; the revision uses 37 only as the window maximum for the full list (minimum price ~$108), and a test spending some contacts first would raise the floor toward ~$130."
+          },
+          {
+            "finding": "The continue branch's 'price above $8' should read 'price at which 4000/price orders are reachable'.",
+            "resolution": "Accepted: the resolution now states the binding test as committed orders at a price where 4000/price orders are reachable (>= ~$108)."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_958bff42c6f44e85bbf0",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b1e0ec7d68a7_911caf",
+        "digest": "b1e0ec7d68a7ee7adff5d9a3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:30:51.821Z"
+      },
+      "review": {
+        "revisionId": "rev_b1e0ec7d68a7_911caf",
+        "revisionDigest": "b1e0ec7d68a7ee7adff5d9a3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9dc2e886ecbd4fc7a2d1/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e4d2cb636cdd4d5ca9e1/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right after the opening's record changed. The card's price fact now reads '$50' (EVIDENCE); the earlier $500 was only a supplier's list price (already judged not this buyer's price), and the card's priceCents 50000 is a stale card field, not a fact. Either way no price these clinics pay supports the target: at $50, 310 clinics x 12% = ~37 orders x $50 = ~$1,860 (minus $8 costs) in the window, far short of $4,000 (81 orders needed, ~675 contacts at 12% against 310 reachable), and Brain's own MARKET_VOLUME basis agrees the list cannot yield the orders. A live test at $500 would now be a bet against the only sourced price, not the measurement of an unknown, so withdrawing the CONDITIONAL plan is correct. The decisive gap and threshold are stated: the target is reachable from this list only if clinics commit at >= ~$108 (4000/37), and $50 makes it unreachable. Other links remain established (reach, demand, 12% acceptance, Brain fulfilment, $8 cost, $0 exposure, 5-day settlement).",
+        "findings": [
+          "If the $50 fact is confirmed as what these clinics pay, this is a constraint, not just missing evidence: even every reachable clinic at the measured rate yields ~$1,860 < $4,000. Record it in constraints with MARKET_VOLUME (and name MARKET_VOLUME in decisiveLinks alongside OFFER_AND_PRICE) so the owner sees the target, not the evidence, is what fails.",
+          "The source behind the '$50' fact is not identified on the card (no population or date beyond the fact); step q1 reading it is the right first move.",
+          "With 310 x $50 = $15,500 at 100% conversion the gap is conversion-driven; a higher-converting channel would be a different, unevidenced plan and is correctly not assumed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:32:22.360Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "b06f1d839258b239",
+        "openings": {
+          "cop_958bff42c6f44e85bbf0": "aeb903c36b931786"
+        }
+      },
+      "at": "2026-11-27T11:37:10.434Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -6690,7 +6690,7 @@
    "output": "opportunities rows linked to the goal",
    "consumer": "runBrain planner; planningContext",
    "evidence": "docs/planning-session-reliability-2026-11-26/journeys/j2-admit-mechanism-retry.json (refusal fixed, retry admitted); J2 published NO_PLAN with a $150 experiment; run 6 discovery 0/4 (no public provenance, no decisive link): docs/planning-session-reliability-2026-11-26/run6-acceptance; run 8: ai-01 and ai-03 pass with 3-4 cited discovered openings each",
-   "remaining": "Run 8 discovery 2/4 (one Brain integrity defect, one harness failure). Fresh acceptance: run 9.",
+   "remaining": "Run 9 discovery 2/4 (1 critical: a wage admitted; 1 proof rule arithmetically insufficient). Fresh acceptance: run 10.",
    "legacy": "goals/routeProposal open-model route ask and russell scout (Brain-autonomous discovery, C03-C10) are not on this path"
   },
   {
@@ -6805,14 +6805,14 @@
   {
    "id": "W12",
    "name": "Commercial payer versus a program",
-   "status": "PASS",
+   "status": "PARTIAL",
    "behavior": "A buyer registered with, enrolled in or funded by a program is the buyer; only a program or funder that is itself the payer is excluded as not a sale.",
    "component": "domain/paymentNature.ts payerHead / arrangementExclusion",
    "inputs": "opening payer text",
    "output": "exclusion or none",
    "consumer": "planner exclusions (W09)",
-   "evidence": "tests/commercialHoldout.test.ts 64/64 incl. fx-15 and controls; run 8 ah-06: \"program directors\" read as a program, repaired (role words after a program noun name a person)",
-   "remaining": "\u2014"
+   "evidence": "tests/commercialHoldout.test.ts 64/64 incl. fx-15 and controls; run 8 ah-06: \"program directors\" read as a program, repaired (role words after a program noun name a person); run 9 ak-01 (critical): an hourly wage for the owner was admitted as an opening, now excluded",
+   "remaining": "Fresh acceptance on the wage repair: run 10."
   },
   {
    "id": "W13",
@@ -6931,8 +6931,8 @@
    "inputs": "published plans + rubrics",
    "output": "verdict/usable/e2e counts",
    "consumer": "completion claim",
-   "evidence": "docs/planning-session-reliability-2026-11-26/run6-acceptance: 18/24 = 0.75 (Wilson 0.55-0.88), 0 critical, on 48e1ca5; run 7 on cfebfd5: 14/18 = 0.78 (Wilson 0.55-0.91), 0 critical (docs/planning-session-reliability-2026-11-26/run7-acceptance); run 8 on a664ccd: 15/18 = 0.83 (Wilson 0.61-0.94), 0 critical (docs/planning-session-reliability-2026-11-26/run8-acceptance)",
-   "remaining": "Run 9 on the build carrying the run 8 repairs (job-title payers, excluded openings admitted, integrity findings scoped to used openings)."
+   "evidence": "docs/planning-session-reliability-2026-11-26/run6-acceptance: 18/24 = 0.75 (Wilson 0.55-0.88), 0 critical, on 48e1ca5; run 7 on cfebfd5: 14/18 = 0.78 (Wilson 0.55-0.91), 0 critical (docs/planning-session-reliability-2026-11-26/run7-acceptance); run 8 on a664ccd: 15/18 = 0.83 (Wilson 0.61-0.94), 0 critical (docs/planning-session-reliability-2026-11-26/run8-acceptance); run 9 on dc5b81e: 14/16 = 0.875 (Wilson 0.64-0.97), 1 critical; bench 12/12 (docs/planning-session-reliability-2026-11-26/run9-acceptance)",
+   "remaining": "Run 10 on the build excluding owner hourly wages as openings; standard needs >= 0.90 with zero critical."
   }
  ]
 }

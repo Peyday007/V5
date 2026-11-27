@@ -1,0 +1,16 @@
+a01 aj-01-climbing-gym-owner-hours cases/cases.json
+a02 aj-02-chiropractic-net-cash cases/cases.json
+a03 aj-03-upholstery-own-listing cases/cases.json
+a04 aj-04-objective-change-tutoring-to-bakeries cases/cases.json
+a05 aj-05-kennel-signed-short cases/cases.json
+a06 aj-06-chimney-price-only-said cases/cases.json
+a07 aj-07-audiology-price-contradicted cases/cases.json
+a08 aj-08-assisted-living-grant-as-price cases/cases.json
+a09 aj-09-yearbook-one-district cases/cases.json
+a10 aj-10-copacker-net45-after-deadline cases/cases.json
+a11 aj-11-violin-appraisal-owner-hours cases/cases.json
+a12 aj-12-sawmill-counted-market-out-of-reach cases/cases.json
+d01 ak-01-small-fast-no-capital cases/discovery-worlds.json
+d02 ak-02-named-industry-sign-shops cases/discovery-worlds.json
+d03 ak-03-larger-owner-hours-limited cases/discovery-worlds.json
+d04 ak-04-net-cash-short-window cases/discovery-worlds.json

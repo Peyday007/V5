@@ -1,0 +1,642 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_4548fa80f6ec45348a85",
+      "words": "Collect $4,000 of settled cash within 21 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 21,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "781c7e8c62c503d3a2ec06c5"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_4548fa80f6ec45348a85",
+        "contractDigest": "781c7e8c62c503d3a2ec06c5",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 21 days: the agreed purchase orders settle on net-45",
+          "opportunityIds": [],
+          "why": "Three co-packers issued written purchase orders at $1,500 each ($4,500, above the $4,000 target), delivery is a spreadsheet Brain produces at $25 cost, but the evidenced payment terms are net-45: 45 days to usable cash against 21 left, so none of it settles inside the window."
+        },
+        "alternatives": [
+          {
+            "title": "Ask the three co-packers for early payment or a deposit",
+            "why": "Nothing on the card says any buyer accepts terms faster than net-45; that would be a renegotiation, not established evidence."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "agreed purchase orders",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per pack",
+            "status": "EVIDENCED",
+            "value": 1500,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 45,
+            "unit": "days",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_fa30f6a482df4483bcb2#price",
+            "dated": "2026-11-24",
+            "claim": "Three co-packers issued POs at $1,500 each, on net-45 payment terms",
+            "population": "three contract food co-packers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fa30f6a482df4483bcb2"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_fa30f6a482df4483bcb2#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "45 days to first cash",
+            "population": "contract food co-packers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fa30f6a482df4483bcb2"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Settlement time: the agreed $4,500 arrives on net-45 terms, 45 days out, against a 21-day window.",
+          "resolution": "Extend the deadline to at least 45 days (the agreed POs then settle $4,500 >= $4,000), or ask the three buyers in writing to pay within 21 days and re-plan if they agree.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_fa30f6a482df4483bcb2",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Move the deadline to at least 45 days from now, when the three net-45 purchase orders ($4,500) settle",
+            "basis": [
+              {
+                "opportunityId": "cop_fa30f6a482df4483bcb2",
+                "field": "timeToFirstCash"
+              },
+              {
+                "opportunityId": "cop_fa30f6a482df4483bcb2",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_7c6920a2b27f_121dc2",
+        "digest": "7c6920a2b27f8e05787a0fba",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9407f2fd901648349378/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:24.699Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_4548fa80f6ec45348a85",
+      "contractDigest": "781c7e8c62c503d3a2ec06c5",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan inside 21 days: the agreed purchase orders settle on net-45",
+        "opportunityIds": [],
+        "why": "Three co-packers issued written purchase orders at $1,500 each ($4,500, above the $4,000 target), delivery is a spreadsheet Brain produces at $25 cost, but the evidenced payment terms are net-45: 45 days to usable cash against 21 left, so none of it settles inside the window."
+      },
+      "alternatives": [
+        {
+          "title": "Ask the three co-packers for early payment or a deposit",
+          "why": "Nothing on the card says any buyer accepts terms faster than net-45; that would be a renegotiation, not established evidence."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "agreed purchase orders",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "deals",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per pack",
+          "status": "EVIDENCED",
+          "value": 1500,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 45,
+          "unit": "days",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_fa30f6a482df4483bcb2#price",
+          "dated": "2026-11-24",
+          "claim": "Three co-packers issued POs at $1,500 each, on net-45 payment terms",
+          "population": "three contract food co-packers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_fa30f6a482df4483bcb2"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_fa30f6a482df4483bcb2#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "45 days to first cash",
+          "population": "contract food co-packers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_fa30f6a482df4483bcb2"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Settlement time: the agreed $4,500 arrives on net-45 terms, 45 days out, against a 21-day window.",
+        "resolution": "Extend the deadline to at least 45 days (the agreed POs then settle $4,500 >= $4,000), or ask the three buyers in writing to pay within 21 days and re-plan if they agree.",
+        "decisiveLinks": [
+          "SETTLES_IN_TIME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_fa30f6a482df4483bcb2",
+          "missing": [
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [
+        {
+          "constraint": "DEADLINE",
+          "suggestion": "Move the deadline to at least 45 days from now, when the three net-45 purchase orders ($4,500) settle",
+          "basis": [
+            {
+              "opportunityId": "cop_fa30f6a482df4483bcb2",
+              "field": "timeToFirstCash"
+            },
+            {
+              "opportunityId": "cop_fa30f6a482df4483bcb2",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_7c6920a2b27f_121dc2",
+      "digest": "7c6920a2b27f8e05787a0fba",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_9407f2fd901648349378/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T10:57:24.699Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_7c6920a2b27f_121dc2",
+      "digest": "7c6920a2b27f8e05787a0fba",
+      "contractDigest": "781c7e8c62c503d3a2ec06c5",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $4,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_fa30f6a482df4483bcb2"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_fa30f6a482df4483bcb2",
+            "title": "FSMA supplier-verification document packs for contract food co-packers",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 0,
+            "potentialReach": 0,
+            "card": {
+              "payer": "Quality-assurance managers at contract food co-packers",
+              "reachableChannel": "Signed purchase orders received by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:46.118Z",
+              "offerScope": "FSMA supplier-verification document packs for contract food co-packers",
+              "priceCents": 150000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "contract food manufacturing",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 150000,
+                "currency": "USD",
+                "deliverable": "FSMA supplier-verification document packs for contract food co-packers",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 150000,
+                "currency": "USD",
+                "deliverable": "FSMA supplier-verification document packs for contract food co-packers",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 150000,
+                "currency": "USD",
+                "deliverable": "FSMA supplier-verification document packs for contract food co-packers",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed purchase orders received by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 4500 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 4500 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 25, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "45 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell FSMA supplier-verification document packs for contract food co-packers to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$25",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Quality-assurance managers at contract food co-packers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Three co-packers issued purchase orders at $1,500 each, on net-45 payment terms.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "45 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_14fa529b04b64f0da749",
+          "cnd_7726535705044a11a698"
+        ],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 21,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:54:57.408Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_7c6920a2b27f_121dc2",
+        "revisionDigest": "7c6920a2b27f8e05787a0fba",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9407f2fd901648349378/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_c242dff921d04c18a1d6/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a DEADLINE constraint is correct. Demand, price and conversion are as strong as they get: three written acceptances (AGREED, WRITTEN_ACCEPTANCE) at $1,500 each = $4,500 >= $4,000, delivery is a spreadsheet Brain has proved it produces, $25 direct cost and $0 tied up fit the $0 exposure cap. The only failing link is SETTLES_IN_TIME: the card's own evidenced price fact states net-45 terms and timeToFirstCash is 45 days, against a 21-day window, so $0 settles inside the window. This is a genuine constraint (even with all the evidence, the money cannot land in time), not missing evidence, and the constraint is cited to the card fields timeToFirstCash and price. Faster payment would be a renegotiation nobody has agreed to, so it is rightly an alternative, not a step.",
+        "findings": [
+          "Arithmetic: 3 x $1,500 = $4,500; target $4,000; collected in window = $0 because 45 > 21 days.",
+          "Brain's own check agrees (NOT_VIABLE, supportedReach 0) and names the same deadline lever.",
+          "Nit: net-45 normally runs from invoice/delivery, so the true settlement date is 45 days plus delivery time; the suggested 'at least 45 days' deadline is a floor, not an exact date. Does not change the stance."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:58:49.406Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_7c6920a2b27f_121dc2",
+      "digest": "7c6920a2b27f8e05787a0fba",
+      "contractDigest": "781c7e8c62c503d3a2ec06c5",
+      "plan": {
+        "goalId": "wst_4548fa80f6ec45348a85",
+        "contractDigest": "781c7e8c62c503d3a2ec06c5",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 21 days: the agreed purchase orders settle on net-45",
+          "opportunityIds": [],
+          "why": "Three co-packers issued written purchase orders at $1,500 each ($4,500, above the $4,000 target), delivery is a spreadsheet Brain produces at $25 cost, but the evidenced payment terms are net-45: 45 days to usable cash against 21 left, so none of it settles inside the window."
+        },
+        "alternatives": [
+          {
+            "title": "Ask the three co-packers for early payment or a deposit",
+            "why": "Nothing on the card says any buyer accepts terms faster than net-45; that would be a renegotiation, not established evidence."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "agreed purchase orders",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per pack",
+            "status": "EVIDENCED",
+            "value": 1500,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 45,
+            "unit": "days",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_fa30f6a482df4483bcb2#price",
+            "dated": "2026-11-24",
+            "claim": "Three co-packers issued POs at $1,500 each, on net-45 payment terms",
+            "population": "three contract food co-packers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fa30f6a482df4483bcb2"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_fa30f6a482df4483bcb2#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "45 days to first cash",
+            "population": "contract food co-packers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_fa30f6a482df4483bcb2"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Settlement time: the agreed $4,500 arrives on net-45 terms, 45 days out, against a 21-day window.",
+          "resolution": "Extend the deadline to at least 45 days (the agreed POs then settle $4,500 >= $4,000), or ask the three buyers in writing to pay within 21 days and re-plan if they agree.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_fa30f6a482df4483bcb2",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Move the deadline to at least 45 days from now, when the three net-45 purchase orders ($4,500) settle",
+            "basis": [
+              {
+                "opportunityId": "cop_fa30f6a482df4483bcb2",
+                "field": "timeToFirstCash"
+              },
+              {
+                "opportunityId": "cop_fa30f6a482df4483bcb2",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_7c6920a2b27f_121dc2",
+        "digest": "7c6920a2b27f8e05787a0fba",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9407f2fd901648349378/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:24.699Z"
+      },
+      "review": {
+        "revisionId": "rev_7c6920a2b27f_121dc2",
+        "revisionDigest": "7c6920a2b27f8e05787a0fba",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_9407f2fd901648349378/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_c242dff921d04c18a1d6/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a DEADLINE constraint is correct. Demand, price and conversion are as strong as they get: three written acceptances (AGREED, WRITTEN_ACCEPTANCE) at $1,500 each = $4,500 >= $4,000, delivery is a spreadsheet Brain has proved it produces, $25 direct cost and $0 tied up fit the $0 exposure cap. The only failing link is SETTLES_IN_TIME: the card's own evidenced price fact states net-45 terms and timeToFirstCash is 45 days, against a 21-day window, so $0 settles inside the window. This is a genuine constraint (even with all the evidence, the money cannot land in time), not missing evidence, and the constraint is cited to the card fields timeToFirstCash and price. Faster payment would be a renegotiation nobody has agreed to, so it is rightly an alternative, not a step.",
+        "findings": [
+          "Arithmetic: 3 x $1,500 = $4,500; target $4,000; collected in window = $0 because 45 > 21 days.",
+          "Brain's own check agrees (NOT_VIABLE, supportedReach 0) and names the same deadline lever.",
+          "Nit: net-45 normally runs from invoice/delivery, so the true settlement date is 45 days plus delivery time; the suggested 'at least 45 days' deadline is a floor, not an exact date. Does not change the stance."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:58:49.406Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,000 of settled cash within 21 days using no up-front capital.",
+        "terms": "c872a92c0fe241e8",
+        "openings": {
+          "cop_fa30f6a482df4483bcb2": "aa1c6812e50e736b"
+        }
+      },
+      "at": "2026-11-27T11:00:37.068Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

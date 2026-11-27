@@ -1,0 +1,3555 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_a5cb9cfbf9e9455babaf",
+      "words": "Generate $6,000 within 30 days in a single industry I name: commercial sign and vehicle-wrap shops. I can put in up to $1,000.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 600000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 100000,
+        "proofCondition": "A sign or vehicle-wrap shop has paid for the offer and the cash has settled",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "52cf54d967dc00a732a46b01"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_a5cb9cfbf9e9455babaf",
+        "contractDigest": "52cf54d967dc00a732a46b01",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Prepaid month-one local SEO for sign and vehicle-wrap shops, delivered by a hired specialist",
+          "opportunityIds": [
+            "cop_464d7e0564b94c8a8817"
+          ],
+          "why": "Sign-shop owners are actually being quoted $700-900/month for SEO and agencies sell SEO exclusively to sign and wrap shops, so $750 prepaid sits inside the quoted range; 9 prepaid shops ($6,750 gross, ~$6,550 after Stripe fees) clear $6,000 settled by day 21, and the specialist is paid only from settled receipts, so the owner advances $30, far inside $1,000. Close rate, whether shops actually pay $750 to a new vendor, and a specialist at $300 are unknown, so a day-12 gate decides."
+        },
+        "alternatives": [
+          {
+            "title": "White-label wrap design for shops at $250",
+            "why": "Wrapmate already sells the same service to shops at $199 flat ($49 promo), so $250 is above the visible market; 24+ designs in 30 days would be needed."
+          },
+          {
+            "title": "Website rebuild for sign shops at $1,500",
+            "why": "No sign-shop-specific price paid was found (only generic agency packages), and 4 sites plus 50% balances must settle inside 30 days."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Buy a sending domain and mailbox; send personalised cold emails to ~300 independent sign and vehicle-wrap shops found on Google Maps, and post in the Signs101 forum",
+            "performer": "OWNER",
+            "costCents": 3000,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_seo_quotes",
+              "src_seo_agency"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer month-one local SEO (Google Business Profile management, service pages, citations, review requests, report) at $750 prepaid, on short calls",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "s1",
+            "evidence": [
+              "src_seo_quotes"
+            ],
+            "ownerHours": 9,
+            "priceCents": 75000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "TEST",
+            "label": "Proof gate on day 12: count replies, calls and prepaid shops; confirm a specialist will deliver at <= $300 per client",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "close_rate",
+              "price_paid",
+              "sub_cost"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "SELL",
+            "label": "Shop pays the $750 first month by Stripe invoice before work starts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "price_paid"
+            ],
+            "ownerHours": 2,
+            "priceCents": 75000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "ORDER",
+            "label": "Hire the freelance local-SEO specialist on Upwork for each paid shop at $300 fixed, once that shop's payment has settled",
+            "performer": "OWNER",
+            "costCents": 270000,
+            "day": 17,
+            "dependsOn": "s4",
+            "evidence": [
+              "sub_cost"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "DELIVER",
+            "label": "Specialist delivers month-one local SEO for each shop; owner reviews the monthly report",
+            "performer": "Freelance local-SEO specialist hired per client (Upwork)",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "s5",
+            "evidence": [
+              "src_seo_card_fulfil"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance local-SEO specialist hired per client (Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s7",
+            "kind": "COLLECT",
+            "label": "Stripe settles each payment (first payout typically 7 days after the first live payment, then standard schedule); Stripe card fee 2.9% + $0.30",
+            "performer": "Stripe",
+            "costCents": 19845,
+            "day": 17,
+            "dependsOn": "s4",
+            "evidence": [
+              "src_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Stripe",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "FUNDING",
+            "amountCents": 3000,
+            "label": "Owner advances $30 for domain and mailbox",
+            "stepId": "s1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Sending domain + one month mailbox",
+            "stepId": "s1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 1 prepays month one",
+            "settlesDay": 17,
+            "stepId": "s7"
+          },
+          {
+            "day": 10,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 1",
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 1",
+            "stepId": "s5"
+          },
+          {
+            "day": 11,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 2 prepays month one",
+            "settlesDay": 17,
+            "stepId": "s7"
+          },
+          {
+            "day": 11,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 2",
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 2",
+            "stepId": "s5"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 3 prepays month one",
+            "settlesDay": 17,
+            "stepId": "s7"
+          },
+          {
+            "day": 12,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 3",
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 3",
+            "stepId": "s5"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 4 prepays month one",
+            "settlesDay": 17,
+            "stepId": "s7"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 4",
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 4",
+            "stepId": "s5"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 5 prepays month one",
+            "settlesDay": 17,
+            "stepId": "s7"
+          },
+          {
+            "day": 14,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 5",
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 5",
+            "stepId": "s5"
+          },
+          {
+            "day": 15,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 6 prepays month one",
+            "settlesDay": 18,
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 6",
+            "stepId": "s7"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 6",
+            "stepId": "s5"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 7 prepays month one",
+            "settlesDay": 19,
+            "stepId": "s7"
+          },
+          {
+            "day": 16,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 7",
+            "stepId": "s7"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 7",
+            "stepId": "s5"
+          },
+          {
+            "day": 17,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 8 prepays month one",
+            "settlesDay": 20,
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 8",
+            "stepId": "s7"
+          },
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 8",
+            "stepId": "s5"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 9 prepays month one",
+            "settlesDay": 21,
+            "stepId": "s7"
+          },
+          {
+            "day": 18,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 9",
+            "stepId": "s7"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 9",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid shops per shop emailed",
+            "sources": [],
+            "needs": "Measured by the day-12 gate from ~300 emails"
+          },
+          {
+            "name": "price_paid",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD month-one prepay",
+            "sources": [
+              "src_seo_quotes"
+            ],
+            "needs": "Quotes of $700-900/month were received by a shop owner, not paid; measured by the first prepaid invoices"
+          },
+          {
+            "name": "sub_cost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per client month",
+            "sources": [],
+            "needs": "A freelance local-SEO specialist must accept $300 fixed per shop; confirmed by an Upwork hire before the first shop is onboarded"
+          },
+          {
+            "name": "deals_needed",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "prepaid shops",
+            "sources": [],
+            "needs": "9 x $750 = $6,750 gross; ~$6,551 after Stripe fees"
+          },
+          {
+            "name": "settlement_days",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "days to first Stripe payout",
+            "sources": [
+              "src_stripe"
+            ],
+            "needs": "Typically 7, up to 14 days for some industries"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_seo_quotes",
+            "url": "https://signs101.com/threads/hiring-a-marketing-company.179038",
+            "dated": "2025-01-09",
+            "claim": "A sign-shop owner was quoted around $700-900/month for SEO by several companies, and $1,500/month by another (quotes, not a purchase)",
+            "population": "Sign shop owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_seo_agency",
+            "url": "https://topmarketingagencies.pages.dev/agencies/sign-shop-marketing-pros/",
+            "dated": "2026-11-27",
+            "claim": "An agency (Sign Shop Marketing Pros) serves only sign companies, wrap shops and commercial graphics firms with SEO, Google Ads and review management — a sold offer to this industry",
+            "population": "Sign and wrap shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_seo_card_fulfil",
+            "url": "https://brain.local/card/cop_464d7e0564b94c8a8817#fulfillmentOwner",
+            "dated": "2026-11-27",
+            "claim": "Fulfilled by a freelance local-SEO specialist hired per client",
+            "population": "this opening",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_stripe",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; cannot be waived",
+            "population": "New Stripe accounts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_wrap_wrapmate",
+            "url": "https://dev-lsi.wrapmate.com/pro/design",
+            "dated": "2026-11-27",
+            "claim": "Wrapmate sells flat-rate wrap design to wrap shops and installers at $199 (Black Friday $49), 2-business-day first concepts",
+            "population": "Wrap shops and installers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_wrap_airmark",
+            "url": "https://www.airmark.com/blogs/airmark/wrap-pricing-strategies",
+            "dated": "2019-02-06",
+            "claim": "A wrap shop charges its shop rate times four hours as a base price for wrap design (to its end customers)",
+            "population": "Wrap shop end customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_wrap_forum",
+            "url": "https://www.signs101.com/threads/any-freelance-wrap-designers.123492/latest",
+            "dated": "2015-06-03",
+            "claim": "Sign-industry members discuss outsourcing wrap design to independent designers (old thread, no price)",
+            "population": "Sign and wrap shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_web_clutch",
+            "url": "https://clutch.co/web-designers/packages",
+            "dated": "2026-11-27",
+            "claim": "Fixed-price web design packages listed by agencies (generic, not sign-shop-specific)",
+            "population": "Small businesses generally",
+            "matchesBuyer": false,
+            "opportunityId": "cop_48ad6817d0e5491ca87b"
+          },
+          {
+            "id": "src_web_elfsight",
+            "url": "https://elfsight.com/solutions/sign-shop-website-template",
+            "dated": "2026-11-27",
+            "claim": "A sign-shop website template product is sold, indicating sign shops build/refresh websites",
+            "population": "Sign shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_48ad6817d0e5491ca87b"
+          }
+        ],
+        "validation": {
+          "proof": "By day 12, at least 2 sign or wrap shops have paid the $750 month-one invoice, and a freelance local-SEO specialist has accepted a $300 fixed contract for the first shop",
+          "stop": [
+            "Fewer than 2 prepaid shops from ~300 emails by day 12",
+            "Shops will only buy below $600, so 9-10 shops cannot reach $6,000 by day 18",
+            "No specialist will deliver at <= $300 per shop",
+            "Stripe holds the first payout beyond day 23 so later receipts cannot settle by day 30",
+            "Owner cash advanced would exceed $1,000"
+          ],
+          "continue": [
+            "2+ prepaid by day 12: keep sending until 9 shops have paid by day 18, hire the specialist for each as its payment settles"
+          ],
+          "decides": [
+            "CONVERSION",
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_79ce60392b5642a0bff3",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_48ad6817d0e5491ca87b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_79ce60392b5642a0bff3",
+            "why": "A competitor sells the same white-label design to shops at $199, below the $250 assumed; 24 sales needed"
+          },
+          {
+            "opportunityId": "cop_48ad6817d0e5491ca87b",
+            "why": "No sign-shop price paid found; sales cycle and 50% balance timing leave settlement inside 30 days unlikely"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "deals": 9,
+            "price": 750,
+            "directCost": 300,
+            "capital": 30
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "MARKET_VOLUME",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_5d17aaaf96ad_dc1450",
+        "digest": "5d17aaaf96ad84940e1c4351",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2f165a07d39047be8b60/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:08:45.925Z"
+      },
+      {
+        "goalId": "wst_a5cb9cfbf9e9455babaf",
+        "contractDigest": "52cf54d967dc00a732a46b01",
+        "parentRevisionId": "rev_5d17aaaf96ad_dc1450",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Prepaid month-one local SEO for sign and vehicle-wrap shops, delivered by a hired specialist",
+          "opportunityIds": [
+            "cop_464d7e0564b94c8a8817"
+          ],
+          "why": "Local SEO is an offer sign shops do buy: one sign-shop owner bought a $1,500/month, 12-month SEO plan and was quoted $700-900/month by others (one shop, so not a market price), and an agency sells SEO only to sign and wrap shops. At $750 prepaid, 9 shops ($6,750 gross, ~$6,550 after Stripe fees) clear $6,000 settled by day 21, and the specialist is paid only from settled receipts, so the owner advances $90. Nothing on the card is established: reachable count, close rate, price a new vendor gets, specialist availability at $300 and deliverability are all measured by the day-2-to-8 gates before more than $90 is spent."
+        },
+        "alternatives": [
+          {
+            "title": "White-label wrap design for shops at $250",
+            "why": "Wrapmate already sells the same service to shops at $199 flat ($49 promo), so $250 is above the visible market; 24+ designs in 30 days would be needed."
+          },
+          {
+            "title": "Website rebuild for sign shops at $1,500",
+            "why": "No sign-shop-specific price paid was found (only generic agency packages), and 4 sites plus 50% balances must settle inside 30 days."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s0",
+            "kind": "RESEARCH",
+            "label": "Build and count the reachable list: independent sign and vehicle-wrap shops in US metros from Google Maps listings with a public email or phone; gate needs >= 600 contacts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "reachable_shops"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s0b",
+            "kind": "TEST",
+            "label": "Post a $300 fixed-price Upwork job for one month of local SEO for a sign shop (GBP management, citations, 2 service pages, report); proof = >= 2 qualified bids at <= $300 from specialists with trade/local portfolios by day 4",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "sub_cost"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Buy 3 sending domains + 3 mailboxes; send ~600 personalised emails (about 60/day split across mailboxes, days 3-12) and phone-follow-up every shop that opens or has no email, so reach does not rest on one unwarmed mailbox",
+            "performer": "OWNER",
+            "costCents": 9000,
+            "day": 3,
+            "dependsOn": "s0",
+            "evidence": [
+              "reachable_shops",
+              "deliverability"
+            ],
+            "ownerHours": 16,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer month-one local SEO (Google Business Profile management, service pages, citations, review requests, report) at $750 prepaid, on short calls",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "s1",
+            "evidence": [
+              "src_seo_quotes"
+            ],
+            "ownerHours": 10,
+            "priceCents": 75000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "TEST",
+            "label": "Proof gate on day 8: of the first 200 shops contacted, >= 3 have paid $750 (1.5% = the 9-of-600 rate the target needs), bounce rate < 5%, and the s0b specialist is hired",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "close_rate",
+              "price_paid",
+              "sub_cost",
+              "deliverability"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "SELL",
+            "label": "Shop pays the $750 first month by Stripe invoice before work starts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "price_paid"
+            ],
+            "ownerHours": 2,
+            "priceCents": 75000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "ORDER",
+            "label": "Hire the freelance local-SEO specialist on Upwork for each paid shop at $300 fixed (escrowed, released on delivery of the month's work), once that shop's payment has settled",
+            "performer": "OWNER",
+            "costCents": 270000,
+            "day": 17,
+            "dependsOn": "s4",
+            "evidence": [
+              "sub_cost"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "DELIVER",
+            "label": "Specialist delivers month-one local SEO for each shop; owner reviews the monthly report",
+            "performer": "Freelance local-SEO specialist hired per client (Upwork)",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "s5",
+            "evidence": [
+              "src_seo_card_fulfil"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance local-SEO specialist hired per client (Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s7",
+            "kind": "COLLECT",
+            "label": "Stripe settles each payment (first payout typically 7 days after the first live payment, up to 14; then standard schedule); Stripe card fee 2.9% + $0.30",
+            "performer": "Stripe",
+            "costCents": 19845,
+            "day": 15,
+            "dependsOn": "s4",
+            "evidence": [
+              "src_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Stripe",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "FUNDING",
+            "amountCents": 9000,
+            "label": "Owner advances $90 for 3 domains and mailboxes",
+            "stepId": "s1"
+          },
+          {
+            "day": 3,
+            "kind": "SPEND",
+            "amountCents": 9000,
+            "label": "3 sending domains + one month of 3 mailboxes",
+            "stepId": "s1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 1 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 8,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 1",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 1",
+            "stepId": "s5"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 2 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 9,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 2",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 2",
+            "stepId": "s5"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 3 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 10,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 3",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 3",
+            "stepId": "s5"
+          },
+          {
+            "day": 11,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 4 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 11,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 4",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 4",
+            "stepId": "s5"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 5 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 12,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 5",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 5",
+            "stepId": "s5"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 6 prepays month one",
+            "settlesDay": 16,
+            "stepId": "s7"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 6",
+            "stepId": "s7"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 6",
+            "stepId": "s5"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 7 prepays month one",
+            "settlesDay": 17,
+            "stepId": "s7"
+          },
+          {
+            "day": 14,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 7",
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 7",
+            "stepId": "s5"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 8 prepays month one",
+            "settlesDay": 19,
+            "stepId": "s7"
+          },
+          {
+            "day": 16,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 8",
+            "stepId": "s7"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 8",
+            "stepId": "s5"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 9 prepays month one",
+            "settlesDay": 21,
+            "stepId": "s7"
+          },
+          {
+            "day": 18,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 9",
+            "stepId": "s7"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 9",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price_paid",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD month-one prepay",
+            "sources": [
+              "src_seo_quotes"
+            ],
+            "needs": "Quotes of $700-900/month were received by a shop owner, not paid; measured by the first prepaid invoices"
+          },
+          {
+            "name": "sub_cost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per client month",
+            "sources": [],
+            "needs": "Measured by the s0b Upwork job post (>= 2 qualified bids at <= $300 by day 4)"
+          },
+          {
+            "name": "deals_needed",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "prepaid shops",
+            "sources": [],
+            "needs": "9 x $750 = $6,750 gross; ~$6,551 after Stripe fees"
+          },
+          {
+            "name": "settlement_days",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "days to first Stripe payout",
+            "sources": [
+              "src_stripe"
+            ],
+            "needs": "Typically 7, up to 14 days for some industries"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid shops per shop contacted",
+            "sources": [],
+            "needs": "Target needs 9 of ~600 = 1.5%; gate: >= 3 of the first 200 by day 8"
+          },
+          {
+            "name": "reachable_shops",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "independent sign/wrap shops with public email or phone",
+            "sources": [],
+            "needs": "Counted in s0 from Google Maps listings; >= 600 needed"
+          },
+          {
+            "name": "deliverability",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "bounce/spam rate on new domains",
+            "sources": [],
+            "needs": "Measured on the first 200 sends; stop at >= 5% bounce; phone follow-up carries reach"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_seo_quotes",
+            "url": "https://signs101.com/threads/hiring-a-marketing-company.179038",
+            "dated": "2025-01-09",
+            "claim": "One sign-shop owner (Signs101, Jan 2025; currency and location not stated) was quoted ~$700-900/month by several SEO firms and bought a $1,500/month 12-month SEO plan from another, which he did not renew — one buyer, not a market price",
+            "population": "Sign shop owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_seo_agency",
+            "url": "https://topmarketingagencies.pages.dev/agencies/sign-shop-marketing-pros/",
+            "dated": "2026-11-27",
+            "claim": "An agency (Sign Shop Marketing Pros) serves only sign companies, wrap shops and commercial graphics firms with SEO, Google Ads and review management — a sold offer to this industry",
+            "population": "Sign and wrap shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_seo_card_fulfil",
+            "url": "https://brain.local/card/cop_464d7e0564b94c8a8817#fulfillmentOwner",
+            "dated": "2026-11-27",
+            "claim": "Fulfilled by a freelance local-SEO specialist hired per client",
+            "population": "this opening",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_stripe",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; cannot be waived",
+            "population": "New Stripe accounts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_wrap_wrapmate",
+            "url": "https://dev-lsi.wrapmate.com/pro/design",
+            "dated": "2026-11-27",
+            "claim": "Wrapmate sells flat-rate wrap design to wrap shops and installers at $199 (Black Friday $49), 2-business-day first concepts",
+            "population": "Wrap shops and installers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_wrap_airmark",
+            "url": "https://www.airmark.com/blogs/airmark/wrap-pricing-strategies",
+            "dated": "2019-02-06",
+            "claim": "A wrap shop charges its shop rate times four hours as a base price for wrap design (to its end customers)",
+            "population": "Wrap shop end customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_wrap_forum",
+            "url": "https://www.signs101.com/threads/any-freelance-wrap-designers.123492/latest",
+            "dated": "2015-06-03",
+            "claim": "Sign-industry members discuss outsourcing wrap design to independent designers (old thread, no price)",
+            "population": "Sign and wrap shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_web_clutch",
+            "url": "https://clutch.co/web-designers/packages",
+            "dated": "2026-11-27",
+            "claim": "Fixed-price web design packages listed by agencies (generic, not sign-shop-specific)",
+            "population": "Small businesses generally",
+            "matchesBuyer": false,
+            "opportunityId": "cop_48ad6817d0e5491ca87b"
+          },
+          {
+            "id": "src_web_elfsight",
+            "url": "https://elfsight.com/solutions/sign-shop-website-template",
+            "dated": "2026-11-27",
+            "claim": "A sign-shop website template product is sold, indicating sign shops build/refresh websites",
+            "population": "Sign shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_48ad6817d0e5491ca87b"
+          }
+        ],
+        "validation": {
+          "proof": "By day 4, >= 600 reachable shops are listed and >= 2 qualified local-SEO specialists have bid <= $300 for a month; by day 8, >= 3 of the first 200 shops contacted (1.5%, the rate that turns 600 contacts into 9 sales) have paid the $750 month-one invoice, with bounce rate under 5%",
+          "stop": [
+            "Fewer than 600 reachable shops found by day 2",
+            "No qualified specialist bids at <= $300 by day 4 (economics fail)",
+            "Fewer than 3 prepaid shops from the first 200 contacts by day 8",
+            "Shops will only buy below $700, so 9 cannot reach $6,000 settled",
+            "Bounce rate >= 5% and phone follow-up cannot carry the remaining contacts",
+            "Stripe holds the first payout beyond day 23",
+            "Owner cash advanced would exceed $1,000"
+          ],
+          "decides": [
+            "CONVERSION",
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "CURRENT_DEMAND"
+          ],
+          "continue": [
+            "Gate passed on day 8: contact the remaining ~400 shops by day 12, close 9 by day 18, hire the specialist for each shop as its payment settles"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Ledger verified: Stripe fee 2.9% x $750 + $0.30 = $22.05 x 9 = $198.45; specialist 9 x $300 = $2,700; total spend $30 + $2,700 + $198.45 = $2,928.45; gross $6,750; settled net of Stripe fees $6,551.55 >= $6,000; net $3,821.55. Matches the check trace.",
+            "resolution": "Accepted. Ledger unchanged in method; spend now $90 + $2,700 + $198.45."
+          },
+          {
+            "finding": "Settlement: Stripe first payout 7-14 days after first live payment; with 14 days the first payout is day 24, still inside 30, and the stop rule covers day 23; acceptable.",
+            "resolution": "Accepted; settlement model kept, first sale moved to day 8 so even a 14-day first payout (day 22) leaves room; stop rule at day 23 kept."
+          },
+          {
+            "finding": "Gate inconsistency: 2/300 = 0.67%; 9/300 = 3.0%. A gate passed at 0.67% predicts ~2 sales from the planned volume, so passing it does not establish the target.",
+            "resolution": "Accepted. Planned volume is now ~600 contacts (counted in s0) and the day-8 gate requires >= 3 of the first 200 (1.5%), the rate that yields 9 from 600."
+          },
+          {
+            "finding": "Month-one SEO is delivered over a month that runs past the day the cash is counted; refund/chargeback exposure if the specialist under-delivers is not modelled.",
+            "resolution": "Accepted as a risk: the specialist is paid through Upwork escrow released only on delivery, so an under-delivered month is refunded to the owner, who refunds the shop; no receipt is counted before its settlement."
+          },
+          {
+            "finding": "Owner hours 8+9+1+2+4 = 24 h; unconstrained in this contract, fine.",
+            "resolution": "Noted; owner hours are now ~41 h, unconstrained by the contract."
+          },
+          {
+            "finding": "The source note for src_seo_quotes says 'quotes, not a purchase', but the same post says the shop bought the $1,500/month 12-month plan; it is still one shop.",
+            "resolution": "Accepted: the source note now says the shop bought the $1,500/month 12-month plan and did not renew; it remains one buyer and the price stays UNKNOWN."
+          },
+          {
+            "finding": "Excluding the wrap-design opening because a competitor lists $199 is reasonable as a ranking, but that page is on a dev- subdomain marked Beta; do not treat it as an established market price either.",
+            "resolution": "Accepted: Wrapmate's $199 is used only to rank wrap design below SEO, not as an established price."
+          },
+          {
+            "finding": "The ledger arithmetic is right and the downside is small ($30 owner cash, max exposure $184 inside the $1,000 cap), but the plan is not yet a CONDITIONAL plan the owner should act on. (1) The proof gate does not imply the target: passing on 'at least 2 prepaid shops from ~300 emails by day 12' measures a ~0.7% purchase rate, at which the same 300 contacts yield ~2 shops, not 9; the continue rule (",
+            "resolution": "Gate re-set to the target's rate, volume counted and planned, deliverability gated with phone follow-up, strategy text no longer presents the forum quotes as a market price, and decides now lists every unestablished link."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "brain:CONVERSION"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "revenueRange",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "buyerVolume",
+              "brain:MARKET_VOLUME"
+            ]
+          },
+          {
+            "condition": 3,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 4,
+            "decision": "ACCEPTED",
+            "records": [
+              "directCosts",
+              "brain:ECONOMICS"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_79ce60392b5642a0bff3",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_48ad6817d0e5491ca87b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_79ce60392b5642a0bff3",
+            "why": "A competitor sells the same white-label design to shops at $199, below the $250 assumed; 24 sales needed"
+          },
+          {
+            "opportunityId": "cop_48ad6817d0e5491ca87b",
+            "why": "No sign-shop price paid found; sales cycle and 50% balance timing leave settlement inside 30 days unlikely"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "deals": 9,
+            "price": 750,
+            "directCost": 300,
+            "capital": 90
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "MARKET_VOLUME",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_3f1ee89958d3_7d37e6",
+        "digest": "3f1ee89958d3ddfa054cf773",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2f165a07d39047be8b60/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:12:21.872Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_a5cb9cfbf9e9455babaf",
+      "contractDigest": "52cf54d967dc00a732a46b01",
+      "parentRevisionId": "rev_5d17aaaf96ad_dc1450",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Prepaid month-one local SEO for sign and vehicle-wrap shops, delivered by a hired specialist",
+        "opportunityIds": [
+          "cop_464d7e0564b94c8a8817"
+        ],
+        "why": "Local SEO is an offer sign shops do buy: one sign-shop owner bought a $1,500/month, 12-month SEO plan and was quoted $700-900/month by others (one shop, so not a market price), and an agency sells SEO only to sign and wrap shops. At $750 prepaid, 9 shops ($6,750 gross, ~$6,550 after Stripe fees) clear $6,000 settled by day 21, and the specialist is paid only from settled receipts, so the owner advances $90. Nothing on the card is established: reachable count, close rate, price a new vendor gets, specialist availability at $300 and deliverability are all measured by the day-2-to-8 gates before more than $90 is spent."
+      },
+      "alternatives": [
+        {
+          "title": "White-label wrap design for shops at $250",
+          "why": "Wrapmate already sells the same service to shops at $199 flat ($49 promo), so $250 is above the visible market; 24+ designs in 30 days would be needed."
+        },
+        {
+          "title": "Website rebuild for sign shops at $1,500",
+          "why": "No sign-shop-specific price paid was found (only generic agency packages), and 4 sites plus 50% balances must settle inside 30 days."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s0",
+          "kind": "RESEARCH",
+          "label": "Build and count the reachable list: independent sign and vehicle-wrap shops in US metros from Google Maps listings with a public email or phone; gate needs >= 600 contacts",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "reachable_shops"
+          ],
+          "ownerHours": 6,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s0b",
+          "kind": "TEST",
+          "label": "Post a $300 fixed-price Upwork job for one month of local SEO for a sign shop (GBP management, citations, 2 service pages, report); proof = >= 2 qualified bids at <= $300 from specialists with trade/local portfolios by day 4",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": null,
+          "evidence": [
+            "sub_cost"
+          ],
+          "ownerHours": 2,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s1",
+          "kind": "REACH",
+          "label": "Buy 3 sending domains + 3 mailboxes; send ~600 personalised emails (about 60/day split across mailboxes, days 3-12) and phone-follow-up every shop that opens or has no email, so reach does not rest on one unwarmed mailbox",
+          "performer": "OWNER",
+          "costCents": 9000,
+          "day": 3,
+          "dependsOn": "s0",
+          "evidence": [
+            "reachable_shops",
+            "deliverability"
+          ],
+          "ownerHours": 16,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "OFFER",
+          "label": "Offer month-one local SEO (Google Business Profile management, service pages, citations, review requests, report) at $750 prepaid, on short calls",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "s1",
+          "evidence": [
+            "src_seo_quotes"
+          ],
+          "ownerHours": 10,
+          "priceCents": 75000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "TEST",
+          "label": "Proof gate on day 8: of the first 200 shops contacted, >= 3 have paid $750 (1.5% = the 9-of-600 rate the target needs), bounce rate < 5%, and the s0b specialist is hired",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "s2",
+          "evidence": [
+            "close_rate",
+            "price_paid",
+            "sub_cost",
+            "deliverability"
+          ],
+          "ownerHours": 1,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s4",
+          "kind": "SELL",
+          "label": "Shop pays the $750 first month by Stripe invoice before work starts",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "s2",
+          "evidence": [
+            "price_paid"
+          ],
+          "ownerHours": 2,
+          "priceCents": 75000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s5",
+          "kind": "ORDER",
+          "label": "Hire the freelance local-SEO specialist on Upwork for each paid shop at $300 fixed (escrowed, released on delivery of the month's work), once that shop's payment has settled",
+          "performer": "OWNER",
+          "costCents": 270000,
+          "day": 17,
+          "dependsOn": "s4",
+          "evidence": [
+            "sub_cost"
+          ],
+          "ownerHours": 4,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s6",
+          "kind": "DELIVER",
+          "label": "Specialist delivers month-one local SEO for each shop; owner reviews the monthly report",
+          "performer": "Freelance local-SEO specialist hired per client (Upwork)",
+          "costCents": 0,
+          "day": 18,
+          "dependsOn": "s5",
+          "evidence": [
+            "src_seo_card_fulfil"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Freelance local-SEO specialist hired per client (Upwork)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s7",
+          "kind": "COLLECT",
+          "label": "Stripe settles each payment (first payout typically 7 days after the first live payment, up to 14; then standard schedule); Stripe card fee 2.9% + $0.30",
+          "performer": "Stripe",
+          "costCents": 19845,
+          "day": 15,
+          "dependsOn": "s4",
+          "evidence": [
+            "src_stripe"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": "Stripe",
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 3,
+          "kind": "FUNDING",
+          "amountCents": 9000,
+          "label": "Owner advances $90 for 3 domains and mailboxes",
+          "stepId": "s1"
+        },
+        {
+          "day": 3,
+          "kind": "SPEND",
+          "amountCents": 9000,
+          "label": "3 sending domains + one month of 3 mailboxes",
+          "stepId": "s1"
+        },
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 1 prepays month one",
+          "settlesDay": 15,
+          "stepId": "s7"
+        },
+        {
+          "day": 8,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 1",
+          "stepId": "s7"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 1",
+          "stepId": "s5"
+        },
+        {
+          "day": 9,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 2 prepays month one",
+          "settlesDay": 15,
+          "stepId": "s7"
+        },
+        {
+          "day": 9,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 2",
+          "stepId": "s7"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 2",
+          "stepId": "s5"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 3 prepays month one",
+          "settlesDay": 15,
+          "stepId": "s7"
+        },
+        {
+          "day": 10,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 3",
+          "stepId": "s7"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 3",
+          "stepId": "s5"
+        },
+        {
+          "day": 11,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 4 prepays month one",
+          "settlesDay": 15,
+          "stepId": "s7"
+        },
+        {
+          "day": 11,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 4",
+          "stepId": "s7"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 4",
+          "stepId": "s5"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 5 prepays month one",
+          "settlesDay": 15,
+          "stepId": "s7"
+        },
+        {
+          "day": 12,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 5",
+          "stepId": "s7"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 5",
+          "stepId": "s5"
+        },
+        {
+          "day": 13,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 6 prepays month one",
+          "settlesDay": 16,
+          "stepId": "s7"
+        },
+        {
+          "day": 13,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 6",
+          "stepId": "s7"
+        },
+        {
+          "day": 16,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 6",
+          "stepId": "s5"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 7 prepays month one",
+          "settlesDay": 17,
+          "stepId": "s7"
+        },
+        {
+          "day": 14,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 7",
+          "stepId": "s7"
+        },
+        {
+          "day": 17,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 7",
+          "stepId": "s5"
+        },
+        {
+          "day": 16,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 8 prepays month one",
+          "settlesDay": 19,
+          "stepId": "s7"
+        },
+        {
+          "day": 16,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 8",
+          "stepId": "s7"
+        },
+        {
+          "day": 19,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 8",
+          "stepId": "s5"
+        },
+        {
+          "day": 18,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "Shop 9 prepays month one",
+          "settlesDay": 21,
+          "stepId": "s7"
+        },
+        {
+          "day": 18,
+          "kind": "FEE",
+          "amountCents": 2205,
+          "label": "Stripe fee on shop 9",
+          "stepId": "s7"
+        },
+        {
+          "day": 21,
+          "kind": "SPEND",
+          "amountCents": 30000,
+          "label": "Specialist fixed fee for shop 9",
+          "stepId": "s5"
+        }
+      ],
+      "proofDay": 12,
+      "quantities": [
+        {
+          "name": "price_paid",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD month-one prepay",
+          "sources": [
+            "src_seo_quotes"
+          ],
+          "needs": "Quotes of $700-900/month were received by a shop owner, not paid; measured by the first prepaid invoices"
+        },
+        {
+          "name": "sub_cost",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per client month",
+          "sources": [],
+          "needs": "Measured by the s0b Upwork job post (>= 2 qualified bids at <= $300 by day 4)"
+        },
+        {
+          "name": "deals_needed",
+          "status": "ESTIMATE",
+          "value": 9,
+          "unit": "prepaid shops",
+          "sources": [],
+          "needs": "9 x $750 = $6,750 gross; ~$6,551 after Stripe fees"
+        },
+        {
+          "name": "settlement_days",
+          "status": "ESTIMATE",
+          "value": 7,
+          "unit": "days to first Stripe payout",
+          "sources": [
+            "src_stripe"
+          ],
+          "needs": "Typically 7, up to 14 days for some industries"
+        },
+        {
+          "name": "close_rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "prepaid shops per shop contacted",
+          "sources": [],
+          "needs": "Target needs 9 of ~600 = 1.5%; gate: >= 3 of the first 200 by day 8"
+        },
+        {
+          "name": "reachable_shops",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "independent sign/wrap shops with public email or phone",
+          "sources": [],
+          "needs": "Counted in s0 from Google Maps listings; >= 600 needed"
+        },
+        {
+          "name": "deliverability",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "bounce/spam rate on new domains",
+          "sources": [],
+          "needs": "Measured on the first 200 sends; stop at >= 5% bounce; phone follow-up carries reach"
+        }
+      ],
+      "sources": [
+        {
+          "id": "src_seo_quotes",
+          "url": "https://signs101.com/threads/hiring-a-marketing-company.179038",
+          "dated": "2025-01-09",
+          "claim": "One sign-shop owner (Signs101, Jan 2025; currency and location not stated) was quoted ~$700-900/month by several SEO firms and bought a $1,500/month 12-month SEO plan from another, which he did not renew — one buyer, not a market price",
+          "population": "Sign shop owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_464d7e0564b94c8a8817"
+        },
+        {
+          "id": "src_seo_agency",
+          "url": "https://topmarketingagencies.pages.dev/agencies/sign-shop-marketing-pros/",
+          "dated": "2026-11-27",
+          "claim": "An agency (Sign Shop Marketing Pros) serves only sign companies, wrap shops and commercial graphics firms with SEO, Google Ads and review management — a sold offer to this industry",
+          "population": "Sign and wrap shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_464d7e0564b94c8a8817"
+        },
+        {
+          "id": "src_seo_card_fulfil",
+          "url": "https://brain.local/card/cop_464d7e0564b94c8a8817#fulfillmentOwner",
+          "dated": "2026-11-27",
+          "claim": "Fulfilled by a freelance local-SEO specialist hired per client",
+          "population": "this opening",
+          "matchesBuyer": true,
+          "opportunityId": "cop_464d7e0564b94c8a8817"
+        },
+        {
+          "id": "src_stripe",
+          "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+          "dated": "2026-11-27",
+          "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; cannot be waived",
+          "population": "New Stripe accounts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_464d7e0564b94c8a8817"
+        },
+        {
+          "id": "src_wrap_wrapmate",
+          "url": "https://dev-lsi.wrapmate.com/pro/design",
+          "dated": "2026-11-27",
+          "claim": "Wrapmate sells flat-rate wrap design to wrap shops and installers at $199 (Black Friday $49), 2-business-day first concepts",
+          "population": "Wrap shops and installers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_79ce60392b5642a0bff3"
+        },
+        {
+          "id": "src_wrap_airmark",
+          "url": "https://www.airmark.com/blogs/airmark/wrap-pricing-strategies",
+          "dated": "2019-02-06",
+          "claim": "A wrap shop charges its shop rate times four hours as a base price for wrap design (to its end customers)",
+          "population": "Wrap shop end customers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_79ce60392b5642a0bff3"
+        },
+        {
+          "id": "src_wrap_forum",
+          "url": "https://www.signs101.com/threads/any-freelance-wrap-designers.123492/latest",
+          "dated": "2015-06-03",
+          "claim": "Sign-industry members discuss outsourcing wrap design to independent designers (old thread, no price)",
+          "population": "Sign and wrap shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_79ce60392b5642a0bff3"
+        },
+        {
+          "id": "src_web_clutch",
+          "url": "https://clutch.co/web-designers/packages",
+          "dated": "2026-11-27",
+          "claim": "Fixed-price web design packages listed by agencies (generic, not sign-shop-specific)",
+          "population": "Small businesses generally",
+          "matchesBuyer": false,
+          "opportunityId": "cop_48ad6817d0e5491ca87b"
+        },
+        {
+          "id": "src_web_elfsight",
+          "url": "https://elfsight.com/solutions/sign-shop-website-template",
+          "dated": "2026-11-27",
+          "claim": "A sign-shop website template product is sold, indicating sign shops build/refresh websites",
+          "population": "Sign shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_48ad6817d0e5491ca87b"
+        }
+      ],
+      "validation": {
+        "proof": "By day 4, >= 600 reachable shops are listed and >= 2 qualified local-SEO specialists have bid <= $300 for a month; by day 8, >= 3 of the first 200 shops contacted (1.5%, the rate that turns 600 contacts into 9 sales) have paid the $750 month-one invoice, with bounce rate under 5%",
+        "stop": [
+          "Fewer than 600 reachable shops found by day 2",
+          "No qualified specialist bids at <= $300 by day 4 (economics fail)",
+          "Fewer than 3 prepaid shops from the first 200 contacts by day 8",
+          "Shops will only buy below $700, so 9 cannot reach $6,000 settled",
+          "Bounce rate >= 5% and phone follow-up cannot carry the remaining contacts",
+          "Stripe holds the first payout beyond day 23",
+          "Owner cash advanced would exceed $1,000"
+        ],
+        "decides": [
+          "CONVERSION",
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME",
+          "FULFILMENT",
+          "ECONOMICS",
+          "CURRENT_DEMAND"
+        ],
+        "continue": [
+          "Gate passed on day 8: contact the remaining ~400 shops by day 12, close 9 by day 18, hire the specialist for each shop as its payment settles"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Ledger verified: Stripe fee 2.9% x $750 + $0.30 = $22.05 x 9 = $198.45; specialist 9 x $300 = $2,700; total spend $30 + $2,700 + $198.45 = $2,928.45; gross $6,750; settled net of Stripe fees $6,551.55 >= $6,000; net $3,821.55. Matches the check trace.",
+          "resolution": "Accepted. Ledger unchanged in method; spend now $90 + $2,700 + $198.45."
+        },
+        {
+          "finding": "Settlement: Stripe first payout 7-14 days after first live payment; with 14 days the first payout is day 24, still inside 30, and the stop rule covers day 23; acceptable.",
+          "resolution": "Accepted; settlement model kept, first sale moved to day 8 so even a 14-day first payout (day 22) leaves room; stop rule at day 23 kept."
+        },
+        {
+          "finding": "Gate inconsistency: 2/300 = 0.67%; 9/300 = 3.0%. A gate passed at 0.67% predicts ~2 sales from the planned volume, so passing it does not establish the target.",
+          "resolution": "Accepted. Planned volume is now ~600 contacts (counted in s0) and the day-8 gate requires >= 3 of the first 200 (1.5%), the rate that yields 9 from 600."
+        },
+        {
+          "finding": "Month-one SEO is delivered over a month that runs past the day the cash is counted; refund/chargeback exposure if the specialist under-delivers is not modelled.",
+          "resolution": "Accepted as a risk: the specialist is paid through Upwork escrow released only on delivery, so an under-delivered month is refunded to the owner, who refunds the shop; no receipt is counted before its settlement."
+        },
+        {
+          "finding": "Owner hours 8+9+1+2+4 = 24 h; unconstrained in this contract, fine.",
+          "resolution": "Noted; owner hours are now ~41 h, unconstrained by the contract."
+        },
+        {
+          "finding": "The source note for src_seo_quotes says 'quotes, not a purchase', but the same post says the shop bought the $1,500/month 12-month plan; it is still one shop.",
+          "resolution": "Accepted: the source note now says the shop bought the $1,500/month 12-month plan and did not renew; it remains one buyer and the price stays UNKNOWN."
+        },
+        {
+          "finding": "Excluding the wrap-design opening because a competitor lists $199 is reasonable as a ranking, but that page is on a dev- subdomain marked Beta; do not treat it as an established market price either.",
+          "resolution": "Accepted: Wrapmate's $199 is used only to rank wrap design below SEO, not as an established price."
+        },
+        {
+          "finding": "The ledger arithmetic is right and the downside is small ($30 owner cash, max exposure $184 inside the $1,000 cap), but the plan is not yet a CONDITIONAL plan the owner should act on. (1) The proof gate does not imply the target: passing on 'at least 2 prepaid shops from ~300 emails by day 12' measures a ~0.7% purchase rate, at which the same 300 contacts yield ~2 shops, not 9; the continue rule (",
+          "resolution": "Gate re-set to the target's rate, volume counted and planned, deliverability gated with phone follow-up, strategy text no longer presents the forum quotes as a market price, and decides now lists every unestablished link."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "brain:CONVERSION"
+          ]
+        },
+        {
+          "condition": 1,
+          "decision": "ACCEPTED",
+          "records": [
+            "price",
+            "revenueRange",
+            "brain:OFFER_AND_PRICE"
+          ]
+        },
+        {
+          "condition": 2,
+          "decision": "ACCEPTED",
+          "records": [
+            "buyerVolume",
+            "brain:MARKET_VOLUME"
+          ]
+        },
+        {
+          "condition": 3,
+          "decision": "ACCEPTED",
+          "records": [
+            "fulfillment",
+            "brain:FULFILMENT"
+          ]
+        },
+        {
+          "condition": 4,
+          "decision": "ACCEPTED",
+          "records": [
+            "directCosts",
+            "brain:ECONOMICS"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_464d7e0564b94c8a8817",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_79ce60392b5642a0bff3",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_48ad6817d0e5491ca87b",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_79ce60392b5642a0bff3",
+          "why": "A competitor sells the same white-label design to shops at $199, below the $250 assumed; 24 sales needed"
+        },
+        {
+          "opportunityId": "cop_48ad6817d0e5491ca87b",
+          "why": "No sign-shop price paid found; sales cycle and 50% balance timing leave settlement inside 30 days unlikely"
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_464d7e0564b94c8a8817",
+          "deals": 9,
+          "price": 750,
+          "directCost": 300,
+          "capital": 90
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "MARKET_VOLUME",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_3f1ee89958d3_7d37e6",
+      "digest": "3f1ee89958d3ddfa054cf773",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_2f165a07d39047be8b60/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:12:21.872Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_3f1ee89958d3_7d37e6",
+      "digest": "3f1ee89958d3ddfa054cf773",
+      "contractDigest": "52cf54d967dc00a732a46b01",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 298845,
+        "committedOpenCents": 0,
+        "preProofCents": 20025,
+        "maxExposureCents": 24435,
+        "minCashCents": 84565,
+        "minCashDay": 14,
+        "collectedCents": 675000,
+        "collectedInWindowCents": 675000,
+        "refundsCents": 0,
+        "ownerFundedCents": 9000,
+        "netCents": 376155
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Website rebuild for sign and wrap shops\", and what it is missing first is an offer and a price. Research first: the deep dive on \"Website rebuild for sign and wrap shops\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_48ad6817d0e5491ca87b",
+          "cop_464d7e0564b94c8a8817",
+          "cop_79ce60392b5642a0bff3"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Research first: the deep dive on \"Website rebuild for sign and wrap shops\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+        "openings": [
+          {
+            "opportunityId": "cop_48ad6817d0e5491ca87b",
+            "title": "Website rebuild for sign and wrap shops",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 6000,
+            "card": {
+              "payer": "Sign/wrap shops with outdated websites",
+              "reachableChannel": "Cold email to shops with outdated sites",
+              "offerScope": "Fixed-price 5-page website with gallery, quote form and local SEO basics, built by Brain",
+              "priceCents": 150000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance WordPress developer hired per site (Upwork)",
+              "peakFundingCents": 30000,
+              "humanHours": 4,
+              "requiredCapabilities": [],
+              "industry": "Commercial sign and vehicle-wrap shops",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to shops with outdated sites"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "16 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "4 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 600, tied up 300"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to shops with outdated sites",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "41,805 Sign/wrap shops with outdated websites (4 sites at $1,500; generic fixed-price web packages run $850-$6,500 on Clutch; no sign-shop-specific price found)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Fixed-price 5-page website with gallery, quote form and local SEO basics, built by Brain to Sign/wrap shops with outdated websites, reached through Cold email to shops with outdated sites, at $1,500; Freelance WordPress developer hired per site (Upwork) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$600",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance WordPress developer hired per site (Upwork).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "4 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Fixed-price 5-page website with gallery, quote form and local SEO basics, built by Brain",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Sign/wrap shops with outdated websites",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://clutch.co/web-designers/packages; https://elfsight.com/solutions/sign-shop-website-template; https://www.ibisworld.com/united-states/number-of-businesses/sign-banner-shops/6550",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "title": "Local SEO / Google Business Profile retainer for sign shops",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 6000,
+            "card": {
+              "payer": "Sign and wrap shop owners seeking more local leads",
+              "reachableChannel": "Cold email to sign shops; Signs101 forum",
+              "offerScope": "Monthly local SEO: Google Business Profile management, service pages, citations, review requests, monthly report — first month prepaid",
+              "priceCents": 75000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance local-SEO specialist hired per client (Upwork)",
+              "peakFundingCents": 30000,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "Commercial sign and vehicle-wrap shops",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to sign shops; Signs101 forum"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "32 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "8 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 300, tied up 300"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to sign shops; Signs101 forum",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "41,805 Sign and wrap shop owners seeking more local leads (8 shops at $750 first month; quotes of $700-900/month reported by a sign-shop owner on Signs101 (Jan 2025))",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly local SEO: Google Business Profile management, service pages, citations, review requests, monthly report — first month prepaid to Sign and wrap shop owners seeking more local leads, reached through Cold email to sign shops; Signs101 forum, at $750; Freelance local-SEO specialist hired per client (Upwork) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance local-SEO specialist hired per client (Upwork).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "3 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Monthly local SEO: Google Business Profile management, service pages, citations, review requests, monthly report — first month prepaid",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Sign and wrap shop owners seeking more local leads",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$750",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$750",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://signs101.com/threads/hiring-a-marketing-company.179038; https://signs101.com/threads/hiring-a-marketing-company.179038; https://topmarketingagencies.pages.dev/agencies/sign-shop-marketing-pros/; https://www.ibisworld.com/united-states/number-of-businesses/sign-banner-shops/6550",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_79ce60392b5642a0bff3",
+            "title": "White-label vehicle-wrap design for sign and wrap shops",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 6000,
+            "card": {
+              "payer": "Independent sign and vehicle-wrap shops without an in-house designer or with overflow",
+              "reachableChannel": "Cold email to wrap shops listed on Google Maps / Signs101 forum",
+              "offerScope": "Print-ready vehicle wrap design (concept + 3 revisions) on the shop's vehicle template, white-label",
+              "priceCents": 25000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance vehicle-wrap designer hired per job (Upwork/Freelancer, ~$50/h)",
+              "peakFundingCents": 20000,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "Commercial sign and vehicle-wrap shops",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to wrap shops listed on Google Maps / Signs101 forum"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "96 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "24 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 125, tied up 200"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "7 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to wrap shops listed on Google Maps / Signs101 forum",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "41,805 Independent sign and vehicle-wrap shops without an in-house designer or with overflow (24 designs at $250; Wrapmate sells the same service to shops at $199 flat, so price competition is real)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Print-ready vehicle wrap design (concept + 3 revisions) on the shop's vehicle template, white-label to Independent sign and vehicle-wrap shops without an in-house designer or with overflow, reached through Cold email to wrap shops listed on Google Maps / Signs101 forum, at $250; Freelance vehicle-wrap designer hired per job (Upwork/Freelancer, ~$50/h) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$125",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance vehicle-wrap designer hired per job (Upwork/Freelancer, ~$50/h).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "1 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Print-ready vehicle wrap design (concept + 3 revisions) on the shop's vehicle template, white-label",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Independent sign and vehicle-wrap shops without an in-house designer or with overflow",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://dev-lsi.wrapmate.com/pro/design; https://www.airmark.com/blogs/airmark/wrap-pricing-strategies; https://www.signs101.com/threads/any-freelance-wrap-designers.123492/latest; https://www.signs101.com/threads/outsourcing-designs.58779; https://www.ibisworld.com/united-states/number-of-businesses/sign-banner-shops/6550",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 600000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": "commercial sign and vehicle-wrap shops",
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T11:08:37.549Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_5d17aaaf96ad_dc1450",
+        "revisionDigest": "5d17aaaf96ad84940e1c4351",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2f165a07d39047be8b60/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_4a35690e2f7a4b788924/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The ledger arithmetic is right and the downside is small ($30 owner cash, max exposure $184 inside the $1,000 cap), but the plan is not yet a CONDITIONAL plan the owner should act on. (1) The proof gate does not imply the target: passing on 'at least 2 prepaid shops from ~300 emails by day 12' measures a ~0.7% purchase rate, at which the same 300 contacts yield ~2 shops, not 9; the continue rule ('keep sending until 9 have paid by day 18') needs ~1,000+ further contacts that no step, sending capacity or buyer count supports. Reaching 9 from 300 needs a 3% cold-email-to-$750-prepay rate inside 18 days; the gate should be set at that rate (or the volume and sending capacity planned and shown) so that passing it actually predicts $6,000. (2) Every fact on the SEO card is RECOMMENDATION; no link is established. validation.decides names only CONVERSION and OFFER_AND_PRICE, yet the plan also rests on unknowns that research, not a live test, can answer and that the decides list omits: MARKET_VOLUME (the card's 41,805 is a RECOMMENDATION, and the 300 Google-Maps shops are uncounted), FULFILMENT and ECONOMICS (a local-SEO specialist at $300 fixed per client is unsourced; the gate tests it but it is not declared decisive), and CURRENT_DEMAND (an agency serving the industry is not a buying signal). (3) The price basis is one sign-shop owner's forum post (Signs101, Jan 2025, quotes from Dec 2023, poster likely Canadian, no currency); that research was verified INSUFFICIENT. The plan's quantities correctly mark price_paid UNKNOWN, but the strategy text ('actually being quoted $700-900/month... $750 sits inside the quoted range') presents it as market price. (4) Reach on a day-1 sending domain and one mailbox: ~300 personalised cold emails in days 1-4 from an unwarmed domain is a deliverability assumption that the plan neither sources nor gates.",
+        "findings": [
+          "Ledger verified: Stripe fee 2.9% x $750 + $0.30 = $22.05 x 9 = $198.45; specialist 9 x $300 = $2,700; total spend $30 + $2,700 + $198.45 = $2,928.45; gross $6,750; settled net of Stripe fees $6,551.55 >= $6,000; net $3,821.55. Matches the check trace.",
+          "Settlement: Stripe first payout 7-14 days after first live payment; with 14 days the first payout is day 24, still inside 30, and the stop rule covers day 23; acceptable.",
+          "Gate inconsistency: 2/300 = 0.67%; 9/300 = 3.0%. A gate passed at 0.67% predicts ~2 sales from the planned volume, so passing it does not establish the target.",
+          "Month-one SEO is delivered over a month that runs past the day the cash is counted; refund/chargeback exposure if the specialist under-delivers is not modelled.",
+          "Owner hours 8+9+1+2+4 = 24 h; unconstrained in this contract, fine.",
+          "The source note for src_seo_quotes says 'quotes, not a purchase', but the same post says the shop bought the $1,500/month 12-month plan; it is still one shop.",
+          "Excluding the wrap-design opening because a competitor lists $199 is reasonable as a ranking, but that page is on a dev- subdomain marked Beta; do not treat it as an established market price either."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:10:04.083Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "link": "CONVERSION",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "conversionRates",
+            "why": "No measured or published reply/close rate for cold email to sign shops buying a $750 prepaid SEO month; the gate threshold (2/300) is below the 3% the target needs."
+          },
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The card's price fact is a RECOMMENDATION ($750); the only research (one shop's 2023 quotes) was verified INSUFFICIENT."
+          },
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "link": "MARKET_VOLUME",
+            "basis": "EVIDENCE",
+            "field": "buyerVolume",
+            "why": "buyerVolume is a RECOMMENDATION; no sourced count of reachable sign/wrap shops, and the plan's continue rule needs far more than the 300 contacts planned."
+          },
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "link": "FULFILMENT",
+            "basis": "EVIDENCE",
+            "field": "fulfillment",
+            "why": "A freelance local-SEO specialist delivering a month at $300 fixed is a RECOMMENDATION with no source; it should be in validation.decides."
+          },
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "link": "ECONOMICS",
+            "basis": "EVIDENCE",
+            "field": "directCosts",
+            "why": "$300 direct cost per client is a RECOMMENDATION; unsourced subcontract cost."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_3f1ee89958d3_7d37e6",
+        "revisionDigest": "3f1ee89958d3ddfa054cf773",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2f165a07d39047be8b60/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_4a35690e2f7a4b788924/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now the right stance and the plan is startable inside the limits. The revision fixes what made the prior one unsafe to act on: the purchase gate is calibrated to the target (>= 3 paid of the first 200 = 1.5%, exactly the rate that turns 600 contacts into 9 sales), the reachable list is counted before sending (>= 600 by day 2, else stop), specialist cost is tested at $0 by day 4 with an Upwork post (>= 2 qualified bids <= $300), deliverability is measured and spread over 3 mailboxes with phone follow-up, and validation.decides now names CONVERSION, OFFER_AND_PRICE, MARKET_VOLUME, FULFILMENT, ECONOMICS and CURRENT_DEMAND. Nothing unknown is treated as known: price_paid, close_rate, sub_cost, reachable_shops and deliverability are all UNKNOWN with the gate that measures each; the Signs101 source is now described accurately as one buyer, not a market price. Money at risk before proof is $90 owner cash (peak exposure ~$244), far inside $1,000; specialists are paid only from settled receipts.",
+        "findings": [
+          "Ledger recomputed: 9 x $750 = $6,750 gross; Stripe 9 x ($21.75 + $0.30) = $198.45; settled net of fees $6,551.55 >= $6,000; spend $90 + $2,700 + $198.45 = $2,988.45, matching the check trace.",
+          "Price floor in the stop rule holds: at $700, 9 x ($700 - $20.60) = $6,114.60 >= $6,000.",
+          "Settlement: shop 9 pays day 18, settles day 21; with a 14-day first-payout wait the first payout lands day 22 and the stop rule fires only beyond day 23, still inside 30.",
+          "Inconsistency to tidy: proofDay is 12 while the purchase gate (s3) is day 8; and s5 (hire specialist) is dated day 17 while the ledger pays shop 1's specialist on day 15.",
+          "Residual risk not modelled: month-one SEO is delivered over the month after the cash is counted; a refund/chargeback policy if the specialist under-delivers should be stated.",
+          "Owner hours ~41 over 30 days; the contract has no hour ceiling."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:13:28.057Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_3f1ee89958d3_7d37e6",
+      "digest": "3f1ee89958d3ddfa054cf773",
+      "contractDigest": "52cf54d967dc00a732a46b01",
+      "plan": {
+        "goalId": "wst_a5cb9cfbf9e9455babaf",
+        "contractDigest": "52cf54d967dc00a732a46b01",
+        "parentRevisionId": "rev_5d17aaaf96ad_dc1450",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Prepaid month-one local SEO for sign and vehicle-wrap shops, delivered by a hired specialist",
+          "opportunityIds": [
+            "cop_464d7e0564b94c8a8817"
+          ],
+          "why": "Local SEO is an offer sign shops do buy: one sign-shop owner bought a $1,500/month, 12-month SEO plan and was quoted $700-900/month by others (one shop, so not a market price), and an agency sells SEO only to sign and wrap shops. At $750 prepaid, 9 shops ($6,750 gross, ~$6,550 after Stripe fees) clear $6,000 settled by day 21, and the specialist is paid only from settled receipts, so the owner advances $90. Nothing on the card is established: reachable count, close rate, price a new vendor gets, specialist availability at $300 and deliverability are all measured by the day-2-to-8 gates before more than $90 is spent."
+        },
+        "alternatives": [
+          {
+            "title": "White-label wrap design for shops at $250",
+            "why": "Wrapmate already sells the same service to shops at $199 flat ($49 promo), so $250 is above the visible market; 24+ designs in 30 days would be needed."
+          },
+          {
+            "title": "Website rebuild for sign shops at $1,500",
+            "why": "No sign-shop-specific price paid was found (only generic agency packages), and 4 sites plus 50% balances must settle inside 30 days."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s0",
+            "kind": "RESEARCH",
+            "label": "Build and count the reachable list: independent sign and vehicle-wrap shops in US metros from Google Maps listings with a public email or phone; gate needs >= 600 contacts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "reachable_shops"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s0b",
+            "kind": "TEST",
+            "label": "Post a $300 fixed-price Upwork job for one month of local SEO for a sign shop (GBP management, citations, 2 service pages, report); proof = >= 2 qualified bids at <= $300 from specialists with trade/local portfolios by day 4",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "sub_cost"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Buy 3 sending domains + 3 mailboxes; send ~600 personalised emails (about 60/day split across mailboxes, days 3-12) and phone-follow-up every shop that opens or has no email, so reach does not rest on one unwarmed mailbox",
+            "performer": "OWNER",
+            "costCents": 9000,
+            "day": 3,
+            "dependsOn": "s0",
+            "evidence": [
+              "reachable_shops",
+              "deliverability"
+            ],
+            "ownerHours": 16,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer month-one local SEO (Google Business Profile management, service pages, citations, review requests, report) at $750 prepaid, on short calls",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "s1",
+            "evidence": [
+              "src_seo_quotes"
+            ],
+            "ownerHours": 10,
+            "priceCents": 75000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "TEST",
+            "label": "Proof gate on day 8: of the first 200 shops contacted, >= 3 have paid $750 (1.5% = the 9-of-600 rate the target needs), bounce rate < 5%, and the s0b specialist is hired",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "close_rate",
+              "price_paid",
+              "sub_cost",
+              "deliverability"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "SELL",
+            "label": "Shop pays the $750 first month by Stripe invoice before work starts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "price_paid"
+            ],
+            "ownerHours": 2,
+            "priceCents": 75000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "ORDER",
+            "label": "Hire the freelance local-SEO specialist on Upwork for each paid shop at $300 fixed (escrowed, released on delivery of the month's work), once that shop's payment has settled",
+            "performer": "OWNER",
+            "costCents": 270000,
+            "day": 17,
+            "dependsOn": "s4",
+            "evidence": [
+              "sub_cost"
+            ],
+            "ownerHours": 4,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "DELIVER",
+            "label": "Specialist delivers month-one local SEO for each shop; owner reviews the monthly report",
+            "performer": "Freelance local-SEO specialist hired per client (Upwork)",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "s5",
+            "evidence": [
+              "src_seo_card_fulfil"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance local-SEO specialist hired per client (Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s7",
+            "kind": "COLLECT",
+            "label": "Stripe settles each payment (first payout typically 7 days after the first live payment, up to 14; then standard schedule); Stripe card fee 2.9% + $0.30",
+            "performer": "Stripe",
+            "costCents": 19845,
+            "day": 15,
+            "dependsOn": "s4",
+            "evidence": [
+              "src_stripe"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Stripe",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "FUNDING",
+            "amountCents": 9000,
+            "label": "Owner advances $90 for 3 domains and mailboxes",
+            "stepId": "s1"
+          },
+          {
+            "day": 3,
+            "kind": "SPEND",
+            "amountCents": 9000,
+            "label": "3 sending domains + one month of 3 mailboxes",
+            "stepId": "s1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 1 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 8,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 1",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 1",
+            "stepId": "s5"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 2 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 9,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 2",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 2",
+            "stepId": "s5"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 3 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 10,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 3",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 3",
+            "stepId": "s5"
+          },
+          {
+            "day": 11,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 4 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 11,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 4",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 4",
+            "stepId": "s5"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 5 prepays month one",
+            "settlesDay": 15,
+            "stepId": "s7"
+          },
+          {
+            "day": 12,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 5",
+            "stepId": "s7"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 5",
+            "stepId": "s5"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 6 prepays month one",
+            "settlesDay": 16,
+            "stepId": "s7"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 6",
+            "stepId": "s7"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 6",
+            "stepId": "s5"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 7 prepays month one",
+            "settlesDay": 17,
+            "stepId": "s7"
+          },
+          {
+            "day": 14,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 7",
+            "stepId": "s7"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 7",
+            "stepId": "s5"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 8 prepays month one",
+            "settlesDay": 19,
+            "stepId": "s7"
+          },
+          {
+            "day": 16,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 8",
+            "stepId": "s7"
+          },
+          {
+            "day": 19,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 8",
+            "stepId": "s5"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "Shop 9 prepays month one",
+            "settlesDay": 21,
+            "stepId": "s7"
+          },
+          {
+            "day": 18,
+            "kind": "FEE",
+            "amountCents": 2205,
+            "label": "Stripe fee on shop 9",
+            "stepId": "s7"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 30000,
+            "label": "Specialist fixed fee for shop 9",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price_paid",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD month-one prepay",
+            "sources": [
+              "src_seo_quotes"
+            ],
+            "needs": "Quotes of $700-900/month were received by a shop owner, not paid; measured by the first prepaid invoices"
+          },
+          {
+            "name": "sub_cost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per client month",
+            "sources": [],
+            "needs": "Measured by the s0b Upwork job post (>= 2 qualified bids at <= $300 by day 4)"
+          },
+          {
+            "name": "deals_needed",
+            "status": "ESTIMATE",
+            "value": 9,
+            "unit": "prepaid shops",
+            "sources": [],
+            "needs": "9 x $750 = $6,750 gross; ~$6,551 after Stripe fees"
+          },
+          {
+            "name": "settlement_days",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "days to first Stripe payout",
+            "sources": [
+              "src_stripe"
+            ],
+            "needs": "Typically 7, up to 14 days for some industries"
+          },
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid shops per shop contacted",
+            "sources": [],
+            "needs": "Target needs 9 of ~600 = 1.5%; gate: >= 3 of the first 200 by day 8"
+          },
+          {
+            "name": "reachable_shops",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "independent sign/wrap shops with public email or phone",
+            "sources": [],
+            "needs": "Counted in s0 from Google Maps listings; >= 600 needed"
+          },
+          {
+            "name": "deliverability",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "bounce/spam rate on new domains",
+            "sources": [],
+            "needs": "Measured on the first 200 sends; stop at >= 5% bounce; phone follow-up carries reach"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_seo_quotes",
+            "url": "https://signs101.com/threads/hiring-a-marketing-company.179038",
+            "dated": "2025-01-09",
+            "claim": "One sign-shop owner (Signs101, Jan 2025; currency and location not stated) was quoted ~$700-900/month by several SEO firms and bought a $1,500/month 12-month SEO plan from another, which he did not renew — one buyer, not a market price",
+            "population": "Sign shop owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_seo_agency",
+            "url": "https://topmarketingagencies.pages.dev/agencies/sign-shop-marketing-pros/",
+            "dated": "2026-11-27",
+            "claim": "An agency (Sign Shop Marketing Pros) serves only sign companies, wrap shops and commercial graphics firms with SEO, Google Ads and review management — a sold offer to this industry",
+            "population": "Sign and wrap shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_seo_card_fulfil",
+            "url": "https://brain.local/card/cop_464d7e0564b94c8a8817#fulfillmentOwner",
+            "dated": "2026-11-27",
+            "claim": "Fulfilled by a freelance local-SEO specialist hired per client",
+            "population": "this opening",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_stripe",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; cannot be waived",
+            "population": "New Stripe accounts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_464d7e0564b94c8a8817"
+          },
+          {
+            "id": "src_wrap_wrapmate",
+            "url": "https://dev-lsi.wrapmate.com/pro/design",
+            "dated": "2026-11-27",
+            "claim": "Wrapmate sells flat-rate wrap design to wrap shops and installers at $199 (Black Friday $49), 2-business-day first concepts",
+            "population": "Wrap shops and installers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_wrap_airmark",
+            "url": "https://www.airmark.com/blogs/airmark/wrap-pricing-strategies",
+            "dated": "2019-02-06",
+            "claim": "A wrap shop charges its shop rate times four hours as a base price for wrap design (to its end customers)",
+            "population": "Wrap shop end customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_wrap_forum",
+            "url": "https://www.signs101.com/threads/any-freelance-wrap-designers.123492/latest",
+            "dated": "2015-06-03",
+            "claim": "Sign-industry members discuss outsourcing wrap design to independent designers (old thread, no price)",
+            "population": "Sign and wrap shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_79ce60392b5642a0bff3"
+          },
+          {
+            "id": "src_web_clutch",
+            "url": "https://clutch.co/web-designers/packages",
+            "dated": "2026-11-27",
+            "claim": "Fixed-price web design packages listed by agencies (generic, not sign-shop-specific)",
+            "population": "Small businesses generally",
+            "matchesBuyer": false,
+            "opportunityId": "cop_48ad6817d0e5491ca87b"
+          },
+          {
+            "id": "src_web_elfsight",
+            "url": "https://elfsight.com/solutions/sign-shop-website-template",
+            "dated": "2026-11-27",
+            "claim": "A sign-shop website template product is sold, indicating sign shops build/refresh websites",
+            "population": "Sign shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_48ad6817d0e5491ca87b"
+          }
+        ],
+        "validation": {
+          "proof": "By day 4, >= 600 reachable shops are listed and >= 2 qualified local-SEO specialists have bid <= $300 for a month; by day 8, >= 3 of the first 200 shops contacted (1.5%, the rate that turns 600 contacts into 9 sales) have paid the $750 month-one invoice, with bounce rate under 5%",
+          "stop": [
+            "Fewer than 600 reachable shops found by day 2",
+            "No qualified specialist bids at <= $300 by day 4 (economics fail)",
+            "Fewer than 3 prepaid shops from the first 200 contacts by day 8",
+            "Shops will only buy below $700, so 9 cannot reach $6,000 settled",
+            "Bounce rate >= 5% and phone follow-up cannot carry the remaining contacts",
+            "Stripe holds the first payout beyond day 23",
+            "Owner cash advanced would exceed $1,000"
+          ],
+          "decides": [
+            "CONVERSION",
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "CURRENT_DEMAND"
+          ],
+          "continue": [
+            "Gate passed on day 8: contact the remaining ~400 shops by day 12, close 9 by day 18, hire the specialist for each shop as its payment settles"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Ledger verified: Stripe fee 2.9% x $750 + $0.30 = $22.05 x 9 = $198.45; specialist 9 x $300 = $2,700; total spend $30 + $2,700 + $198.45 = $2,928.45; gross $6,750; settled net of Stripe fees $6,551.55 >= $6,000; net $3,821.55. Matches the check trace.",
+            "resolution": "Accepted. Ledger unchanged in method; spend now $90 + $2,700 + $198.45."
+          },
+          {
+            "finding": "Settlement: Stripe first payout 7-14 days after first live payment; with 14 days the first payout is day 24, still inside 30, and the stop rule covers day 23; acceptable.",
+            "resolution": "Accepted; settlement model kept, first sale moved to day 8 so even a 14-day first payout (day 22) leaves room; stop rule at day 23 kept."
+          },
+          {
+            "finding": "Gate inconsistency: 2/300 = 0.67%; 9/300 = 3.0%. A gate passed at 0.67% predicts ~2 sales from the planned volume, so passing it does not establish the target.",
+            "resolution": "Accepted. Planned volume is now ~600 contacts (counted in s0) and the day-8 gate requires >= 3 of the first 200 (1.5%), the rate that yields 9 from 600."
+          },
+          {
+            "finding": "Month-one SEO is delivered over a month that runs past the day the cash is counted; refund/chargeback exposure if the specialist under-delivers is not modelled.",
+            "resolution": "Accepted as a risk: the specialist is paid through Upwork escrow released only on delivery, so an under-delivered month is refunded to the owner, who refunds the shop; no receipt is counted before its settlement."
+          },
+          {
+            "finding": "Owner hours 8+9+1+2+4 = 24 h; unconstrained in this contract, fine.",
+            "resolution": "Noted; owner hours are now ~41 h, unconstrained by the contract."
+          },
+          {
+            "finding": "The source note for src_seo_quotes says 'quotes, not a purchase', but the same post says the shop bought the $1,500/month 12-month plan; it is still one shop.",
+            "resolution": "Accepted: the source note now says the shop bought the $1,500/month 12-month plan and did not renew; it remains one buyer and the price stays UNKNOWN."
+          },
+          {
+            "finding": "Excluding the wrap-design opening because a competitor lists $199 is reasonable as a ranking, but that page is on a dev- subdomain marked Beta; do not treat it as an established market price either.",
+            "resolution": "Accepted: Wrapmate's $199 is used only to rank wrap design below SEO, not as an established price."
+          },
+          {
+            "finding": "The ledger arithmetic is right and the downside is small ($30 owner cash, max exposure $184 inside the $1,000 cap), but the plan is not yet a CONDITIONAL plan the owner should act on. (1) The proof gate does not imply the target: passing on 'at least 2 prepaid shops from ~300 emails by day 12' measures a ~0.7% purchase rate, at which the same 300 contacts yield ~2 shops, not 9; the continue rule (",
+            "resolution": "Gate re-set to the target's rate, volume counted and planned, deliverability gated with phone follow-up, strategy text no longer presents the forum quotes as a market price, and decides now lists every unestablished link."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "brain:CONVERSION"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "revenueRange",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "buyerVolume",
+              "brain:MARKET_VOLUME"
+            ]
+          },
+          {
+            "condition": 3,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 4,
+            "decision": "ACCEPTED",
+            "records": [
+              "directCosts",
+              "brain:ECONOMICS"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_79ce60392b5642a0bff3",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_48ad6817d0e5491ca87b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_79ce60392b5642a0bff3",
+            "why": "A competitor sells the same white-label design to shops at $199, below the $250 assumed; 24 sales needed"
+          },
+          {
+            "opportunityId": "cop_48ad6817d0e5491ca87b",
+            "why": "No sign-shop price paid found; sales cycle and 50% balance timing leave settlement inside 30 days unlikely"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_464d7e0564b94c8a8817",
+            "deals": 9,
+            "price": 750,
+            "directCost": 300,
+            "capital": 90
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "MARKET_VOLUME",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_3f1ee89958d3_7d37e6",
+        "digest": "3f1ee89958d3ddfa054cf773",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2f165a07d39047be8b60/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:12:21.872Z"
+      },
+      "review": {
+        "revisionId": "rev_3f1ee89958d3_7d37e6",
+        "revisionDigest": "3f1ee89958d3ddfa054cf773",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2f165a07d39047be8b60/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_4a35690e2f7a4b788924/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now the right stance and the plan is startable inside the limits. The revision fixes what made the prior one unsafe to act on: the purchase gate is calibrated to the target (>= 3 paid of the first 200 = 1.5%, exactly the rate that turns 600 contacts into 9 sales), the reachable list is counted before sending (>= 600 by day 2, else stop), specialist cost is tested at $0 by day 4 with an Upwork post (>= 2 qualified bids <= $300), deliverability is measured and spread over 3 mailboxes with phone follow-up, and validation.decides now names CONVERSION, OFFER_AND_PRICE, MARKET_VOLUME, FULFILMENT, ECONOMICS and CURRENT_DEMAND. Nothing unknown is treated as known: price_paid, close_rate, sub_cost, reachable_shops and deliverability are all UNKNOWN with the gate that measures each; the Signs101 source is now described accurately as one buyer, not a market price. Money at risk before proof is $90 owner cash (peak exposure ~$244), far inside $1,000; specialists are paid only from settled receipts.",
+        "findings": [
+          "Ledger recomputed: 9 x $750 = $6,750 gross; Stripe 9 x ($21.75 + $0.30) = $198.45; settled net of fees $6,551.55 >= $6,000; spend $90 + $2,700 + $198.45 = $2,988.45, matching the check trace.",
+          "Price floor in the stop rule holds: at $700, 9 x ($700 - $20.60) = $6,114.60 >= $6,000.",
+          "Settlement: shop 9 pays day 18, settles day 21; with a 14-day first-payout wait the first payout lands day 22 and the stop rule fires only beyond day 23, still inside 30.",
+          "Inconsistency to tidy: proofDay is 12 while the purchase gate (s3) is day 8; and s5 (hire specialist) is dated day 17 while the ledger pays shop 1's specialist on day 15.",
+          "Residual risk not modelled: month-one SEO is delivered over the month after the cash is counted; a refund/chargeback policy if the specialist under-delivers should be stated.",
+          "Owner hours ~41 over 30 days; the contract has no hour ceiling."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:13:28.057Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Generate $6,000 within 30 days in a single industry I name: commercial sign and vehicle-wrap shops. I can put in up to $1,000.",
+        "terms": "773b98a018fa38b3",
+        "openings": {
+          "cop_464d7e0564b94c8a8817": "718125395060034d",
+          "cop_48ad6817d0e5491ca87b": "512161cf143570a5",
+          "cop_79ce60392b5642a0bff3": "1af75d2b5813b456"
+        }
+      },
+      "at": "2026-11-27T11:18:20.658Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}
