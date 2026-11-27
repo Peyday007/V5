@@ -32,6 +32,7 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import { parseJson } from '../../repos/util.ts';
 import { blockerKindOf, formatBlockerKey } from '../../domain/types.ts';
+import { positionNeedKey } from './regulatedPositions.ts';
 import type {
   BlockerKey,
   CashCardFact,
@@ -94,6 +95,18 @@ const WORKABLE = new Set(['QUALIFIED', 'READY_TO_TEST']);
  * does not by itself make a piece WAITING.
  */
 const RESEARCH_KINDS = new Set(['FIELD', 'EVIDENCE']);
+
+/**
+ * Whether a need is this piece's own compliant-position search
+ * (`regulatedPositions.ts`). Its key may name a licensed-partner SUPPLIER for
+ * the self-model's grouping, but what it asks for is research into this one
+ * opening's product, location and contract, and it closes when Brain reads the
+ * opening's own record. It holds back the economics figure, never the piece, so
+ * it does not make a piece WAITING — exactly as before it carried a key.
+ */
+function isOwnPositionSearch(need: CashNeed): boolean {
+  return need.opportunityId !== null && need.requestKey === positionNeedKey(need.opportunityId);
+}
 
 function sortedUnique<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort();
@@ -189,7 +202,7 @@ export function standingFor(input: StandingInput): Standing {
 
   const blocking = sortedUnique(
     input.needs
-      .filter((need) => need.state === 'OPEN' && need.blockerKey !== null)
+      .filter((need) => need.state === 'OPEN' && need.blockerKey !== null && !isOwnPositionSearch(need))
       .map((need) => need.blockerKey as BlockerKey)
       .filter((key) => !RESEARCH_KINDS.has(blockerKindOf(key))),
   );
