@@ -92,7 +92,9 @@ import { cashEngineCard, NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts
 import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
-import { seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
+import { positionNeedKey, seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
+import { assessOpportunityRole, type RegulatedActivity } from './exclusions.ts';
+import type { BlockerKey } from '../../domain/types.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
 import {
   CAPACITY_DEFERRALS_PER_PASS,
@@ -1918,6 +1920,13 @@ export async function operate(
    */
   const positions = await step('seekCompliantPositions', () => seekCompliantPositions(projectId), { sought: [], settled: [] } as PositionPass);
   /*
+   * A position need is raised without a blocker key, and an untyped need is grouped with every other
+   * by its blocked action with the quoted title erased — so fifty unrelated openings read as one
+   * "missing resource" that nobody acquires. Each is given the key its own next step names: the
+   * licensed partner it needs, by what the opening performs, keyed to that one opening.
+   */
+  await step('typeRegulatedPositionNeeds', () => typeRegulatedPositionNeeds(projectId, positions), [] as string[]);
+  /*
    * And the bounded deep dive on each opening, which is where the commercial
    * questions actually get answered.
    *
@@ -2191,4 +2200,50 @@ function replySyncDue(projectId: string, now = Date.now()): boolean {
   if (now - (lastReplySync.get(projectId) ?? 0) < REPLY_SYNC_EVERY_MS) return false;
   lastReplySync.set(projectId, now);
   return true;
+}
+
+/**
+ * The blocker key of one held-back opening's position need. Pure; exported for tests.
+ *
+ * The need's own next step is "name an authorized licensed partner and agree a contract", which is a
+ * supplier the piece lacks (`SUPPLIER`, routed to the commercial workflow, never to a person). The key is
+ * the opening's own: its completion condition is that *this* opening's record shows a compliant position,
+ * which turns on its product, its location and a contract in place for it (`assessRole`), and a published
+ * practice is not an executed contract. Two openings performing the same activity can still differ in all
+ * three, so sharing an activity is not sharing a resource, and a key built from the activity alone would
+ * let the self-model group them as one acquisition that "serves all of them" — the same false shared
+ * resource this key exists to dissolve. The activities stay in the key so a reader can see what kind of
+ * partner it names; the opening id makes it one need's, and no group of two can form from it.
+ *
+ * All of that is for a *regulated* opening. One that performs no recognised regulated activity is held
+ * back for a different reason: it is UNKNOWN, because no finding yet says what it performs (or that it
+ * performs nothing regulated), and the funnel will not count its settled cash until one does. Nothing in
+ * its record says it needs a licensed partner, so it is never keyed as needing one. What it lacks is
+ * information about this one opening, so its key is `EVIDENCE:` named by the need's own request key (the
+ * precedent in services/quant/needs.ts): routed to research, and unique to the opening.
+ */
+export function regulatedPositionBlockerKey(opportunityId: string, activities: readonly RegulatedActivity[]): BlockerKey | null {
+  if (activities.length === 0) return parseBlockerKey(`EVIDENCE:${positionNeedKey(opportunityId)}`);
+  return parseBlockerKey(`SUPPLIER:licensed-partner/${[...new Set(activities)].sort().join('+')}@${opportunityId}`);
+}
+
+/**
+ * Give every open position need this pass sought, and that has no key yet, its typed blocker key.
+ * Idempotent: a key once written is never replaced, and a need that already has one is not read.
+ * Returns the ids of the needs keyed this pass.
+ */
+export async function typeRegulatedPositionNeeds(projectId: string, pass: PositionPass): Promise<string[]> {
+  const sought = pass.sought.filter((one) => one.needId);
+  if (sought.length === 0) return [];
+  const open = await listNeeds({ projectId, states: ['OPEN'] });
+  const unkeyed = new Map(open.filter((need) => !need.blockerKey).map((need) => [need.id, need]));
+  const keyed: string[] = [];
+  for (const one of sought) {
+    const need = unkeyed.get(one.needId!);
+    if (!need) continue;
+    const assessment = await assessOpportunityRole({ projectId, opportunityId: one.opportunityId });
+    const key = regulatedPositionBlockerKey(one.opportunityId, assessment.activities);
+    if (key && (await setNeedBlockerKeyIfUnset(need.id, key))) keyed.push(need.id);
+  }
+  return keyed;
 }
