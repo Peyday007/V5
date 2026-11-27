@@ -1,0 +1,167 @@
+{
+ "caseId": "al-10-insurance-agency-volume-estimate",
+ "keys": {
+  "cop_966f612cde334f2dbcf9": "agency"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Policy-renewal retention workbook for independent insurance \", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 19734× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Policy-renewal retention workbook for independent insurance agencies\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_966f612cde334f2dbcf9"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Policy-renewal retention workbook for independent insurance agencies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Policy-renewal retention workbook for independent insurance agencies\"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Collect payment for \"Policy-renewal retention workbook for independent insurance agencies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish how many buyers for \"Policy-renewal retention workbook for independent insurance agencies\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+  "openings": [
+   {
+    "opportunityId": "cop_966f612cde334f2dbcf9",
+    "title": "Policy-renewal retention workbook for independent insurance agencies",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 290,
+    "potentialReach": 3500,
+    "card": {
+     "payer": "Agency principals at independent property-and-casualty agencies",
+     "reachableChannel": "Published agency emails and LinkedIn messages to agency principals",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:58.701Z",
+     "offerScope": "Policy-renewal retention workbook for independent insurance agencies",
+     "priceCents": 29000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "independent insurance agencies",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Published agency emails and LinkedIn messages to agency principals"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 290 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 6 accepted of 50 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "14 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Brain estimates that roughly 400 agencies in the region would buy a renewal workbook this quarter.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Policy-renewal retention workbook for independent insurance agencies to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "6 agreements from 50 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Agency principals at independent property-and-casualty agencies",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Agency principals pay $290 for comparable renewal-retention workbooks (three vendor listings, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_b9ade53c82804f0ca1e0"
+  ],
+  "scope": {
+   "targetCents": 350000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:11:37.486Z"
+ }
+}

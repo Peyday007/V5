@@ -1,0 +1,284 @@
+{
+ "caseId": "al-01-septic-pumpout-lists",
+ "keys": {
+  "cop_427469f803c542eca790": "septicList",
+  "cop_d3d6d83b15be4f639c30": "septicRisers"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 11384× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"County pump-out-due lists for licensed septic haulers\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_d3d6d83b15be4f639c30",
+   "cop_427469f803c542eca790"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"County pump-out-due lists for licensed septic haulers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"County pump-out-due lists for licensed septic haulers\"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Collect payment for \"County pump-out-due lists for licensed septic haulers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_427469f803c542eca790",
+    "title": "County pump-out-due lists for licensed septic haulers",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 2500,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Owners and dispatch managers of licensed septic hauling companies",
+     "reachableChannel": "Business emails published in the state environmental agency's licensed septage hauler roster",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:09.452Z",
+     "offerScope": "A one-county list of septic systems whose permit records show a pump-out falling due in the next 90 days, compiled from public permit records.",
+     "priceCents": 24000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "septic pumping",
+     "mechanism": "INFORMATION_ASYMMETRY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Business emails published in the state environmental agency's licensed septage h"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 240 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 14 accepted of 120 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "12 deal(s) needed, 210 available in the window (210 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state environmental agency's roster lists 210 licensed septage haulers, each with a published business email; haulers pump systems year-round and buy lists per county.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A one-county list of septic systems whose permit records show a pump-out falling due in the next 90 days, compiled from public permit records. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "14 agreements from 120 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners and dispatch managers of licensed septic hauling companies",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Two regional septic-hauler lead services publish $240 for a one-county list of systems due for pump-out (published price pages, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_d3d6d83b15be4f639c30",
+    "title": "Septic tank riser installation for rural homeowners",
+    "missing": [
+     "FULFILMENT"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 2200,
+    "potentialReach": 2200,
+    "card": {
+     "payer": "Rural homeowners with buried septic lids",
+     "reachableChannel": "Replies to a county homeowners Facebook group post",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:09.452Z",
+     "offerScope": "Septic tank riser installation for rural homeowners",
+     "priceCents": 110000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "septic pumping",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 110000,
+      "currency": "USD",
+      "deliverable": "Septic tank riser installation for rural homeowners",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 110000,
+      "currency": "USD",
+      "deliverable": "Septic tank riser installation for rural homeowners",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Replies to a county homeowners Facebook group post"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 2200 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 2200 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 600, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Septic tank riser installation for rural homeowners to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Rural homeowners with buried septic lids",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Two homeowners signed $1,100 quotes for a riser and lid installation (signed quotes, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_9882898de71e4614b666"
+  ],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:10:55.189Z"
+ }
+}

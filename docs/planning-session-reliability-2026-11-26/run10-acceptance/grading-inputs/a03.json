@@ -1,0 +1,297 @@
+{
+ "caseId": "al-03-process-server-owner-hours",
+ "keys": {
+  "cop_2c630ec307bf4c3499e6": "serve"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: the agreed deals need 60 owner hours, more than the 12 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 261× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Paralegals and office managers at small litigat\" needs [figure withheld] and keeps [figure withheld], 74× the [figure withheld] behind the plan (bound ×20), on a price no buyer), so none of its figures is shown or adopted. The steps found are not presented as the plan: its collection (\"Collect payment\") is cash would be usable on day 35–60 (swept by the plan's simulation: an assumption, not established), after the 21 days left, so it brings no cash inside the goal's window.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_2c630ec307bf4c3499e6"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": "Discover, construct and research openings that can reach the 1500 USD still needed — the openings held reach at most 1900 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_2c630ec307bf4c3499e6",
+    "title": "Same-week service of process for small litigation firms",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 1500,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "Paralegals and office managers at small litigation firms",
+     "reachableChannel": "The county bar association's small-firm section referral list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:20.097Z",
+     "offerScope": "Same-week service of process for small litigation firms",
+     "priceCents": 9500,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "legal process serving",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 9500,
+      "currency": "USD",
+      "deliverable": "Same-week service of process for small litigation firms",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The county bar association's small-firm section referral list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 1900 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 1900 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by The owner, personally (a person says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 12, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Same-week service of process for small litigation firms to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$12",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Paralegals and office managers at small litigation firms",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The county's three largest process-serving firms list $95 for standard service completed within 7 days (published rate cards, 2026-10).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 150000,
+   "daysLeft": 21,
+   "hoursCeiling": 12,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 4
+  },
+  "at": "2026-11-27T12:12:09.088Z"
+ }
+}

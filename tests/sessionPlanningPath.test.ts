@@ -65,6 +65,9 @@ const route = (over: Record<string, unknown> = {}) => ({
   searches: { price: [], demand: [], volume: [] }, ...over,
 });
 
+/** The second route admitted below (its direct cost unknown), which every revision sets aside: each opening on the goal is accounted for. */
+let otherOpp = '';
+
 function revision(goalId: string, contractDigest: string, opp: string, over: Partial<PlanRevisionInput> = {}): PlanRevisionInput {
   return {
     goalId, contractDigest, parentRevisionId: null, stance: 'EXECUTABLE',
@@ -92,7 +95,9 @@ function revision(goalId: string, contractDigest: string, opp: string, over: Par
       { id: 's3', url: 'https://example.test/pilot', dated: '2026-11-15', claim: '4 paid from 200 emails', population: 'independent dental practices', matchesBuyer: true },
     ],
     validation: { proof: 'two paid orders', stop: ['no paid order by day 7'], continue: ['two paid orders'] },
-    noPlan: null, reach: null, answers: [], ...over,
+    noPlan: null, reach: null, answers: [],
+    ...(otherOpp ? { excluded: [{ opportunityId: otherOpp, why: 'its direct cost is unknown; not weighed in this plan' }] } : {}),
+    ...over,
   };
 }
 
@@ -118,6 +123,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(a.refused).toEqual([]);
     expect(a.filed.map((f) => f.directCostKnown)).toEqual([true, false]);
     opp = a.filed[0]!.id;
+    otherOpp = a.filed[1]!.id;
     // Idempotent on resume: the same route is never filed twice.
     const again = await svc.admitRoutes({ goalId, routes: [route()], actor: AUTHOR });
     expect(again.filed[0]).toMatchObject({ id: opp, existing: true });
@@ -231,6 +237,36 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(await svc.reviewRecordedBy(goalId, id, fleet.id)).toBe(true);
   }, 240_000);
 
+  it('the review is carried by a one-item bin naming its goal, never handed to the author, and complete only once the review is recorded (production, 2026-11-27: routines are handed bins only)', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const { createWorker } = await import('../server/repos/identity.ts');
+    const { claimWork, completeWork, getWorkItem } = await import('../server/repos/workQueue.ts');
+    const { getBin } = await import('../server/repos/bins.ts');
+    const { decideBinRouting } = await import('../server/services/bins/routing.ts');
+    const { evaluateContract } = await import('../server/services/bins/contracts.ts');
+    const fleet = await createWorker({ name: `bin-fleet-${Date.now()}`, displayName: 'Fleet', createdByType: 'HUMAN', createdById: world.userId } as never);
+    const first = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], answers: [{ finding: 'bin test', resolution: 'resubmitted' }] }, actor: AUTHOR, today: '2026-11-26' });
+    const disagreements = (first.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []).filter((l) => !l.ok).map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s3' }));
+    const clean = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], disagreements, answers: [{ finding: 'bin test', resolution: 'resubmitted' }] }, actor: AUTHOR, today: '2026-11-26' });
+    expect(clean.problems).toEqual([]);
+    const item = (await getWorkItem(clean.reviewItem!.id))!;
+    expect(item.binId).toBeTruthy();
+    const bin = (await getBin(item.binId!))!;
+    expect(bin).toMatchObject({ completionContract: 'PLAN_REVIEW_V1', goalId, state: 'READY', projectId: world.projectId });
+    expect(bin.manifest.independentOf).toEqual([AUTHOR.id]);
+    const principal = (id: string) => ({ type: 'WORKER', id, memberships: [{ active: true, projectId: world.projectId, scopes: ['project:read', 'queue:claim', 'queue:complete', 'research:write'] }] }) as never;
+    const routing = { workerId: 'w', families: ['RESEARCH', 'GENERAL'], repositories: [], capabilities: [], reason: 'test', explicit: false } as never;
+    expect(decideBinRouting({ bin, principal: principal(AUTHOR.id), routing })).toMatchObject({ ok: false, refusal: 'NOT_INDEPENDENT' });
+    expect(decideBinRouting({ bin, principal: principal(fleet.id), routing })).toMatchObject({ ok: true, family: 'RESEARCH' });
+    expect((await evaluateContract(bin)).disposition).toBe('RETRY');
+    // Drained inside the bin, as a routine does: the bin's one item, its review recorded, then the item and the bin complete.
+    const [held] = await claimWork({ workerId: fleet.id, limit: 1, scopes: [{ projectId: world.projectId, scopes: ['project:read', 'queue:claim', 'queue:complete'] }], bin: { id: bin.id, orchestrationId: null } });
+    expect(held?.workItemId).toBe(item.id);
+    await svc.recordReview({ goalId, revisionId: clean.revision.revisionId, reviewer: { kind: 'MODEL', id: `${fleet.id}/routine`, model: 'm' }, verdict: 'PASS', reasons: 'recomputed', findings: [] });
+    expect((await completeWork({ workItemId: held!.workItemId, workerId: fleet.id, leaseId: held!.leaseId, leaseGeneration: held!.leaseGeneration })).ok).toBe(true);
+    expect((await evaluateContract((await getBin(bin.id))!)).satisfied).toBe(true);
+  }, 240_000);
+
   it('a published plan goes stale when the owner’s objective or a weighed opening’s record changes after publication, and is current again when they are restored (acceptance run 2026-11-27)', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     const { getWorkstream, updateWorkstream } = await import('../server/repos/register.ts');
@@ -327,7 +363,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     const brainLinks = (undecided.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []);
     const disagreements = brainLinks.filter((l) => !l.ok && l.link !== 'CONVERSION').map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s2' }))
       .concat(brainLinks.some((l) => l.link === 'CONVERSION' && l.ok) ? [{ opportunityId: opp, link: 'CONVERSION', reason: 'the 200-email rate is untested for this list' }] : []);
-    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown], chain: [{ opportunityId: opp, missing: ['CONVERSION'] }], resolves: ['CONVERSION'], disagreements, validation: { ...base.validation!, decides: ['CONVERSION'] } }, actor: AUTHOR, today: '2026-11-26' });
+    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown], chain: [{ opportunityId: opp, missing: ['CONVERSION'] }], members: [{ opportunityId: opp, deals: 4, price: 750, directCost: 100, capital: 0, settlesDay: 7 }], resolves: ['CONVERSION'], disagreements, validation: { ...base.validation!, decides: ['CONVERSION'] } }, actor: AUTHOR, today: '2026-11-26' });
     expect(cond.problems).toEqual([]);
   }, 120_000);
 

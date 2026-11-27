@@ -202,8 +202,11 @@ const revisionTool: McpTool = {
     'Submit a plan revision (stance, strategy, alternatives, steps, cash sequence, proof day, quantities with UNKNOWN as null, ' +
     'sources with population and buyer match (and `opportunityId` for a public source about an opening the session discovered), ' +
     'validation (for a conditional plan, `decides`: the chain link(s) whose measurement decides whether it goes on) or no-plan ' +
-    'reasoning, reach with its calibration, answers to the last review). Brain checks it against the contract and its planner and ' +
-    'returns every concrete problem to revise.',
+    'reasoning, reach with its calibration, answers to the last review). Every opening on the goal goes in `chain` (weighed) or ' +
+    '`excluded` (with why, e.g. outside a changed objective). A no-plan or conditional result states `members` for every opening ' +
+    'it weighs: deals needed at its price, direct cost, capital per cycle and `settlesDay`, null exactly where that link is ' +
+    'unestablished; a test that measures CONVERSION by selling also measures FULFILMENT where it is unestablished. Brain checks ' +
+    'it against the contract and its planner and returns every concrete problem to revise.',
   inputSchema: { type: 'object', properties: { revision: { type: 'object' }, ...SESSION }, required: ['revision', 'session_id'], additionalProperties: false },
   annotations: { title: 'Planning: submit revision', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {

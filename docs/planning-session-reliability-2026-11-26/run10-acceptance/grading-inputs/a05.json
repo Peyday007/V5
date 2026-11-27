@@ -1,0 +1,161 @@
+{
+ "caseId": "al-05-christmas-tree-capital",
+ "keys": {
+  "cop_ac2c276adb63453bbdb7": "trees"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $5,000 still needed, even with every buyer agreeing at the top price. To make it supportable, capital: allow the goal to commit at least $6,300, what the lots that reach the target need at once; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_ac2c276adb63453bbdb7"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_ac2c276adb63453bbdb7",
+    "title": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 5000,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "Volunteer organisers of church and school Christmas tree fundraiser lots",
+     "reachableChannel": "Organiser contacts listed by the regional Christmas tree growers' association",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:30.969Z",
+     "offerScope": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+     "priceCents": 900000,
+     "currency": "USD",
+     "fulfillmentOwner": "Blue Ridge Fir Farms (quoted $6,300 a load, payment in full at pickup)",
+     "peakFundingCents": 630000,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "Christmas tree wholesale",
+     "mechanism": "SUPPLY_DEMAND_MISMATCH",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 900000,
+      "currency": "USD",
+      "deliverable": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 900000,
+      "currency": "USD",
+      "deliverable": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 900000,
+      "currency": "USD",
+      "deliverable": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Organiser contacts listed by the regional Christmas tree growers' association"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 27000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 27000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Blue Ridge Fir Farms (quoted $6,300 a load, payment in full at pickup) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 6300, tied up 6300"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "6 days to usable cash against 25 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$6300",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$6300",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Blue Ridge Fir Farms (quoted $6,300 a load, payment in full at pickup) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Volunteer organisers of church and school Christmas tree fundraiser lots",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three fundraiser-lot organisers signed to buy a 300-tree trailer load at $9,000, payable on delivery (signed purchase agreements, 2026-11-20).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "6 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 25,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:10:58.202Z"
+ }
+}

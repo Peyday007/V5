@@ -1,0 +1,331 @@
+{
+ "caseId": "al-02-pt-denial-tracker",
+ "keys": {
+  "cop_6d439d08f4284435b936": "ptDenials",
+  "cop_15d4aa6d298f4aba9055": "ptRtm"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Insurance-denial appeal tracker workbook for outpatient phys\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Insurance-denial appeal tracker workbook for outpatient phys\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost)) it would reach 100% (p50 $28,400): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Insurance-denial appeal tracker workbook for outpatient physical thera\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_6d439d08f4284435b936",
+   "cop_15d4aa6d298f4aba9055"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Insurance-denial appeal tracker workbook for outpatient physical therapy clinics\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Insurance-denial appeal tracker workbook for outpatient physical therapy clinics\"",
+    "owner": "PERSON",
+    "cost": 8
+   },
+   {
+    "label": "Collect payment for \"Insurance-denial appeal tracker workbook for outpatient physical therapy clinics\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_6d439d08f4284435b936",
+    "title": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Billing managers at independent outpatient PT clinics",
+     "reachableChannel": "Billing-manager emails in the state physical therapy association's member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:14.871Z",
+     "offerScope": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+     "priceCents": 65000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "outpatient physical therapy",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Billing-manager emails in the state physical therapy association's member direct"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 4550 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 4550 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 8, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Insurance-denial appeal tracker workbook for outpatient physical therapy clinics to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$8",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Billing managers at independent outpatient PT clinics",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Seven clinic billing managers signed order forms at $650 each for the denial-appeal tracker, invoiced net 7 (signed order forms, 2026-11-18 to 2026-11-24).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_15d4aa6d298f4aba9055",
+    "title": "Remote therapeutic monitoring set-up for PT clinics",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Clinic owners at outpatient PT practices",
+     "reachableChannel": "Billing-manager emails in the state physical therapy association's member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:09:14.871Z",
+     "offerScope": "Remote therapeutic monitoring set-up for PT clinics",
+     "priceCents": 5000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "outpatient physical therapy",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Billing-manager emails in the state physical therapy association's member direct | reach: Billing-manager emails in the state physical therapy association's member direct"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 4550 USD | price 50 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 4550 USD | measured on this offer's own sales: 12 accepted of 100 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "no new deals needed | 81 deal(s) needed at the measured rate means asking 1017 prospects, but the market holds only 480 (480 reachable buyers, each holding one subscription at the price per period (its own service frequency is inside that price)): at that rate it yields about 38.2"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 8, tied up 0 | cost 5, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 30 left | 7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state physical therapy association's directory lists 480 member clinics; each treats Medicare patients weekly.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Remote therapeutic monitoring set-up for PT clinics to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "12 agreements from 100 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$5",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Clinic owners at outpatient PT practices",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Medicare reimburses clinics about $50 per patient per month for remote therapeutic monitoring device supply (CPT 98977, 2026 physician fee schedule).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_c7b29e5639a04425b065"
+  ],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:11:46.898Z"
+ }
+}

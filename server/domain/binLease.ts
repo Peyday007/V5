@@ -78,6 +78,7 @@ export const CONTRACT_MIN_LEASE_MS: Record<CompletionContract, number | null> = 
   RESEARCH_PACKET_V1: null,
   DETERMINISTIC_UNITS_V1: null,
   SURFACE_PROBE_V1: null,
+  PLAN_REVIEW_V1: null,
   RUSSELL_TURN_V1: null,
   RUSSELL_LENS_V1: null,
   // Checks the repository out and reads it to decompose an objective. 695s measured.

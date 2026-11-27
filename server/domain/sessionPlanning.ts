@@ -243,8 +243,14 @@ export interface PlanRevisionInput {
   chain?: { opportunityId: string; missing: string[] }[];
   /** Openings set aside, each with why. */
   excluded?: { opportunityId: string; why: string }[];
-  /** The deals the strategy counts per member, at the price and direct cost it was judged on (major units). */
-  members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null }[];
+  /**
+   * The arithmetic per opening (major units): for an executable plan, the deals the strategy counts per member; for a
+   * no-plan or conditional result, every opening it weighs — the deals needed to carry the target at its price, the
+   * direct cost, the capital one cycle ties up, and the window day its cash settles. A figure is null exactly where the
+   * link it rests on is unestablished (price: OFFER_AND_PRICE, capital: ECONOMICS, settlesDay: SETTLES_IN_TIME): an
+   * unknown stays unknown, and a known figure is never left out.
+   */
+  members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null; settlesDay?: number | null }[];
   /** The chain links the plan's validation test or research measures (what would resolve the unknowns). */
   resolves?: string[];
   /** Where the session's chain judgement differs from Brain's planner (BrainFacts.links): the link and the evidence-based reason. */
@@ -355,6 +361,8 @@ export type CheckCode =
   | 'EXCLUSION_DISPUTE_UNSTATED'
   | 'CONDITIONAL_DECISIVE_UNNAMED'
   | 'DISCOVERY_UNSOURCED'
+  | 'OPENING_UNACCOUNTED'
+  | 'ARITHMETIC_UNSTATED'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -572,6 +580,54 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
       if (!r.strategy.opportunityIds.includes(c.opportunityId)) continue;
       for (const l of c.missing) if (!resolves.has(l)) add('RESOLUTION_UNNAMED', `the plan's member ${c.opportunityId} is missing ${l}, but its validation (\`resolves\`) does not measure it`, c.opportunityId);
     }
+  }
+
+  /*
+   * A limitation's test may not sell what nobody is shown able to deliver: measuring CONVERSION takes real buyers'
+   * orders or deposits, so on an opening whose FULFILMENT is unestablished the test measures FULFILMENT too — who
+   * delivers, in what hours or capacity — or it creates obligations it may not be able to keep (acceptance run 10,
+   * am-03: a test winning freelance awards for owner-built sites while the owner's ability and hours were unknown).
+   */
+  if (r.stance !== 'EXECUTABLE' && resolves.has('CONVERSION') && !resolves.has('FULFILMENT')) {
+    for (const c of r.chain ?? []) {
+      if (c.missing.includes('CONVERSION') && c.missing.includes('FULFILMENT') && !(r.excluded ?? []).some((x) => x.opportunityId === c.opportunityId)) {
+        add('FULFILMENT_UNESTABLISHED', `the test measures CONVERSION by selling ${c.opportunityId}, whose FULFILMENT is not established: it would take buyers' orders before anyone is shown able to deliver them. Measure FULFILMENT in the same test (\`resolves\`: who delivers, in what hours or capacity), or measure conversion without taking paid work`, c.opportunityId);
+      }
+    }
+  }
+
+  /*
+   * A no-plan or conditional result shows its arithmetic per opening, so the decisive gap is read from figures rather
+   * than asserted: deals needed at the opening's price, the capital one cycle ties up, and when its cash settles
+   * (run 10, am-03: four openings, deal counts for one, no settlement timing and no capital check against the cap).
+   * A figure is null exactly where its link is unestablished, so an unknown is kept and a known figure is never dropped.
+   */
+  if (r.stance !== 'EXECUTABLE') {
+    const set = new Set((r.excluded ?? []).map((x) => x.opportunityId));
+    for (const c of r.chain ?? []) {
+      if (set.has(c.opportunityId)) continue;
+      const m = (r.members ?? []).find((x) => x.opportunityId === c.opportunityId);
+      const missing = (l: string) => c.missing.includes(l);
+      if (!m) { add('ARITHMETIC_UNSTATED', `state ${c.opportunityId}'s arithmetic in \`members\`: deals needed to carry the target at its price, direct cost, capital one cycle ties up, and the day its cash settles (null where the link is unestablished)`, c.opportunityId); continue; }
+      const gaps: string[] = [];
+      if (m.price === null && !missing('OFFER_AND_PRICE')) gaps.push('price is null but OFFER_AND_PRICE is established');
+      if (m.price !== null && m.deals === null) gaps.push(`deals is null at a price of ${m.price}: the deals needed are target / price`);
+      if (m.price !== null && m.deals !== null && m.deals * m.price * 100 < t.targetCents - 0.5) gaps.push(`${m.deals} deals at ${m.price} do not carry the ${t.targetCents / 100} target`);
+      if (m.capital === null && !missing('ECONOMICS')) gaps.push('capital is null but ECONOMICS is established');
+      if (m.settlesDay === undefined) gaps.push('settlesDay is not stated (null if SETTLES_IN_TIME is unestablished)');
+      else if (m.settlesDay === null && !missing('SETTLES_IN_TIME')) gaps.push('settlesDay is null but SETTLES_IN_TIME is established');
+      if (gaps.length) add('ARITHMETIC_UNSTATED', `${c.opportunityId}'s arithmetic: ${gaps.join('; ')}`, c.opportunityId);
+    }
+  }
+
+  /*
+   * Every opening the goal holds is accounted for in structured fields — weighed in `chain`, built on, or set aside in
+   * `excluded` with its reason — so an opening an objective change put out of scope is excluded, not silently dropped
+   * or named only in prose (run 10, al-08: the bowling opening, out of scope after the change, appeared nowhere).
+   */
+  if (brain) {
+    const accounted = new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId), ...(r.excluded ?? []).map((x) => x.opportunityId)]);
+    for (const id of brain.admittedOpportunityIds) if (!accounted.has(id)) add('OPENING_UNACCOUNTED', `opening ${id} is on this goal but the revision neither weighs it (\`chain\`) nor sets it aside (\`excluded\` with why, e.g. outside the objective's scope)`, id);
   }
 
   // Stance-specific completeness.

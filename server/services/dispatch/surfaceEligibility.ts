@@ -206,6 +206,7 @@ export function repositoryProbeWork(input: {
   return {
     id: 'bin_readiness_probe',
     projectId,
+    goalId: null,
     layerId: null,
     kind: 'FACTORY_UNITS',
     title: 'Readiness probe',

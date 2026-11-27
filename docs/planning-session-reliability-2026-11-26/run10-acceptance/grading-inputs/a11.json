@@ -1,0 +1,182 @@
+{
+ "caseId": "al-11-mushroom-net45-deadline",
+ "keys": {
+  "cop_c3d7ef4296514a7b9317": "mushrooms"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $2,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_c3d7ef4296514a7b9317"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_c3d7ef4296514a7b9317",
+    "title": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Executive chefs at independent restaurants",
+     "reachableChannel": "Direct calls to chefs introduced by the farm",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T12:10:04.121Z",
+     "offerScope": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+     "priceCents": 60000,
+     "currency": "USD",
+     "fulfillmentOwner": "Hollow Creek Mushroom Farm (quoted $380 a month per chef, billed net 60)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "specialty mushroom farming",
+     "mechanism": "SUPPLY_DEMAND_MISMATCH",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Direct calls to chefs introduced by the farm"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Hollow Creek Mushroom Farm (quoted $380 a month per chef, billed net 60) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 380, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "45 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brokered weekly specialty-mushroom supply for restaurant chefs to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$380",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Hollow Creek Mushroom Farm (quoted $380 a month per chef, billed net 60) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Executive chefs at independent restaurants",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Five executive chefs signed $600 orders for a month of weekly lion's mane and oyster mushroom deliveries, payable net 45 after the month's last delivery (signed orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "45 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_dad8d055df13448083a4",
+   "cnd_ab55e7df4eb94abd8e9a"
+  ],
+  "scope": {
+   "targetCents": 200000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T12:11:57.299Z"
+ }
+}
