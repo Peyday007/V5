@@ -1,0 +1,1022 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_8dc874a0f88f47a5beea",
+      "words": "Collect $7,500 of settled cash within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 750000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$7,500 of settled cash collected within 45 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "a1c07e8db7678c6e1b28acac"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_8dc874a0f88f47a5beea",
+        "contractDigest": "a1c07e8db7678c6e1b28acac",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: facade-grant application packets have no established purchase price",
+          "opportunityIds": [],
+          "why": "Buyers (85 eligible buildings, county assessor mailing addresses), current demand (posted 2026-11-24), conversion (4 of 40 measured on this offer), fulfilment (a spreadsheet Brain produces, $20 direct cost) and settlement (10 days) are evidenced, but the card's only price figure, $7,500, is the city grant award a building owner may receive, not a fee any owner is shown to pay for an application packet. A grant is not a purchase price, so the offer's price, and therefore how many deals the $7,500 target needs, is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell packets at $7,500 each, one deal reaching the target",
+            "why": "Rejected: $7,500 is the maximum grant award (city program page), not what owners pay a preparer; no owner is shown paying it, and charging the whole award for the application is not an evidenced price."
+          },
+          {
+            "title": "Conditional outreach at an assumed fee",
+            "why": "Rejected: the fee buyers pay is a published-market question research can answer first; a guessed fee also leaves the deal count, and whether 85 eligible owners at a 10% close rate can carry $7,500, undecided."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find published fees that grant writers or consultants charge building owners to prepare a facade-improvement or historic-preservation grant application, with source, date and population",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price buyers pay per application packet",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "a published fee (figure or range, sourced and dated) that historic-district building owners pay for grant application preparation"
+          },
+          {
+            "name": "grant award ceiling (not a price)",
+            "status": "EVIDENCED",
+            "value": 750000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "eligible buildings",
+            "status": "EVIDENCED",
+            "value": 85,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per packet",
+            "status": "EVIDENCED",
+            "value": 2000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#price",
+            "dated": "2026-10",
+            "claim": "The city's Facade Improvement Grant awards up to $7,500 to downtown historic-district building owners for exterior restoration (a grant award, not a purchase price)",
+            "population": "grant recipients",
+            "matchesBuyer": false,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#buyerVolume",
+            "dated": null,
+            "claim": "85 buildings in the downtown historic district are eligible; grant round open until 2027-01-15",
+            "population": "historic-district building owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#conversionRates",
+            "dated": null,
+            "claim": "4 agreements from 40 contacts",
+            "population": "this offer's own contacts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#directCosts",
+            "dated": null,
+            "claim": "$20 direct cost per packet",
+            "population": "this offer",
+            "matchesBuyer": false,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: no price that a building owner pays for a facade-grant application packet is established; the only figure on the card ($7,500) is the grant award ceiling, which is money the city pays the owner, not a purchase price.",
+          "resolution": "Research published fees for preparing facade-improvement / historic-preservation grant applications (grant-writer and consultant fee schedules, sourced and dated, for building owners). With an established fee F, the 85 eligible owners at the measured 10% close rate give about 8 deals; re-plan if 8 x F (or a repeatable fee structure) reaches $7,500 settled inside 45 days, otherwise report the target as out of reach on established figures.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cebc4bb345bc412784a3",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_fee335c2be48_455fd7",
+        "digest": "fee335c2be4823bb8f66eb26",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f29e54283aa44c24ab2b/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:49.649Z"
+      },
+      {
+        "goalId": "wst_8dc874a0f88f47a5beea",
+        "contractDigest": "a1c07e8db7678c6e1b28acac",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: facade-grant application packets have no established purchase price",
+          "opportunityIds": [],
+          "why": "Buyers (85 eligible buildings, county assessor mailing addresses), current demand (posted 2026-11-24), conversion (4 of 40 measured on this offer), fulfilment (a spreadsheet Brain produces, $20 direct cost) and settlement (10 days) are evidenced, but the card's only price figure, $7,500, is the city grant award a building owner may receive, not a fee any owner is shown to pay for an application packet. A grant is not a purchase price, so the offer's price, and therefore how many deals the $7,500 target needs, is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell packets at $7,500 each, one deal reaching the target",
+            "why": "Rejected: $7,500 is the maximum grant award (city program page), not what owners pay a preparer; no owner is shown paying it, and charging the whole award for the application is not an evidenced price."
+          },
+          {
+            "title": "Conditional outreach at an assumed fee",
+            "why": "Rejected: the fee buyers pay is a published-market question research can answer first; a guessed fee also leaves the deal count, and whether 85 eligible owners at a 10% close rate can carry $7,500, undecided."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find published fees that grant writers or consultants charge building owners to prepare a facade-improvement or historic-preservation grant application, with source, date and population",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price buyers pay per application packet",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "a published fee (figure or range, sourced and dated) that historic-district building owners pay for grant application preparation"
+          },
+          {
+            "name": "grant award ceiling (not a price)",
+            "status": "EVIDENCED",
+            "value": 750000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "eligible buildings",
+            "status": "EVIDENCED",
+            "value": 85,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per packet",
+            "status": "EVIDENCED",
+            "value": 2000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#price",
+            "dated": "2026-10",
+            "claim": "The city's Facade Improvement Grant awards up to $7,500 to downtown historic-district building owners for exterior restoration (a grant award, not a purchase price)",
+            "population": "grant recipients",
+            "matchesBuyer": false,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#buyerVolume",
+            "dated": null,
+            "claim": "85 buildings in the downtown historic district are eligible; grant round open until 2027-01-15",
+            "population": "historic-district building owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#conversionRates",
+            "dated": null,
+            "claim": "4 agreements from 40 contacts",
+            "population": "this offer's own contacts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#directCosts",
+            "dated": null,
+            "claim": "$20 direct cost per packet",
+            "population": "this offer",
+            "matchesBuyer": false,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: no price that a building owner pays for a facade-grant application packet is established; the only figure on the card ($7,500) is the grant award ceiling, which is money the city pays the owner, not a purchase price.",
+          "resolution": "Research published fees for preparing facade-improvement / historic-preservation grant applications (grant-writer and consultant fee schedules, sourced and dated, for building owners). With an established fee F, the 85 eligible owners at the measured 10% close rate give about 8 deals; re-plan if 8 x F (or a repeatable fee structure) reaches $7,500 settled inside 45 days, otherwise report the target as out of reach on established figures.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cebc4bb345bc412784a3",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_28471061d160_e08fbd",
+        "digest": "28471061d16011e142a1cb6b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f29e54283aa44c24ab2b/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:54.704Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_8dc874a0f88f47a5beea",
+      "contractDigest": "a1c07e8db7678c6e1b28acac",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan yet: facade-grant application packets have no established purchase price",
+        "opportunityIds": [],
+        "why": "Buyers (85 eligible buildings, county assessor mailing addresses), current demand (posted 2026-11-24), conversion (4 of 40 measured on this offer), fulfilment (a spreadsheet Brain produces, $20 direct cost) and settlement (10 days) are evidenced, but the card's only price figure, $7,500, is the city grant award a building owner may receive, not a fee any owner is shown to pay for an application packet. A grant is not a purchase price, so the offer's price, and therefore how many deals the $7,500 target needs, is not established."
+      },
+      "alternatives": [
+        {
+          "title": "Sell packets at $7,500 each, one deal reaching the target",
+          "why": "Rejected: $7,500 is the maximum grant award (city program page), not what owners pay a preparer; no owner is shown paying it, and charging the whole award for the application is not an evidenced price."
+        },
+        {
+          "title": "Conditional outreach at an assumed fee",
+          "why": "Rejected: the fee buyers pay is a published-market question research can answer first; a guessed fee also leaves the deal count, and whether 85 eligible owners at a 10% close rate can carry $7,500, undecided."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Find published fees that grant writers or consultants charge building owners to prepare a facade-improvement or historic-preservation grant application, with source, date and population",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price",
+            "s_volume"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price buyers pay per application packet",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [],
+          "needs": "a published fee (figure or range, sourced and dated) that historic-district building owners pay for grant application preparation"
+        },
+        {
+          "name": "grant award ceiling (not a price)",
+          "status": "EVIDENCED",
+          "value": 750000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "eligible buildings",
+          "status": "EVIDENCED",
+          "value": 85,
+          "unit": "buyers",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "close rate",
+          "status": "EVIDENCED",
+          "value": 0.1,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per packet",
+          "status": "EVIDENCED",
+          "value": 2000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#price",
+          "dated": "2026-10",
+          "claim": "The city's Facade Improvement Grant awards up to $7,500 to downtown historic-district building owners for exterior restoration (a grant award, not a purchase price)",
+          "population": "grant recipients",
+          "matchesBuyer": false,
+          "opportunityId": "cop_cebc4bb345bc412784a3"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#buyerVolume",
+          "dated": null,
+          "claim": "85 buildings in the downtown historic district are eligible; grant round open until 2027-01-15",
+          "population": "historic-district building owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_cebc4bb345bc412784a3"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#conversionRates",
+          "dated": null,
+          "claim": "4 agreements from 40 contacts",
+          "population": "this offer's own contacts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_cebc4bb345bc412784a3"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#directCosts",
+          "dated": null,
+          "claim": "$20 direct cost per packet",
+          "population": "this offer",
+          "matchesBuyer": false,
+          "opportunityId": "cop_cebc4bb345bc412784a3"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "OFFER_AND_PRICE: no price that a building owner pays for a facade-grant application packet is established; the only figure on the card ($7,500) is the grant award ceiling, which is money the city pays the owner, not a purchase price.",
+        "resolution": "Research published fees for preparing facade-improvement / historic-preservation grant applications (grant-writer and consultant fee schedules, sourced and dated, for building owners). With an established fee F, the 85 eligible owners at the measured 10% close rate give about 8 deals; re-plan if 8 x F (or a repeatable fee structure) reaches $7,500 settled inside 45 days, otherwise report the target as out of reach on established figures.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_cebc4bb345bc412784a3",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_28471061d160_e08fbd",
+      "digest": "28471061d16011e142a1cb6b",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_f29e54283aa44c24ab2b/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:26:54.704Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_28471061d160_e08fbd",
+      "digest": "28471061d16011e142a1cb6b",
+      "contractDigest": "a1c07e8db7678c6e1b28acac",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 7500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 12295× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Historic-district building owners — Facade-impr\" needs [figure withheld] and keeps [figure withheld], 7465× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Historic-district building owners\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_cebc4bb345bc412784a3"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Facade-improvement grant application packets for historic-district building owne\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Facade-improvement grant application packets for historic-district building owne\"",
+            "owner": "PERSON",
+            "cost": 20
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the supply",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Historic-district building owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Historic-district building owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Collect payment for \"Facade-improvement grant application packets for historic-district building owne\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 7500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_cebc4bb345bc412784a3",
+            "title": "Facade-improvement grant application packets for historic-district building owners",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 7500,
+            "card": {
+              "payer": "Historic-district building owners",
+              "reachableChannel": "Owner mailing addresses from the county assessor's parcel records for the district",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:36.533Z",
+              "offerScope": "Facade-improvement grant application packets for historic-district building owners",
+              "priceCents": 750000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "historic building restoration",
+              "mechanism": "INFORMATION_ASYMMETRY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Owner mailing addresses from the county assessor's parcel records for the distri"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 4 accepted of 40 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 20, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "85 buildings in the downtown historic district are eligible; the grant round is open until 2027-01-15.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Facade-improvement grant application packets for historic-district building owners to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "4 agreements from 40 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$20",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Historic-district building owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The city's Facade Improvement Grant program awards up to $7,500 to downtown historic-district building owners for exterior restoration work (city program page, 2026-10).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_a40ff16580a24ce888ba"
+        ],
+        "scope": {
+          "targetCents": 750000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:24:30.110Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_28471061d160_e08fbd",
+        "revisionDigest": "28471061d16011e142a1cb6b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f29e54283aa44c24ab2b/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_bc8b3d425afc4e19ad80/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance. The only price fact on the card is the city's facade grant award ceiling ($7,500) - money the city pays the owner, not a fee any owner is shown paying for an application packet - so OFFER_AND_PRICE is genuinely unestablished and is correctly named as the decisive link. Every other link (reachable buyer via assessor mailing addresses, signal dated 2026-11-24, 4/40 measured conversion, Brain-produced spreadsheet at $20, 10-day settlement in a 45-day window, $0 exposure) is evidenced on the card. Without a price the deal count is undetermined, so no executable or conditional plan can be sized.",
+        "findings": [
+          "$7,500 is a grant award (city -> owner), not a purchase price; treating it as price would make one deal = target, which the plan correctly rejects.",
+          "Arithmetic in resolution checks: 85 eligible x 10% measured close = ~8.5 deals, so a fee of at least ~$940/packet would be needed to reach $7,500; the re-plan rule is stated correctly.",
+          "No money is committed and the single research step costs $0, inside the $0 exposure cap.",
+          "Minor: conversion 4/40 was measured without an established price, so it should be re-checked once a fee is found - not decisive now."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:29:20.605Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_28471061d160_e08fbd",
+      "digest": "28471061d16011e142a1cb6b",
+      "contractDigest": "a1c07e8db7678c6e1b28acac",
+      "plan": {
+        "goalId": "wst_8dc874a0f88f47a5beea",
+        "contractDigest": "a1c07e8db7678c6e1b28acac",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: facade-grant application packets have no established purchase price",
+          "opportunityIds": [],
+          "why": "Buyers (85 eligible buildings, county assessor mailing addresses), current demand (posted 2026-11-24), conversion (4 of 40 measured on this offer), fulfilment (a spreadsheet Brain produces, $20 direct cost) and settlement (10 days) are evidenced, but the card's only price figure, $7,500, is the city grant award a building owner may receive, not a fee any owner is shown to pay for an application packet. A grant is not a purchase price, so the offer's price, and therefore how many deals the $7,500 target needs, is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell packets at $7,500 each, one deal reaching the target",
+            "why": "Rejected: $7,500 is the maximum grant award (city program page), not what owners pay a preparer; no owner is shown paying it, and charging the whole award for the application is not an evidenced price."
+          },
+          {
+            "title": "Conditional outreach at an assumed fee",
+            "why": "Rejected: the fee buyers pay is a published-market question research can answer first; a guessed fee also leaves the deal count, and whether 85 eligible owners at a 10% close rate can carry $7,500, undecided."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find published fees that grant writers or consultants charge building owners to prepare a facade-improvement or historic-preservation grant application, with source, date and population",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price buyers pay per application packet",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "a published fee (figure or range, sourced and dated) that historic-district building owners pay for grant application preparation"
+          },
+          {
+            "name": "grant award ceiling (not a price)",
+            "status": "EVIDENCED",
+            "value": 750000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "eligible buildings",
+            "status": "EVIDENCED",
+            "value": 85,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per packet",
+            "status": "EVIDENCED",
+            "value": 2000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#price",
+            "dated": "2026-10",
+            "claim": "The city's Facade Improvement Grant awards up to $7,500 to downtown historic-district building owners for exterior restoration (a grant award, not a purchase price)",
+            "population": "grant recipients",
+            "matchesBuyer": false,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#buyerVolume",
+            "dated": null,
+            "claim": "85 buildings in the downtown historic district are eligible; grant round open until 2027-01-15",
+            "population": "historic-district building owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#conversionRates",
+            "dated": null,
+            "claim": "4 agreements from 40 contacts",
+            "population": "this offer's own contacts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_cebc4bb345bc412784a3#directCosts",
+            "dated": null,
+            "claim": "$20 direct cost per packet",
+            "population": "this offer",
+            "matchesBuyer": false,
+            "opportunityId": "cop_cebc4bb345bc412784a3"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: no price that a building owner pays for a facade-grant application packet is established; the only figure on the card ($7,500) is the grant award ceiling, which is money the city pays the owner, not a purchase price.",
+          "resolution": "Research published fees for preparing facade-improvement / historic-preservation grant applications (grant-writer and consultant fee schedules, sourced and dated, for building owners). With an established fee F, the 85 eligible owners at the measured 10% close rate give about 8 deals; re-plan if 8 x F (or a repeatable fee structure) reaches $7,500 settled inside 45 days, otherwise report the target as out of reach on established figures.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cebc4bb345bc412784a3",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_28471061d160_e08fbd",
+        "digest": "28471061d16011e142a1cb6b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f29e54283aa44c24ab2b/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:54.704Z"
+      },
+      "review": {
+        "revisionId": "rev_28471061d160_e08fbd",
+        "revisionDigest": "28471061d16011e142a1cb6b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f29e54283aa44c24ab2b/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_bc8b3d425afc4e19ad80/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance. The only price fact on the card is the city's facade grant award ceiling ($7,500) - money the city pays the owner, not a fee any owner is shown paying for an application packet - so OFFER_AND_PRICE is genuinely unestablished and is correctly named as the decisive link. Every other link (reachable buyer via assessor mailing addresses, signal dated 2026-11-24, 4/40 measured conversion, Brain-produced spreadsheet at $20, 10-day settlement in a 45-day window, $0 exposure) is evidenced on the card. Without a price the deal count is undetermined, so no executable or conditional plan can be sized.",
+        "findings": [
+          "$7,500 is a grant award (city -> owner), not a purchase price; treating it as price would make one deal = target, which the plan correctly rejects.",
+          "Arithmetic in resolution checks: 85 eligible x 10% measured close = ~8.5 deals, so a fee of at least ~$940/packet would be needed to reach $7,500; the re-plan rule is stated correctly.",
+          "No money is committed and the single research step costs $0, inside the $0 exposure cap.",
+          "Minor: conversion 4/40 was measured without an established price, so it should be re-checked once a fee is found - not decisive now."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:29:20.605Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $7,500 of settled cash within 45 days using no up-front capital.",
+        "terms": "12a0c70d307222b9",
+        "openings": {
+          "cop_cebc4bb345bc412784a3": "824bf9aabe78107e"
+        }
+      },
+      "at": "2026-11-27T08:30:11.525Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

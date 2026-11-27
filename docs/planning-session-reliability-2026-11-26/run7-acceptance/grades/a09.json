@@ -1,0 +1,37 @@
+{
+  "id": "ag-09-signing-agents-volume-estimated",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 3,
+  "reviewVerdicts": [
+    "REVISE",
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_c8da27f178b9_359e3c",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_0377c88a5f8547e2b98f/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names MARKET_VOLUME",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

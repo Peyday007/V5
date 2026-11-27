@@ -1,0 +1,2390 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_628f8f57ed9b4644895d",
+      "words": "Net me $3,000 of profit after all direct costs within 21 days. I can risk at most $250.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "CONTRIBUTION",
+        "windowDays": 21,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 25000,
+        "proofCondition": "",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "47524d702728aa55188dbc5f"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_628f8f57ed9b4644895d",
+        "contractDigest": "47524d702728aa55188dbc5f",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: run a $62 seven-day test of the $1,500 website offer before committing",
+          "opportunityIds": [],
+          "why": "Only the website build has an evidenced price ($614-$1,817 typical on Thumbtack; $1,500 is a named pros' starting rate). Nothing shows that any buyer in this population will pay within 21 days: no buying signal, no measured close rate, and no designer quote. To net $3,000 it needs about 4 sales closed, built in 7 days and settled by day 21 while Stripe's first payout alone can take 7-14 days, so the first deposit must land by about day 7. That makes demand and conversion in week one the decisive unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Resume rewrite sold directly by Stripe link ($170)",
+            "why": "Needs about 19 sales in 21 days through the owner's own network; the price evidence was rejected by the verifier as not current and not matched to the payer, and no buyer count exists"
+          },
+          {
+            "title": "Fixed-price chatbot builds on Upwork",
+            "why": "Budgets around $100-$300 could not be read (HTTP 403); 15+ wins in 21 days with an unknown win rate"
+          },
+          {
+            "title": "Fiverr resume / LinkedIn gigs",
+            "why": "Refused by Brain: Fiverr's 14-day clearance after completion puts first money past day 21"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Instantly Growth for one month ($47) and one sending domain ($15); send 1,000 cold emails offering a $1,500 5-page site with a $750 deposit",
+            "performer": "OWNER",
+            "costCents": 6200,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Get fixed written quotes for a 5-page brochure site from 3 marketplace junior designers (no payment)",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_sub"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Read results on day 7: paid deposits, replies, designer quotes, and whether Stripe's first payout is scheduled inside the window",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 7,
+            "dependsOn": "t1",
+            "evidence": [
+              "close_rate",
+              "s_stripe"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "FUNDING",
+            "amountCents": 6200,
+            "label": "Owner advances the experiment cost",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, one month",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Sending domain",
+            "stepId": "t1"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid deposits per 1,000 cold emails",
+            "sources": [],
+            "needs": "the day 0-7 send"
+          },
+          {
+            "name": "sub_cost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [
+              "s_sub"
+            ],
+            "needs": "3 fixed written quotes"
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 1500,
+            "unit": "USD per site",
+            "sources": [
+              "s_tt",
+              "s_rr"
+            ],
+            "needs": "inside the $614-$1,817 typical band"
+          },
+          {
+            "name": "deals_needed",
+            "status": "ESTIMATE",
+            "value": 4,
+            "unit": "sites at about $856 contribution each if a designer quotes $600",
+            "sources": [
+              "s_tt",
+              "s_sub"
+            ],
+            "needs": "sub_cost"
+          },
+          {
+            "name": "experiment_cost",
+            "status": "EVIDENCED",
+            "value": 62,
+            "unit": "USD",
+            "sources": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "needs": "none"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_tt",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "Thumbtack national cost data: website developer average $1,057, typical $614-$1,817; named pros charge $1,500-$2,500 basic web design",
+            "population": "US businesses hiring a web developer on Thumbtack",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_rr",
+            "url": "https://brain.local/card/cop_8f572b0e324645218c0b#revenueRange",
+            "dated": "2026-11-27",
+            "claim": "Verified revenueRange EVIDENCE on the card",
+            "population": "card",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_compete",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "Done-for-you substitute at $79 setup + $24.99/mo; freelancer projects $1,000-$5,000",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_sub",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "goLance junior designer rates $20-$40/hr: a fulfiller pool exists, but no quote is held",
+            "population": "marketplace web designers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_demand",
+            "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+            "dated": "2025-08-21",
+            "claim": "Clutch: about 17% of US small businesses still have no website (headline only; page returned HTTP 403)",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_instantly",
+            "url": "https://instantly.ai/pricing.md",
+            "dated": "2026-11-27",
+            "claim": "Instantly Growth $47/mo, 5,000 emails/mo",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_domain",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "A domain costs an average of $15 per year",
+            "population": "domain pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Stripe's first payout typically completes 7-14 days after the first live payment",
+            "population": "Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_res",
+            "url": "https://www.thumbtack.com/p/resume-writing-prices",
+            "dated": "2020-08-26",
+            "claim": "Thumbtack resume writers $170-$200 national average fixed price; the verifier rejected this as not current and not matched to the payer",
+            "population": "Thumbtack resume customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1fb3fd705d854eff8d6e"
+          },
+          {
+            "id": "s_bot",
+            "url": "https://www.upwork.com/jobs/~022066569537508893245",
+            "dated": "2026-11-27",
+            "claim": "Upwork search listing of a $100 fixed-price basic chatbot job; job page itself returned HTTP 403 and was not read",
+            "population": "Upwork clients",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1f0eda077b5945b4a459"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that any US local-service business reached by cold email will pay a $1,500 website deposit within the first week: CURRENT_DEMAND has no buying signal and CONVERSION has no measured close rate. Without a deposit by about day 7, Stripe's 7-14 day first payout and a 7-day build put the money past day 21.",
+          "resolution": "Spend $62 (Instantly Growth $47 + one $15 domain, within the $250 risk cap) and 11 owner hours: send 1,000 cold emails offering the $1,500 site with a $750 deposit, and get 3 fixed designer quotes. PROOF: at least 2 paid deposits and a quote at or below $600 by day 7 -> turn this into a conditional plan for 4 builds. STOP: no paid deposit by day 7, or no quote at or below $900 -> stop at $62 spent. CONTINUE: replies but no deposit -> one more 1,000-email batch at no added cost, final read on day 10.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_8f572b0e324645218c0b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "why": "Budgets unreadable (HTTP 403) and 15+ wins needed in 21 days"
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "why": "Price evidence rejected by the verifier; about 19 sales with no buyer count"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_8f572b0e324645218c0b",
+            "link": "OFFER_AND_PRICE",
+            "reason": "The card's revenueRange is verified EVIDENCE: Thumbtack national cost data $614-$1,817 typical for a business website, and named small-business designers on the same page charge $1,500-$2,500 for basic web design; $1,500 is a price buyers are shown to pay."
+          }
+        ],
+        "revisionId": "rev_45f8c00214ab_442e87",
+        "digest": "45f8c00214ab5b98511c3114",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:50:07.217Z"
+      },
+      {
+        "goalId": "wst_628f8f57ed9b4644895d",
+        "contractDigest": "47524d702728aa55188dbc5f",
+        "parentRevisionId": "rev_45f8c00214ab_442e87",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: run a $122 ten-day test of the $1,500 website offer before committing",
+          "opportunityIds": [],
+          "why": "Only the website build has an evidenced price ($614-$1,817 typical on Thumbtack; $1,500 is a named pros' starting rate). Nothing shows that any buyer in this population will pay within 21 days: no buying signal, no measured close rate, and no designer quote. To net $3,000 it needs about 4 sales closed, built in 7 days and settled by day 21 while Stripe's first payout alone can take 7-14 days, so the first deposit must land by about day 7. That makes demand and conversion in week one the decisive unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Resume rewrite sold directly by Stripe link ($170)",
+            "why": "Needs about 19 sales in 21 days through the owner's own network; the price evidence was rejected by the verifier as not current and not matched to the payer, and no buyer count exists"
+          },
+          {
+            "title": "Fixed-price chatbot builds on Upwork",
+            "why": "Budgets around $100-$300 could not be read (HTTP 403); 15+ wins in 21 days with an unknown win rate"
+          },
+          {
+            "title": "Fiverr resume / LinkedIn gigs",
+            "why": "Refused by Brain: Fiverr's 14-day clearance after completion puts first money past day 21"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Instantly Hypergrowth for one month ($107; 25,000 contacts, 125,000 emails) and one sending domain ($15); warm up from day 0 and email 2,000 contacts days 2-10 offering a $1,500 5-page site paid in full up front by Stripe link",
+            "performer": "OWNER",
+            "costCents": 12200,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Get fixed written quotes from 3 marketplace junior designers for a 5-page site in 7 days, paid on delivery (no advance); no payment",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_sub"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Read results on day 10: paid orders, designer quotes, and the payout date Stripe shows for the first payment",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "close_rate",
+              "s_stripe"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "FUNDING",
+            "amountCents": 12200,
+            "label": "Owner advances the experiment cost",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 10700,
+            "label": "Instantly Hypergrowth, one month",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Sending domain",
+            "stepId": "t1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid deposits per 1,000 cold emails",
+            "sources": [],
+            "needs": "the day 0-7 send"
+          },
+          {
+            "name": "sub_cost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [
+              "s_sub"
+            ],
+            "needs": "3 fixed written quotes"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 1500,
+            "unit": "USD per site",
+            "sources": [
+              "s_tt",
+              "s_rr"
+            ],
+            "needs": "paid orders at $1,500; the verified market range ($614-$1,817, avg $1,057) makes it plausible but only these buyers paying establishes it"
+          },
+          {
+            "name": "deals_needed",
+            "status": "ESTIMATE",
+            "value": 4,
+            "unit": "sites at about $856 contribution each if a designer quotes $600",
+            "sources": [
+              "s_tt",
+              "s_sub"
+            ],
+            "needs": "sub_cost"
+          },
+          {
+            "name": "experiment_cost",
+            "status": "EVIDENCED",
+            "value": 122,
+            "unit": "USD",
+            "sources": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "needs": "none"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_tt",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "Thumbtack national cost data: website developer average $1,057, typical $614-$1,817; named pros charge $1,500-$2,500 basic web design",
+            "population": "US businesses hiring a web developer on Thumbtack",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_rr",
+            "url": "https://brain.local/card/cop_8f572b0e324645218c0b#revenueRange",
+            "dated": "2026-11-27",
+            "claim": "Verified revenueRange EVIDENCE on the card",
+            "population": "card",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_compete",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "Done-for-you substitute at $79 setup + $24.99/mo; freelancer projects $1,000-$5,000",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_sub",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "goLance junior designer rates $20-$40/hr: a fulfiller pool exists, but no quote is held",
+            "population": "marketplace web designers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_demand",
+            "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+            "dated": "2025-08-21",
+            "claim": "Clutch: about 17% of US small businesses still have no website (headline only; page returned HTTP 403)",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_instantly",
+            "url": "https://instantly.ai/pricing.md",
+            "dated": "2026-11-27",
+            "claim": "Instantly Hypergrowth $107/mo: 125,000 emails, 25,000 uploaded contacts (Growth $47 allows only 1,000 contacts)",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_domain",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "A domain costs an average of $15 per year",
+            "population": "domain pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Stripe's first payout typically completes 7-14 days after the first live payment",
+            "population": "Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_res",
+            "url": "https://www.thumbtack.com/p/resume-writing-prices",
+            "dated": "2020-08-26",
+            "claim": "Thumbtack resume writers $170-$200 national average fixed price; the verifier rejected this as not current and not matched to the payer",
+            "population": "Thumbtack resume customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1fb3fd705d854eff8d6e"
+          },
+          {
+            "id": "s_bot",
+            "url": "https://www.upwork.com/jobs/~022066569537508893245",
+            "dated": "2026-11-27",
+            "claim": "Upwork search listing of a $100 fixed-price basic chatbot job; job page itself returned HTTP 403 and was not read",
+            "population": "Upwork clients",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1f0eda077b5945b4a459"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that any US local-service business reached by cold email will pay a $1,500 website deposit within the first week: CURRENT_DEMAND has no buying signal and CONVERSION has no measured close rate. Paying designers before Stripe's first payout would breach the $250 risk cap, so only orders paid in full by about day 10, built by a designer paid on delivery, can settle by day 21.",
+          "resolution": "Spend $122 (Instantly Hypergrowth $107 for 25,000 contacts + one $15 domain), the only owner money at risk, plus 11 owner hours: email 2,000 local-service businesses days 2-10 offering the $1,500 site paid in full up front, and get 3 fixed designer quotes for 7-day delivery paid on delivery (so no designer fee is ever advanced from the owner's $250). PROOF by day 10: at least 4 full $1,500 payments, a designer quote at or below $600 payable on delivery, and Stripe showing the first payout on or before day 17 -> plan 4 builds ordered day 10, delivered day 17, designers paid from the settled payments, about $3,363 net ($6,000 - $2,400 - $176 Stripe - $122) settled by day 21. STOP: fewer than 4 paid orders by day 10, no designer accepting pay-on-delivery at or below $600, or a first payout scheduled after day 17 -> stop at $122 spent; any order already paid is still built and delivered from its own payment. No CONTINUE batch: the window leaves no time for a second round.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Exposure: four $600 builds advanced before payout = $2,400 >> $250 cap",
+            "resolution": "ACCEPTED. Designers must quote payment on delivery (no advance) and buyers pay in full up front; a designer not accepting that is a stop condition, so the owner's money at risk is only the $122 test."
+          },
+          {
+            "finding": "Timeline: deposit day 7 + 14-day first payout + 7-day build = day 28",
+            "resolution": "ACCEPTED. The proof now requires Stripe to show the first payout on or before day 17, with builds ordered day 10 and delivered day 17; otherwise stop."
+          },
+          {
+            "finding": "Proof sizing: require consistent with 4 paid builds by ~day 10",
+            "resolution": "ACCEPTED. Proof is 4 full $1,500 payments by day 10; fewer stops the plan."
+          },
+          {
+            "finding": "Price: $1,500 near top of range; named-pros rates rejected; deposits measure it",
+            "resolution": "ACCEPTED. Removed the price disagreement and the rejected citation; price is ASSUMED and OFFER_AND_PRICE is in the chain's missing links and in resolves."
+          },
+          {
+            "finding": "Deliverability of a fresh domain; second batch conflicts with Growth's 1,000-contact limit",
+            "resolution": "ACCEPTED. Moved to Hypergrowth (25,000 contacts) and dropped the second batch; warm-up from day 0 with sends from day 2 is a risk the day-10 read measures, not evidence either way."
+          },
+          {
+            "finding": "Exclusions of resume, chatbot and Fiverr routes are correct",
+            "resolution": "Kept unchanged."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_8f572b0e324645218c0b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "why": "Budgets unreadable (HTTP 403) and 15+ wins needed in 21 days"
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "why": "Price evidence rejected by the verifier; about 19 sales with no buyer count"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b502e39571e4_dc820c",
+        "digest": "b502e39571e414af0298db80",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:54:18.103Z"
+      },
+      {
+        "goalId": "wst_628f8f57ed9b4644895d",
+        "contractDigest": "47524d702728aa55188dbc5f",
+        "parentRevisionId": "rev_45f8c00214ab_442e87",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: run a $122 ten-day test of the $1,500 website offer before committing",
+          "opportunityIds": [],
+          "why": "Only the website build has an evidenced price ($614-$1,817 typical on Thumbtack; $1,500 is a named pros' starting rate). Nothing shows that any buyer in this population will pay within 21 days: no buying signal, no measured close rate, and no designer quote. To net $3,000 it needs 4 sales paid in full by about day 10, built in 7 days by a designer paid on delivery, and settled by day 21 while Stripe's first payout alone can take 7-14 days. That makes demand and conversion in the first ten days the decisive unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Resume rewrite sold directly by Stripe link ($170)",
+            "why": "Needs about 19 sales in 21 days through the owner's own network; the price evidence was rejected by the verifier as not current and not matched to the payer, and no buyer count exists"
+          },
+          {
+            "title": "Fixed-price chatbot builds on Upwork",
+            "why": "Budgets around $100-$300 could not be read (HTTP 403); 15+ wins in 21 days with an unknown win rate"
+          },
+          {
+            "title": "Fiverr resume / LinkedIn gigs",
+            "why": "Refused by Brain: Fiverr's 14-day clearance after completion puts first money past day 21"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Instantly Hypergrowth for one month ($107; 25,000 contacts, 125,000 emails) and one sending domain ($15); warm up from day 0 and email 2,000 contacts days 2-10 offering a $1,500 5-page site paid in full up front by Stripe link",
+            "performer": "OWNER",
+            "costCents": 12200,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Get fixed written quotes from 3 marketplace junior designers for a 5-page site in 7 days, paid on delivery (no advance); no payment",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_sub"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Read results on day 10: paid orders, designer quotes, and the payout date Stripe shows for the first payment",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "close_rate",
+              "s_stripe"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "FUNDING",
+            "amountCents": 12200,
+            "label": "Owner advances the experiment cost",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 10700,
+            "label": "Instantly Hypergrowth, one month",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Sending domain",
+            "stepId": "t1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid deposits per 1,000 cold emails",
+            "sources": [],
+            "needs": "the day 0-7 send"
+          },
+          {
+            "name": "sub_cost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [
+              "s_sub"
+            ],
+            "needs": "3 fixed written quotes"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 1500,
+            "unit": "USD per site",
+            "sources": [
+              "s_tt",
+              "s_rr"
+            ],
+            "needs": "paid orders at $1,500; the verified market range ($614-$1,817, avg $1,057) makes it plausible but only these buyers paying establishes it"
+          },
+          {
+            "name": "deals_needed",
+            "status": "ESTIMATE",
+            "value": 4,
+            "unit": "sites at about $856 contribution each if a designer quotes $600",
+            "sources": [
+              "s_tt",
+              "s_sub"
+            ],
+            "needs": "sub_cost"
+          },
+          {
+            "name": "experiment_cost",
+            "status": "EVIDENCED",
+            "value": 122,
+            "unit": "USD",
+            "sources": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "needs": "none"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_tt",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "Thumbtack national cost data: website developer average $1,057, typical $614-$1,817; named pros charge $1,500-$2,500 basic web design",
+            "population": "US businesses hiring a web developer on Thumbtack",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_rr",
+            "url": "https://brain.local/card/cop_8f572b0e324645218c0b#revenueRange",
+            "dated": "2026-11-27",
+            "claim": "Verified revenueRange EVIDENCE on the card",
+            "population": "card",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_compete",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "Done-for-you substitute at $79 setup + $24.99/mo; freelancer projects $1,000-$5,000",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_sub",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "goLance junior designer rates $20-$40/hr: a fulfiller pool exists, but no quote is held",
+            "population": "marketplace web designers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_demand",
+            "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+            "dated": "2025-08-21",
+            "claim": "Clutch: about 17% of US small businesses still have no website (headline only; page returned HTTP 403)",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_instantly",
+            "url": "https://instantly.ai/pricing.md",
+            "dated": "2026-11-27",
+            "claim": "Instantly Hypergrowth $107/mo: 125,000 emails, 25,000 uploaded contacts (Growth $47 allows only 1,000 contacts)",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_domain",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "A domain costs an average of $15 per year",
+            "population": "domain pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Stripe's first payout typically completes 7-14 days after the first live payment",
+            "population": "Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_res",
+            "url": "https://www.thumbtack.com/p/resume-writing-prices",
+            "dated": "2020-08-26",
+            "claim": "Thumbtack resume writers $170-$200 national average fixed price; the verifier rejected this as not current and not matched to the payer",
+            "population": "Thumbtack resume customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1fb3fd705d854eff8d6e"
+          },
+          {
+            "id": "s_bot",
+            "url": "https://www.upwork.com/jobs/~022066569537508893245",
+            "dated": "2026-11-27",
+            "claim": "Upwork search listing of a $100 fixed-price basic chatbot job; job page itself returned HTTP 403 and was not read",
+            "population": "Upwork clients",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1f0eda077b5945b4a459"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that any US local-service business reached by cold email will pay a $1,500 website deposit within the first week: CURRENT_DEMAND has no buying signal and CONVERSION has no measured close rate. Paying designers before Stripe's first payout would breach the $250 risk cap, so only orders paid in full by about day 10, built by a designer paid on delivery, can settle by day 21.",
+          "resolution": "Spend $122 (Instantly Hypergrowth $107 for 25,000 contacts + one $15 domain), the only owner money at risk, plus 11 owner hours: email 2,000 local-service businesses days 2-10 offering the $1,500 site paid in full up front, and get 3 fixed designer quotes for 7-day delivery paid on delivery (so no designer fee is ever advanced from the owner's $250). PROOF by day 10: at least 4 full $1,500 payments, a designer quote at or below $600 payable on delivery, and Stripe showing the first payout on or before day 17 -> plan 4 builds ordered day 10, delivered day 17, designers paid from the settled payments, about $3,303 net ($6,000 - $2,400 - $175 Stripe - $122) settled by day 21. STOP: fewer than 4 paid orders by day 10, no designer accepting pay-on-delivery at or below $600, or a first payout scheduled after day 17 -> stop at $122 spent; any order already paid is still built and delivered from its own payment. No CONTINUE batch: the window leaves no time for a second round.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Exposure: four $600 builds advanced before payout = $2,400 >> $250 cap",
+            "resolution": "ACCEPTED. Designers must quote payment on delivery (no advance) and buyers pay in full up front; a designer not accepting that is a stop condition, so the owner's money at risk is only the $122 test."
+          },
+          {
+            "finding": "Timeline: deposit day 7 + 14-day first payout + 7-day build = day 28",
+            "resolution": "ACCEPTED. The proof now requires Stripe to show the first payout on or before day 17, with builds ordered day 10 and delivered day 17; otherwise stop."
+          },
+          {
+            "finding": "Proof sizing: require consistent with 4 paid builds by ~day 10",
+            "resolution": "ACCEPTED. Proof is 4 full $1,500 payments by day 10; fewer stops the plan."
+          },
+          {
+            "finding": "Price: $1,500 near top of range; named-pros rates rejected; deposits measure it",
+            "resolution": "ACCEPTED. Removed the price disagreement and the rejected citation; price is ASSUMED and OFFER_AND_PRICE is in the chain's missing links and in resolves."
+          },
+          {
+            "finding": "Deliverability of a fresh domain; second batch conflicts with Growth's 1,000-contact limit",
+            "resolution": "ACCEPTED. Moved to Hypergrowth (25,000 contacts) and dropped the second batch; warm-up from day 0 with sends from day 2 is a risk the day-10 read measures, not evidence either way."
+          },
+          {
+            "finding": "Exclusions of resume, chatbot and Fiverr routes are correct",
+            "resolution": "Kept unchanged."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_8f572b0e324645218c0b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "why": "Budgets unreadable (HTTP 403) and 15+ wins needed in 21 days"
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "why": "Price evidence rejected by the verifier; about 19 sales with no buyer count"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_73a43ac02ca6_f5f65d",
+        "digest": "73a43ac02ca68510212bba01",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:54:28.069Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_628f8f57ed9b4644895d",
+      "contractDigest": "47524d702728aa55188dbc5f",
+      "parentRevisionId": "rev_45f8c00214ab_442e87",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan yet: run a $122 ten-day test of the $1,500 website offer before committing",
+        "opportunityIds": [],
+        "why": "Only the website build has an evidenced price ($614-$1,817 typical on Thumbtack; $1,500 is a named pros' starting rate). Nothing shows that any buyer in this population will pay within 21 days: no buying signal, no measured close rate, and no designer quote. To net $3,000 it needs 4 sales paid in full by about day 10, built in 7 days by a designer paid on delivery, and settled by day 21 while Stripe's first payout alone can take 7-14 days. That makes demand and conversion in the first ten days the decisive unknown."
+      },
+      "alternatives": [
+        {
+          "title": "Resume rewrite sold directly by Stripe link ($170)",
+          "why": "Needs about 19 sales in 21 days through the owner's own network; the price evidence was rejected by the verifier as not current and not matched to the payer, and no buyer count exists"
+        },
+        {
+          "title": "Fixed-price chatbot builds on Upwork",
+          "why": "Budgets around $100-$300 could not be read (HTTP 403); 15+ wins in 21 days with an unknown win rate"
+        },
+        {
+          "title": "Fiverr resume / LinkedIn gigs",
+          "why": "Refused by Brain: Fiverr's 14-day clearance after completion puts first money past day 21"
+        }
+      ],
+      "steps": [
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Instantly Hypergrowth for one month ($107; 25,000 contacts, 125,000 emails) and one sending domain ($15); warm up from day 0 and email 2,000 contacts days 2-10 offering a $1,500 5-page site paid in full up front by Stripe link",
+          "performer": "OWNER",
+          "costCents": 12200,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s_instantly",
+            "s_domain"
+          ],
+          "ownerHours": 8,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "t2",
+          "kind": "RESEARCH",
+          "label": "Get fixed written quotes from 3 marketplace junior designers for a 5-page site in 7 days, paid on delivery (no advance); no payment",
+          "performer": "OWNER",
+          "costCents": null,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_sub"
+          ],
+          "ownerHours": 2,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "t3",
+          "kind": "TEST",
+          "label": "Read results on day 10: paid orders, designer quotes, and the payout date Stripe shows for the first payment",
+          "performer": "OWNER",
+          "costCents": null,
+          "day": 10,
+          "dependsOn": "t1",
+          "evidence": [
+            "close_rate",
+            "s_stripe"
+          ],
+          "ownerHours": 1,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 0,
+          "kind": "FUNDING",
+          "amountCents": 12200,
+          "label": "Owner advances the experiment cost",
+          "stepId": "t1"
+        },
+        {
+          "day": 0,
+          "kind": "SPEND",
+          "amountCents": 10700,
+          "label": "Instantly Hypergrowth, one month",
+          "stepId": "t1"
+        },
+        {
+          "day": 0,
+          "kind": "SPEND",
+          "amountCents": 1500,
+          "label": "Sending domain",
+          "stepId": "t1"
+        }
+      ],
+      "proofDay": 10,
+      "quantities": [
+        {
+          "name": "close_rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "paid deposits per 1,000 cold emails",
+          "sources": [],
+          "needs": "the day 0-7 send"
+        },
+        {
+          "name": "sub_cost",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per site",
+          "sources": [
+            "s_sub"
+          ],
+          "needs": "3 fixed written quotes"
+        },
+        {
+          "name": "price",
+          "status": "ASSUMED",
+          "value": 1500,
+          "unit": "USD per site",
+          "sources": [
+            "s_tt",
+            "s_rr"
+          ],
+          "needs": "paid orders at $1,500; the verified market range ($614-$1,817, avg $1,057) makes it plausible but only these buyers paying establishes it"
+        },
+        {
+          "name": "deals_needed",
+          "status": "ESTIMATE",
+          "value": 4,
+          "unit": "sites at about $856 contribution each if a designer quotes $600",
+          "sources": [
+            "s_tt",
+            "s_sub"
+          ],
+          "needs": "sub_cost"
+        },
+        {
+          "name": "experiment_cost",
+          "status": "EVIDENCED",
+          "value": 122,
+          "unit": "USD",
+          "sources": [
+            "s_instantly",
+            "s_domain"
+          ],
+          "needs": "none"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_tt",
+          "url": "https://www.thumbtack.com/p/website-development-prices",
+          "dated": "2025-02-21",
+          "claim": "Thumbtack national cost data: website developer average $1,057, typical $614-$1,817; named pros charge $1,500-$2,500 basic web design",
+          "population": "US businesses hiring a web developer on Thumbtack",
+          "matchesBuyer": true,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_rr",
+          "url": "https://brain.local/card/cop_8f572b0e324645218c0b#revenueRange",
+          "dated": "2026-11-27",
+          "claim": "Verified revenueRange EVIDENCE on the card",
+          "population": "card",
+          "matchesBuyer": true,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_compete",
+          "url": "https://ueni.com/blog/affordable-website-design/",
+          "dated": "2026-08-11",
+          "claim": "Done-for-you substitute at $79 setup + $24.99/mo; freelancer projects $1,000-$5,000",
+          "population": "US small businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_sub",
+          "url": "https://ueni.com/blog/affordable-website-design/",
+          "dated": "2026-08-11",
+          "claim": "goLance junior designer rates $20-$40/hr: a fulfiller pool exists, but no quote is held",
+          "population": "marketplace web designers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_demand",
+          "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+          "dated": "2025-08-21",
+          "claim": "Clutch: about 17% of US small businesses still have no website (headline only; page returned HTTP 403)",
+          "population": "US small businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_instantly",
+          "url": "https://instantly.ai/pricing.md",
+          "dated": "2026-11-27",
+          "claim": "Instantly Hypergrowth $107/mo: 125,000 emails, 25,000 uploaded contacts (Growth $47 allows only 1,000 contacts)",
+          "population": "tool pricing",
+          "matchesBuyer": false,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_domain",
+          "url": "https://www.thumbtack.com/p/website-development-prices",
+          "dated": "2025-02-21",
+          "claim": "A domain costs an average of $15 per year",
+          "population": "domain pricing",
+          "matchesBuyer": false,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_stripe",
+          "url": "https://docs.stripe.com/payouts",
+          "dated": "2026-11-27",
+          "claim": "Stripe's first payout typically completes 7-14 days after the first live payment",
+          "population": "Stripe accounts",
+          "matchesBuyer": false,
+          "opportunityId": "cop_8f572b0e324645218c0b"
+        },
+        {
+          "id": "s_res",
+          "url": "https://www.thumbtack.com/p/resume-writing-prices",
+          "dated": "2020-08-26",
+          "claim": "Thumbtack resume writers $170-$200 national average fixed price; the verifier rejected this as not current and not matched to the payer",
+          "population": "Thumbtack resume customers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_1fb3fd705d854eff8d6e"
+        },
+        {
+          "id": "s_bot",
+          "url": "https://www.upwork.com/jobs/~022066569537508893245",
+          "dated": "2026-11-27",
+          "claim": "Upwork search listing of a $100 fixed-price basic chatbot job; job page itself returned HTTP 403 and was not read",
+          "population": "Upwork clients",
+          "matchesBuyer": true,
+          "opportunityId": "cop_1f0eda077b5945b4a459"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "No evidence that any US local-service business reached by cold email will pay a $1,500 website deposit within the first week: CURRENT_DEMAND has no buying signal and CONVERSION has no measured close rate. Paying designers before Stripe's first payout would breach the $250 risk cap, so only orders paid in full by about day 10, built by a designer paid on delivery, can settle by day 21.",
+        "resolution": "Spend $122 (Instantly Hypergrowth $107 for 25,000 contacts + one $15 domain), the only owner money at risk, plus 11 owner hours: email 2,000 local-service businesses days 2-10 offering the $1,500 site paid in full up front, and get 3 fixed designer quotes for 7-day delivery paid on delivery (so no designer fee is ever advanced from the owner's $250). PROOF by day 10: at least 4 full $1,500 payments, a designer quote at or below $600 payable on delivery, and Stripe showing the first payout on or before day 17 -> plan 4 builds ordered day 10, delivered day 17, designers paid from the settled payments, about $3,303 net ($6,000 - $2,400 - $175 Stripe - $122) settled by day 21. STOP: fewer than 4 paid orders by day 10, no designer accepting pay-on-delivery at or below $600, or a first payout scheduled after day 17 -> stop at $122 spent; any order already paid is still built and delivered from its own payment. No CONTINUE batch: the window leaves no time for a second round.",
+        "decisiveLinks": [
+          "CURRENT_DEMAND",
+          "CONVERSION"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Exposure: four $600 builds advanced before payout = $2,400 >> $250 cap",
+          "resolution": "ACCEPTED. Designers must quote payment on delivery (no advance) and buyers pay in full up front; a designer not accepting that is a stop condition, so the owner's money at risk is only the $122 test."
+        },
+        {
+          "finding": "Timeline: deposit day 7 + 14-day first payout + 7-day build = day 28",
+          "resolution": "ACCEPTED. The proof now requires Stripe to show the first payout on or before day 17, with builds ordered day 10 and delivered day 17; otherwise stop."
+        },
+        {
+          "finding": "Proof sizing: require consistent with 4 paid builds by ~day 10",
+          "resolution": "ACCEPTED. Proof is 4 full $1,500 payments by day 10; fewer stops the plan."
+        },
+        {
+          "finding": "Price: $1,500 near top of range; named-pros rates rejected; deposits measure it",
+          "resolution": "ACCEPTED. Removed the price disagreement and the rejected citation; price is ASSUMED and OFFER_AND_PRICE is in the chain's missing links and in resolves."
+        },
+        {
+          "finding": "Deliverability of a fresh domain; second batch conflicts with Growth's 1,000-contact limit",
+          "resolution": "ACCEPTED. Moved to Hypergrowth (25,000 contacts) and dropped the second batch; warm-up from day 0 with sends from day 2 is a risk the day-10 read measures, not evidence either way."
+        },
+        {
+          "finding": "Exclusions of resume, chatbot and Fiverr routes are correct",
+          "resolution": "Kept unchanged."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_8f572b0e324645218c0b",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_1f0eda077b5945b4a459",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_1fb3fd705d854eff8d6e",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_1f0eda077b5945b4a459",
+          "why": "Budgets unreadable (HTTP 403) and 15+ wins needed in 21 days"
+        },
+        {
+          "opportunityId": "cop_1fb3fd705d854eff8d6e",
+          "why": "Price evidence rejected by the verifier; about 19 sales with no buyer count"
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_73a43ac02ca6_f5f65d",
+      "digest": "73a43ac02ca68510212bba01",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_5959ea909de948cea40d/author-F",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:54:28.069Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_73a43ac02ca6_f5f65d",
+      "digest": "73a43ac02ca68510212bba01",
+      "contractDigest": "47524d702728aa55188dbc5f",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 12200,
+        "committedOpenCents": 0,
+        "preProofCents": 12200,
+        "maxExposureCents": 12200,
+        "minCashCents": 25000,
+        "minCashDay": 0,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 12200,
+        "netCents": -12200
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed (net of direct costs) at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_1f0eda077b5945b4a459",
+          "cop_1fb3fd705d854eff8d6e",
+          "cop_8f572b0e324645218c0b"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "title": "Fixed-price AI website chatbot builds answering posted client requests",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 170,
+            "card": {
+              "payer": "Small businesses posting fixed-price chatbot jobs on Upwork",
+              "reachableChannel": "Proposals to posted Upwork fixed-price jobs",
+              "offerScope": "Website chatbot answering from the client's PDF/FAQ knowledge base, embedded and deployed",
+              "priceCents": 20000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 5000,
+              "humanHours": 4,
+              "requiredCapabilities": [],
+              "industry": "Small-business software / AI automation",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Proposals to posted Upwork fixed-price jobs"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 30, tied up 50"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Proposals to posted Upwork fixed-price jobs",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Website chatbot answering from the client's PDF/FAQ knowledge base, embedded and deployed to Small businesses posting fixed-price chatbot jobs on Upwork, reached through Proposals to posted Upwork fixed-price jobs, at $200; The owner, drafting with AI tools delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$30",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$50",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner, drafting with AI tools.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "4 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Website chatbot answering from the client's PDF/FAQ knowledge base, embedded and deployed",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Small businesses posting fixed-price chatbot jobs on Upwork",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.upwork.com/jobs/~022066569537508893245; Upwork AI chatbot setup small business fixed price job 2026; https://www.upwork.com/jobs/~022067015542265312467; Upwork AI chatbot setup small business fixed price job 2026",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "title": "Resume rewrite sold directly and paid by Stripe payment link",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 165,
+            "card": {
+              "payer": "Individual job seekers (mid-career)",
+              "reachableChannel": "Owner's own LinkedIn network and job-seeker community posts, paid through a Stripe payment link (2.9% + 30c)",
+              "offerScope": "Professional-level resume rewrite plus cover letter, 3-day delivery",
+              "priceCents": 17000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 1.5,
+              "requiredCapabilities": [],
+              "industry": "Career services / resume writing",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Owner's own LinkedIn network and job-seeker community posts, paid through a Stri"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 170 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 5, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Owner's own LinkedIn network and job-seeker community posts, paid through a Stripe payment link (2.9% + 30c)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Professional-level resume rewrite plus cover letter, 3-day delivery to Individual job seekers (mid-career), reached through Owner's own LinkedIn network and job-seeker community posts, paid through a Stripe payment link (2.9% + 30c), at $170; The owner, drafting with AI tools delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner, drafting with AI tools.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "1.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Professional-level resume rewrite plus cover letter, 3-day delivery",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Individual job seekers (mid-career)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$170",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$170",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.thumbtack.com/p/resume-writing-prices; https://www.thumbtack.com/p/resume-writing-prices; https://docs.stripe.com/payouts; https://stripe.com/pricing",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_8f572b0e324645218c0b",
+            "title": "Done-for-you small-business website build sold by cold email",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 900,
+            "card": {
+              "payer": "US small local-service business owners without a usable website",
+              "reachableChannel": "Cold email through an Instantly Growth workspace (7/mo) to scraped local-business lists",
+              "offerScope": "5-page brochure website, copy written, live in 7 days, one-time build fee",
+              "priceCents": 150000,
+              "currency": "USD",
+              "fulfillmentOwner": "Junior freelance web designer hired on a marketplace (goLance junior rate $20-$40/hr per UENI 2026 guide)",
+              "peakFundingCents": 25000,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "Local services / small business web design",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email through an Instantly Growth workspace (7/mo) to scraped local-busines"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 600, tied up 250"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email through an Instantly Growth workspace (7/mo) to scraped local-business lists",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell 5-page brochure website, copy written, live in 7 days, one-time build fee to US small local-service business owners without a usable website, reached through Cold email through an Instantly Growth workspace (7/mo) to scraped local-business lists, at $1,500; Junior freelance web designer hired on a marketplace (goLance junior rate $20-$40/hr per UENI 2026 guide) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$600",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Junior freelance web designer hired on a marketplace (goLance junior rate $20-$40/hr per UENI 2026 guide).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "3 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "5-page brochure website, copy written, live in 7 days, one-time build fee",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US small local-service business owners without a usable website",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "US customers hiring a website developer for their business's website on Thumbtack pay a national average fixed price of $1,057, typically $614-$1,817 (Thumbtack national cost data, 2026 page).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://ueni.com/blog/affordable-website-design/; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/pricing.md; https://docs.stripe.com/payouts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 21,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:48:42.377Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_45f8c00214ab_442e87",
+        "revisionDigest": "45f8c00214ab5b98511c3114",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5be413d22a5f4715b94f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "No plan with a cheap test is the right posture, and the $62 test fits the $250 risk cap, but the test's proof does not decide the goal and the funding path it leads to breaks the cap. Recomputed: per build $1,500 - $600 designer (unquoted) - ~$43.80 Stripe on two charges = ~$856; 4 builds = ~$3,425, minus $62 = ~$3,363 >= $3,000, so 4 completed and paid builds are needed inside 21 days. The designers must be paid before or during the 7-day build, but deposits taken around day 7 are not usable until Stripe's first payout (7-14 days, i.e. day 14-21). Paying four designers from the owner's pocket would put up to $2,400 at risk against a $250 cap; paying them only from settled deposits pushes builds to day 21-28 and the balances past day 21. The resolution must say how designer fees are funded inside $250 (e.g. designer paid on delivery, or at most one build advanced) and make that a stop condition. The proof (2 deposits) is also not sized to the 4 builds the target needs, and the second 1,000-email batch 'at no added cost' conflicts with the Growth plan's 1,000 uploaded-contact limit cited in the same research.",
+        "findings": [
+          "Exposure: max owner advance with four $600 builds before payout = $2,400 >> $250 cap; the plan's trace shows only the $62 test, so the follow-on is not shown to fit.",
+          "Timeline: deposit day ~7 + first payout up to 14 days = day 21 usable; + 7-day build = day 28. Only the 7-day best-case payout leaves a path; the proof should require it (Stripe account already paying out) rather than read it on day 7.",
+          "Proof sizing: require deposits/replies consistent with 4 paid builds by ~day 10, not 2; stop otherwise.",
+          "Price: $1,500 is near the top of the verified Thumbtack range ($614-$1,817, avg $1,057); the named pros' $1,500-$2,500 rates were rejected at the evidence gate and should not be cited as evidence. A market range is not what these cold-emailed buyers are shown paying - the deposits measure it.",
+          "Deliverability: a fresh sending domain bought on day 0 usually needs warm-up before 1,000 cold sends; unevidenced either way, but it threatens the day-7 read.",
+          "Exclusions of resume, chatbot and Fiverr routes are reasoned correctly (sales counts, unreadable budgets, 14-day clearance)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:51:34.493Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_b502e39571e4_dc820c",
+        "revisionDigest": "b502e39571e414af0298db80",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5be413d22a5f4715b94f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "Superseded by rev_73a43ac02ca6_f5f65d. The structure answers every earlier finding (pay-in-full orders, designer paid on delivery, proof of 4 payments by day 10, first payout by day 17, $122 at risk within $250), but its net arithmetic is wrong: 4 x $1,500 = $6,000 - 4 x $600 = $2,400 - Stripe 4 x (2.9% x $1,500 + $0.30) = $175.20 - $122 test = $3,302.80, not $3,363. The later revision corrects this to $3,303.",
+        "findings": [
+          "Net contribution recomputed at $3,302.80 (>= $3,000, so the conclusion holds, but the stated figure is off by $60)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:56:05.604Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_73a43ac02ca6_f5f65d",
+        "revisionDigest": "73a43ac02ca68510212bba01",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5be413d22a5f4715b94f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a bounded $122 test is the honest stance: no buying signal, no close rate, no designer quote and no buyer-paid price exist for this offer, and the decisive gaps (CURRENT_DEMAND, CONVERSION) are what the test measures. The test is now sized to the goal and kept inside the $250 cap: buyers pay $1,500 in full up front, designers are paid on delivery from settled payments (never advanced), and the proof requires 4 paid orders, a <= $600 pay-on-delivery quote and Stripe's first payout by day 17 by day 10; otherwise stop at $122. Recomputed: $6,000 - $2,400 - 4 x $43.80 Stripe ($175.20) - $122 = $3,302.80 contribution >= $3,000; build day 10-17, payout <= day 17, designers paid day 17, all settled by day 21. Verified the channel figure (instantly.ai: Hypergrowth $107/mo, 25,000 contacts, 125,000 emails).",
+        "findings": [
+          "Margin is thin: 4 builds give ~$3,303; any designer quote above ~$675 or one refund breaks $3,000 - the <= $600 quote condition protects this.",
+          "Capacity: 4 concurrent 7-day builds (~60 designer-hours) from 'a designer quote'; the day-10 read should confirm the quoting designer(s) can take all four, or use two of the three quoted.",
+          "The proof bar (4 full payments from 2,000 fresh-domain cold emails in 8 days) is demanding; the stop rule makes the downside $122 and 11 owner hours.",
+          "Price is correctly ASSUMED and measured by the paid orders, not taken from the Thumbtack market range."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:56:30.721Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_73a43ac02ca6_f5f65d",
+      "digest": "73a43ac02ca68510212bba01",
+      "contractDigest": "47524d702728aa55188dbc5f",
+      "plan": {
+        "goalId": "wst_628f8f57ed9b4644895d",
+        "contractDigest": "47524d702728aa55188dbc5f",
+        "parentRevisionId": "rev_45f8c00214ab_442e87",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: run a $122 ten-day test of the $1,500 website offer before committing",
+          "opportunityIds": [],
+          "why": "Only the website build has an evidenced price ($614-$1,817 typical on Thumbtack; $1,500 is a named pros' starting rate). Nothing shows that any buyer in this population will pay within 21 days: no buying signal, no measured close rate, and no designer quote. To net $3,000 it needs 4 sales paid in full by about day 10, built in 7 days by a designer paid on delivery, and settled by day 21 while Stripe's first payout alone can take 7-14 days. That makes demand and conversion in the first ten days the decisive unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Resume rewrite sold directly by Stripe link ($170)",
+            "why": "Needs about 19 sales in 21 days through the owner's own network; the price evidence was rejected by the verifier as not current and not matched to the payer, and no buyer count exists"
+          },
+          {
+            "title": "Fixed-price chatbot builds on Upwork",
+            "why": "Budgets around $100-$300 could not be read (HTTP 403); 15+ wins in 21 days with an unknown win rate"
+          },
+          {
+            "title": "Fiverr resume / LinkedIn gigs",
+            "why": "Refused by Brain: Fiverr's 14-day clearance after completion puts first money past day 21"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Instantly Hypergrowth for one month ($107; 25,000 contacts, 125,000 emails) and one sending domain ($15); warm up from day 0 and email 2,000 contacts days 2-10 offering a $1,500 5-page site paid in full up front by Stripe link",
+            "performer": "OWNER",
+            "costCents": 12200,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "RESEARCH",
+            "label": "Get fixed written quotes from 3 marketplace junior designers for a 5-page site in 7 days, paid on delivery (no advance); no payment",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_sub"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Read results on day 10: paid orders, designer quotes, and the payout date Stripe shows for the first payment",
+            "performer": "OWNER",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "close_rate",
+              "s_stripe"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "FUNDING",
+            "amountCents": 12200,
+            "label": "Owner advances the experiment cost",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 10700,
+            "label": "Instantly Hypergrowth, one month",
+            "stepId": "t1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Sending domain",
+            "stepId": "t1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "close_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid deposits per 1,000 cold emails",
+            "sources": [],
+            "needs": "the day 0-7 send"
+          },
+          {
+            "name": "sub_cost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [
+              "s_sub"
+            ],
+            "needs": "3 fixed written quotes"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 1500,
+            "unit": "USD per site",
+            "sources": [
+              "s_tt",
+              "s_rr"
+            ],
+            "needs": "paid orders at $1,500; the verified market range ($614-$1,817, avg $1,057) makes it plausible but only these buyers paying establishes it"
+          },
+          {
+            "name": "deals_needed",
+            "status": "ESTIMATE",
+            "value": 4,
+            "unit": "sites at about $856 contribution each if a designer quotes $600",
+            "sources": [
+              "s_tt",
+              "s_sub"
+            ],
+            "needs": "sub_cost"
+          },
+          {
+            "name": "experiment_cost",
+            "status": "EVIDENCED",
+            "value": 122,
+            "unit": "USD",
+            "sources": [
+              "s_instantly",
+              "s_domain"
+            ],
+            "needs": "none"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_tt",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "Thumbtack national cost data: website developer average $1,057, typical $614-$1,817; named pros charge $1,500-$2,500 basic web design",
+            "population": "US businesses hiring a web developer on Thumbtack",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_rr",
+            "url": "https://brain.local/card/cop_8f572b0e324645218c0b#revenueRange",
+            "dated": "2026-11-27",
+            "claim": "Verified revenueRange EVIDENCE on the card",
+            "population": "card",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_compete",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "Done-for-you substitute at $79 setup + $24.99/mo; freelancer projects $1,000-$5,000",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_sub",
+            "url": "https://ueni.com/blog/affordable-website-design/",
+            "dated": "2026-08-11",
+            "claim": "goLance junior designer rates $20-$40/hr: a fulfiller pool exists, but no quote is held",
+            "population": "marketplace web designers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_demand",
+            "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+            "dated": "2025-08-21",
+            "claim": "Clutch: about 17% of US small businesses still have no website (headline only; page returned HTTP 403)",
+            "population": "US small businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_instantly",
+            "url": "https://instantly.ai/pricing.md",
+            "dated": "2026-11-27",
+            "claim": "Instantly Hypergrowth $107/mo: 125,000 emails, 25,000 uploaded contacts (Growth $47 allows only 1,000 contacts)",
+            "population": "tool pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_domain",
+            "url": "https://www.thumbtack.com/p/website-development-prices",
+            "dated": "2025-02-21",
+            "claim": "A domain costs an average of $15 per year",
+            "population": "domain pricing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_stripe",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "Stripe's first payout typically completes 7-14 days after the first live payment",
+            "population": "Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8f572b0e324645218c0b"
+          },
+          {
+            "id": "s_res",
+            "url": "https://www.thumbtack.com/p/resume-writing-prices",
+            "dated": "2020-08-26",
+            "claim": "Thumbtack resume writers $170-$200 national average fixed price; the verifier rejected this as not current and not matched to the payer",
+            "population": "Thumbtack resume customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1fb3fd705d854eff8d6e"
+          },
+          {
+            "id": "s_bot",
+            "url": "https://www.upwork.com/jobs/~022066569537508893245",
+            "dated": "2026-11-27",
+            "claim": "Upwork search listing of a $100 fixed-price basic chatbot job; job page itself returned HTTP 403 and was not read",
+            "population": "Upwork clients",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1f0eda077b5945b4a459"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that any US local-service business reached by cold email will pay a $1,500 website deposit within the first week: CURRENT_DEMAND has no buying signal and CONVERSION has no measured close rate. Paying designers before Stripe's first payout would breach the $250 risk cap, so only orders paid in full by about day 10, built by a designer paid on delivery, can settle by day 21.",
+          "resolution": "Spend $122 (Instantly Hypergrowth $107 for 25,000 contacts + one $15 domain), the only owner money at risk, plus 11 owner hours: email 2,000 local-service businesses days 2-10 offering the $1,500 site paid in full up front, and get 3 fixed designer quotes for 7-day delivery paid on delivery (so no designer fee is ever advanced from the owner's $250). PROOF by day 10: at least 4 full $1,500 payments, a designer quote at or below $600 payable on delivery, and Stripe showing the first payout on or before day 17 -> plan 4 builds ordered day 10, delivered day 17, designers paid from the settled payments, about $3,303 net ($6,000 - $2,400 - $175 Stripe - $122) settled by day 21. STOP: fewer than 4 paid orders by day 10, no designer accepting pay-on-delivery at or below $600, or a first payout scheduled after day 17 -> stop at $122 spent; any order already paid is still built and delivered from its own payment. No CONTINUE batch: the window leaves no time for a second round.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Exposure: four $600 builds advanced before payout = $2,400 >> $250 cap",
+            "resolution": "ACCEPTED. Designers must quote payment on delivery (no advance) and buyers pay in full up front; a designer not accepting that is a stop condition, so the owner's money at risk is only the $122 test."
+          },
+          {
+            "finding": "Timeline: deposit day 7 + 14-day first payout + 7-day build = day 28",
+            "resolution": "ACCEPTED. The proof now requires Stripe to show the first payout on or before day 17, with builds ordered day 10 and delivered day 17; otherwise stop."
+          },
+          {
+            "finding": "Proof sizing: require consistent with 4 paid builds by ~day 10",
+            "resolution": "ACCEPTED. Proof is 4 full $1,500 payments by day 10; fewer stops the plan."
+          },
+          {
+            "finding": "Price: $1,500 near top of range; named-pros rates rejected; deposits measure it",
+            "resolution": "ACCEPTED. Removed the price disagreement and the rejected citation; price is ASSUMED and OFFER_AND_PRICE is in the chain's missing links and in resolves."
+          },
+          {
+            "finding": "Deliverability of a fresh domain; second batch conflicts with Growth's 1,000-contact limit",
+            "resolution": "ACCEPTED. Moved to Hypergrowth (25,000 contacts) and dropped the second batch; warm-up from day 0 with sends from day 2 is a risk the day-10 read measures, not evidence either way."
+          },
+          {
+            "finding": "Exclusions of resume, chatbot and Fiverr routes are correct",
+            "resolution": "Kept unchanged."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_8f572b0e324645218c0b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_1f0eda077b5945b4a459",
+            "why": "Budgets unreadable (HTTP 403) and 15+ wins needed in 21 days"
+          },
+          {
+            "opportunityId": "cop_1fb3fd705d854eff8d6e",
+            "why": "Price evidence rejected by the verifier; about 19 sales with no buyer count"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_73a43ac02ca6_f5f65d",
+        "digest": "73a43ac02ca68510212bba01",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:54:28.069Z"
+      },
+      "review": {
+        "revisionId": "rev_73a43ac02ca6_f5f65d",
+        "revisionDigest": "73a43ac02ca68510212bba01",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5959ea909de948cea40d/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5be413d22a5f4715b94f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a bounded $122 test is the honest stance: no buying signal, no close rate, no designer quote and no buyer-paid price exist for this offer, and the decisive gaps (CURRENT_DEMAND, CONVERSION) are what the test measures. The test is now sized to the goal and kept inside the $250 cap: buyers pay $1,500 in full up front, designers are paid on delivery from settled payments (never advanced), and the proof requires 4 paid orders, a <= $600 pay-on-delivery quote and Stripe's first payout by day 17 by day 10; otherwise stop at $122. Recomputed: $6,000 - $2,400 - 4 x $43.80 Stripe ($175.20) - $122 = $3,302.80 contribution >= $3,000; build day 10-17, payout <= day 17, designers paid day 17, all settled by day 21. Verified the channel figure (instantly.ai: Hypergrowth $107/mo, 25,000 contacts, 125,000 emails).",
+        "findings": [
+          "Margin is thin: 4 builds give ~$3,303; any designer quote above ~$675 or one refund breaks $3,000 - the <= $600 quote condition protects this.",
+          "Capacity: 4 concurrent 7-day builds (~60 designer-hours) from 'a designer quote'; the day-10 read should confirm the quoting designer(s) can take all four, or use two of the three quoted.",
+          "The proof bar (4 full payments from 2,000 fresh-domain cold emails in 8 days) is demanding; the stop rule makes the downside $122 and 11 owner hours.",
+          "Price is correctly ASSUMED and measured by the paid orders, not taken from the Thumbtack market range."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:56:30.721Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Net me $3,000 of profit after all direct costs within 21 days. I can risk at most $250.",
+        "terms": "182276615cf5e899",
+        "openings": {
+          "cop_1f0eda077b5945b4a459": "1ccd04d79d7e4471",
+          "cop_1fb3fd705d854eff8d6e": "f3a51b691c913aec",
+          "cop_8f572b0e324645218c0b": "a13b848ba663e968"
+        }
+      },
+      "at": "2026-11-27T08:56:39.995Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,1189 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_42287539b8684d76ad9f",
+      "words": "Keep $3,000 of net profit after direct costs, settled within 45 days, using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "CONTRIBUTION",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,000 of settled receipts net of direct costs within 45 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "f3ae9e2f552157f73f8f9e10"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_42287539b8684d76ad9f",
+        "contractDigest": "f3ae9e2f552157f73f8f9e10",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the five signed booth install-and-dismantle orders through Keystone Exhibit Labor",
+          "opportunityIds": [
+            "cop_cf55f4855699452cb4fd"
+          ],
+          "why": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders 2026-11; five written acceptances recorded); Keystone Exhibit Labor's written quote is $1,300 per show, so $900 net per show; exposure $0; cash usable 14 days after the show. 5 x $900 = $4,500 net (4 shows = $3,600) >= $3,000 net profit within 45 days with no up-front capital."
+        },
+        "alternatives": [
+          {
+            "title": "Add the three rush booth-graphics print orders",
+            "why": "Excluded: WideFormat's written cost is $1,950 per job against a $1,800 price — each job loses $150 and lowers net profit."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm show dates with the five exhibitors' event managers who signed $2,200 I&D labour orders",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_agree"
+            ],
+            "priceCents": 220000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Keystone Exhibit Labor installs and dismantles the five booths at its written $1,300-per-show quote",
+            "performer": "Keystone Exhibit Labor",
+            "costCents": 650000,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Keystone Exhibit Labor",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $2,200 per show; usable 14 days after the show",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 21,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 1100000,
+            "label": "Five signed I&D orders at $2,200",
+            "settlesDay": 21,
+            "stepId": "s3"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 650000,
+            "label": "Pay Keystone Exhibit Labor $1,300 x 5 shows from collected receipts (card exposure $0)",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 21,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 220000,
+            "unit": "cents per show",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "orders",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontract cost",
+            "status": "EVIDENCED",
+            "value": 130000,
+            "unit": "cents per show",
+            "sources": [
+              "s_cost",
+              "s_fulfil"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 14,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#price",
+            "dated": "2026-11",
+            "claim": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders, 2026-11)",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#agreements",
+            "dated": "2026-11",
+            "claim": "Five WRITTEN_ACCEPTANCE agreements of $2,200 each, state AGREED",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_fulfil",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#fulfillment",
+            "dated": "2026-11",
+            "claim": "Keystone Exhibit Labor (written quote, $1,300 per show) quoted to do the work",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#directCosts",
+            "dated": "2026-11",
+            "claim": "$1,300 direct cost per show",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "14 days to first cash",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_prcost",
+            "url": "https://brain.local/card/cop_6161cbadc1ed4d1a8bc7#directCosts",
+            "dated": "2026-11",
+            "claim": "$1,950 direct cost per rush print job against $1,800 price",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6161cbadc1ed4d1a8bc7"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cf55f4855699452cb4fd",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_6161cbadc1ed4d1a8bc7",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_6161cbadc1ed4d1a8bc7",
+            "why": "Direct cost $1,950 (WideFormat written quote) exceeds the $1,800 signed price: every job loses $150, so it cannot add net profit."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_cf55f4855699452cb4fd",
+            "deals": 5,
+            "price": 2200,
+            "directCost": 1300,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_42bbea937849_5e56fb",
+        "digest": "42bbea937849663f9aa4710b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbd0d0f85ff24b6596fc/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:28:16.310Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_42287539b8684d76ad9f",
+      "contractDigest": "f3ae9e2f552157f73f8f9e10",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Fulfil the five signed booth install-and-dismantle orders through Keystone Exhibit Labor",
+        "opportunityIds": [
+          "cop_cf55f4855699452cb4fd"
+        ],
+        "why": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders 2026-11; five written acceptances recorded); Keystone Exhibit Labor's written quote is $1,300 per show, so $900 net per show; exposure $0; cash usable 14 days after the show. 5 x $900 = $4,500 net (4 shows = $3,600) >= $3,000 net profit within 45 days with no up-front capital."
+      },
+      "alternatives": [
+        {
+          "title": "Add the three rush booth-graphics print orders",
+          "why": "Excluded: WideFormat's written cost is $1,950 per job against a $1,800 price — each job loses $150 and lowers net profit."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Confirm show dates with the five exhibitors' event managers who signed $2,200 I&D labour orders",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price",
+            "s_agree"
+          ],
+          "priceCents": 220000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "DELIVER",
+          "label": "Keystone Exhibit Labor installs and dismantles the five booths at its written $1,300-per-show quote",
+          "performer": "Keystone Exhibit Labor",
+          "costCents": 650000,
+          "day": 7,
+          "dependsOn": "s1",
+          "evidence": [
+            "s_fulfil",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Keystone Exhibit Labor",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $2,200 per show; usable 14 days after the show",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 21,
+          "dependsOn": "s2",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 7,
+          "kind": "RECEIPT",
+          "amountCents": 1100000,
+          "label": "Five signed I&D orders at $2,200",
+          "settlesDay": 21,
+          "stepId": "s3"
+        },
+        {
+          "day": 21,
+          "kind": "SPEND",
+          "amountCents": 650000,
+          "label": "Pay Keystone Exhibit Labor $1,300 x 5 shows from collected receipts (card exposure $0)",
+          "stepId": "s2"
+        }
+      ],
+      "proofDay": 21,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 220000,
+          "unit": "cents per show",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signed orders",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "orders",
+          "sources": [
+            "s_agree"
+          ],
+          "needs": null
+        },
+        {
+          "name": "subcontract cost",
+          "status": "EVIDENCED",
+          "value": 130000,
+          "unit": "cents per show",
+          "sources": [
+            "s_cost",
+            "s_fulfil"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to cash",
+          "status": "EVIDENCED",
+          "value": 14,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#price",
+          "dated": "2026-11",
+          "claim": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders, 2026-11)",
+          "population": "Trade show exhibitors who signed orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_cf55f4855699452cb4fd"
+        },
+        {
+          "id": "s_agree",
+          "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#agreements",
+          "dated": "2026-11",
+          "claim": "Five WRITTEN_ACCEPTANCE agreements of $2,200 each, state AGREED",
+          "population": "Trade show exhibitors who signed orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_cf55f4855699452cb4fd"
+        },
+        {
+          "id": "s_fulfil",
+          "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#fulfillment",
+          "dated": "2026-11",
+          "claim": "Keystone Exhibit Labor (written quote, $1,300 per show) quoted to do the work",
+          "population": "Trade show exhibitors who signed orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_cf55f4855699452cb4fd"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#directCosts",
+          "dated": "2026-11",
+          "claim": "$1,300 direct cost per show",
+          "population": "Trade show exhibitors who signed orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_cf55f4855699452cb4fd"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#timeToFirstCash",
+          "dated": "2026-11",
+          "claim": "14 days to first cash",
+          "population": "Trade show exhibitors who signed orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_cf55f4855699452cb4fd"
+        },
+        {
+          "id": "s_prcost",
+          "url": "https://brain.local/card/cop_6161cbadc1ed4d1a8bc7#directCosts",
+          "dated": "2026-11",
+          "claim": "$1,950 direct cost per rush print job against $1,800 price",
+          "population": "Trade show exhibitors who signed orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_6161cbadc1ed4d1a8bc7"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_cf55f4855699452cb4fd",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_6161cbadc1ed4d1a8bc7",
+          "missing": [
+            "ECONOMICS"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_6161cbadc1ed4d1a8bc7",
+          "why": "Direct cost $1,950 (WideFormat written quote) exceeds the $1,800 signed price: every job loses $150, so it cannot add net profit."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_cf55f4855699452cb4fd",
+          "deals": 5,
+          "price": 2200,
+          "directCost": 1300,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_42bbea937849_5e56fb",
+      "digest": "42bbea937849663f9aa4710b",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_fbd0d0f85ff24b6596fc/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:28:16.310Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_42bbea937849_5e56fb",
+      "digest": "42bbea937849663f9aa4710b",
+      "contractDigest": "f3ae9e2f552157f73f8f9e10",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 650000,
+        "committedOpenCents": 0,
+        "preProofCents": 650000,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 7,
+        "collectedCents": 1100000,
+        "collectedInWindowCents": 1100000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 450000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Combined, fastest money first: Rush booth-graphics printing f + Booth install-and-dismantle la\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Combined, fastest money first: Rush booth-graphics printing f + Booth install-and-dismantle la\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4500× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Booth install-and-dismantle labour for exhibitors at the regional conv\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_cf55f4855699452cb4fd"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Booth install-and-dismantle labour for exhibitors at the regional convention cen\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Booth install-and-dismantle labour for exhibitors at the regional convention cen\"",
+            "owner": "PERSON",
+            "cost": 1300
+          },
+          {
+            "label": "Collect payment for \"Booth install-and-dismantle labour for exhibitors at the regional convention cen\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_cf55f4855699452cb4fd",
+            "title": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Trade show exhibitors",
+              "reachableChannel": "The exhibitors' event managers who signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:00.629Z",
+              "offerScope": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+              "priceCents": 220000,
+              "currency": "USD",
+              "fulfillmentOwner": "Keystone Exhibit Labor (written quote, $1,300 per show)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "trade show exhibiting",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 220000,
+                "currency": "USD",
+                "deliverable": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 220000,
+                "currency": "USD",
+                "deliverable": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 220000,
+                "currency": "USD",
+                "deliverable": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 220000,
+                "currency": "USD",
+                "deliverable": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 220000,
+                "currency": "USD",
+                "deliverable": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The exhibitors' event managers who signed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 11000 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 11000 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Keystone Exhibit Labor (written quote, $1,300 per show) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 1300, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Booth install-and-dismantle labour for exhibitors at the regional convention centre to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$1300",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Keystone Exhibit Labor (written quote, $1,300 per show) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Trade show exhibitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders, 2026-11).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_6161cbadc1ed4d1a8bc7",
+            "title": "Rush booth-graphics printing for trade show exhibitors",
+            "missing": [
+              "ECONOMICS"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 0,
+            "potentialReach": 0,
+            "card": {
+              "payer": "Trade show exhibitors",
+              "reachableChannel": "The exhibitors' event managers who signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:00.629Z",
+              "offerScope": "Rush booth-graphics printing for trade show exhibitors",
+              "priceCents": 180000,
+              "currency": "USD",
+              "fulfillmentOwner": "WideFormat Print Co. (written quote, $1,950 per rush job)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "trade show exhibiting",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Rush booth-graphics printing for trade show exhibitors",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Rush booth-graphics printing for trade show exhibitors",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Rush booth-graphics printing for trade show exhibitors",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Rush booth-graphics printing for trade show exhibitors to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$1950",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "WideFormat Print Co. (written quote, $1,950 per rush job) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Trade show exhibitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Three exhibitors signed rush graphics orders at $1,800 each.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_dd2cf2f1352348dbb069",
+          "cnd_11c9c8a463854907a5eb",
+          "cnd_811e9d4c15374ddf93aa"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:25:32.717Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_42bbea937849_5e56fb",
+        "revisionDigest": "42bbea937849663f9aa4710b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbd0d0f85ff24b6596fc/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8d2d033cf34b4ff382ef/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Metric is contribution (settled receipts net of direct costs). The single member, booth install-and-dismantle labour, has every link established by its card's EVIDENCE: five WRITTEN_ACCEPTANCE orders at $2,200 per show (state AGREED) are real prices these exhibitors agreed to pay; the recorded fulfiller Keystone Exhibit Labor performs it on a written $1,300-per-show quote; exposure $0; cash usable 14 days after the show. Arithmetic recomputed: 5 x ($2,200 - $1,300) = $4,500 net >= $3,000 (four shows = $3,600 also clears it, so one lost order is absorbed); collected $11,000, subcontract $6,500 paid from collected receipts, capital out $0 = cap; show day 7 + 14 = settled day 21 of 45. The rush graphics opening is correctly excluded: its written cost $1,950 exceeds its $1,800 price, so each job lowers contribution. EXECUTABLE is right.",
+        "findings": [
+          "The five show dates are not on the card; the plan assumes day 7. Cash lands in the window for any show on or before day 31 (31 + 14 = 45); Brain should confirm the dates in s1 and drop any show after day 31 from the count (four shows still clear the target).",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup, not an evidential gap.",
+          "The $0 capital rests on the card's EVIDENCE exposure fact that Keystone is paid from collected receipts; if Keystone needs payment at the show, $6,500 would be out against a $0 cap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:32:31.211Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_42bbea937849_5e56fb",
+      "digest": "42bbea937849663f9aa4710b",
+      "contractDigest": "f3ae9e2f552157f73f8f9e10",
+      "plan": {
+        "goalId": "wst_42287539b8684d76ad9f",
+        "contractDigest": "f3ae9e2f552157f73f8f9e10",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the five signed booth install-and-dismantle orders through Keystone Exhibit Labor",
+          "opportunityIds": [
+            "cop_cf55f4855699452cb4fd"
+          ],
+          "why": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders 2026-11; five written acceptances recorded); Keystone Exhibit Labor's written quote is $1,300 per show, so $900 net per show; exposure $0; cash usable 14 days after the show. 5 x $900 = $4,500 net (4 shows = $3,600) >= $3,000 net profit within 45 days with no up-front capital."
+        },
+        "alternatives": [
+          {
+            "title": "Add the three rush booth-graphics print orders",
+            "why": "Excluded: WideFormat's written cost is $1,950 per job against a $1,800 price — each job loses $150 and lowers net profit."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm show dates with the five exhibitors' event managers who signed $2,200 I&D labour orders",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_agree"
+            ],
+            "priceCents": 220000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Keystone Exhibit Labor installs and dismantles the five booths at its written $1,300-per-show quote",
+            "performer": "Keystone Exhibit Labor",
+            "costCents": 650000,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Keystone Exhibit Labor",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $2,200 per show; usable 14 days after the show",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 21,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 1100000,
+            "label": "Five signed I&D orders at $2,200",
+            "settlesDay": 21,
+            "stepId": "s3"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 650000,
+            "label": "Pay Keystone Exhibit Labor $1,300 x 5 shows from collected receipts (card exposure $0)",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 21,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 220000,
+            "unit": "cents per show",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "orders",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontract cost",
+            "status": "EVIDENCED",
+            "value": 130000,
+            "unit": "cents per show",
+            "sources": [
+              "s_cost",
+              "s_fulfil"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 14,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#price",
+            "dated": "2026-11",
+            "claim": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders, 2026-11)",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#agreements",
+            "dated": "2026-11",
+            "claim": "Five WRITTEN_ACCEPTANCE agreements of $2,200 each, state AGREED",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_fulfil",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#fulfillment",
+            "dated": "2026-11",
+            "claim": "Keystone Exhibit Labor (written quote, $1,300 per show) quoted to do the work",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#directCosts",
+            "dated": "2026-11",
+            "claim": "$1,300 direct cost per show",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_cf55f4855699452cb4fd#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "14 days to first cash",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_cf55f4855699452cb4fd"
+          },
+          {
+            "id": "s_prcost",
+            "url": "https://brain.local/card/cop_6161cbadc1ed4d1a8bc7#directCosts",
+            "dated": "2026-11",
+            "claim": "$1,950 direct cost per rush print job against $1,800 price",
+            "population": "Trade show exhibitors who signed orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6161cbadc1ed4d1a8bc7"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cf55f4855699452cb4fd",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_6161cbadc1ed4d1a8bc7",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_6161cbadc1ed4d1a8bc7",
+            "why": "Direct cost $1,950 (WideFormat written quote) exceeds the $1,800 signed price: every job loses $150, so it cannot add net profit."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_cf55f4855699452cb4fd",
+            "deals": 5,
+            "price": 2200,
+            "directCost": 1300,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_42bbea937849_5e56fb",
+        "digest": "42bbea937849663f9aa4710b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbd0d0f85ff24b6596fc/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:28:16.310Z"
+      },
+      "review": {
+        "revisionId": "rev_42bbea937849_5e56fb",
+        "revisionDigest": "42bbea937849663f9aa4710b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbd0d0f85ff24b6596fc/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8d2d033cf34b4ff382ef/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Metric is contribution (settled receipts net of direct costs). The single member, booth install-and-dismantle labour, has every link established by its card's EVIDENCE: five WRITTEN_ACCEPTANCE orders at $2,200 per show (state AGREED) are real prices these exhibitors agreed to pay; the recorded fulfiller Keystone Exhibit Labor performs it on a written $1,300-per-show quote; exposure $0; cash usable 14 days after the show. Arithmetic recomputed: 5 x ($2,200 - $1,300) = $4,500 net >= $3,000 (four shows = $3,600 also clears it, so one lost order is absorbed); collected $11,000, subcontract $6,500 paid from collected receipts, capital out $0 = cap; show day 7 + 14 = settled day 21 of 45. The rush graphics opening is correctly excluded: its written cost $1,950 exceeds its $1,800 price, so each job lowers contribution. EXECUTABLE is right.",
+        "findings": [
+          "The five show dates are not on the card; the plan assumes day 7. Cash lands in the window for any show on or before day 31 (31 + 14 = 45); Brain should confirm the dates in s1 and drop any show after day 31 from the count (four shows still clear the target).",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup, not an evidential gap.",
+          "The $0 capital rests on the card's EVIDENCE exposure fact that Keystone is paid from collected receipts; if Keystone needs payment at the show, $6,500 would be out against a $0 cap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:32:31.211Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Keep $3,000 of net profit after direct costs, settled within 45 days, using no up-front capital.",
+        "terms": "5ea74034db6ac9ee",
+        "openings": {
+          "cop_6161cbadc1ed4d1a8bc7": "b41378071d9909ba",
+          "cop_cf55f4855699452cb4fd": "328702bb5334164c"
+        }
+      },
+      "at": "2026-11-27T08:33:51.726Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

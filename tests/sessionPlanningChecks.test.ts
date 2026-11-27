@@ -274,6 +274,8 @@ describe('missing evidence is a gap, never an arithmetic ceiling (2026-11-27 run
     expect(ceiling(noPlan(['CONVERSION'], [{ constraint: 'TARGET', suggestion: 'relax the target to $3,500', basis: [{ opportunityId: 'o1', field: 'price' }] }]))).toBe(1);
     const detail = checkRevision(contract, noPlan(['CONVERSION'], [{ constraint: 'TARGET', suggestion: 'x', basis: [{ opportunityId: 'o1', field: 'price' }] }]), brain({ facts }), '2026-11-27').find((p) => p.code === 'CONSTRAINT_FROM_MISSING_EVIDENCE')!.detail;
     expect(detail).toMatch(/counted market.*buyerVolume/);
+    // Run 7, ag-11: MARKET_VOLUME marked missing, and the price and payer facts (both EVIDENCE) cited — still no count.
+    expect(ceiling(noPlan(['CONVERSION', 'MARKET_VOLUME'], [{ constraint: 'TARGET', suggestion: 'lower to $6,000', basis: [{ opportunityId: 'o1', field: 'timeToFirstCash' }] }]))).toBe(1);
     // Control: the same judgement with the counted market cited is a real limit (ac-20: 380 dealerships × $500).
     expect(ceiling(noPlan(['CONVERSION'], [{ constraint: 'TARGET', suggestion: 'about $190,000', basis: [{ opportunityId: 'o1', field: 'buyerVolume' }, { opportunityId: 'o1', field: 'price' }] }]))).toBe(0);
   });
@@ -361,6 +363,12 @@ describe('a conditional plan names its decisive link, and a discovered opening c
     expect(unsourced(conditional({ sources: [card] }))).toBe(1);
     expect(unsourced(conditional({ sources: [] }))).toBe(1);
   });
+  it('refuses a weighed alternative the session discovered and left uncited, even when the plan builds on none (run 7)', () => {
+    const weighed = conditional({ strategy: { title: 's', opportunityIds: [], why: 'w' }, stance: 'NO_PLAN', chain: [{ opportunityId: 'o1', missing: ['OFFER_AND_PRICE'] }, { opportunityId: 'o2', missing: ['CONVERSION'] }], sources: [page] });
+    expect(unsourced(weighed, brain({ discovered: ['o1', 'o2'] }))).toBe(1);
+    expect(unsourced({ ...weighed, sources: [page, { ...page, id: 's3', url: 'https://www.example.org/upwork-job/123', opportunityId: 'o2' }] }, brain({ discovered: ['o1', 'o2'] }))).toBe(0);
+  });
+
   it('controls: a public page about the opening passes; an opening filed by research (not discovered by the session) needs none', () => {
     expect(unsourced(conditional({ sources: [card, page] }))).toBe(0);
     expect(unsourced(conditional({ sources: [card] }), brain())).toBe(0);

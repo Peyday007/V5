@@ -1,0 +1,97 @@
+[
+  {
+    "id": "ae-01-small-target-owner-hours-short",
+    "objective": "Bring in $1,000 of settled cash within 14 days. I have no money to put in, and I can give this at most 2 hours a week.",
+    "rubric": {
+      "constraints": { "targetUsd": 1000, "windowDays": 14, "capitalMaxUsd": 0, "ownerHoursMax": 4, "netObjective": false, "industry": null },
+      "notes": "2 hours a week over 14 days is 4 owner hours in total, for everything the owner does (selling, delivering, approving, chasing payment). No capital means no paid ads, purchased lists, inventory, tools or subscriptions that must be paid before cash arrives. Settlement must land inside day 14, so payment terms longer than the remaining window, marketplace payout holds and net-30 invoices disqualify a leg.",
+      "passIf": [
+        "(A) EXECUTABLE: names at least one concrete opportunity (buyer, offer, price) discovered from public sources with citations (URLs) that a grader can open, AND every chain link of each counted leg is evidenced: a reachable buyer through a stated channel, a dated current buying signal, a price shown paid by this kind of buyer for this deliverable (not a reward, grant, wage or another product's price), measured or written conversion FOR THIS SELLER (or signed agreements), a counted buyer volume (not a category total shared among many sellers), a named fulfiller (Brain only where Brain demonstrably produces it), direct cost below price, payout arriving before day 14; and the cautious arithmetic reaches $1,000 using 0 capital and <= 4 owner hours.",
+        "(B) NO_PLAN or CONDITIONAL: names >= 2 specific discovered opportunities with public citations (each with its buyer, offer and evidenced or candidate price), states which chain link is decisive for each (for a fresh seller usually CONVERSION and/or MARKET_VOLUME for this seller, or a payout-timing link), and gives a concrete experiment that measures it inside the limits: $0 spend, total owner time <= 4 hours (Brain does the outreach/production), finishes with time left for cash to settle before day 14, with an explicit proof rule (e.g. N paid orders from M contacts by day D) and a stop rule (abandon/redirect if fewer than X by day D)."
+      ],
+      "incorrectIf": [
+        "A generic refusal or 'not enough information' without discovered, cited opportunities.",
+        "Opportunities that are categories ('freelancing', 'sell templates') rather than a specific buyer, offer and price with a source.",
+        "The decisive link named is wrong for the evidence (e.g. calls the price missing when a cited price exists and conversion is the real unknown) or no link is named.",
+        "The experiment needs money, needs the owner to do more than 4 hours of work, or cannot produce settled cash or a decision before day 14.",
+        "Concludes the $1,000 target is arithmetically out of reach because evidence is missing (missing evidence never makes a target infeasible)."
+      ],
+      "criticalIf": [
+        "Calls a plan EXECUTABLE whose price, conversion, volume, fulfiller or settlement is an estimate, a person's word, an industry average, a category total or an uncited claim.",
+        "Counts a bounty, grant, prize, reward or wage as the price a buyer pays for the deliverable, or models one named organisation as a population of repeat buyers.",
+        "An executable plan that requires any up-front spend, more than 4 owner hours, or cash that settles after day 14.",
+        "An executable plan whose member has direct cost at or above price."
+      ]
+    }
+  },
+  {
+    "id": "ae-02-named-industry-medium",
+    "objective": "Make $5,000 in the next 30 days selling to independent optometry practices. I can spend up to $500 to get it going.",
+    "rubric": {
+      "constraints": { "targetUsd": 5000, "windowDays": 30, "capitalMaxUsd": 500, "ownerHoursMax": null, "netObjective": false, "industry": "independent optometry practices" },
+      "notes": "The named industry binds: every counted buyer must be an independent optometry practice (not ophthalmology hospital groups, chains or patients). Capital: at most $500 tied up before it pays. Settlement inside day 30.",
+      "passIf": [
+        "(A) EXECUTABLE: one or more offers to independent optometry practices, each discovered and cited from public sources, with every chain link evidenced (reachable practices through a stated channel such as a state board licensee list or association directory, a dated buying signal, a price shown paid by optometry practices for this deliverable, measured conversion for this seller or signed agreements, a counted practice population, a named fulfiller, cost below price, cash before day 30), spending <= $500, and cautious arithmetic reaching $5,000.",
+        "(B) NO_PLAN or CONDITIONAL: names >= 2 specific opportunities inside independent optometry with public citations (e.g. a compliance, billing, recall, inventory or credentialing need with a sourced price paid by practices), counts the reachable practice population from a cited source where one exists, identifies the decisive missing link (typically conversion for this seller, or a price evidenced only for a different buyer), and gives an experiment inside the limits: <= $500 spend, results early enough in the 30 days that cash can still settle, with a proof rule (N paid of M practices contacted by day D, implying the target at the measured rate and counted population) and a stop rule."
+      ],
+      "incorrectIf": [
+        "Proposes or counts openings outside independent optometry practices.",
+        "Generic refusal, or no specific cited optometry opportunities.",
+        "Wrong or no decisive link; or an experiment that spends over $500 or cannot conclude in time for cash to settle by day 30.",
+        "Declares the target infeasible without a counted market showing it (e.g. practices x evidenced price below $5,000)."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan using a buyer outside the named industry.",
+        "An EXECUTABLE plan on an unverified, estimated, word-only, contradicted or other-buyer price, or on volume that is a category total not reachable by this seller.",
+        "An EXECUTABLE plan tying up more than $500, settling after day 30, or with a member whose cost meets or exceeds its price.",
+        "Counting a grant, reimbursement or rebate (e.g. an insurer or vision-plan reimbursement paid to the practice) as what the practice pays for the deliverable."
+      ]
+    }
+  },
+  {
+    "id": "ae-03-large-target-capital",
+    "objective": "I want $12,000 of cash in the bank within 45 days. I can put up to $2,500 of my own money into it. Any industry is fine.",
+    "rubric": {
+      "constraints": { "targetUsd": 12000, "windowDays": 45, "capitalMaxUsd": 2500, "ownerHoursMax": null, "netObjective": false, "industry": null },
+      "notes": "No industry excluded. Capital up to $2,500 may be tied up at once (inventory, deposits, a supplier prepayment), but it must come back or be covered within the window; cash collected after day 45 does not count. A large target in a modest window: repeatability or several buyers is required, so market volume and conversion for this seller matter.",
+      "passIf": [
+        "(A) EXECUTABLE: a portfolio of one or more cited, discovered openings whose every link is evidenced (as in §2), whose capital tied up at any time is <= $2,500, whose payouts settle by day 45, and whose cautious arithmetic (evidenced price x measured conversion for this seller x counted reachable buyers, or signed agreements) reaches $12,000.",
+        "(B) NO_PLAN or CONDITIONAL: names >= 2 specific discovered opportunities with public citations and their evidenced prices and counted buyer populations, explains which link is decisive for each (e.g. conversion unmeasured for this seller; a resale's buy-side price or sell-through unverified; fulfiller unconfirmed), and proposes a staged experiment inside $2,500 and the 45 days, e.g. a small first lot or a priced outreach batch, with an explicit proof rule (what result implies $12,000 at the measured rate inside the remaining window) and a stop rule capping loss within the capital limit."
+      ],
+      "incorrectIf": [
+        "Generic refusal; no cited opportunities; a list of business ideas without buyers and sourced prices.",
+        "Wrong or no decisive link.",
+        "An experiment that commits more than $2,500, or whose results arrive too late for scaled cash to settle by day 45.",
+        "Declares $12,000 infeasible from missing evidence rather than from a counted market or capital arithmetic."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan resting on an estimated, word-only, uncited or contradicted price, conversion, volume, cost or settlement.",
+        "An EXECUTABLE plan tying up more than $2,500 at once, or with cash settling after day 45.",
+        "An EXECUTABLE plan with a member whose cost meets or exceeds price, or one counting a grant/bounty/reward as a purchase price, or one organisation modelled as many repeat buyers."
+      ]
+    }
+  },
+  {
+    "id": "ae-04-net-profit-small-capital",
+    "objective": "Net me $3,000 of profit after all direct costs within 21 days. I can risk at most $250.",
+    "rubric": {
+      "constraints": { "targetUsd": 3000, "windowDays": 21, "capitalMaxUsd": 250, "ownerHoursMax": null, "netObjective": true, "industry": null },
+      "notes": "A net objective: the deals counted must keep $3,000 after their direct costs (subcontractor, supplier, materials, platform and payment fees). Gross revenue of $3,000 does not meet it. Capital at most $250; settlement by day 21.",
+      "passIf": [
+        "(A) EXECUTABLE: cited, discovered openings with every link evidenced, each member's direct cost evidenced and below price, and cautious arithmetic in which the counted deals' (price - direct cost) sums to >= $3,000, settling by day 21 with <= $250 tied up.",
+        "(B) NO_PLAN or CONDITIONAL: names >= 2 specific discovered opportunities with public citations, states for each its evidenced price AND direct cost (or names the cost as the missing link), identifies the decisive link (often conversion for this seller, or an unquoted fulfiller cost that decides the margin), and gives an experiment within $250 and early enough in the 21 days, with a proof rule expressed in kept margin (e.g. N paid deals at $X margin by day D implies $3,000 net) and a stop rule."
+      ],
+      "incorrectIf": [
+        "Reasons only in gross revenue (counts $3,000 of sales as meeting the target).",
+        "Generic refusal or no cited opportunities; wrong or no decisive link.",
+        "An experiment spending over $250 or unable to conclude in time for net cash to settle by day 21.",
+        "Declares the target infeasible from missing evidence rather than counted-market or margin arithmetic."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan reaching $3,000 only on gross revenue, or whose counted deals keep less than $3,000 after direct costs.",
+        "An EXECUTABLE plan with an unestablished or estimated direct cost, price, conversion, volume or settlement.",
+        "An EXECUTABLE plan tying up more than $250, settling after day 21, or with a member whose cost meets or exceeds price."
+      ]
+    }
+  }
+]

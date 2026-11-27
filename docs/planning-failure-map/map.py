@@ -733,3 +733,31 @@ WORKFLOW = [
    component='scripts/planningReliabilitySession.ts', inputs='published plans + rubrics', output='verdict/usable/e2e counts', consumer='completion claim',
    evidence=f'{_J}/run5-frozen (11/14, 0 critical)', remaining='Final acceptance on the frozen build carrying the W08/W11/W12/W18 repairs.'),
 ]
+
+# ---- Run 6 findings (frozen 48e1ca5; docs/planning-session-reliability-2026-11-26/run6-acceptance) ----
+_R6 = f'{_J}/run6-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W02':
+        _w.update(status='PARTIAL', evidence=_w['evidence'] + f'; run 6 discovery 0/4 (no public provenance, no decisive link): {_R6}', remaining='Repaired in cfebfd5: a session-discovered opening must be cited to a public page (DISCOVERY_UNSOURCED). Fresh acceptance: run 7.')
+    if _w['id'] == 'W13':
+        _w.update(evidence=_w['evidence'] + f'; run 6 ac-15: a TARGET limit read from the openings on file, repaired in cfebfd5 (counted market: buyerVolume EVIDENCE)', remaining='Fresh acceptance: run 7.', status='PARTIAL')
+    if _w['id'] == 'W15':
+        _w.update(evidence=_w['evidence'] + '; run 6: four mid-run changes went unseen after publication', status='PARTIAL', remaining='Repaired in cfebfd5: planningState reports staleFinal with staleBecause when the basis of a published plan changes. Fresh acceptance: run 7.')
+    if _w['id'] == 'W09':
+        _w.update(remaining=_w['remaining'] + ' Run 6: a conditional plan had no decisive link; validation.decides required (cfebfd5).')
+    if _w['id'] == 'W22':
+        _w.update(evidence=f'{_R6}: 18/24 = 0.75 (Wilson 0.55-0.88), 0 critical, on 48e1ca5', remaining='Run 7 on cfebfd5 with fresh hidden cases (14 bench + 4 discovery).', status='PARTIAL')
+    if _w['id'] == 'W18':
+        _w.update(evidence=_w['evidence'] + '; run 6: 6 hosts OOM-killed mid-run, restarted on their databases with state intact')
+
+# ---- Run 7 (frozen cfebfd5; run7-acceptance) ----
+_R7 = f'{_J}/run7-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W15':
+        _w.update(status='PASS', evidence=_w['evidence'] + f'; run 7: three mid-run changes re-planned unprompted via staleBecause ({_R7})', remaining='—')
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 7 on cfebfd5: 14/18 = 0.78 (Wilson 0.55-0.91), 0 critical ({_R7})', remaining='Run 8 on the build carrying the run 7 repairs (TARGET counted market always; provenance for every weighed discovered opening).')
+    if _w['id'] == 'W02':
+        _w.update(remaining='Run 7 discovery 1/4: alternatives left uncited; provenance now required for every weighed discovered opening. Fresh acceptance: run 8.')
+    if _w['id'] == 'W13':
+        _w.update(remaining='Run 7 ag-11: counted-market rule now applies to every TARGET limit. Fresh acceptance: run 8.')

@@ -1,0 +1,1500 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_5501a35b1e2140358d0b",
+      "words": "Collect $2,000 of settled cash within 28 days with no more than 2 hours a week of owner time and no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 200000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 28,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$2,000 of buyer payments settled within 28 days using at most 2 owner hours a week",
+        "ownerHoursPerWeek": 2,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "10b648cae397c1ee8051d0ea"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_5501a35b1e2140358d0b",
+        "contractDigest": "10b648cae397c1ee8051d0ea",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the home-inspector report template pack to uncontacted roster licensees by email",
+          "opportunityIds": [
+            "cop_a3be0b213ab04dada535"
+          ],
+          "why": "21 inspectors paid $250 each through this offer's checkout (payment processor records, 2026-11) from 210 contacts (10%); 890 roster licensees remain uncontacted, each buys one pack; Brain produces the spreadsheet deliverable; $4 direct cost from receipts; cash in 3 days. 10 x $250 = $2,500 >= $2,000 within 28 days with 0 owner hours and $0 up-front."
+        },
+        "alternatives": [
+          {
+            "title": "Owner peer-review of inspection reports ($300 x 4 signed)",
+            "why": "Excluded: the owner personally performs it at 5 hours per review; 4 reviews = 20 hours against an 8-hour window ceiling (2 h/week x 4 weeks), and even all 4 reach only $1,200."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email the offer to 150 of the 890 uncontacted licensees on the state home inspector licensing roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the state-standards-of-practice report template and defect narrative library at $250 with the checkout link",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Close 10 sales at $250 (measured 21 of 210 = 10% -> ~15 expected from 150 contacts)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Brain produces each buyer's template pack (10 x $4 direct cost, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 4,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Collect $250 per sale through the payment processor; usable 3 days after sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "10 checkout payments at $250",
+            "settlesDay": 6,
+            "stepId": "s5"
+          },
+          {
+            "day": 6,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost $4 x 10 packs, paid from settled receipts",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 25000,
+            "unit": "cents per pack",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "paid per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "uncontacted buyers",
+            "status": "EVIDENCED",
+            "value": 890,
+            "unit": "licensees",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents per deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "hours",
+            "sources": [
+              "s_delivery"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#price",
+            "dated": "2026-11",
+            "claim": "21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11)",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#conversionRates",
+            "dated": "2026-11",
+            "claim": "21 agreements from 210 contacts",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#buyerVolume",
+            "dated": "2026-11",
+            "claim": "Roster lists 1,100 active licensees with published email (counted 2026-11-18); 210 contacted, 890 not; each buys one pack",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#delivery",
+            "dated": "2026-11",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#directCosts",
+            "dated": "2026-11",
+            "claim": "$4 direct cost per deal",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "3 days to first cash",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_pfulfil",
+            "url": "https://brain.local/card/cop_7a1bab6aaf454299a44c#fulfillment",
+            "dated": "2026-11",
+            "claim": "The owner does the work personally (5 human hours per review on the card)",
+            "population": "Newly licensed home inspectors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7a1bab6aaf454299a44c"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_7a1bab6aaf454299a44c",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7a1bab6aaf454299a44c",
+            "why": "Fulfilled by the owner personally at 5 hours per review (card humanHours 5); the objective allows 2 owner hours a week (8 in the window), so at most one review fits, and all four signed reviews total only $1,200 against $2,000."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "deals": 10,
+            "price": 250,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "link": "OFFER_AND_PRICE",
+            "reason": "Established: the card's price fact is EVIDENCE — 21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11). That is a measured purchase price on this exact offer, not a guess."
+          },
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "link": "MARKET_VOLUME",
+            "reason": "Established: the card's buyerVolume fact is EVIDENCE — the state licensing roster lists 1,100 active licensees with published email (counted 2026-11-18), 890 not yet contacted, each buys one pack; 8-10 deals are needed."
+          }
+        ],
+        "revisionId": "rev_166eed8dd635_871a47",
+        "digest": "166eed8dd6357ceadb3c024e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3a6d586075e94b1faf47/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:57.854Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_5501a35b1e2140358d0b",
+      "contractDigest": "10b648cae397c1ee8051d0ea",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell the home-inspector report template pack to uncontacted roster licensees by email",
+        "opportunityIds": [
+          "cop_a3be0b213ab04dada535"
+        ],
+        "why": "21 inspectors paid $250 each through this offer's checkout (payment processor records, 2026-11) from 210 contacts (10%); 890 roster licensees remain uncontacted, each buys one pack; Brain produces the spreadsheet deliverable; $4 direct cost from receipts; cash in 3 days. 10 x $250 = $2,500 >= $2,000 within 28 days with 0 owner hours and $0 up-front."
+      },
+      "alternatives": [
+        {
+          "title": "Owner peer-review of inspection reports ($300 x 4 signed)",
+          "why": "Excluded: the owner personally performs it at 5 hours per review; 4 reviews = 20 hours against an 8-hour window ceiling (2 h/week x 4 weeks), and even all 4 reach only $1,200."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "REACH",
+          "label": "Email the offer to 150 of the 890 uncontacted licensees on the state home inspector licensing roster",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_volume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "OFFER",
+          "label": "Offer the state-standards-of-practice report template and defect narrative library at $250 with the checkout link",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "s1",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 25000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "SELL",
+          "label": "Close 10 sales at $250 (measured 21 of 210 = 10% -> ~15 expected from 150 contacts)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "s2",
+          "evidence": [
+            "s_conv",
+            "s_price"
+          ],
+          "priceCents": 25000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s4",
+          "kind": "DELIVER",
+          "label": "Brain produces each buyer's template pack (10 x $4 direct cost, paid from receipts)",
+          "performer": "BRAIN",
+          "costCents": 4000,
+          "day": 4,
+          "dependsOn": "s3",
+          "evidence": [
+            "s_delivery",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s5",
+          "kind": "COLLECT",
+          "label": "Collect $250 per sale through the payment processor; usable 3 days after sale",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 6,
+          "dependsOn": "s3",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 3,
+          "kind": "RECEIPT",
+          "amountCents": 250000,
+          "label": "10 checkout payments at $250",
+          "settlesDay": 6,
+          "stepId": "s5"
+        },
+        {
+          "day": 6,
+          "kind": "SPEND",
+          "amountCents": 4000,
+          "label": "Direct cost $4 x 10 packs, paid from settled receipts",
+          "stepId": "s4"
+        }
+      ],
+      "proofDay": 6,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 25000,
+          "unit": "cents per pack",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.1,
+          "unit": "paid per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "uncontacted buyers",
+          "status": "EVIDENCED",
+          "value": 890,
+          "unit": "licensees",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost",
+          "status": "EVIDENCED",
+          "value": 400,
+          "unit": "cents per deal",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to cash",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        },
+        {
+          "name": "owner hours",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "hours",
+          "sources": [
+            "s_delivery"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_a3be0b213ab04dada535#price",
+          "dated": "2026-11",
+          "claim": "21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11)",
+          "population": "Licensed home inspectors on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_a3be0b213ab04dada535"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_a3be0b213ab04dada535#conversionRates",
+          "dated": "2026-11",
+          "claim": "21 agreements from 210 contacts",
+          "population": "Licensed home inspectors on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_a3be0b213ab04dada535"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_a3be0b213ab04dada535#buyerVolume",
+          "dated": "2026-11",
+          "claim": "Roster lists 1,100 active licensees with published email (counted 2026-11-18); 210 contacted, 890 not; each buys one pack",
+          "population": "Licensed home inspectors on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_a3be0b213ab04dada535"
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_a3be0b213ab04dada535#delivery",
+          "dated": "2026-11",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Licensed home inspectors on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_a3be0b213ab04dada535"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_a3be0b213ab04dada535#directCosts",
+          "dated": "2026-11",
+          "claim": "$4 direct cost per deal",
+          "population": "Licensed home inspectors on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_a3be0b213ab04dada535"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_a3be0b213ab04dada535#timeToFirstCash",
+          "dated": "2026-11",
+          "claim": "3 days to first cash",
+          "population": "Licensed home inspectors on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_a3be0b213ab04dada535"
+        },
+        {
+          "id": "s_pfulfil",
+          "url": "https://brain.local/card/cop_7a1bab6aaf454299a44c#fulfillment",
+          "dated": "2026-11",
+          "claim": "The owner does the work personally (5 human hours per review on the card)",
+          "population": "Newly licensed home inspectors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_7a1bab6aaf454299a44c"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_7a1bab6aaf454299a44c",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_a3be0b213ab04dada535",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_7a1bab6aaf454299a44c",
+          "why": "Fulfilled by the owner personally at 5 hours per review (card humanHours 5); the objective allows 2 owner hours a week (8 in the window), so at most one review fits, and all four signed reviews total only $1,200 against $2,000."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_a3be0b213ab04dada535",
+          "deals": 10,
+          "price": 250,
+          "directCost": 4,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_a3be0b213ab04dada535",
+          "link": "OFFER_AND_PRICE",
+          "reason": "Established: the card's price fact is EVIDENCE — 21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11). That is a measured purchase price on this exact offer, not a guess."
+        },
+        {
+          "opportunityId": "cop_a3be0b213ab04dada535",
+          "link": "MARKET_VOLUME",
+          "reason": "Established: the card's buyerVolume fact is EVIDENCE — the state licensing roster lists 1,100 active licensees with published email (counted 2026-11-18), 890 not yet contacted, each buys one pack; 8-10 deals are needed."
+        }
+      ],
+      "revisionId": "rev_166eed8dd635_871a47",
+      "digest": "166eed8dd6357ceadb3c024e",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_3a6d586075e94b1faf47/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:27:57.854Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_166eed8dd635_871a47",
+      "digest": "166eed8dd6357ceadb3c024e",
+      "contractDigest": "10b648cae397c1ee8051d0ea",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 4000,
+        "committedOpenCents": 0,
+        "preProofCents": 4000,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 3,
+        "collectedCents": 250000,
+        "collectedInWindowCents": 250000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 246000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 2000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 1200). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 14760× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"State-standards-of-practice report template and defect narra\" needs [figure withheld] and keeps [figure withheld], 246× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Newly licensed home inspectors\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_7a1bab6aaf454299a44c",
+          "cop_a3be0b213ab04dada535"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"State-standards-of-practice report template and defect narrative library for hom\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"State-standards-of-practice report template and defect narrative library for hom\"",
+            "owner": "PERSON",
+            "cost": 4
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Newly licensed home inspectors",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Newly licensed home inspectors",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 0.5998510339191507
+          },
+          {
+            "label": "Collect payment for \"State-standards-of-practice report template and defect narrative library for hom\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 2000 USD still needed — the openings held reach at most 1200 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_7a1bab6aaf454299a44c",
+            "title": "Owner peer-review of home inspection reports before delivery",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1200,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "Newly licensed home inspectors",
+              "reachableChannel": "The inspectors who signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:21:55.112Z",
+              "offerScope": "Owner peer-review of home inspection reports before delivery",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 5,
+              "requiredCapabilities": [],
+              "industry": "home inspection",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Owner peer-review of home inspection reports before delivery",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Owner peer-review of home inspection reports before delivery",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Owner peer-review of home inspection reports before delivery",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Owner peer-review of home inspection reports before delivery",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The inspectors who signed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1200 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1200 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by The owner, personally (a person says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 28 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Owner peer-review of home inspection reports before delivery to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Newly licensed home inspectors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four new inspectors signed for a $300 report peer review.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "title": "State-standards-of-practice report template and defect narrative library for home inspectors",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 2000,
+            "card": {
+              "payer": "Licensed home inspectors",
+              "reachableChannel": "Direct email to addresses published on the state home inspector licensing roster",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:21:55.112Z",
+              "offerScope": "State-standards-of-practice report template and defect narrative library for home inspectors",
+              "priceCents": 25000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "home inspection",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state home inspector licensing roster lists 1,100 active licensees with a published email (counted 2026-11-18); 210 have been contacted, 890 have not. Each buys one pack.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell State-standards-of-practice report template and defect narrative library for home inspectors to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "21 agreements from 210 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Licensed home inspectors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "3 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_3cf1cbf7b59d45a7823c",
+          "cnd_b3bb94ec04294a069234"
+        ],
+        "scope": {
+          "targetCents": 200000,
+          "daysLeft": 28,
+          "hoursCeiling": 8,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 2
+        },
+        "at": "2026-11-27T08:25:08.452Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_166eed8dd635_871a47",
+        "revisionDigest": "166eed8dd6357ceadb3c024e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3a6d586075e94b1faf47/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_4809d06bbf9044e0917a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The template-pack member is established by its own card's EVIDENCE facts: price = 21 licensed inspectors actually paid $250 through this offer's checkout (payment processor records); conversion 21/210 = 10% on the same offer and roster; buyerVolume = 1,100 roster licensees with published email, 890 uncontacted, one pack each; delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET present); direct cost $4 < $250; exposure $0; usable cash 3 days after sale. Brain's NOT_VIABLE verdict rests on this opening showing OFFER_AND_PRICE and MARKET_VOLUME missing with an empty links list, i.e. it was never evaluated against these facts; the author's recorded disagreement cites the specific EVIDENCE facts that establish both, and I agree with it. Arithmetic recomputed: 10 x $250 = $2,500 >= $2,000; 150 contacts x 10% = 15 expected vs 10 needed (8 would suffice at exactly $2,000), with 740 more uncontacted licensees in reserve; direct cost 10 x $4 = $40 from settled receipts, so $0 up-front; net $2,460; sale day 3 + 3 = settled day 6 of 28. Every step is performed by Brain, so owner time stays inside 2 h/week. The excluded owner peer-review (5 owner hours per review, 4 x 5 = 20 h vs an 8 h window, and only $1,200 even if all ran) is correctly left out. EXECUTABLE is right.",
+        "findings": [
+          "The plan records owner hours as EVIDENCED 0, sourced to the delivery fact; the card's humanHours is 1, not 0. One hour fits the 2 h/week limit, so the stance survives, but the quantity should read 1 hour (card) rather than an evidenced zero.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED: setup before s1/s5, not an evidential gap.",
+          "Brain's snapshot of this opening has links: [] while its facts are all EVIDENCE; Brain should re-evaluate the card so its verdict reflects the recorded payment-processor price and roster count."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:32:15.924Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_166eed8dd635_871a47",
+      "digest": "166eed8dd6357ceadb3c024e",
+      "contractDigest": "10b648cae397c1ee8051d0ea",
+      "plan": {
+        "goalId": "wst_5501a35b1e2140358d0b",
+        "contractDigest": "10b648cae397c1ee8051d0ea",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the home-inspector report template pack to uncontacted roster licensees by email",
+          "opportunityIds": [
+            "cop_a3be0b213ab04dada535"
+          ],
+          "why": "21 inspectors paid $250 each through this offer's checkout (payment processor records, 2026-11) from 210 contacts (10%); 890 roster licensees remain uncontacted, each buys one pack; Brain produces the spreadsheet deliverable; $4 direct cost from receipts; cash in 3 days. 10 x $250 = $2,500 >= $2,000 within 28 days with 0 owner hours and $0 up-front."
+        },
+        "alternatives": [
+          {
+            "title": "Owner peer-review of inspection reports ($300 x 4 signed)",
+            "why": "Excluded: the owner personally performs it at 5 hours per review; 4 reviews = 20 hours against an 8-hour window ceiling (2 h/week x 4 weeks), and even all 4 reach only $1,200."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email the offer to 150 of the 890 uncontacted licensees on the state home inspector licensing roster",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the state-standards-of-practice report template and defect narrative library at $250 with the checkout link",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Close 10 sales at $250 (measured 21 of 210 = 10% -> ~15 expected from 150 contacts)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Brain produces each buyer's template pack (10 x $4 direct cost, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 4,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Collect $250 per sale through the payment processor; usable 3 days after sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "10 checkout payments at $250",
+            "settlesDay": 6,
+            "stepId": "s5"
+          },
+          {
+            "day": 6,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost $4 x 10 packs, paid from settled receipts",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 25000,
+            "unit": "cents per pack",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "paid per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "uncontacted buyers",
+            "status": "EVIDENCED",
+            "value": 890,
+            "unit": "licensees",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents per deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "hours",
+            "sources": [
+              "s_delivery"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#price",
+            "dated": "2026-11",
+            "claim": "21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11)",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#conversionRates",
+            "dated": "2026-11",
+            "claim": "21 agreements from 210 contacts",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#buyerVolume",
+            "dated": "2026-11",
+            "claim": "Roster lists 1,100 active licensees with published email (counted 2026-11-18); 210 contacted, 890 not; each buys one pack",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#delivery",
+            "dated": "2026-11",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#directCosts",
+            "dated": "2026-11",
+            "claim": "$4 direct cost per deal",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_a3be0b213ab04dada535#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "3 days to first cash",
+            "population": "Licensed home inspectors on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_a3be0b213ab04dada535"
+          },
+          {
+            "id": "s_pfulfil",
+            "url": "https://brain.local/card/cop_7a1bab6aaf454299a44c#fulfillment",
+            "dated": "2026-11",
+            "claim": "The owner does the work personally (5 human hours per review on the card)",
+            "population": "Newly licensed home inspectors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_7a1bab6aaf454299a44c"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_7a1bab6aaf454299a44c",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7a1bab6aaf454299a44c",
+            "why": "Fulfilled by the owner personally at 5 hours per review (card humanHours 5); the objective allows 2 owner hours a week (8 in the window), so at most one review fits, and all four signed reviews total only $1,200 against $2,000."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "deals": 10,
+            "price": 250,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "link": "OFFER_AND_PRICE",
+            "reason": "Established: the card's price fact is EVIDENCE — 21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11). That is a measured purchase price on this exact offer, not a guess."
+          },
+          {
+            "opportunityId": "cop_a3be0b213ab04dada535",
+            "link": "MARKET_VOLUME",
+            "reason": "Established: the card's buyerVolume fact is EVIDENCE — the state licensing roster lists 1,100 active licensees with published email (counted 2026-11-18), 890 not yet contacted, each buys one pack; 8-10 deals are needed."
+          }
+        ],
+        "revisionId": "rev_166eed8dd635_871a47",
+        "digest": "166eed8dd6357ceadb3c024e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3a6d586075e94b1faf47/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:57.854Z"
+      },
+      "review": {
+        "revisionId": "rev_166eed8dd635_871a47",
+        "revisionDigest": "166eed8dd6357ceadb3c024e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3a6d586075e94b1faf47/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_4809d06bbf9044e0917a/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The template-pack member is established by its own card's EVIDENCE facts: price = 21 licensed inspectors actually paid $250 through this offer's checkout (payment processor records); conversion 21/210 = 10% on the same offer and roster; buyerVolume = 1,100 roster licensees with published email, 890 uncontacted, one pack each; delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET present); direct cost $4 < $250; exposure $0; usable cash 3 days after sale. Brain's NOT_VIABLE verdict rests on this opening showing OFFER_AND_PRICE and MARKET_VOLUME missing with an empty links list, i.e. it was never evaluated against these facts; the author's recorded disagreement cites the specific EVIDENCE facts that establish both, and I agree with it. Arithmetic recomputed: 10 x $250 = $2,500 >= $2,000; 150 contacts x 10% = 15 expected vs 10 needed (8 would suffice at exactly $2,000), with 740 more uncontacted licensees in reserve; direct cost 10 x $4 = $40 from settled receipts, so $0 up-front; net $2,460; sale day 3 + 3 = settled day 6 of 28. Every step is performed by Brain, so owner time stays inside 2 h/week. The excluded owner peer-review (5 owner hours per review, 4 x 5 = 20 h vs an 8 h window, and only $1,200 even if all ran) is correctly left out. EXECUTABLE is right.",
+        "findings": [
+          "The plan records owner hours as EVIDENCED 0, sourced to the delivery fact; the card's humanHours is 1, not 0. One hour fits the 2 h/week limit, so the stance survives, but the quantity should read 1 hour (card) rather than an evidenced zero.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED: setup before s1/s5, not an evidential gap.",
+          "Brain's snapshot of this opening has links: [] while its facts are all EVIDENCE; Brain should re-evaluate the card so its verdict reflects the recorded payment-processor price and roster count."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:32:15.924Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $2,000 of settled cash within 28 days with no more than 2 hours a week of owner time and no up-front capital.",
+        "terms": "a17cc89ff9335487",
+        "openings": {
+          "cop_7a1bab6aaf454299a44c": "db8cf975e54cd738",
+          "cop_a3be0b213ab04dada535": "c856acac9e779f15"
+        }
+      },
+      "at": "2026-11-27T08:33:51.187Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

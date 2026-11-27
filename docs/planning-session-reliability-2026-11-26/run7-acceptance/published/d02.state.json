@@ -1,0 +1,3309 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_a1ad360caaa04e55b96e",
+      "words": "Make $5,000 in the next 30 days selling to independent optometry practices. I can spend up to $500 to get it going.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "COLLECTED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 50000,
+        "proofCondition": "first paid order from an independent optometry practice",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "975a8a15ef3002f82b39835d"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_a1ad360caaa04e55b96e",
+        "contractDigest": "975a8a15ef3002f82b39835d",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell two $2,500 website rebuilds to independent optometry practices, built by a Fiverr WordPress developer",
+          "opportunityIds": [
+            "cop_dd705eda7a0149d9b511"
+          ],
+          "why": "Two deals reach $5,000. Optometry practices are a large, publicly listed and reachable population (CMS NPI registry, 1,200+ optometrist organizations in Ohio alone), agencies publish $2,000-$25,000 for an optometrist site, and 5-page WordPress builds are sold on Fiverr for a few hundred dollars, so the margin and the $500 exposure cap fit if deals are staggered. What no record establishes is whether a practice will buy from a cold approach at $2,500 within the window (demand and close rate), so the plan starts with a bounded outreach test."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile / review-request setup at $500",
+            "why": "Needs 10 deals in 30 days, owner-performed, price and demand unestablished"
+          },
+          {
+            "title": "Monthly website-care retainer at $199",
+            "why": "Needs ~25 first-month retainers inside 30 days; not reachable on cold outreach"
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Pull optometrist organization records (address, phone) from the CMS NPI registry, find each practice's website, and send personalised rebuild offers by the owner's own email/phone to 150 practices with dated sites",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer: 5-page mobile WordPress rebuild with booking link, 10-day delivery, $2,500 paid up front by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure: count practices that sign and pay $2,500 by day 10",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "o1",
+            "evidence": [],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1d",
+            "kind": "SELL",
+            "label": "Close deal 1 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or1",
+            "kind": "ORDER",
+            "label": "Order the 5-page build for deal 1 from a Fiverr WordPress developer",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 9,
+            "dependsOn": "s1d",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 1 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 19,
+            "dependsOn": "or1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2d",
+            "kind": "SELL",
+            "label": "Close deal 2 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or2",
+            "kind": "ORDER",
+            "label": "Order deal 2 build after deal 1's payment has settled (keeps exposure under $500)",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 17,
+            "dependsOn": "s2d",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 2 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "or2",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Stripe payouts for both deals land in the owner's bank",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 28,
+            "dependsOn": "d2",
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 9,
+            "kind": "FUNDING",
+            "amountCents": 40000,
+            "label": "Owner advances deal 1 build cost (Stripe first payout not yet available)",
+            "stepId": "or1"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 1",
+            "stepId": "or1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 1 payment",
+            "settlesDay": 16,
+            "stepId": "s1d"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 2 payment",
+            "settlesDay": 17,
+            "stepId": "s2d"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 2 (paid from settled deal 1 cash)",
+            "stepId": "or2"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "close rate of cold outreach to independent optometry practices at $2,500",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-10 outreach test"
+          },
+          {
+            "name": "price an independent practice pays this seller for a rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a paid order at $2,500"
+          },
+          {
+            "name": "reachable optometrist organizations in Ohio (NPI registry)",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "organizations (lower bound)",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontracted build cost",
+            "status": "ESTIMATE",
+            "value": 400,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": "a quote from the chosen developer"
+          },
+          {
+            "name": "Stripe first payout delay",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days (up to 14)",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_dd705eda7a0149d9b511#price",
+            "dated": "2026-11-27",
+            "claim": "Offer price $2,500 (a hypothesis recorded on the card)",
+            "population": "independent optometry practices",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s2",
+            "url": "https://redefineweb.com/blog/optometrist-website-design-cost/",
+            "dated": "2026-01-24",
+            "claim": "Optometrist website design cost lands between $2,000 and $25,000 depending on scope (agency-published price list, not observed payments)",
+            "population": "optometry practices (agency's market)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s3",
+            "url": "https://npiregistry.cms.hhs.gov/api/?version=2.1&taxonomy_description=Optometrist&enumeration_type=NPI-2&state=OH&limit=200&skip=1000",
+            "dated": "2026-11-27",
+            "claim": "At least 1,200 optometrist organization records in Ohio, each with address and phone: the buyers exist and can be reached",
+            "population": "optometrist organizations (independent and some multi-specialty)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s4",
+            "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+            "dated": "2026-11-27",
+            "claim": "Fiverr gig: 5-page WordPress business website within 2 days for $250 — a fulfiller of this kind exists",
+            "population": "Fiverr WordPress developers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s5",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "First Stripe payout typically 7 days, up to 14 for some industries",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s6",
+            "url": "https://www.reviewofoptometry.com/article/Culture-Shift-The-Changing-Career-Prospects-and-Priorities-of-Todays-OD",
+            "dated": "2025-01-15",
+            "claim": "Private practice share of the optometric workforce fell from 51% to 41% (2017-2024)",
+            "population": "US optometrists",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          }
+        ],
+        "validation": {
+          "proof": "At least one independent optometry practice signs and pays $2,500 by Stripe link by day 10 from the 150-practice outreach",
+          "stop": [
+            "No paid order by day 10 after 150 personalised contacts: stop, spend nothing on builds",
+            "Developer quote above $500 for the scope: stop before ordering"
+          ],
+          "continue": [
+            "One paid order by day 10: order the build, keep selling for deal 2 with the same offer",
+            "Two or more replies asking for a lower price: re-offer at $2,000 (bottom of the published range) and re-measure"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "why": "10 owner-performed deals needed in 30 days; no established price or demand"
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "why": "~25 first-month retainers needed inside the window; not reachable"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "deals": 2,
+            "price": 2500,
+            "directCost": 400,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_4173e7abd464_1f501d",
+        "digest": "4173e7abd4642cf7ee5ee057",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_afc3bc74740940d4810f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:31:29.144Z"
+      },
+      {
+        "goalId": "wst_a1ad360caaa04e55b96e",
+        "contractDigest": "975a8a15ef3002f82b39835d",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell two $2,500 website rebuilds to independent optometry practices, built by a Fiverr WordPress developer",
+          "opportunityIds": [
+            "cop_dd705eda7a0149d9b511"
+          ],
+          "why": "Two deals reach $5,000. Optometry practices are a large, publicly listed and reachable population (CMS NPI registry, 1,200+ optometrist organizations in Ohio alone), agencies publish $2,000-$25,000 for an optometrist site, and 5-page WordPress builds are sold on Fiverr for a few hundred dollars, so the margin and the $500 exposure cap fit if deals are staggered. What no record establishes is whether a practice will buy from a cold approach at $2,500 within the window (demand and close rate), so the plan starts with a bounded outreach test."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile / review-request setup at $500",
+            "why": "Needs 10 deals in 30 days, owner-performed, price and demand unestablished"
+          },
+          {
+            "title": "Monthly website-care retainer at $199",
+            "why": "Needs ~25 first-month retainers inside 30 days; not reachable on cold outreach"
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Pull optometrist organization records (address, phone) from the CMS NPI registry, find each practice's website, and send personalised rebuild offers by the owner's own email/phone to 150 practices with dated sites",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer: 5-page mobile WordPress rebuild with booking link, 10-day delivery, $2,500 paid up front by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure: count practices that sign and pay $2,500 by day 10",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "o1",
+            "evidence": [
+              "close rate of cold outreach to independent optometry practices at $2,500"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1d",
+            "kind": "SELL",
+            "label": "Close deal 1 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or1",
+            "kind": "ORDER",
+            "label": "Order the 5-page build for deal 1 from a Fiverr WordPress developer",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 1 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "or1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2d",
+            "kind": "SELL",
+            "label": "Close deal 2 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or2",
+            "kind": "ORDER",
+            "label": "Order deal 2 build after deal 1's payment has settled (keeps exposure under $500)",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 17,
+            "dependsOn": "s2d",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 2 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "or2",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Stripe payouts for both deals land in the owner's bank",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 28,
+            "dependsOn": "d2",
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "FUNDING",
+            "amountCents": 40000,
+            "label": "Owner advances deal 1 build cost (Stripe first payout not yet available)",
+            "stepId": "or1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 1",
+            "stepId": "or1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 1 payment",
+            "settlesDay": 16,
+            "stepId": "s1d"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 2 payment",
+            "settlesDay": 17,
+            "stepId": "s2d"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 2 (paid from settled deal 1 cash)",
+            "stepId": "or2"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "close rate of cold outreach to independent optometry practices at $2,500",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-10 outreach test"
+          },
+          {
+            "name": "price an independent practice pays this seller for a rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a paid order at $2,500"
+          },
+          {
+            "name": "reachable optometrist organizations in Ohio (NPI registry)",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "organizations (lower bound)",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontracted build cost",
+            "status": "ESTIMATE",
+            "value": 400,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": "a quote from the chosen developer"
+          },
+          {
+            "name": "Stripe first payout delay",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days (up to 14)",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_dd705eda7a0149d9b511#price",
+            "dated": "2026-11-27",
+            "claim": "Offer price $2,500 (a hypothesis recorded on the card)",
+            "population": "independent optometry practices",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s2",
+            "url": "https://redefineweb.com/blog/optometrist-website-design-cost/",
+            "dated": "2026-01-24",
+            "claim": "Optometrist website design cost lands between $2,000 and $25,000 depending on scope (agency-published price list, not observed payments)",
+            "population": "optometry practices (agency's market)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s3",
+            "url": "https://npiregistry.cms.hhs.gov/api/?version=2.1&taxonomy_description=Optometrist&enumeration_type=NPI-2&state=OH&limit=200&skip=1000",
+            "dated": "2026-11-27",
+            "claim": "At least 1,200 optometrist organization records in Ohio, each with address and phone: the buyers exist and can be reached",
+            "population": "optometrist organizations (independent and some multi-specialty)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s4",
+            "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+            "dated": "2026-11-27",
+            "claim": "Fiverr gig: 5-page WordPress business website within 2 days for $250 — a fulfiller of this kind exists",
+            "population": "Fiverr WordPress developers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s5",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "First Stripe payout typically 7 days, up to 14 for some industries",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s6",
+            "url": "https://www.reviewofoptometry.com/article/Culture-Shift-The-Changing-Career-Prospects-and-Priorities-of-Todays-OD",
+            "dated": "2025-01-15",
+            "claim": "Private practice share of the optometric workforce fell from 51% to 41% (2017-2024)",
+            "population": "US optometrists",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          }
+        ],
+        "validation": {
+          "proof": "At least one independent optometry practice signs and pays $2,500 by Stripe link by day 10 from the 150-practice outreach",
+          "stop": [
+            "No paid order by day 10 after 150 personalised contacts: stop, spend nothing on builds",
+            "Developer quote above $500 for the scope: stop before ordering"
+          ],
+          "continue": [
+            "One paid order by day 10: order the build, keep selling for deal 2 with the same offer",
+            "Two or more replies asking for a lower price: re-offer at $2,000 (bottom of the published range) and re-measure"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "why": "10 owner-performed deals needed in 30 days; no established price or demand"
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "why": "~25 first-month retainers needed inside the window; not reachable"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "deals": 2,
+            "price": 2500,
+            "directCost": 400,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c18fde0925b1_2059f8",
+        "digest": "c18fde0925b15b3154f37af3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_afc3bc74740940d4810f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:31:38.213Z"
+      },
+      {
+        "goalId": "wst_a1ad360caaa04e55b96e",
+        "contractDigest": "975a8a15ef3002f82b39835d",
+        "parentRevisionId": "rev_c18fde0925b1_2059f8",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell two $2,500 website rebuilds to independent optometry practices, built by a Fiverr WordPress developer",
+          "opportunityIds": [
+            "cop_dd705eda7a0149d9b511"
+          ],
+          "why": "Two deals reach $5,000. Optometry practices are a large, publicly listed and reachable population (CMS NPI registry, 1,200+ optometrist organizations in Ohio alone), agencies publish $2,000-$25,000 for an optometrist site, and 5-page WordPress builds are sold on Fiverr for a few hundred dollars, so the margin and the $500 exposure cap fit if deals are staggered. What no record establishes is whether a practice will buy from a cold approach at $2,500 within the window (demand and close rate), so the plan starts with a bounded outreach test."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile / review-request setup at $500",
+            "why": "Needs 10 deals in 30 days, owner-performed, price and demand unestablished"
+          },
+          {
+            "title": "Monthly website-care retainer at $199",
+            "why": "Needs ~25 first-month retainers inside 30 days; not reachable on cold outreach"
+          }
+        ],
+        "steps": [
+          {
+            "id": "q0",
+            "kind": "RESEARCH",
+            "label": "Before any outreach, get a written fixed quote from a named Fiverr WordPress developer for the exact scope (5 pages, online-booking link, eye-care copy supplied by the owner from Brain drafts) with delivery in 10 days or less; stop the plan if no quote <= $500 is obtained",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s4",
+              "subcontracted build cost"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Pull optometrist organization records (address, phone) from the CMS NPI registry, find each practice's website, and send personalised rebuild offers by the owner's own email/phone to 150 practices with dated sites",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "q0",
+            "evidence": [
+              "s3"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer: 5-page mobile WordPress rebuild with booking link, delivery within 14 days of payment, $2,500 paid up front by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "r1",
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure on day 10: paid orders at $2,500 and qualified replies from the first 150 contacts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "o1",
+            "evidence": [
+              "close rate of cold outreach to independent optometry practices at $2,500"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1d",
+            "kind": "SELL",
+            "label": "Close deal 1 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or1",
+            "kind": "ORDER",
+            "label": "Order the 5-page build for deal 1 from a Fiverr WordPress developer",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 1 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "or1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2d",
+            "kind": "SELL",
+            "label": "Close deal 2 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or2",
+            "kind": "ORDER",
+            "label": "Order deal 2 build only after deal 1's Stripe payout has settled (keeps exposure under $500); if the first payout takes the full 14 days, order on day 22 and use the quoted <=10-day delivery",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 17,
+            "dependsOn": "s2d",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 2 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "or2",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Stripe payouts for both deals land in the owner's bank (Stripe 2.9% + 30c per charge)",
+            "performer": "OWNER",
+            "costCents": 14560,
+            "day": 28,
+            "dependsOn": "d2",
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "FUNDING",
+            "amountCents": 40000,
+            "label": "Owner advances deal 1 build cost (Stripe first payout not yet available)",
+            "stepId": "or1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 1",
+            "stepId": "or1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 1 payment",
+            "settlesDay": 16,
+            "stepId": "s1d"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 2 payment",
+            "settlesDay": 17,
+            "stepId": "s2d"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 2 (paid from settled deal 1 cash)",
+            "stepId": "or2"
+          },
+          {
+            "day": 16,
+            "kind": "FEE",
+            "amountCents": 7280,
+            "label": "Stripe fee, deal 1",
+            "stepId": "c1"
+          },
+          {
+            "day": 17,
+            "kind": "FEE",
+            "amountCents": 7280,
+            "label": "Stripe fee, deal 2",
+            "stepId": "c1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "close rate of cold outreach to independent optometry practices at $2,500",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-10 outreach test"
+          },
+          {
+            "name": "price an independent practice pays this seller for a rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a paid order at $2,500"
+          },
+          {
+            "name": "optometrist-taxonomy organization NPI records in Ohio (superset of independent practices; includes multi-specialty and chains)",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "organization records (lower bound)",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontracted build cost",
+            "status": "ESTIMATE",
+            "value": 400,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": "the step q0 written quote for the exact scope"
+          },
+          {
+            "name": "Stripe first payout delay",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days (up to 14)",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_dd705eda7a0149d9b511#price",
+            "dated": "2026-11-27",
+            "claim": "Offer price $2,500 (a hypothesis recorded on the card)",
+            "population": "independent optometry practices",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s2",
+            "url": "https://redefineweb.com/blog/optometrist-website-design-cost/",
+            "dated": "2026-01-24",
+            "claim": "Optometrist website design cost lands between $2,000 and $25,000 depending on scope (agency-published price list, not observed payments)",
+            "population": "optometry practices (agency's market)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s3",
+            "url": "https://npiregistry.cms.hhs.gov/api/?version=2.1&taxonomy_description=Optometrist&enumeration_type=NPI-2&state=OH&limit=200&skip=1000",
+            "dated": "2026-11-27",
+            "claim": "At least 1,200 optometrist organization records in Ohio, each with address and phone: the buyers exist and can be reached",
+            "population": "optometrist organizations (independent and some multi-specialty)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s4",
+            "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+            "dated": "2026-11-27",
+            "claim": "Fiverr gig: 5-page WordPress business website within 2 days for $250 — a fulfiller of this kind exists",
+            "population": "Fiverr WordPress developers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s5",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "First Stripe payout typically 7 days, up to 14 for some industries",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s6",
+            "url": "https://www.reviewofoptometry.com/article/Culture-Shift-The-Changing-Career-Prospects-and-Priorities-of-Todays-OD",
+            "dated": "2025-01-15",
+            "claim": "Private practice share of the optometric workforce fell from 51% to 41% (2017-2024)",
+            "population": "US optometrists",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          }
+        ],
+        "validation": {
+          "proof": "Day 1: a named developer's written quote <= $500 for the exact scope with <= 10-day delivery. Day 10: at least one practice has signed and paid $2,500 from the first 150 contacts and at least 3 more qualified replies are open, so a second paid deal by day 16 is credible",
+          "stop": [
+            "No developer quote <= $500 for the scope on day 1-2: stop before contacting any practice",
+            "No paid order by day 10 after 150 personalised contacts: stop, spend nothing on builds",
+            "Deal 2 not paid by day 16: stop selling (no time to build and settle by day 30); deliver deal 1 only",
+            "Two or more replies objecting to the price: re-offer once at $2,000 and re-measure on the next 100 contacts"
+          ],
+          "continue": [
+            "Quote obtained: start outreach on day 2",
+            "One paid order and >= 3 qualified replies by day 10: order deal 1, contact 150 more practices on days 10-12 to close deal 2 by day 16"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "OFFER_AND_PRICE",
+            "FULFILMENT",
+            "ECONOMICS"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Recomputed: $5,000 collected; Stripe fee leaves ~$4,854 paid out",
+            "resolution": "Accepted: Stripe fees now appear as FEE outflows on the collect step; the contract metric is COLLECTED_CASH, so gross collections of $5,000 meet it."
+          },
+          {
+            "finding": "Delivery promise inconsistent with the schedule",
+            "resolution": "Accepted: the offer now promises delivery within 14 days of payment, which both deals meet (deal 1 paid day 8, delivered day 20; deal 2 paid day 14, delivered day 27)."
+          },
+          {
+            "finding": "Add a step 0: written quote from a named developer for the exact scope before outreach",
+            "resolution": "Accepted: step q0 obtains the quote on day 1 and the plan stops before any practice is contacted if no quote <= $500 exists, so no buyer money is ever taken without a fulfiller."
+          },
+          {
+            "finding": "Size the test to the target",
+            "resolution": "Accepted: proof now requires one paid order plus >= 3 open qualified replies by day 10, a continue rule of 150 more contacts on days 10-12, and a stop if deal 2 is not paid by day 16."
+          },
+          {
+            "finding": "The 1,200 NPI-2 records are a superset",
+            "resolution": "Accepted: the quantity is renamed as a lower bound on optometrist-taxonomy organization records, not on independent practices."
+          },
+          {
+            "finding": "SETTLES_IN_TIME: first Stripe payout up to 14 days",
+            "resolution": "Accepted: deal 2's build is ordered only once deal 1's payout has settled (day 22 at worst), using the quoted <= 10-day delivery; payment for deal 2 taken by day 16 settles by day 30 at worst (2-day rolling after the first payout)."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "fulfillmentOwner",
+              "brain:FULFILMENT"
+            ],
+            "finding": "FULFILMENT condition",
+            "resolution": "The card's fulfillment fact is a RECOMMENDATION; FULFILMENT is now measured by step q0's written quote before outreach and is in validation.decides."
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "directCosts",
+              "peakFundingCents",
+              "brain:ECONOMICS"
+            ],
+            "finding": "ECONOMICS condition",
+            "resolution": "directCosts $400 is an ESTIMATE; ECONOMICS is now measured by the same quote (stop above $500) and is in validation.decides."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "why": "10 owner-performed deals needed in 30 days; no established price or demand"
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "why": "~25 first-month retainers needed inside the window; not reachable"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "deals": 2,
+            "price": 2500,
+            "directCost": 400,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b89fa9430c00_533e7e",
+        "digest": "b89fa9430c000de6a3bb040c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_afc3bc74740940d4810f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:39:23.938Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_a1ad360caaa04e55b96e",
+      "contractDigest": "975a8a15ef3002f82b39835d",
+      "parentRevisionId": "rev_c18fde0925b1_2059f8",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Sell two $2,500 website rebuilds to independent optometry practices, built by a Fiverr WordPress developer",
+        "opportunityIds": [
+          "cop_dd705eda7a0149d9b511"
+        ],
+        "why": "Two deals reach $5,000. Optometry practices are a large, publicly listed and reachable population (CMS NPI registry, 1,200+ optometrist organizations in Ohio alone), agencies publish $2,000-$25,000 for an optometrist site, and 5-page WordPress builds are sold on Fiverr for a few hundred dollars, so the margin and the $500 exposure cap fit if deals are staggered. What no record establishes is whether a practice will buy from a cold approach at $2,500 within the window (demand and close rate), so the plan starts with a bounded outreach test."
+      },
+      "alternatives": [
+        {
+          "title": "Google Business Profile / review-request setup at $500",
+          "why": "Needs 10 deals in 30 days, owner-performed, price and demand unestablished"
+        },
+        {
+          "title": "Monthly website-care retainer at $199",
+          "why": "Needs ~25 first-month retainers inside 30 days; not reachable on cold outreach"
+        }
+      ],
+      "steps": [
+        {
+          "id": "q0",
+          "kind": "RESEARCH",
+          "label": "Before any outreach, get a written fixed quote from a named Fiverr WordPress developer for the exact scope (5 pages, online-booking link, eye-care copy supplied by the owner from Brain drafts) with delivery in 10 days or less; stop the plan if no quote <= $500 is obtained",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s4",
+            "subcontracted build cost"
+          ],
+          "ownerHours": 1,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "r1",
+          "kind": "REACH",
+          "label": "Pull optometrist organization records (address, phone) from the CMS NPI registry, find each practice's website, and send personalised rebuild offers by the owner's own email/phone to 150 practices with dated sites",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "q0",
+          "evidence": [
+            "s3"
+          ],
+          "ownerHours": 8,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "o1",
+          "kind": "OFFER",
+          "label": "Offer: 5-page mobile WordPress rebuild with booking link, delivery within 14 days of payment, $2,500 paid up front by Stripe link",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "r1",
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "ownerHours": 2,
+          "priceCents": 250000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Measure on day 10: paid orders at $2,500 and qualified replies from the first 150 contacts",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "o1",
+          "evidence": [
+            "close rate of cold outreach to independent optometry practices at $2,500"
+          ],
+          "ownerHours": 1,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s1d",
+          "kind": "SELL",
+          "label": "Close deal 1 and take payment by Stripe link",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "o1",
+          "evidence": [
+            "s1"
+          ],
+          "ownerHours": 2,
+          "priceCents": 250000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "or1",
+          "kind": "ORDER",
+          "label": "Order the 5-page build for deal 1 from a Fiverr WordPress developer",
+          "performer": "Fiverr WordPress developer",
+          "costCents": 40000,
+          "day": 10,
+          "dependsOn": "t1",
+          "evidence": [
+            "s4"
+          ],
+          "executor": {
+            "operation": "PAY_SUPPLIER",
+            "performedBy": "BRAIN",
+            "provider": "Fiverr WordPress developer",
+            "capabilities": [
+              {
+                "id": "PAY_A_SUPPLIER",
+                "state": "NOT_DECLARED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d1",
+          "kind": "DELIVER",
+          "label": "Developer builds deal 1 site; owner QA and handover",
+          "performer": "Fiverr WordPress developer",
+          "costCents": 0,
+          "day": 20,
+          "dependsOn": "or1",
+          "evidence": [
+            "s4"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Fiverr WordPress developer",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2d",
+          "kind": "SELL",
+          "label": "Close deal 2 and take payment by Stripe link",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 14,
+          "dependsOn": "o1",
+          "evidence": [
+            "s1"
+          ],
+          "ownerHours": 2,
+          "priceCents": 250000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "or2",
+          "kind": "ORDER",
+          "label": "Order deal 2 build only after deal 1's Stripe payout has settled (keeps exposure under $500); if the first payout takes the full 14 days, order on day 22 and use the quoted <=10-day delivery",
+          "performer": "Fiverr WordPress developer",
+          "costCents": 40000,
+          "day": 17,
+          "dependsOn": "s2d",
+          "evidence": [
+            "s4"
+          ],
+          "executor": {
+            "operation": "PAY_SUPPLIER",
+            "performedBy": "BRAIN",
+            "provider": "Fiverr WordPress developer",
+            "capabilities": [
+              {
+                "id": "PAY_A_SUPPLIER",
+                "state": "NOT_DECLARED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d2",
+          "kind": "DELIVER",
+          "label": "Developer builds deal 2 site; owner QA and handover",
+          "performer": "Fiverr WordPress developer",
+          "costCents": 0,
+          "day": 27,
+          "dependsOn": "or2",
+          "evidence": [
+            "s4"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Fiverr WordPress developer",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c1",
+          "kind": "COLLECT",
+          "label": "Stripe payouts for both deals land in the owner's bank (Stripe 2.9% + 30c per charge)",
+          "performer": "OWNER",
+          "costCents": 14560,
+          "day": 28,
+          "dependsOn": "d2",
+          "evidence": [
+            "s5"
+          ],
+          "ownerHours": 0.5,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 10,
+          "kind": "FUNDING",
+          "amountCents": 40000,
+          "label": "Owner advances deal 1 build cost (Stripe first payout not yet available)",
+          "stepId": "or1"
+        },
+        {
+          "day": 10,
+          "kind": "SPEND",
+          "amountCents": 40000,
+          "label": "Fiverr build, deal 1",
+          "stepId": "or1"
+        },
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 250000,
+          "label": "Deal 1 payment",
+          "settlesDay": 16,
+          "stepId": "s1d"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 250000,
+          "label": "Deal 2 payment",
+          "settlesDay": 17,
+          "stepId": "s2d"
+        },
+        {
+          "day": 17,
+          "kind": "SPEND",
+          "amountCents": 40000,
+          "label": "Fiverr build, deal 2 (paid from settled deal 1 cash)",
+          "stepId": "or2"
+        },
+        {
+          "day": 16,
+          "kind": "FEE",
+          "amountCents": 7280,
+          "label": "Stripe fee, deal 1",
+          "stepId": "c1"
+        },
+        {
+          "day": 17,
+          "kind": "FEE",
+          "amountCents": 7280,
+          "label": "Stripe fee, deal 2",
+          "stepId": "c1"
+        }
+      ],
+      "proofDay": 10,
+      "quantities": [
+        {
+          "name": "close rate of cold outreach to independent optometry practices at $2,500",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "ratio",
+          "sources": [],
+          "needs": "the day-10 outreach test"
+        },
+        {
+          "name": "price an independent practice pays this seller for a rebuild",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [],
+          "needs": "a paid order at $2,500"
+        },
+        {
+          "name": "optometrist-taxonomy organization NPI records in Ohio (superset of independent practices; includes multi-specialty and chains)",
+          "status": "EVIDENCED",
+          "value": 1200,
+          "unit": "organization records (lower bound)",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "subcontracted build cost",
+          "status": "ESTIMATE",
+          "value": 400,
+          "unit": "USD",
+          "sources": [
+            "s4"
+          ],
+          "needs": "the step q0 written quote for the exact scope"
+        },
+        {
+          "name": "Stripe first payout delay",
+          "status": "EVIDENCED",
+          "value": 7,
+          "unit": "days (up to 14)",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_dd705eda7a0149d9b511#price",
+          "dated": "2026-11-27",
+          "claim": "Offer price $2,500 (a hypothesis recorded on the card)",
+          "population": "independent optometry practices",
+          "matchesBuyer": true,
+          "opportunityId": "cop_dd705eda7a0149d9b511"
+        },
+        {
+          "id": "s2",
+          "url": "https://redefineweb.com/blog/optometrist-website-design-cost/",
+          "dated": "2026-01-24",
+          "claim": "Optometrist website design cost lands between $2,000 and $25,000 depending on scope (agency-published price list, not observed payments)",
+          "population": "optometry practices (agency's market)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_dd705eda7a0149d9b511"
+        },
+        {
+          "id": "s3",
+          "url": "https://npiregistry.cms.hhs.gov/api/?version=2.1&taxonomy_description=Optometrist&enumeration_type=NPI-2&state=OH&limit=200&skip=1000",
+          "dated": "2026-11-27",
+          "claim": "At least 1,200 optometrist organization records in Ohio, each with address and phone: the buyers exist and can be reached",
+          "population": "optometrist organizations (independent and some multi-specialty)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_dd705eda7a0149d9b511"
+        },
+        {
+          "id": "s4",
+          "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+          "dated": "2026-11-27",
+          "claim": "Fiverr gig: 5-page WordPress business website within 2 days for $250 — a fulfiller of this kind exists",
+          "population": "Fiverr WordPress developers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_dd705eda7a0149d9b511"
+        },
+        {
+          "id": "s5",
+          "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+          "dated": "2026-11-27",
+          "claim": "First Stripe payout typically 7 days, up to 14 for some industries",
+          "population": "new Stripe accounts",
+          "matchesBuyer": false,
+          "opportunityId": "cop_dd705eda7a0149d9b511"
+        },
+        {
+          "id": "s6",
+          "url": "https://www.reviewofoptometry.com/article/Culture-Shift-The-Changing-Career-Prospects-and-Priorities-of-Todays-OD",
+          "dated": "2025-01-15",
+          "claim": "Private practice share of the optometric workforce fell from 51% to 41% (2017-2024)",
+          "population": "US optometrists",
+          "matchesBuyer": true,
+          "opportunityId": "cop_dd705eda7a0149d9b511"
+        }
+      ],
+      "validation": {
+        "proof": "Day 1: a named developer's written quote <= $500 for the exact scope with <= 10-day delivery. Day 10: at least one practice has signed and paid $2,500 from the first 150 contacts and at least 3 more qualified replies are open, so a second paid deal by day 16 is credible",
+        "stop": [
+          "No developer quote <= $500 for the scope on day 1-2: stop before contacting any practice",
+          "No paid order by day 10 after 150 personalised contacts: stop, spend nothing on builds",
+          "Deal 2 not paid by day 16: stop selling (no time to build and settle by day 30); deliver deal 1 only",
+          "Two or more replies objecting to the price: re-offer once at $2,000 and re-measure on the next 100 contacts"
+        ],
+        "continue": [
+          "Quote obtained: start outreach on day 2",
+          "One paid order and >= 3 qualified replies by day 10: order deal 1, contact 150 more practices on days 10-12 to close deal 2 by day 16"
+        ],
+        "decides": [
+          "CURRENT_DEMAND",
+          "CONVERSION",
+          "OFFER_AND_PRICE",
+          "FULFILMENT",
+          "ECONOMICS"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Recomputed: $5,000 collected; Stripe fee leaves ~$4,854 paid out",
+          "resolution": "Accepted: Stripe fees now appear as FEE outflows on the collect step; the contract metric is COLLECTED_CASH, so gross collections of $5,000 meet it."
+        },
+        {
+          "finding": "Delivery promise inconsistent with the schedule",
+          "resolution": "Accepted: the offer now promises delivery within 14 days of payment, which both deals meet (deal 1 paid day 8, delivered day 20; deal 2 paid day 14, delivered day 27)."
+        },
+        {
+          "finding": "Add a step 0: written quote from a named developer for the exact scope before outreach",
+          "resolution": "Accepted: step q0 obtains the quote on day 1 and the plan stops before any practice is contacted if no quote <= $500 exists, so no buyer money is ever taken without a fulfiller."
+        },
+        {
+          "finding": "Size the test to the target",
+          "resolution": "Accepted: proof now requires one paid order plus >= 3 open qualified replies by day 10, a continue rule of 150 more contacts on days 10-12, and a stop if deal 2 is not paid by day 16."
+        },
+        {
+          "finding": "The 1,200 NPI-2 records are a superset",
+          "resolution": "Accepted: the quantity is renamed as a lower bound on optometrist-taxonomy organization records, not on independent practices."
+        },
+        {
+          "finding": "SETTLES_IN_TIME: first Stripe payout up to 14 days",
+          "resolution": "Accepted: deal 2's build is ordered only once deal 1's payout has settled (day 22 at worst), using the quoted <= 10-day delivery; payment for deal 2 taken by day 16 settles by day 30 at worst (2-day rolling after the first payout)."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "fulfillment",
+            "fulfillmentOwner",
+            "brain:FULFILMENT"
+          ],
+          "finding": "FULFILMENT condition",
+          "resolution": "The card's fulfillment fact is a RECOMMENDATION; FULFILMENT is now measured by step q0's written quote before outreach and is in validation.decides."
+        },
+        {
+          "condition": 1,
+          "decision": "ACCEPTED",
+          "records": [
+            "directCosts",
+            "peakFundingCents",
+            "brain:ECONOMICS"
+          ],
+          "finding": "ECONOMICS condition",
+          "resolution": "directCosts $400 is an ESTIMATE; ECONOMICS is now measured by the same quote (stop above $500) and is in validation.decides."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_dd705eda7a0149d9b511",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_ae7eed8fc1364011874d",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+          "why": "10 owner-performed deals needed in 30 days; no established price or demand"
+        },
+        {
+          "opportunityId": "cop_ae7eed8fc1364011874d",
+          "why": "~25 first-month retainers needed inside the window; not reachable"
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_dd705eda7a0149d9b511",
+          "deals": 2,
+          "price": 2500,
+          "directCost": 400,
+          "capital": 400
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_b89fa9430c00_533e7e",
+      "digest": "b89fa9430c000de6a3bb040c",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_afc3bc74740940d4810f/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:39:23.938Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_b89fa9430c00_533e7e",
+      "digest": "b89fa9430c000de6a3bb040c",
+      "contractDigest": "975a8a15ef3002f82b39835d",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 94560,
+        "committedOpenCents": 0,
+        "preProofCents": 40000,
+        "maxExposureCents": 40000,
+        "minCashCents": 50000,
+        "minCashDay": 8,
+        "collectedCents": 500000,
+        "collectedInWindowCents": 500000,
+        "refundsCents": 0,
+        "ownerFundedCents": 40000,
+        "netCents": 405440
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_dd705eda7a0149d9b511",
+          "cop_2a1ed845b64b46dbbf4c",
+          "cop_ae7eed8fc1364011874d"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "title": "Optometry practice website rebuild, subcontracted to a Fiverr WordPress developer",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 2500,
+            "card": {
+              "payer": "Independent optometry practice owners (ODs) with dated websites",
+              "reachableChannel": "Owner's own email and phone to practices listed in the CMS NPI registry (taxonomy Optometrist, organization records) and their websites",
+              "offerScope": "5-page mobile-friendly WordPress site rebuild with online-booking link and eye-care copy, delivered in 10 days",
+              "priceCents": 250000,
+              "currency": "USD",
+              "fulfillmentOwner": "Fiverr WordPress developer (5-page business site gigs, e.g. $250-$500 tiers)",
+              "peakFundingCents": 40000,
+              "humanHours": 6,
+              "requiredCapabilities": [],
+              "industry": "optometry / eye care",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Owner's own email and phone to practices listed in the CMS NPI registry (taxonom"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 2500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 400, tied up 400"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Owner's own email and phone to practices listed in the CMS NPI registry (taxonomy Optometrist, organization records) and their websites",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell 5-page mobile-friendly WordPress site rebuild with online-booking link and eye-care copy, delivered in 10 days to Independent optometry practice owners (ODs) with dated websites, reached through Owner's own email and phone to practices listed in the CMS NPI registry (taxonomy Optometrist, organization records) and their websites, at $2,500; Fiverr WordPress developer (5-page business site gigs, e.g. $250-$500 tiers) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Fiverr WordPress developer (5-page business site gigs, e.g. $250-$500 tiers).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "6 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "5-page mobile-friendly WordPress site rebuild with online-booking link and eye-care copy, delivered in 10 days",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Independent optometry practice owners (ODs) with dated websites",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$2,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$2,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://redefineweb.com/blog/optometrist-website-design-cost/; https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder; https://npiregistry.cms.hhs.gov/api/?version=2.1&taxonomy_description=Optometrist&enumeration_type=NPI-2&state=OH&limit=200; https://www.reviewofoptometry.com/article/Culture-Shift-The-Changing-Career-Prospects-and-Priorities-of-Todays-OD",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "title": "Google Business Profile and patient-review request setup for optometry practices (owner-performed)",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 500,
+            "card": {
+              "payer": "Independent optometry practices",
+              "reachableChannel": "Owner email/phone to NPI-registry optometry organizations",
+              "offerScope": "One-time Google Business Profile optimization plus compliant (non-gated) review-request text/email templates and QR cards",
+              "priceCents": 50000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 4,
+              "requiredCapabilities": [],
+              "industry": "optometry / eye care",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Owner email/phone to NPI-registry optometry organizations"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Owner email/phone to NPI-registry optometry organizations",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One-time Google Business Profile optimization plus compliant (non-gated) review-request text/email templates and QR cards to Independent optometry practices, reached through Owner email/phone to NPI-registry optometry organizations, at $500; The owner delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "4 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "One-time Google Business Profile optimization plus compliant (non-gated) review-request text/email templates and QR cards",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Independent optometry practices",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://thestacc.com/for/optometrists/; https://www.g2.com/products/reviewinstant/pricing; https://www.embedmyreviews.com/niches/optometrists-and-eye-care/; optometry practices count US",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "title": "Monthly website care / hosting retainer for optometry practices",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 199,
+            "card": {
+              "payer": "Independent optometry practices",
+              "reachableChannel": "Owner email to NPI-registry practices",
+              "offerScope": "Managed hosting, updates and monthly content edits",
+              "priceCents": 19900,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "optometry / eye care",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Owner email to NPI-registry practices"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 199 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 30, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Owner email to NPI-registry practices",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Managed hosting, updates and monthly content edits to Independent optometry practices, reached through Owner email to NPI-registry practices, at $199; The owner (with managed WordPress host) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$30",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner (with managed WordPress host).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "2 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Managed hosting, updates and monthly content edits",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Independent optometry practices",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$199",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$199",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://redefineweb.com/blog/optometrist-website-design-cost/; optometry website maintenance; optometry practices count",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:36:17.269Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_c18fde0925b1_2059f8",
+        "revisionDigest": "c18fde0925b15b3154f37af3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_afc3bc74740940d4810f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_294f568460ef4353b1df/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "A conditional outreach test is a reasonable shape, but the plan's live test decides only CURRENT_DEMAND and CONVERSION while four other links it relies on are unestablished and are not things only a live sale can measure. FULFILMENT and ECONOMICS rest on RECOMMENDATION facts only (a $250 Fiverr gig page, a $400 build ESTIMATE, no quote for the actual scope - 5 pages plus booking integration plus written eye-care copy, which a $250 template gig does not include); Brain marks both not established. These can be settled by research/quote at $0 before any practice is asked to pay $2,500 up front, yet no step obtains a quote before the sale - the 'quote above $500: stop' rule fires only after money has been taken (day 10), which would force a refund. OFFER_AND_PRICE is measured by the same test (a paid order at $2,500) and should be listed in validation.decides; the only published price evidence (agency bands) was rejected at the evidence gate as a seller's price list. The test's proof (one paid order by day 10) also does not decide the target of two deals: at ~1/150 it implies ~300 contacts for the second, with no rule for when deal 2 must close to deliver and settle by day 30.",
+        "findings": [
+          "Recomputed: 2 x $2,500 = $5,000 collected; direct cost 2 x $400 = $800 (ESTIMATE); max exposure $400 (owner advance day 10) <= $500 cap; Stripe 2.9% + 30c leaves ~$4,854 paid out - fine under COLLECTED_CASH but not if 'make $5,000' is read as net.",
+          "Delivery promise inconsistent with the schedule: offer says 10-day delivery, but deal 1 (paid day 8) is delivered day 20 and deal 2 (paid day 14) day 27.",
+          "Add a step 0: get a written quote from a named developer for the exact scope (pages, booking link, copy) before outreach; then FULFILMENT/ECONOMICS rest on evidence and the stop rule protects buyers' money.",
+          "Size the test to the target: proof should state what day-10 result makes two paid deals by ~day 17-20 credible (e.g. contact count/close-rate threshold), with a continue rule for further outreach and a stop if deal 2 is not paid by a stated day.",
+          "The 1,200 NPI-2 records are a superset (includes ophthalmology/multi-specialty and chains); enough for 150 contacts, but 'EVIDENCED' should be a lower bound on organisations, not on independent practices.",
+          "SETTLES_IN_TIME: first Stripe payout up to 14 days for some industries; deal 2 paid day 14 settles by day 28 at worst - inside 30, but with no slack."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:38:01.878Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "link": "FULFILMENT",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "fulfillment",
+            "why": "The card's fulfillment fact is a RECOMMENDATION (a Fiverr gig tier range); no EVIDENCE fact names a developer who has quoted or agreed to build this scope (5 pages, booking link, eye-care copy) in time."
+          },
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "link": "ECONOMICS",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "directCosts",
+            "why": "directCosts $400 is a RECOMMENDATION/ESTIMATE; no quote establishes the build cost for the scope, so margin and the $500 exposure fit are not evidenced."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_b89fa9430c00_533e7e",
+        "revisionDigest": "b89fa9430c000de6a3bb040c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_afc3bc74740940d4810f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_294f568460ef4353b1df/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now a startable, bounded plan. The unknowns it rests on - whether an independent practice buys from a cold approach at $2,500, and at what close rate - are ones only a live offer measures, and the plan names them in validation.decides together with price. FULFILMENT and ECONOMICS are settled before any buyer is contacted (step q0: a named developer's written quote <= $500 for the exact scope, stop otherwise), so no practice's money is taken without a fulfiller. Recomputed: 2 x $2,500 = $5,000 collected (COLLECTED_CASH, so gross meets the metric); builds 2 x $400 + Stripe fees 2 x $72.80 = $945.60; net $4,054.40; max exposure $400 (owner advance day 10) <= $500 cap, deal 2's build paid from deal 1's settled payout; proof day 10; deal 2 stop at day 16. Proof/stop/continue are sized to the two-deal target and every prior finding and both conditions are answered.",
+        "findings": [
+          "Worst-case timing: if the first Stripe payout takes the full 14 days, deal 1 settles day 22 and deal 2's build is ordered day 22; a <=10-day build then lands as late as day 32, after the window and past the 'within 14 days of payment' promise for a deal paid day 14-16. The q0 quote should require <= 6-day delivery (the referenced Fiverr gig advertises 2 days) or the stop should fire earlier.",
+          "Owner hours total ~16.5 h plus writing the eye-care copy from Brain drafts (not counted); the goal sets no hours limit, so this fits, but the copy hours should be measured on deal 1.",
+          "The NPI count is correctly relabelled as a lower bound on optometrist-taxonomy organisation records, a superset of independent practices; 300 contacts out of 1,200+ is plausible.",
+          "The agency price band (s2) is correctly labelled as a seller's price list, not observed payments; the plan does not lean on it as the price."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:40:44.036Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_b89fa9430c00_533e7e",
+      "digest": "b89fa9430c000de6a3bb040c",
+      "contractDigest": "975a8a15ef3002f82b39835d",
+      "plan": {
+        "goalId": "wst_a1ad360caaa04e55b96e",
+        "contractDigest": "975a8a15ef3002f82b39835d",
+        "parentRevisionId": "rev_c18fde0925b1_2059f8",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell two $2,500 website rebuilds to independent optometry practices, built by a Fiverr WordPress developer",
+          "opportunityIds": [
+            "cop_dd705eda7a0149d9b511"
+          ],
+          "why": "Two deals reach $5,000. Optometry practices are a large, publicly listed and reachable population (CMS NPI registry, 1,200+ optometrist organizations in Ohio alone), agencies publish $2,000-$25,000 for an optometrist site, and 5-page WordPress builds are sold on Fiverr for a few hundred dollars, so the margin and the $500 exposure cap fit if deals are staggered. What no record establishes is whether a practice will buy from a cold approach at $2,500 within the window (demand and close rate), so the plan starts with a bounded outreach test."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile / review-request setup at $500",
+            "why": "Needs 10 deals in 30 days, owner-performed, price and demand unestablished"
+          },
+          {
+            "title": "Monthly website-care retainer at $199",
+            "why": "Needs ~25 first-month retainers inside 30 days; not reachable on cold outreach"
+          }
+        ],
+        "steps": [
+          {
+            "id": "q0",
+            "kind": "RESEARCH",
+            "label": "Before any outreach, get a written fixed quote from a named Fiverr WordPress developer for the exact scope (5 pages, online-booking link, eye-care copy supplied by the owner from Brain drafts) with delivery in 10 days or less; stop the plan if no quote <= $500 is obtained",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s4",
+              "subcontracted build cost"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Pull optometrist organization records (address, phone) from the CMS NPI registry, find each practice's website, and send personalised rebuild offers by the owner's own email/phone to 150 practices with dated sites",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "q0",
+            "evidence": [
+              "s3"
+            ],
+            "ownerHours": 8,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Offer: 5-page mobile WordPress rebuild with booking link, delivery within 14 days of payment, $2,500 paid up front by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "r1",
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure on day 10: paid orders at $2,500 and qualified replies from the first 150 contacts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "o1",
+            "evidence": [
+              "close rate of cold outreach to independent optometry practices at $2,500"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1d",
+            "kind": "SELL",
+            "label": "Close deal 1 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or1",
+            "kind": "ORDER",
+            "label": "Order the 5-page build for deal 1 from a Fiverr WordPress developer",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 10,
+            "dependsOn": "t1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 1 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "or1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2d",
+            "kind": "SELL",
+            "label": "Close deal 2 and take payment by Stripe link",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "o1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 2,
+            "priceCents": 250000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "or2",
+            "kind": "ORDER",
+            "label": "Order deal 2 build only after deal 1's Stripe payout has settled (keeps exposure under $500); if the first payout takes the full 14 days, order on day 22 and use the quoted <=10-day delivery",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 40000,
+            "day": 17,
+            "dependsOn": "s2d",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "DELIVER",
+            "label": "Developer builds deal 2 site; owner QA and handover",
+            "performer": "Fiverr WordPress developer",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "or2",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr WordPress developer",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Stripe payouts for both deals land in the owner's bank (Stripe 2.9% + 30c per charge)",
+            "performer": "OWNER",
+            "costCents": 14560,
+            "day": 28,
+            "dependsOn": "d2",
+            "evidence": [
+              "s5"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "FUNDING",
+            "amountCents": 40000,
+            "label": "Owner advances deal 1 build cost (Stripe first payout not yet available)",
+            "stepId": "or1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 1",
+            "stepId": "or1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 1 payment",
+            "settlesDay": 16,
+            "stepId": "s1d"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 250000,
+            "label": "Deal 2 payment",
+            "settlesDay": 17,
+            "stepId": "s2d"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 40000,
+            "label": "Fiverr build, deal 2 (paid from settled deal 1 cash)",
+            "stepId": "or2"
+          },
+          {
+            "day": 16,
+            "kind": "FEE",
+            "amountCents": 7280,
+            "label": "Stripe fee, deal 1",
+            "stepId": "c1"
+          },
+          {
+            "day": 17,
+            "kind": "FEE",
+            "amountCents": 7280,
+            "label": "Stripe fee, deal 2",
+            "stepId": "c1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "close rate of cold outreach to independent optometry practices at $2,500",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "the day-10 outreach test"
+          },
+          {
+            "name": "price an independent practice pays this seller for a rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a paid order at $2,500"
+          },
+          {
+            "name": "optometrist-taxonomy organization NPI records in Ohio (superset of independent practices; includes multi-specialty and chains)",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "organization records (lower bound)",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontracted build cost",
+            "status": "ESTIMATE",
+            "value": 400,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": "the step q0 written quote for the exact scope"
+          },
+          {
+            "name": "Stripe first payout delay",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days (up to 14)",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_dd705eda7a0149d9b511#price",
+            "dated": "2026-11-27",
+            "claim": "Offer price $2,500 (a hypothesis recorded on the card)",
+            "population": "independent optometry practices",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s2",
+            "url": "https://redefineweb.com/blog/optometrist-website-design-cost/",
+            "dated": "2026-01-24",
+            "claim": "Optometrist website design cost lands between $2,000 and $25,000 depending on scope (agency-published price list, not observed payments)",
+            "population": "optometry practices (agency's market)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s3",
+            "url": "https://npiregistry.cms.hhs.gov/api/?version=2.1&taxonomy_description=Optometrist&enumeration_type=NPI-2&state=OH&limit=200&skip=1000",
+            "dated": "2026-11-27",
+            "claim": "At least 1,200 optometrist organization records in Ohio, each with address and phone: the buyers exist and can be reached",
+            "population": "optometrist organizations (independent and some multi-specialty)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s4",
+            "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+            "dated": "2026-11-27",
+            "claim": "Fiverr gig: 5-page WordPress business website within 2 days for $250 — a fulfiller of this kind exists",
+            "population": "Fiverr WordPress developers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s5",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "First Stripe payout typically 7 days, up to 14 for some industries",
+            "population": "new Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          },
+          {
+            "id": "s6",
+            "url": "https://www.reviewofoptometry.com/article/Culture-Shift-The-Changing-Career-Prospects-and-Priorities-of-Todays-OD",
+            "dated": "2025-01-15",
+            "claim": "Private practice share of the optometric workforce fell from 51% to 41% (2017-2024)",
+            "population": "US optometrists",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dd705eda7a0149d9b511"
+          }
+        ],
+        "validation": {
+          "proof": "Day 1: a named developer's written quote <= $500 for the exact scope with <= 10-day delivery. Day 10: at least one practice has signed and paid $2,500 from the first 150 contacts and at least 3 more qualified replies are open, so a second paid deal by day 16 is credible",
+          "stop": [
+            "No developer quote <= $500 for the scope on day 1-2: stop before contacting any practice",
+            "No paid order by day 10 after 150 personalised contacts: stop, spend nothing on builds",
+            "Deal 2 not paid by day 16: stop selling (no time to build and settle by day 30); deliver deal 1 only",
+            "Two or more replies objecting to the price: re-offer once at $2,000 and re-measure on the next 100 contacts"
+          ],
+          "continue": [
+            "Quote obtained: start outreach on day 2",
+            "One paid order and >= 3 qualified replies by day 10: order deal 1, contact 150 more practices on days 10-12 to close deal 2 by day 16"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "OFFER_AND_PRICE",
+            "FULFILMENT",
+            "ECONOMICS"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Recomputed: $5,000 collected; Stripe fee leaves ~$4,854 paid out",
+            "resolution": "Accepted: Stripe fees now appear as FEE outflows on the collect step; the contract metric is COLLECTED_CASH, so gross collections of $5,000 meet it."
+          },
+          {
+            "finding": "Delivery promise inconsistent with the schedule",
+            "resolution": "Accepted: the offer now promises delivery within 14 days of payment, which both deals meet (deal 1 paid day 8, delivered day 20; deal 2 paid day 14, delivered day 27)."
+          },
+          {
+            "finding": "Add a step 0: written quote from a named developer for the exact scope before outreach",
+            "resolution": "Accepted: step q0 obtains the quote on day 1 and the plan stops before any practice is contacted if no quote <= $500 exists, so no buyer money is ever taken without a fulfiller."
+          },
+          {
+            "finding": "Size the test to the target",
+            "resolution": "Accepted: proof now requires one paid order plus >= 3 open qualified replies by day 10, a continue rule of 150 more contacts on days 10-12, and a stop if deal 2 is not paid by day 16."
+          },
+          {
+            "finding": "The 1,200 NPI-2 records are a superset",
+            "resolution": "Accepted: the quantity is renamed as a lower bound on optometrist-taxonomy organization records, not on independent practices."
+          },
+          {
+            "finding": "SETTLES_IN_TIME: first Stripe payout up to 14 days",
+            "resolution": "Accepted: deal 2's build is ordered only once deal 1's payout has settled (day 22 at worst), using the quoted <= 10-day delivery; payment for deal 2 taken by day 16 settles by day 30 at worst (2-day rolling after the first payout)."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "fulfillmentOwner",
+              "brain:FULFILMENT"
+            ],
+            "finding": "FULFILMENT condition",
+            "resolution": "The card's fulfillment fact is a RECOMMENDATION; FULFILMENT is now measured by step q0's written quote before outreach and is in validation.decides."
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "directCosts",
+              "peakFundingCents",
+              "brain:ECONOMICS"
+            ],
+            "finding": "ECONOMICS condition",
+            "resolution": "directCosts $400 is an ESTIMATE; ECONOMICS is now measured by the same quote (stop above $500) and is in validation.decides."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_2a1ed845b64b46dbbf4c",
+            "why": "10 owner-performed deals needed in 30 days; no established price or demand"
+          },
+          {
+            "opportunityId": "cop_ae7eed8fc1364011874d",
+            "why": "~25 first-month retainers needed inside the window; not reachable"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_dd705eda7a0149d9b511",
+            "deals": 2,
+            "price": 2500,
+            "directCost": 400,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b89fa9430c00_533e7e",
+        "digest": "b89fa9430c000de6a3bb040c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_afc3bc74740940d4810f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:39:23.938Z"
+      },
+      "review": {
+        "revisionId": "rev_b89fa9430c00_533e7e",
+        "revisionDigest": "b89fa9430c000de6a3bb040c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_afc3bc74740940d4810f/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_294f568460ef4353b1df/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now a startable, bounded plan. The unknowns it rests on - whether an independent practice buys from a cold approach at $2,500, and at what close rate - are ones only a live offer measures, and the plan names them in validation.decides together with price. FULFILMENT and ECONOMICS are settled before any buyer is contacted (step q0: a named developer's written quote <= $500 for the exact scope, stop otherwise), so no practice's money is taken without a fulfiller. Recomputed: 2 x $2,500 = $5,000 collected (COLLECTED_CASH, so gross meets the metric); builds 2 x $400 + Stripe fees 2 x $72.80 = $945.60; net $4,054.40; max exposure $400 (owner advance day 10) <= $500 cap, deal 2's build paid from deal 1's settled payout; proof day 10; deal 2 stop at day 16. Proof/stop/continue are sized to the two-deal target and every prior finding and both conditions are answered.",
+        "findings": [
+          "Worst-case timing: if the first Stripe payout takes the full 14 days, deal 1 settles day 22 and deal 2's build is ordered day 22; a <=10-day build then lands as late as day 32, after the window and past the 'within 14 days of payment' promise for a deal paid day 14-16. The q0 quote should require <= 6-day delivery (the referenced Fiverr gig advertises 2 days) or the stop should fire earlier.",
+          "Owner hours total ~16.5 h plus writing the eye-care copy from Brain drafts (not counted); the goal sets no hours limit, so this fits, but the copy hours should be measured on deal 1.",
+          "The NPI count is correctly relabelled as a lower bound on optometrist-taxonomy organisation records, a superset of independent practices; 300 contacts out of 1,200+ is plausible.",
+          "The agency price band (s2) is correctly labelled as a seller's price list, not observed payments; the plan does not lean on it as the price."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:40:44.036Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Make $5,000 in the next 30 days selling to independent optometry practices. I can spend up to $500 to get it going.",
+        "terms": "22ec0849026890b9",
+        "openings": {
+          "cop_2a1ed845b64b46dbbf4c": "f40d80209f72c527",
+          "cop_ae7eed8fc1364011874d": "9e261c7af12c9b32",
+          "cop_dd705eda7a0149d9b511": "5345d3aa4640340c"
+        }
+      },
+      "at": "2026-11-27T08:41:34.827Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

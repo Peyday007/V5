@@ -521,7 +521,8 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
       if (!inputs) continue;
       for (const c of r.chain ?? []) {
         for (const l of inputs.needs) if (c.missing.includes(l)) add('CONSTRAINT_FROM_MISSING_EVIDENCE', `${k.constraint} is arithmetic on ${[inputs.binds, ...inputs.needs].join(' and ')}, but ${c.opportunityId}'s ${l} is not established; an unknown sets no ceiling. Name it as a decisive gap (noPlan.decisiveLinks) to research, not as a limit`, c.opportunityId);
-        if (!c.missing.includes(inputs.binds)) continue;
+        // TARGET's binding figure is a counted market, checked below whatever the chain says.
+        if (!c.missing.includes(inputs.binds) || k.constraint === 'TARGET') continue;
         const card = brain?.facts?.[c.opportunityId];
         const cited = (k.basis ?? []).filter((b) => b.opportunityId === c.opportunityId);
         const evidenced = cited.some((b) => (card ?? []).some((f) => f.field === b.field && f.kind === 'EVIDENCE'));
@@ -533,8 +534,9 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
        * request is not a population that ends at one (acceptance run 2026-11-27, ac-15: a $12,000 target declared out
        * of reach because the only opening was one company's $3,500 RFQ, while nothing counted the other buyers).
        */
-      // (Where a chain already marks MARKET_VOLUME missing, the check above has said so.)
-      if (k.constraint === 'TARGET' && !(r.chain ?? []).some((c) => c.missing.includes('MARKET_VOLUME'))) {
+      // Whether or not a chain marks MARKET_VOLUME missing: citing the price or the payer is not counting the market
+      // (run 7, ag-11: one transit authority's one $6,000 order, MARKET_VOLUME marked missing, `price` and `payer` cited).
+      if (k.constraint === 'TARGET') {
         const counted = (k.basis ?? []).some((b) => b.field === 'buyerVolume' && (brain?.facts?.[b.opportunityId] ?? []).some((f) => f.field === 'buyerVolume' && f.kind === 'EVIDENCE'));
         if (!counted) add('CONSTRAINT_FROM_MISSING_EVIDENCE', `TARGET says the market cannot carry the target, so it needs a counted market: cite an opening's EVIDENCE buyerVolume fact in its \`basis\`. Nothing here counts the buyers — the openings on file are not the whole market — so MARKET_VOLUME is unknown: name it as a decisive gap (noPlan.decisiveLinks) with research or a test that counts the market, not as a limit`, null);
       }
@@ -608,17 +610,20 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
         else if (!(r.resolves ?? []).includes(l)) add('CONDITIONAL_DECISIVE_UNNAMED', `\`validation.decides\` names ${l}, but \`resolves\` says the test does not measure it`);
       }
     }
-    /*
-     * An opening the session discovered is a hypothesis whose only provenance is what the session found: the plan cites,
-     * for each it builds on, a public source about that opening (a URL outside Brain), so the owner can see where the
-     * opportunity came from. A card link back into Brain is circular (acceptance run 2026-11-27, discovery worlds).
-     */
-    for (const id of r.strategy.opportunityIds) {
-      if (!brain?.discovered?.includes(id)) continue;
-      const cited = r.sources.some((x) => x.opportunityId === id && /^https?:\/\//i.test(x.url) && !/^https?:\/\/brain\.local\b/i.test(x.url));
-      if (!cited) add('DISCOVERY_UNSOURCED', `opening ${id} was discovered by this session: cite in \`sources\` (with \`opportunityId\`) the public page(s) that show it exists — the buyers, the offer or the request — not Brain's own card`, id);
-    }
     for (const id of r.strategy.opportunityIds) if (brain && !brain.admittedOpportunityIds.includes(id)) add('OPPORTUNITY_NOT_ADMITTED', `opening ${id} was never admitted to this goal; submit it as a route first`, id);
+  }
+
+  /*
+   * An opening the session discovered is a hypothesis whose only provenance is what the session found: the plan cites,
+   * for each it builds on, a public source about that opening (a URL outside Brain), so the owner can see where the
+   * opportunity came from. A card link back into Brain is circular (acceptance run 2026-11-27, discovery worlds).
+   */
+  // Every discovered opening the plan weighs, not only the one it builds on: alternatives left as uncited categories
+  // ("Upwork hourly work") are not discovered opportunities (run 7: three discovery plans cited one opening only).
+  for (const id of [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])]) {
+    if (!brain?.discovered?.includes(id)) continue;
+    const cited = r.sources.some((x) => x.opportunityId === id && /^https?:\/\//i.test(x.url) && !/^https?:\/\/brain\.local\b/i.test(x.url));
+    if (!cited) add('DISCOVERY_UNSOURCED', `opening ${id} was discovered by this session: cite in \`sources\` (with \`opportunityId\`) the public page(s) that show it exists — the buyers, the offer or the request — not Brain's own card`, id);
   }
 
   // Every step's cost reconciled to the ledger: each costed step paid or committed exactly by the

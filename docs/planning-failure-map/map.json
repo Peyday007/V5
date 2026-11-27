@@ -6689,8 +6689,8 @@
    "inputs": "routes the author proposes from the objective and Brain context",
    "output": "opportunities rows linked to the goal",
    "consumer": "runBrain planner; planningContext",
-   "evidence": "docs/planning-session-reliability-2026-11-26/journeys/j2-admit-mechanism-retry.json (refusal fixed, retry admitted); J2 published NO_PLAN with a $150 experiment",
-   "remaining": "No bench rubric grades raw-objective discovery yet; final acceptance includes discovery cases graded on the published plan by the \u00a72 rule (a generic refusal or no openings fails).",
+   "evidence": "docs/planning-session-reliability-2026-11-26/journeys/j2-admit-mechanism-retry.json (refusal fixed, retry admitted); J2 published NO_PLAN with a $150 experiment; run 6 discovery 0/4 (no public provenance, no decisive link): docs/planning-session-reliability-2026-11-26/run6-acceptance",
+   "remaining": "Run 7 discovery 1/4: alternatives left uncited; provenance now required for every weighed discovered opening. Fresh acceptance: run 8.",
    "legacy": "goals/routeProposal open-model route ask and russell scout (Brain-autonomous discovery, C03-C10) are not on this path"
   },
   {
@@ -6776,7 +6776,7 @@
    "output": "strategy with disagreements",
    "consumer": "reviewer; publication",
    "evidence": "tests/sessionPlanningChecks.test.ts exclusion dispute (2 tests)",
-   "remaining": "No check that the chosen strategy dominates a considered alternative; comparison is the author's reasoning, examined by the reviewer."
+   "remaining": "No check that the chosen strategy dominates a considered alternative; comparison is the author's reasoning, examined by the reviewer. Run 6: a conditional plan had no decisive link; validation.decides required (cfebfd5)."
   },
   {
    "id": "W10",
@@ -6817,14 +6817,14 @@
   {
    "id": "W13",
    "name": "Constraint versus missing evidence",
-   "status": "PASS",
+   "status": "PARTIAL",
    "behavior": "Missing demand evidence cannot establish an arithmetic ceiling; a constraint cites EVIDENCE facts.",
    "component": "checkRevision CONSTRAINT_FROM_MISSING_EVIDENCE; CONSTRAINT_INPUTS",
    "inputs": "constraints with basis",
    "output": "check codes",
    "consumer": "author",
-   "evidence": "docs/planning-session-reliability-2026-11-26/run5-frozen regression; tests/sessionPlanningChecks.test.ts",
-   "remaining": "\u2014"
+   "evidence": "docs/planning-session-reliability-2026-11-26/run5-frozen regression; tests/sessionPlanningChecks.test.ts; run 6 ac-15: a TARGET limit read from the openings on file, repaired in cfebfd5 (counted market: buyerVolume EVIDENCE)",
+   "remaining": "Run 7 ag-11: counted-market rule now applies to every TARGET limit. Fresh acceptance: run 8."
   },
   {
    "id": "W14",
@@ -6847,7 +6847,7 @@
    "inputs": "check codes, review conditions",
    "output": "new revision",
    "consumer": "review; finalize",
-   "evidence": "docs/planning-session-reliability-2026-11-26/run5-frozen; journeys",
+   "evidence": "docs/planning-session-reliability-2026-11-26/run5-frozen; journeys; run 6: four mid-run changes went unseen after publication; run 7: three mid-run changes re-planned unprompted via staleBecause (docs/planning-session-reliability-2026-11-26/run7-acceptance)",
    "remaining": "\u2014"
   },
   {
@@ -6883,7 +6883,7 @@
    "inputs": "lease state",
    "output": "redelivered item",
    "consumer": "another fleet member",
-   "evidence": "J2 mechanism refusal \u2192 retry; tests/sessionPlanningPath.test.ts \"a reviewer that dies loses its review\" (no second owner while live; lapsed lease grants nothing; redealt to another member)",
+   "evidence": "J2 mechanism refusal \u2192 retry; tests/sessionPlanningPath.test.ts \"a reviewer that dies loses its review\" (no second owner while live; lapsed lease grants nothing; redealt to another member); run 6: 6 hosts OOM-killed mid-run, restarted on their databases with state intact",
    "remaining": "\u2014"
   },
   {
@@ -6925,14 +6925,14 @@
   {
    "id": "W22",
    "name": "Acceptance grading",
-   "status": "PASS",
+   "status": "PARTIAL",
    "behavior": "Published plans of unfamiliar objectives are graded per COMPLETION-SPEC \u00a74 with denominators, Wilson intervals and critical counts; hidden cases are authored by another agent.",
    "component": "scripts/planningReliabilitySession.ts",
    "inputs": "published plans + rubrics",
    "output": "verdict/usable/e2e counts",
    "consumer": "completion claim",
-   "evidence": "docs/planning-session-reliability-2026-11-26/run5-frozen (11/14, 0 critical)",
-   "remaining": "Final acceptance on the frozen build carrying the W08/W11/W12/W18 repairs."
+   "evidence": "docs/planning-session-reliability-2026-11-26/run6-acceptance: 18/24 = 0.75 (Wilson 0.55-0.88), 0 critical, on 48e1ca5; run 7 on cfebfd5: 14/18 = 0.78 (Wilson 0.55-0.91), 0 critical (docs/planning-session-reliability-2026-11-26/run7-acceptance)",
+   "remaining": "Run 8 on the build carrying the run 7 repairs (TARGET counted market always; provenance for every weighed discovered opening)."
   }
  ]
 }

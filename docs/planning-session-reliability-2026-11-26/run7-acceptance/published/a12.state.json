@@ -1,0 +1,724 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_0e2a69a86c254e3c94de",
+      "words": "Collect $5,000 of settled cash within 21 days with at most $500 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "windowDays": 21,
+        "totalSpendCapCents": 50000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "ownerHoursPerWeek": null,
+        "proofCondition": "$5,000 of settled cash received within 21 days",
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "269d1136a71dc9a9b2b87a51"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_0e2a69a86c254e3c94de",
+        "contractDigest": "269d1136a71dc9a9b2b87a51",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 21 days: the signed permit-packet deals settle net-45",
+          "opportunityIds": [],
+          "why": "The only opening has four written acceptances at $2,000 each ($8,000, enough for the $5,000 target, cost $30 and no capital), but its evidenced payment terms are net-45 from invoice, so no cash settles inside the 21-day window."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the four signed packets anyway and collect at day ~45",
+            "why": "Brings $8,000 but after the deadline; counts only if the owner moves the deadline to at least 45 days."
+          },
+          {
+            "title": "Ask the signed line producers for payment on delivery or a deposit",
+            "why": "Would change the settlement link, but no record shows any buyer accepting earlier terms; it is a question to measure, not evidence."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Ask the four signed buyers whether they would pay on delivery or a deposit inside 21 days, and search for faster-settling openings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_time"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "time to usable cash",
+            "status": "EVIDENCED",
+            "value": 45,
+            "unit": "days",
+            "sources": [
+              "s_time"
+            ],
+            "needs": null
+          },
+          {
+            "name": "agreed price per packet",
+            "status": "EVIDENCED",
+            "value": 2000,
+            "unit": "USD",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "buyers",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_time",
+            "url": "https://brain.local/card/cop_3e528f7117dc480f83fb#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "45 days to first cash",
+            "population": "the four signed production companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3e528f7117dc480f83fb"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_3e528f7117dc480f83fb#price",
+            "dated": "2026-11-24",
+            "claim": "Four production companies signed at $2,000 each, payable net-45 from invoice",
+            "population": "independent production companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3e528f7117dc480f83fb"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Settlement: the four signed $2,000 deals ($8,000) are payable net-45 from invoice (timeToFirstCash 45 days), so nothing settles inside the 21-day window; every other link is established.",
+          "resolution": "Move the deadline to at least 45 days (the signed deals then settle $8,000 >= $5,000 with $30 cost and no capital), or have Brain ask the signed buyers for payment on delivery/deposit and re-plan only if a buyer accepts in writing.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_3e528f7117dc480f83fb",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Move the deadline to at least 45 days, when the four net-45 invoices settle.",
+            "basis": [
+              {
+                "opportunityId": "cop_3e528f7117dc480f83fb",
+                "field": "timeToFirstCash"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_4b9312c9e3af_fe03e9",
+        "digest": "4b9312c9e3af04a758c77ac3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_002c4caf4f554ffcb467/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:52.418Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_0e2a69a86c254e3c94de",
+      "contractDigest": "269d1136a71dc9a9b2b87a51",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan inside 21 days: the signed permit-packet deals settle net-45",
+        "opportunityIds": [],
+        "why": "The only opening has four written acceptances at $2,000 each ($8,000, enough for the $5,000 target, cost $30 and no capital), but its evidenced payment terms are net-45 from invoice, so no cash settles inside the 21-day window."
+      },
+      "alternatives": [
+        {
+          "title": "Deliver the four signed packets anyway and collect at day ~45",
+          "why": "Brings $8,000 but after the deadline; counts only if the owner moves the deadline to at least 45 days."
+        },
+        {
+          "title": "Ask the signed line producers for payment on delivery or a deposit",
+          "why": "Would change the settlement link, but no record shows any buyer accepting earlier terms; it is a question to measure, not evidence."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Ask the four signed buyers whether they would pay on delivery or a deposit inside 21 days, and search for faster-settling openings",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_time"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "time to usable cash",
+          "status": "EVIDENCED",
+          "value": 45,
+          "unit": "days",
+          "sources": [
+            "s_time"
+          ],
+          "needs": null
+        },
+        {
+          "name": "agreed price per packet",
+          "status": "EVIDENCED",
+          "value": 2000,
+          "unit": "USD",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signed buyers",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "buyers",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_time",
+          "url": "https://brain.local/card/cop_3e528f7117dc480f83fb#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "45 days to first cash",
+          "population": "the four signed production companies",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3e528f7117dc480f83fb"
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_3e528f7117dc480f83fb#price",
+          "dated": "2026-11-24",
+          "claim": "Four production companies signed at $2,000 each, payable net-45 from invoice",
+          "population": "independent production companies",
+          "matchesBuyer": true,
+          "opportunityId": "cop_3e528f7117dc480f83fb"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Settlement: the four signed $2,000 deals ($8,000) are payable net-45 from invoice (timeToFirstCash 45 days), so nothing settles inside the 21-day window; every other link is established.",
+        "resolution": "Move the deadline to at least 45 days (the signed deals then settle $8,000 >= $5,000 with $30 cost and no capital), or have Brain ask the signed buyers for payment on delivery/deposit and re-plan only if a buyer accepts in writing.",
+        "decisiveLinks": [
+          "SETTLES_IN_TIME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_3e528f7117dc480f83fb",
+          "missing": [
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [
+        {
+          "constraint": "DEADLINE",
+          "suggestion": "Move the deadline to at least 45 days, when the four net-45 invoices settle.",
+          "basis": [
+            {
+              "opportunityId": "cop_3e528f7117dc480f83fb",
+              "field": "timeToFirstCash"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_4b9312c9e3af_fe03e9",
+      "digest": "4b9312c9e3af04a758c77ac3",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_002c4caf4f554ffcb467/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:26:52.418Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_4b9312c9e3af_fe03e9",
+      "digest": "4b9312c9e3af04a758c77ac3",
+      "contractDigest": "269d1136a71dc9a9b2b87a51",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 50000,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $5,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_3e528f7117dc480f83fb"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_3e528f7117dc480f83fb",
+            "title": "Location film-permit application packets for independent production companies",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 0,
+            "potentialReach": 0,
+            "card": {
+              "payer": "Independent film and video production companies",
+              "reachableChannel": "The line producers who signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:48.443Z",
+              "offerScope": "Location film-permit application packets for independent production companies",
+              "priceCents": 200000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "film and video production",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Location film-permit application packets for independent production companies",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Location film-permit application packets for independent production companies",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Location film-permit application packets for independent production companies",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Location film-permit application packets for independent production companies",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The line producers who signed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 8000 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 8000 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 30, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "45 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Location film-permit application packets for independent production companies to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$30",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent film and video production companies",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four production companies signed for permit packets at $2,000 each, payable net-45 from invoice.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "45 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_14e8066e66e649f1b935",
+          "cnd_4e8e620f4c7549f498dd"
+        ],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 21,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:24:02.291Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_4b9312c9e3af_fe03e9",
+        "revisionDigest": "4b9312c9e3af04a758c77ac3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_002c4caf4f554ffcb467/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_56a3c122feaa4af4bee8/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is correct and the decisive gap is the one the evidence decides: four written acceptances at $2,000 ($8,000, which would cover $5,000 at $30 cost and no capital) are payable net-45 from invoice, and the card's timeToFirstCash is 45 days against a 21-day window. That is a real constraint - even with every link held as evidenced, nothing settles in the window - not missing evidence. Brain's own check agrees (at most $0 inside the limits). The alternatives (move the deadline to >=45 days, or obtain a written earlier-payment term) are the right two, and the plan correctly refuses to treat a hoped-for deposit as evidence.",
+        "findings": [
+          "Recomputed: 4 x $2,000 = $8,000 >= $5,000; cost $30 << price; capital $0 <= $500 cap; but settlement day 45 > 21, so in-window cash is $0.",
+          "The constraint is cited to the card's own timeToFirstCash and price facts (net-45), not an assumption.",
+          "Possible avenue not considered: invoice factoring/early-payment financing within the $500 capital cap - unevidenced, so not a reason to revise, but worth a research question if the owner keeps the 21-day deadline.",
+          "Acceptances are recorded by a PERSON as written acceptances; no contradicting record."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:29:58.677Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_4b9312c9e3af_fe03e9",
+      "digest": "4b9312c9e3af04a758c77ac3",
+      "contractDigest": "269d1136a71dc9a9b2b87a51",
+      "plan": {
+        "goalId": "wst_0e2a69a86c254e3c94de",
+        "contractDigest": "269d1136a71dc9a9b2b87a51",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 21 days: the signed permit-packet deals settle net-45",
+          "opportunityIds": [],
+          "why": "The only opening has four written acceptances at $2,000 each ($8,000, enough for the $5,000 target, cost $30 and no capital), but its evidenced payment terms are net-45 from invoice, so no cash settles inside the 21-day window."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the four signed packets anyway and collect at day ~45",
+            "why": "Brings $8,000 but after the deadline; counts only if the owner moves the deadline to at least 45 days."
+          },
+          {
+            "title": "Ask the signed line producers for payment on delivery or a deposit",
+            "why": "Would change the settlement link, but no record shows any buyer accepting earlier terms; it is a question to measure, not evidence."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Ask the four signed buyers whether they would pay on delivery or a deposit inside 21 days, and search for faster-settling openings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_time"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "time to usable cash",
+            "status": "EVIDENCED",
+            "value": 45,
+            "unit": "days",
+            "sources": [
+              "s_time"
+            ],
+            "needs": null
+          },
+          {
+            "name": "agreed price per packet",
+            "status": "EVIDENCED",
+            "value": 2000,
+            "unit": "USD",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "buyers",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_time",
+            "url": "https://brain.local/card/cop_3e528f7117dc480f83fb#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "45 days to first cash",
+            "population": "the four signed production companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3e528f7117dc480f83fb"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_3e528f7117dc480f83fb#price",
+            "dated": "2026-11-24",
+            "claim": "Four production companies signed at $2,000 each, payable net-45 from invoice",
+            "population": "independent production companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_3e528f7117dc480f83fb"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Settlement: the four signed $2,000 deals ($8,000) are payable net-45 from invoice (timeToFirstCash 45 days), so nothing settles inside the 21-day window; every other link is established.",
+          "resolution": "Move the deadline to at least 45 days (the signed deals then settle $8,000 >= $5,000 with $30 cost and no capital), or have Brain ask the signed buyers for payment on delivery/deposit and re-plan only if a buyer accepts in writing.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_3e528f7117dc480f83fb",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Move the deadline to at least 45 days, when the four net-45 invoices settle.",
+            "basis": [
+              {
+                "opportunityId": "cop_3e528f7117dc480f83fb",
+                "field": "timeToFirstCash"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_4b9312c9e3af_fe03e9",
+        "digest": "4b9312c9e3af04a758c77ac3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_002c4caf4f554ffcb467/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:52.418Z"
+      },
+      "review": {
+        "revisionId": "rev_4b9312c9e3af_fe03e9",
+        "revisionDigest": "4b9312c9e3af04a758c77ac3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_002c4caf4f554ffcb467/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_56a3c122feaa4af4bee8/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is correct and the decisive gap is the one the evidence decides: four written acceptances at $2,000 ($8,000, which would cover $5,000 at $30 cost and no capital) are payable net-45 from invoice, and the card's timeToFirstCash is 45 days against a 21-day window. That is a real constraint - even with every link held as evidenced, nothing settles in the window - not missing evidence. Brain's own check agrees (at most $0 inside the limits). The alternatives (move the deadline to >=45 days, or obtain a written earlier-payment term) are the right two, and the plan correctly refuses to treat a hoped-for deposit as evidence.",
+        "findings": [
+          "Recomputed: 4 x $2,000 = $8,000 >= $5,000; cost $30 << price; capital $0 <= $500 cap; but settlement day 45 > 21, so in-window cash is $0.",
+          "The constraint is cited to the card's own timeToFirstCash and price facts (net-45), not an assumption.",
+          "Possible avenue not considered: invoice factoring/early-payment financing within the $500 capital cap - unevidenced, so not a reason to revise, but worth a research question if the owner keeps the 21-day deadline.",
+          "Acceptances are recorded by a PERSON as written acceptances; no contradicting record."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:29:58.677Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $5,000 of settled cash within 21 days with at most $500 of capital.",
+        "terms": "6d9944944e4691a9",
+        "openings": {
+          "cop_3e528f7117dc480f83fb": "51d9291233d08dcd"
+        }
+      },
+      "at": "2026-11-27T08:32:18.401Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}
