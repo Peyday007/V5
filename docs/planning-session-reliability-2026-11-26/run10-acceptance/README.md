@@ -69,3 +69,21 @@ This run cannot tell whether the expected answer or the review is wrong, because
   - The second REVISE answered an unchanged resubmission.
   - The loop ended on its own, without anyone stepping in.
 - **Duplicate review.** fleet-2 accidentally submitted the first a09 review twice, so it appears twice in a09's review list. It did not change any outcome.
+
+## Reconciliation against the original completion requirements (2026-11-27)
+
+The owner set these requirements in the "Continue the current mission… WHAT COUNTS AS FINISHED" message. No new requirement is added here.
+
+| requirement | state | evidence / reason |
+|---|---|---|
+| The real Claude-app workflow works without the owner managing its stages | **NOT MET on the real app** | **On the isolated host it works.** `scripts/planningMcpHost.ts` mounts Brain's real `mcpRouter`, with the same authentication, authorization and tool dispatch the app connector uses. On it, runs 6–10 went from author → Brain checks → queue-dealt independent review → publication. Runs 7–10 ran with no prompting and no hand-carrying of work between author and reviewer. In run 10, both mid-run changes (a08, a09) were re-planned unprompted.<br>**On production it does not.** The `production` branch does not contain a5412ec (verified with `git merge-base --is-ancestor`), and the production connector lists no `brain_planning_*` tool. It is blocked by **MISSING_AUTHORITY**: deploying needs the owner's authorization. |
+| Planning reliability meets COMPLETION-SPEC (≥ 0.90, zero critical, representative, independently evaluated, hidden cases included) | **NOT MET** | Run 10 scored 14/16 = 0.875 (Wilson 0.64–0.97), with 0 critical failures. The step-5 rule applies: diagnose, repair, keep the regression, then run a fresh acceptance on the changed build (run 11). This run records the evaluation only. |
+| Each result is an evidence-supported plan, or a justified limitation with a concrete measurement or experiment | **14 / 16 met** | The 12 passing cases carry graded plans or justified NO_PLAN outcomes. Each NO_PLAN names its binding constraint and either a measurement or the change to the goal that would remove the constraint. Both failures (al-08, am-03) are above. |
+| Software tests, tool registration, a review PASS or a release document alone are not "finished" | respected | Nothing above is counted as done on that basis. |
+
+**What the owner must do to test this in the real Claude app.** None of these steps spends money or contacts anyone.
+
+1. Authorize the merge of `claude/10k-revenue-30-days-9ba2t4` into `production` and dispatch `Deploy`.
+2. Run `npm run admin -- access grant-planning worker-05 <project> --admin <your account>` to give the app's worker planning rights on the project.
+3. Become the goal's owner via `PATCH /api/goals/<goal>/terms`.
+4. Open the Claude app with the Brain connector and state an objective. The `brain_planning_*` tools then run the same loop that runs 6–10 exercised.
