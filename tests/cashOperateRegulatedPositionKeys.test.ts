@@ -19,6 +19,11 @@ import { seekCompliantPositions } from '../server/services/cash/regulatedPositio
 import { needExecutionOwner } from '../server/services/cash/needs.ts';
 import { unmetNeedWeaknesses } from '../server/services/selfmodel/originate.ts';
 import { parseBlockerKey } from '../server/domain/types.ts';
+import { recordMoney } from '../server/repos/cashLedger.ts';
+import { recordConstraint } from '../server/repos/industry.ts';
+import { getDb } from '../server/db/database.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createOrchestration } from '../server/repos/research.ts';
 
 let projectId = '';
 let userId = '';
@@ -129,7 +134,10 @@ describe('regulated-position needs carry a typed blocker key', () => {
   it('keys every opening to itself, so openings sharing an activity never form a shared group', () => {
     const a = regulatedPositionBlockerKey('opp_a', []);
     const b = regulatedPositionBlockerKey('opp_b', []);
-    expect(a).toBe('SUPPLIER:licensed-partner/unrecognised@opp_a');
+    // An opening with no recognised activity is not regulated: it lacks a finding, never a licensed partner.
+    expect(a).toBe('EVIDENCE:regulated-position:opp_a');
+    expect(a).not.toMatch(/licensed-partner/);
+    expect(needExecutionOwner(a).route).toBe('RESEARCH');
     expect(a).not.toBe(b);
     expect(regulatedPositionBlockerKey('x', ['EARN_COMMISSION', 'BROKER', 'BROKER'])).toBe('SUPPLIER:licensed-partner/BROKER+EARN_COMMISSION@x');
     const same = ['opp_1', 'opp_2', 'opp_3'].map((id) => regulatedPositionBlockerKey(id, ['EARN_COMMISSION']));
@@ -146,5 +154,42 @@ describe('regulated-position needs carry a typed blocker key', () => {
       })),
     );
     expect(grouped).toEqual([]);
+  });
+
+  it('an unregulated opening held back only for its settled cash is not said to need a licensed partner', async () => {
+    // Research recorded a platform-terms constraint against an opening whose text names no regulated
+    // activity: the reader withholds the not-regulated finding, so its settled cash is held back.
+    const plain = await opening('Photo prints for a cafe wall');
+    const layer = await getDb().all<{ id: string }>('SELECT id FROM layers WHERE project_id = ? LIMIT 1', [projectId]);
+    const run = await createRun({ projectId, layerId: layer[0]!.id, runType: 'FOUNDATION', provider: 'WORKER' });
+    const orchestration = await createOrchestration({ projectId, layerId: layer[0]!.id, runId: run.id, title: 'rpk fixture', assignment: 'terms', provider: 'WORKER' });
+    const claimId = `clm_rpk_${Math.random().toString(36).slice(2, 10)}`;
+    await getDb().run(
+      `INSERT INTO research_claims
+         (id, orchestration_id, fragment_id, pass_id, pass_key, claim, source_url, source_title,
+          source_publisher, source_date, evidence_excerpt, evidence_locator, evidence_lane,
+          retrieved_at, confidence, contradiction_state, contradiction_note, validation_state,
+          validation_detail, sourced, derived, derived_from, accepted, content_hash, created_at)
+       VALUES (?, ?, NULL, NULL, 'RESEARCH', ?, ?, NULL, NULL, NULL, NULL, NULL, 'lane-1',
+               ?, 0.9, 'UNCHALLENGED', NULL, 'VALID', NULL, 1, 0, '[]', 1, ?, ?)`,
+      [claimId, orchestration.id, 'The marketplace terms govern resale of prints.', 'https://example.test/terms', '2026-11-01T00:00:00.000Z', `hash-${claimId}`, '2026-11-01T00:00:00.000Z'] as never[],
+    );
+    expect(await recordConstraint({ projectId, opportunityId: plain, nodeId: null, kind: 'PLATFORM_TERMS', statement: 'The marketplace terms govern resale of prints.', sourceClaimId: claimId })).not.toBeNull();
+    const settled = await recordMoney({ projectId, opportunityId: plain, kind: 'SETTLEMENT', amountCents: 10_000, currency, verifiedReference: `ref-${plain}`, recordedBy: userId, idempotencyKey: `settle-${plain}` });
+    expect(settled.ok).toBe(true);
+
+    const role = await assessOpportunityRole({ projectId, opportunityId: plain });
+    expect(role).toMatchObject({ regulated: false, countEconomics: false, activities: [] });
+
+    const tick = await operate(projectId);
+    expect(tick.failures.filter((f) => f.step === 'typeRegulatedPositionNeeds' || f.step === 'seekCompliantPositions')).toEqual([]);
+    const need = (await positionNeeds()).find((n) => n.opportunityId === plain)!;
+    expect(need).toBeDefined();
+    expect(need.blockerKey).not.toBeNull();
+    expect(need.blockerKey).not.toMatch(/licensed-partner/);
+    expect(need.blockerKey!.startsWith('SUPPLIER:')).toBe(false);
+    expect(need.blockerKey).toBe(`EVIDENCE:regulated-position:${plain}`);
+    expect(parseBlockerKey(need.blockerKey)).toBe(need.blockerKey);
+    expect(needExecutionOwner(need.blockerKey).route).toBe('RESEARCH');
   });
 });

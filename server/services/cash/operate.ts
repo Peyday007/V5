@@ -92,7 +92,7 @@ import { cashEngineCard, NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts
 import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
-import { seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
+import { positionNeedKey, seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
 import { assessOpportunityRole, type RegulatedActivity } from './exclusions.ts';
 import type { BlockerKey } from '../../domain/types.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
@@ -2214,10 +2214,17 @@ function replySyncDue(projectId: string, now = Date.now()): boolean {
  * let the self-model group them as one acquisition that "serves all of them" — the same false shared
  * resource this key exists to dissolve. The activities stay in the key so a reader can see what kind of
  * partner it names; the opening id makes it one need's, and no group of two can form from it.
+ *
+ * All of that is for a *regulated* opening. One that performs no recognised regulated activity is held
+ * back for a different reason: it is UNKNOWN, because no finding yet says what it performs (or that it
+ * performs nothing regulated), and the funnel will not count its settled cash until one does. Nothing in
+ * its record says it needs a licensed partner, so it is never keyed as needing one. What it lacks is
+ * information about this one opening, so its key is `EVIDENCE:` named by the need's own request key (the
+ * precedent in services/quant/needs.ts): routed to research, and unique to the opening.
  */
 export function regulatedPositionBlockerKey(opportunityId: string, activities: readonly RegulatedActivity[]): BlockerKey | null {
-  const kind = activities.length > 0 ? [...new Set(activities)].sort().join('+') : 'unrecognised';
-  return parseBlockerKey(`SUPPLIER:licensed-partner/${kind}@${opportunityId}`);
+  if (activities.length === 0) return parseBlockerKey(`EVIDENCE:${positionNeedKey(opportunityId)}`);
+  return parseBlockerKey(`SUPPLIER:licensed-partner/${[...new Set(activities)].sort().join('+')}@${opportunityId}`);
 }
 
 /**
