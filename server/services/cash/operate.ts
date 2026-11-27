@@ -458,10 +458,49 @@ export async function withdrawResearchNotWorthIt(projectId: string): Promise<str
   return out;
 }
 
+/**
+ * Why a signal's payer question has no answer that could pay Brain, or null.
+ *
+ * Production, 2026-11 (ORIGINATED:UNMET_NEED:payer-for-v): five SIGNAL openings
+ * each held an open "Payer for …" need, and the self-model grouped them as one
+ * missing resource. They were five unanswerable questions: a stock-image
+ * subscription price and a broker's registration fee are what a supplier
+ * charges *its* customers, and a TCGPlayer or StubHub quote is a resale
+ * market's price — none names anybody who would approve paying Brain, so
+ * "Name the person or role who can approve payment" has no answer research can
+ * find. Only the payer question is withheld; the opening's other capture
+ * questions are still asked, and a fact that itself names a payer — a bounty,
+ * a reward, "X is the payer" — keeps its question.
+ *
+ * Read from the opening's own sentence and never written anywhere: this decides
+ * which question is worth a research slot, and it establishes nothing (§8).
+ */
+const NAMES_A_PAYER =
+  /\b(is the payer|pays? (?:out|for|a|an|the|up to|researchers|contributors|creators|freelancers)|bount(?:y|ies)|reward(?:s|ed)?|commission(?:s|ed)?|hiring|hires|seeking|request for proposals?|rfp|contract award|grant)\b/i;
+const RESALE_MARKET =
+  /\b(tcgplayer|stubhub|vivid ?seats|seatgeek|ebay|stockx|goat|grailed|poshmark|mercari|ticketmaster resale)\b/i;
+const RESALE_QUOTE = /\b(traded at|resale|market price|current market|listed (?:resale|at)|last sold|sold for|tracked sale)\b/i;
+const SUPPLIER_PRICE =
+  /\b(subscription price|subscription (?:plan|tier)|per month|\/month|\/mo\b|registration (?:fee|terms)|annual (?:registration|membership)|membership fee|charges (?:buyers|customers|members|users|subscribers)(?: who)?)\b/i;
+
+export function payerQuestionUnanswerable(opportunity: Pick<CashOpportunity, 'title' | 'payer'>): string | null {
+  if (opportunity.payer !== null) return null;
+  const text = opportunity.title;
+  if (NAMES_A_PAYER.test(text)) return null;
+  if (RESALE_MARKET.test(text) && RESALE_QUOTE.test(text)) {
+    return "it is a resale market's price quote, which names no party that would pay Brain";
+  }
+  if (SUPPLIER_PRICE.test(text)) {
+    return 'it is a price a supplier charges its own customers, which names no party that would pay Brain';
+  }
+  return null;
+}
+
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
+  const openByKey = new Map(open.filter((one) => !!one.requestKey).map((one) => [one.requestKey!, one]));
 
   for (const opportunity of await listOpportunities({
     projectId,
@@ -548,10 +587,36 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * many: it left the payer unasked, which is the single question that could
      * have moved the piece.
      */
-    const asking =
+    let asking =
       reading.tier === 'SIGNAL'
         ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
         : card.fields;
+    /*
+     * And a signal is not asked for a payer its own fact rules out
+     * (`payerQuestionUnanswerable`). The skip is recorded, and a payer question
+     * already open on it is withdrawn — nothing was established, so never
+     * resolved — which frees the research slot it held.
+     */
+    const noPayer = reading.tier === 'SIGNAL' ? payerQuestionUnanswerable(opportunity) : null;
+    if (noPayer) {
+      asking = asking.filter((one) => one.key !== 'payer');
+      await recordQuestionsSkipped({
+        projectId,
+        opportunityId: opportunity.id,
+        fields: ['payer'],
+        why: `No payer to look up: ${noPayer}.`,
+      });
+      const stale = openByKey.get(questionKey(opportunity.id, 'payer'));
+      if (stale) {
+        const closed = await closeNeed({
+          needId: stale.id,
+          to: 'WITHDRAWN',
+          resolution: `Not researched: ${noPayer}. Nothing was established, so this is withdrawn rather than resolved.`,
+          actorUserId: BRAIN,
+        });
+        if (closed.ok) openByKey.delete(stale.requestKey!);
+      }
+    }
 
     for (const field of orderFieldsByCost(asking)) {
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
