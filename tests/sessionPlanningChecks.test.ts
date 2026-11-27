@@ -125,6 +125,47 @@ describe('owner hours and fulfilment responsibility', () => {
   });
 });
 
+describe('unknown owner availability stays unknown — never zero, never unlimited (2026-11-27 frozen run, n14)', () => {
+  const unstated = { ...terms, ownerHoursPerWeek: null };
+  const cU: GoalContract = { ...contract, terms: unstated as never, digest: contractDigest({ goalId: 'g', words: 'w', terms: unstated as never }) };
+  const withOwnerWork = (stance: PlanRevisionInput['stance']) => {
+    const r = plan({ contractDigest: cU.digest, stance, ...(stance === 'CONDITIONAL' ? { validation: { proof: 'owner confirms 15 hours by day 1', stop: ['owner declines'], continue: ['confirmed'] } } : {}) });
+    r.steps[2] = { ...r.steps[2]!, performer: 'OWNER', ownerHours: 15, label: 'owner files the reports', executor: exec('OWNER_TASK', 'OWNER', []) };
+    return r;
+  };
+  const codesU = (r: PlanRevisionInput) => checkRevision(cU, r, brain({ fulfilment: { o1: { by: 'OWNER', name: null, capability: null, capabilityState: null } }, hoursCeiling: null }), '2026-11-27').map((p) => p.code);
+
+  it('an EXECUTABLE plan resting on owner hours the goal never states is at most CONDITIONAL, and is not refused as over a limit', () => {
+    const c = codesU(withOwnerWork('EXECUTABLE'));
+    expect(c).toContain('UNKNOWN_IN_EXECUTABLE');
+    expect(c).not.toContain('OWNER_HOURS_OVER');
+  });
+
+  it('the same plan, CONDITIONAL on the owner confirming the hours, raises no owner-hours problem', () => {
+    const c = codesU(withOwnerWork('CONDITIONAL'));
+    expect(c).not.toContain('OWNER_HOURS_OVER');
+    expect(c).not.toContain('UNKNOWN_IN_EXECUTABLE');
+  });
+
+  it('control: a stated allowance of zero is a limit, and the same hours are refused', () => {
+    const r = plan();
+    r.steps[2] = { ...r.steps[2]!, performer: 'OWNER', ownerHours: 15, executor: exec('OWNER_TASK', 'OWNER', []) };
+    expect(codes(r, brain({ fulfilment: { o1: { by: 'OWNER', name: null, capability: null, capabilityState: null } } }))).toContain('OWNER_HOURS_OVER');
+  });
+});
+
+describe('an opening Brain excluded is built on only with a stated dispute (2026-11-27 frozen run, fx-15)', () => {
+  const excludedBrain = brain({ excluded: { o1: 'not a sale: its payer is a program' } });
+  it('refuses a plan on an excluded opening that never says why the exclusion is wrong', () => {
+    expect(codes(plan(), excludedBrain)).toContain('EXCLUSION_DISPUTE_UNSTATED');
+  });
+  it('control: the same plan with the dispute stated from the card passes that check; an unexcluded opening needs none', () => {
+    const disputed = plan({ disagreements: [{ opportunityId: 'o1', link: 'EXCLUSION', reason: 'the payer is commercial beekeepers who buy; the program is only what they register with (card payer)' }] });
+    expect(codes(disputed, excludedBrain)).not.toContain('EXCLUSION_DISPUTE_UNSTATED');
+    expect(codes(plan())).not.toContain('EXCLUSION_DISPUTE_UNSTATED');
+  });
+});
+
 describe('capability records', () => {
   it('never passes a Brain step whose capability record is missing, and refuses one Brain does not hold', () => {
     const r = plan();

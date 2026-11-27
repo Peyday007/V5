@@ -231,6 +231,33 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(await svc.reviewRecordedBy(goalId, id, fleet.id)).toBe(true);
   }, 240_000);
 
+  it('a reviewer that dies loses its review: the lapsed lease grants nothing, and the queue deals the review to another member', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const { createWorker } = await import('../server/repos/identity.ts');
+    const { claimWork } = await import('../server/repos/workQueue.ts');
+    const mk = (n: string) => createWorker({ name: `${n}-${Date.now()}`, displayName: n, createdByType: 'HUMAN', createdById: world.userId } as never);
+    const [dead, alive] = [await mk('dead'), await mk('alive')];
+    const first = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [] }, actor: AUTHOR, today: '2026-11-26' });
+    const disagreements = (first.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []).filter((l) => !l.ok).map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s3' }));
+    const clean = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], disagreements }, actor: AUTHOR, today: '2026-11-26' });
+    expect(clean.problems).toEqual([]);
+    const id = clean.revision.revisionId;
+    const scopes = [{ projectId: world.projectId, scopes: ['project:read', 'queue:claim', 'queue:complete'] }];
+    // Drain every waiting review to the dying member on the shortest lease the queue grants.
+    const held = await claimWork({ workerId: dead.id, limit: 25, leaseMs: 5_000, scopes, workTypes: [svc.PLAN_REVIEW_WORK] });
+    expect(held.some((one) => one.payload['revisionId'] === id)).toBe(true);
+    expect(await svc.leasedReviewFor(dead.id, id)).toBe(true);
+    // Nothing else is dealt while the lease is live: no second owner (§19).
+    expect((await claimWork({ workerId: alive.id, limit: 25, scopes, workTypes: [svc.PLAN_REVIEW_WORK] })).some((one) => one.payload['revisionId'] === id)).toBe(false);
+    await new Promise((r) => setTimeout(r, 5_500));
+    // The lapsed lease is no authority to review, and the review is dealt again to a live member.
+    expect(await svc.leasedReviewFor(dead.id, id)).toBe(false);
+    const again = await claimWork({ workerId: alive.id, limit: 25, scopes, workTypes: [svc.PLAN_REVIEW_WORK] });
+    expect(again.some((one) => one.payload['revisionId'] === id)).toBe(true);
+    expect(await svc.leasedReviewFor(alive.id, id)).toBe(true);
+    expect(await svc.leasedReviewFor(dead.id, id)).toBe(false);
+  }, 240_000);
+
   it('control 2: missing supplier or demand evidence stays unknown and caps the stance at CONDITIONAL', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     const unknown = { name: 'buyer conversion per 100 emails', status: 'UNKNOWN' as const, value: null, unit: 'orders', sources: [], needs: 'a 200-email live test' };

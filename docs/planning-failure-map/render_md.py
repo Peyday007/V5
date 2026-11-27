@@ -81,3 +81,17 @@ for p in M.PROGRESS: w(f"| {p['at']} | {p['measure']} | {p['usable']} | {p['note
 open(os.path.join(D,'..','PLANNING-FAILURE-MAP.md'),'w').write('\n'.join(out)+'\n')
 json.dump(dict(outcome=M.OUTCOME,dimensions=M.DIMS,rootCauses=M.ROOT_CAUSES,repairs=M.REPAIRS,progress=M.PROGRESS,capabilities=[dict(id=x[0],stage=x[1],name=x[2],why=x[3]) for x in M.CAPS],questions=qs),open(os.path.join(D,'map.json'),'w'),indent=1)
 print(len(M.CAPS),len(qs),dict(c),dict(pc),len(M.ROOT_CAUSES),len(M.REPAIRS))
+# Current Opus + Brain workflow coverage (appended section)
+wf = getattr(M, 'WORKFLOW', [])
+if wf:
+    md_path = os.path.join(D,'..','PLANNING-FAILURE-MAP.md')
+    extra = ['\n## I. Current Opus + Brain workflow coverage\n',
+             'Capabilities of the workflow the owner uses now (objective in the Claude app → Opus driving Brain through `brain_planning_*`). Status PASS, PARTIAL (verified with a named gap), FAIL (known defect), BLOCKED (owner action).\n',
+             '| id | capability | status | required behaviour | component | inputs | output → consumer | evidence | remaining / repair | legacy path not on this workflow |',
+             '|---|---|---|---|---|---|---|---|---|---|']
+    cell = lambda t: (t or '—').replace('|','/').replace('\n',' ')
+    for x in wf:
+        extra.append(f"| {x['id']} | {cell(x['name'])} | **{x['status']}** | {cell(x['behavior'])} | {cell(x['component'])} | {cell(x['inputs'])} | {cell(x['output'])} → {cell(x['consumer'])} | {cell(x['evidence'])} | {cell(x['remaining'])} | {cell(x.get('legacy'))} |")
+    open(md_path,'a').write('\n'.join(extra)+'\n')
+    j = json.load(open(os.path.join(D,'map.json'))); j['workflow'] = wf
+    json.dump(j, open(os.path.join(D,'map.json'),'w'), indent=1)

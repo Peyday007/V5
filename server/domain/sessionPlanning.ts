@@ -346,6 +346,7 @@ export type CheckCode =
   | 'RESOLUTION_UNNAMED'
   | 'CONSTRAINT_FROM_MISSING_EVIDENCE'
   | 'REVIEW_CONDITION_UNANSWERED'
+  | 'EXCLUSION_DISPUTE_UNSTATED'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -374,6 +375,8 @@ export interface BrainFacts {
   facts?: CardFacts;
   /** The conditions the last REVISE review of this revision's parent proposed, each to be answered against the records. */
   reviewConditions?: ReviewCondition[];
+  /** Openings Brain's planner set aside, with its reason: a plan that builds on one states why the exclusion is wrong. */
+  excluded?: Record<string, string>;
 }
 
 /** The cash sequence, day by day, with every limit's running figure. Exported so the author can read it back. */
@@ -517,6 +520,15 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     }
   }
 
+  // An opening Brain's planner excluded is built on only with a stated reason the exclusion is wrong (link EXCLUSION in
+  // `disagreements`), read against its card the context now shows — never silently, and never refused unread.
+  for (const id of r.strategy.opportunityIds) {
+    const why = brain?.excluded?.[id];
+    if (why && !(r.disagreements ?? []).some((x) => x.opportunityId === id && x.link === 'EXCLUSION' && x.reason.trim().length > 0)) {
+      add('EXCLUSION_DISPUTE_UNSTATED', `Brain's planner excluded ${id} ("${why.slice(0, 200)}"); to build on it, state in \`disagreements\` (link EXCLUSION) why the exclusion is wrong, from its card`, id);
+    }
+  }
+
   // A reviewer's proposed condition is answered against the records before it is accepted or rebutted.
   (brain?.reviewConditions ?? []).forEach((k, i) => {
     const a = r.answers.find((x) => x.condition === i);
@@ -586,16 +598,21 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     if (t.exposureCapCents !== null && t.exposureCapCents === 0 && stepCost > 0 && !r.cash.some((e) => e.kind === 'RECEIPT')) add('EXPOSURE_OVER', `the steps cost ${stepCost / 100} with no receipt to fund them under a zero exposure cap`);
   }
 
-  // Owner work: every owner step states its hours, and the total fits what the goal allows.
-  // Unstated allowance is none: the owner does no routine work the objective gives no hours for.
+  // Owner work: every owner step states its hours, and the total fits what the goal allows. An unstated allowance is
+  // UNKNOWN — never zero (which refused n14's plan in the 2026-11-27 frozen run) and never unlimited: a plan that
+  // needs owner hours the goal does not state rests on that unknown, so it is at most CONDITIONAL on the owner saying
+  // how many hours they can give. A stated allowance, zero included, is a limit.
   {
     const ownerSteps = r.steps.filter((s) => s.performer === 'OWNER');
     for (const s of ownerSteps) if (typeof s.ownerHours !== 'number' || !Number.isFinite(s.ownerHours) || s.ownerHours < 0) add('STEP_FIELD_ABSENT', 'an owner step must state its owner hours', s.id);
     const hours = ownerSteps.reduce((sum, s) => sum + (typeof s.ownerHours === 'number' ? s.ownerHours : 0), 0);
     const weeks = t.windowDays !== null ? t.windowDays / 7 : null;
     const allowed = t.ownerHoursPerWeek !== null && weeks !== null ? t.ownerHoursPerWeek * weeks : (brain?.hoursCeiling ?? null);
-    if (hours > 0 && (allowed === null || hours > allowed + 1e-9)) {
-      add('OWNER_HOURS_OVER', `the plan gives the owner ${hours} hours; the goal allows ${allowed === null ? 'none (no owner hours stated)' : `${Math.round(allowed * 10) / 10} over the window`}`, null);
+    if (hours > 0 && allowed === null && r.stance === 'EXECUTABLE') {
+      add('UNKNOWN_IN_EXECUTABLE', `the plan gives the owner ${hours} hours and the goal states no owner hours: the owner's availability is unknown, so the plan is at most CONDITIONAL until the owner says how many hours they can give`, null);
+    }
+    if (hours > 0 && allowed !== null && hours > allowed + 1e-9) {
+      add('OWNER_HOURS_OVER', `the plan gives the owner ${hours} hours; the goal allows ${Math.round(allowed * 10) / 10} over the window`, null);
     }
   }
 

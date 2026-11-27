@@ -2839,8 +2839,22 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     // An assumed ceiling ("little up-front capital", no figure) is still a question for the owner, never their answer.
     const askCapital = verdict === 'RECOMMENDABLE' && capitalQuestionOpen(target, cons.exposure ?? 0);
     if (askCapital) verdict = 'NEEDS_EVIDENCE';
+    /*
+     * The owner's hours, the same way (2026-11-27 frozen evaluation, n14): a plan that needs the owner's own work, for
+     * a goal that states no hours, is not recommended as though the owner had unlimited time — an unstated allowance
+     * is unknown, never zero and never unlimited — so it is a question for the owner, not a pass and not a failure.
+     */
+    const askHours = verdict === 'RECOMMENDABLE' && !askCapital && target.hoursCeiling === null && (cons.labour ?? 0) > 0;
+    if (askHours) verdict = 'NEEDS_EVIDENCE';
     let nextTest: NextTest | null = null;
-    if (askCapital) {
+    if (askHours) {
+      nextTest = {
+        link: 'FULFILMENT',
+        test: `This plan needs about ${Math.round((cons.labour ?? 0) * 10) / 10} of the owner's own hours, and the goal states none. Say how many hours the owner can give, or that they can give none.`,
+        by: 'PERSON',
+        blocker: 'The owner has not said how many hours this goal may take.',
+      };
+    } else if (askCapital) {
       nextTest = {
         link: 'ECONOMICS',
         test: `This plan ties up about ${Math.round(cons.exposure!)} ${target.currency} before it pays. Say how much this goal may commit, or that it may commit none.`,

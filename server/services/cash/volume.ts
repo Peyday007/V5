@@ -429,6 +429,8 @@ interface StatedRate {
   period: string;
   /** The vague word a per-unit count was read from at its low end, when it was one. */
   vague?: string;
+  /** Where the rate's count stands in the text. */
+  at?: number;
 }
 
 /** Words between a count and its buyer word that say the count is of something else: results, pages, followers. */
@@ -473,6 +475,16 @@ function buyerCounts(text: string, pattern: RegExp): Array<{ at: number; n: numb
 const MAX_BUYERS = 2_000_000_000;
 
 /** The sentence around a position: the text between the nearest sentence breaks. */
+/** The sellers a category's order count is spread across, in the count's own sentence ("… across 40 sellers"), or null. */
+const SHARED_SELLERS = /\b(?:across|among|between|split between|shared by)\s+(?:the\s+|its\s+|their\s+)?(?:about\s+|around\s+|some\s+|roughly\s+|over\s+|more than\s+)?(\d[\d,]*)\s+(?:[A-Za-z-]+\s+){0,2}?(sellers|shops|vendors|listings|merchants|creators|suppliers|providers|competitors)\b/i;
+function sharedAmong(text: string, at: number): { n: number; word: string } | null {
+  const sentence = sentenceAt(text, at);
+  const m = SHARED_SELLERS.exec(sentence.text.slice(at - sentence.start));
+  if (!m) return null;
+  const n = toInt(m[1]!);
+  return n > 1 ? { n, word: m[2]!.toLowerCase() } : null;
+}
+
 function sentenceAt(text: string, at: number): { start: number; text: string } {
   const before = text.slice(0, at);
   const start = Math.max(before.lastIndexOf('. '), before.lastIndexOf('; '), before.lastIndexOf('! '), before.lastIndexOf('? '), before.lastIndexOf('\n')) + 1;
@@ -485,7 +497,7 @@ function readRates(text: string, buyerWords: string, buyerCount: RegExp): Stated
   // Keyed by where the rate's own count stands, so a rate read per unit replaces its plain reading.
   const byPosition = new Map<number, StatedRate>();
   const put = (at: number, rate: StatedRate) => {
-    if (rate.each > 0 && rate.perDay > 0) byPosition.set(at, rate);
+    if (rate.each > 0 && rate.perDay > 0) byPosition.set(at, { ...rate, at });
   };
   const plain = (n: number, period: string, units: number | null): StatedRate => ({
     perDay: (n * (units ?? 1)) / PERIOD_DAYS[period]!,
@@ -516,7 +528,7 @@ function readRates(text: string, buyerWords: string, buyerCount: RegExp): Stated
     const length = m[2] ? (/^\d/.test(m[2]) ? toInt(m[2]) : SPAN_NUMBERS[m[2].toLowerCase()]!) : 1;
     const days = length * PERIOD_DAYS[m[3]!.toLowerCase()]!;
     const n = toInt(m[1]!);
-    if (n > 0 && days > 0) byPosition.set(m.index ?? 0, { perDay: n / days, units: null, each: n, period: `${length} ${m[3]!.toLowerCase()}${length === 1 ? '' : 's'}` });
+    if (n > 0 && days > 0) byPosition.set(m.index ?? 0, { perDay: n / days, units: null, each: n, period: `${length} ${m[3]!.toLowerCase()}${length === 1 ? '' : 's'}`, at: m.index ?? 0 });
   }
 
   const vagueRate = (rateText: string, period: string, units: number | null): StatedRate => {
@@ -640,6 +652,27 @@ export function readVolume(raw: string, windowDays: number, payer: string | null
   const rates = readRates(text, buyerWords, buyerCount);
   if (rates.length > 0) {
     const slowest = rates.sort((a, b) => a.perDay - b.perDay)[0]!;
+    /*
+     * A category's order total that the text spreads across its sellers ("2,300
+     * sales in the last 12 months across 40 sellers") is the market's purchase
+     * rate, shared among them: one listing can count on the average seller's
+     * share, never on the whole category (mv-04, 2026-11-27). Before, the 36
+     * sales one new listing needed were checked against all 191 of the
+     * category's monthly orders. Selling more than the average share is a pace
+     * this listing's own sales measure, not something the category total says.
+     */
+    const sellers = slowest.units === null && slowest.at !== undefined ? sharedAmong(text, slowest.at) : null;
+    if (sellers !== null) {
+      const deals = Math.floor((slowest.perDay * window) / sellers.n);
+      const monthly = Math.round(slowest.perDay * 30);
+      return {
+        deals,
+        buyers: null,
+        everyDays: null,
+        counted: 'ORDERS',
+        basis: `about ${monthly} orders a month are stated across ${sellers.n} ${sellers.word}, so one seller's average share is ${deals} in ${window} days; selling more than that is a pace this listing's own sales must measure`,
+      };
+    }
     const deals = Math.floor(slowest.perDay * window);
     if (deals >= 1) {
       const monthly = Math.round(slowest.perDay * 30);

@@ -320,6 +320,19 @@ const EMPLOYMENT_FRAME = /\bW-?2\b|\b\d+\s+hours (?:a|per) week\b|\b(?:with|plus
  * no price and the plan could not reach anything).
  */
 const FUNDER_BODY = /\b(?:foundations?(?!\s+(?:repair|repairs|crack|cracks|waterproofing|leveling|levelling|inspection|inspections|contractors?|work|works|drilling|pouring)\b)|endowments?|grantmakers?|funds?|arts councils?|development councils?|institutes?|institute of|programs?|programmes?|donors?|supporters?)\b(?!-)/i;
+/**
+ * The body a payer phrase names, without what qualifies it: "Commercial beekeepers registered with the state apiary
+ * program" names commercial beekeepers, who buy, not the program they are registered with (2026-11-27 frozen run,
+ * fx-15: the only opening was excluded as "its payer is a program"). The qualifier starts at the first participle or
+ * relative word that attaches the payer to another body; a funder at the head ("The Riverside Arts Council", "the
+ * county's workforce program") is still the payer. Pure.
+ */
+const PAYER_QUALIFIER = /\s(?:(?:who|that|which|whose)\b|(?:registered|enrolled|listed|certified|licensed|accredited|participating|funded|supported|served|regulated|inspected|approved|permitted|insured|members?)\b|(?:in|under|through|with|by|from|at)\s+(?:a|an|the|their|its|our|state|federal|county|city|local|national)\b)/i;
+function payerHead(payer: string | null | undefined): string {
+  const p = (payer ?? '').trim();
+  const cut = p.search(PAYER_QUALIFIER);
+  return cut > 0 ? p.slice(0, cut) : p;
+}
 /** Text that shows somebody being paid as a supplier, or buying through procurement or a sale. */
 const SUPPLIER_SIGNAL = (t: string): boolean =>
   SUPPLIER_PRICE_FRAME.test(t) || PAYS_SUPPLIER.test(t) || PROCUREMENT.test(t) || /\b(?:sells?|sold|hires?|hired|retains?|retained|subscriptions?)\b/i.test(t);
@@ -403,7 +416,7 @@ function readTransaction(evidence: string | null | undefined, arrangement: Arran
   const job = SUPPLIER_SIGNAL(t) ? undefined : (t.match(EMPLOYMENT_FRAME)?.[0] ?? [arrangement.buyingSignal, arrangement.source].filter(Boolean).join(' ').match(EMPLOYMENT_FRAME)?.[0]);
   if (job) return not('PAYOUT', job, `an employee's pay ("${job}"), not a price a buyer pays a supplier`);
   // An opening's payer is one body with a role; a population's name ("community foundations") is a kind of buyer, and buys.
-  const funder = opening ? arrangement.payer?.match(FUNDER_BODY)?.[0] : undefined;
+  const funder = opening ? payerHead(arrangement.payer).match(FUNDER_BODY)?.[0] : undefined;
   if (funder && !SUPPLIER_SIGNAL(t)) return not('PAYOUT', funder, `its payer is a ${funder.toLowerCase()} paying out, and the evidence shows no supplier being paid`);
 
   // 6. The evidence is about another market, or shows no purchase at all.
@@ -427,7 +440,7 @@ export function arrangementExclusion(arrangement: ArrangementFields, goalText: s
   const asked = requestedNonCommercial(goalText);
   if (asked.size > 0) return null;
   if (payerPaysOut(arrangement.payer) && nonCommercialExclusion(`${arrangement.payer} $1`, goalText) !== null) return `not a sale: its payer pays out rather than buys ("${(arrangement.payer ?? '').slice(0, 80)}"); a revenue goal's strategies are commercial purchases`;
-  const funder = arrangement.payer?.match(FUNDER_BODY)?.[0];
+  const funder = payerHead(arrangement.payer).match(FUNDER_BODY)?.[0];
   if (funder && !SUPPLIER_SIGNAL(text)) return `not a sale: its payer is a ${funder.toLowerCase()} ("${(arrangement.payer ?? '').slice(0, 80)}") and nothing in the opening shows it paying a supplier for a deliverable; a revenue goal's strategies are commercial purchases`;
   return null;
 }

@@ -34,7 +34,7 @@ const dims = (industry: string, mechanism: string): CaseDimensions => ({ capital
 const LEGITIMATE: PlanningCase = {
   id: 'committee-legitimate-marketplace',
   heldOut: false,
-  description: 'Every link evidenced: 2,300 comparable sales a year, a measured 4% conversion at $29, Brain produces it, cash in 3 days.',
+  description: 'Every link evidenced: 2,300 comparable sales a year across 4 sellers (a share of about 47 a month covers 36), a measured 4% conversion at $29, Brain produces it, cash in 3 days.',
   dimensions: dims('home meal planning', 'PRODUCTIZED_SERVICE'),
   objective: 'Collect $1,000 of settled cash within 30 days using no up-front capital.',
   openings: [
@@ -43,7 +43,7 @@ const LEGITIMATE: PlanningCase = {
       payer: 'Marketplace shoppers planning allergen-free meals', channel: 'The marketplace listing and its search', price: 29,
       priceEvidence: 'Comparable allergen meal-plan spreadsheets sell for $29 on the marketplace (listing prices, 2026-11).',
       cost: 3, capital: 0, daysToCash: 3, hours: 0.1, performer: 'BRAIN',
-      volume: 'The marketplace shows 2,300 sales of comparable meal-plan spreadsheets in the last 12 months across 40 sellers; buyers return each season.',
+      volume: 'The marketplace shows 2,300 sales of comparable meal-plan spreadsheets in the last 12 months across 4 sellers; buyers return each season.',
       conversion: { paid: 60, of: 1500 },
     },
   ],
@@ -138,6 +138,21 @@ describe('the investment committee on the real planner', () => {
     const gated = gate(challengeAnswered(forcedAccepted(r)));
     expect(gated.committee!.blocks).toBe(false);
     expect(gated.acceptance.status).toBe('ACCEPTED');
+  });
+
+  it('mv-04 (2026-11-27): the same category total spread across 40 sellers is one listing’s average share, so MARKET_VOLUME is not established for it', { timeout: 300_000 }, async () => {
+    const shared: PlanningCase = { ...LEGITIMATE, id: 'committee-shared-category', openings: LEGITIMATE.openings.map((o) => ({ ...o, volume: o.volume!.replace('across 4 sellers', 'across 40 sellers') })) };
+    const r = await read(shared);
+    const volume = r.strategies.flatMap((s) => s.links).filter((l) => l.link === 'MARKET_VOLUME');
+    expect(volume.length).toBeGreaterThan(0);
+    for (const l of volume) {
+      expect(l.ok, l.basis).toBe(false);
+      expect(l.basis).toMatch(/across 40 sellers.*average share/);
+    }
+    expect(r.verdict).not.toBe('RECOMMENDABLE');
+    // Control: the evidenced world it was copied from still establishes the link.
+    const own = readings.get(LEGITIMATE.id) ?? (await read(LEGITIMATE));
+    expect(own.strategies.flatMap((s) => s.links).filter((l) => l.link === 'MARKET_VOLUME').every((l) => l.ok)).toBe(true);
   });
 
   it('C60: refuses an acceptance the committee passes when the plan breaks an integrity rule', { timeout: 300_000 }, async () => {

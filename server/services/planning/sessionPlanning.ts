@@ -243,7 +243,12 @@ export interface BrainRunSummary {
   nextTest: string | null;
   /** Every opening the planner weighed: the chain links it judged missing, and the card the session reasons from. */
   openings: SessionOpening[];
-  excluded: { opportunityId: string; title: string; reason: string }[];
+  /**
+   * Openings the planner set aside, each with why and the same record a considered opening carries (card, facts,
+   * agreements), so a session can judge an exclusion on the evidence rather than on the reason alone (2026-11-27
+   * frozen run, fx-15: the only opening was excluded and the author could not see its card to dispute it).
+   */
+  excluded: ({ opportunityId: string; title: string; reason: string } & OpeningRecord)[];
   /** The research questions this run raised through Brain's path-research owner (need ids). */
   questions: string[];
   /** The target and scope as the planner read them. */
@@ -267,24 +272,36 @@ export interface SessionOpening {
 
 const OPENING_FIELDS = ['payer', 'reachableChannel', 'buyingSignal', 'signalObservedAt', 'offerScope', 'acceptanceCondition', 'priceCents', 'currency', 'paymentTerms', 'fulfillmentOwner', 'deliveryMethod', 'requiredInputs', 'deadline', 'economicsNote', 'peakFundingCents', 'humanHours', 'requiredCapabilities', 'industry', 'mechanism', 'state'] as const;
 
+/** One opening's own record as the session sees it: the card fields a chain link rests on, its facts, its agreements. */
+export interface OpeningRecord {
+  card: Record<string, unknown>;
+  agreements: { amountCents: number; currency: string; deliverable: string; evidenceKind: string; state: string; recordedBy: string }[];
+  facts: { field: string; value: string | null; kind: string }[];
+}
+
+async function openingRecord(opportunityId: string): Promise<OpeningRecord> {
+  const o = await getOpportunity(opportunityId);
+  const row = (o ?? {}) as unknown as Record<string, unknown>;
+  const card: Record<string, unknown> = {};
+  // The opening's own record as Brain's planner reads it (`CashOpportunity`), every field a chain link rests on.
+  for (const k of OPENING_FIELDS) if (row[k] !== undefined && row[k] !== null && row[k] !== '') card[k] = row[k];
+  // Written agreements and commitments recorded against it (the journey's agreement rows): evidence the card's facts do not carry.
+  const { agreementsFor } = await import('../../repos/cashJourney.ts');
+  const agreements = (await agreementsFor(opportunityId).catch(() => [])).map((a) => ({ amountCents: a.amountCents, currency: a.currency, deliverable: a.deliverable, evidenceKind: a.evidenceKind, state: a.state, recordedBy: a.recordedBy }));
+  const facts = (await cardFactsFor(opportunityId).catch(() => [])).map((f) => ({ field: f.field, value: f.value, kind: f.kind }));
+  return { card, agreements, facts };
+}
+
 async function consideredOpenings(reading: { considered: { opportunityId: string; title: string; missing: string[]; stage: string; supportedReach: number; potentialReach: number | null }[]; strategies?: { opportunityIds: string[]; links: { link: string; ok: boolean; basis: string }[] }[] }): Promise<SessionOpening[]> {
   const out: SessionOpening[] = [];
   for (const c of reading.considered ?? []) {
-    const o = await getOpportunity(c.opportunityId);
-    const facts = await cardFactsFor(c.opportunityId).catch(() => []);
-    const row = (o ?? {}) as unknown as Record<string, unknown>;
-    const card: Record<string, unknown> = {};
-    // The opening's own record as Brain's planner reads it (`CashOpportunity`), every field a chain link rests on.
-    for (const k of OPENING_FIELDS) if (row[k] !== undefined && row[k] !== null && row[k] !== '') card[k] = row[k];
-    // Written agreements and commitments recorded against it (the journey's agreement rows): evidence the card's facts do not carry.
-    const { agreementsFor } = await import('../../repos/cashJourney.ts');
-    const agreements = (await agreementsFor(c.opportunityId).catch(() => [])).map((a) => ({ amountCents: a.amountCents, currency: a.currency, deliverable: a.deliverable, evidenceKind: a.evidenceKind, state: a.state, recordedBy: a.recordedBy }));
+    const { card, agreements, facts } = await openingRecord(c.opportunityId);
     // Brain's own judgement of each chain link for this opening, with the row or rule that decides it: the strategy
     // that holds this opening alone, else the first that holds it. What a session must answer before it disagrees.
     const strategy = (reading.strategies ?? []).find((one) => one.opportunityIds.length === 1 && one.opportunityIds[0] === c.opportunityId)
       ?? (reading.strategies ?? []).find((one) => one.opportunityIds.includes(c.opportunityId));
     const links = (strategy?.links ?? []).map((l) => ({ link: l.link, ok: l.ok, basis: l.basis }));
-    out.push({ opportunityId: c.opportunityId, title: c.title, missing: [...c.missing], stage: c.stage, supportedReach: c.supportedReach, potentialReach: c.potentialReach, card, agreements, links, facts: facts.map((f) => ({ field: f.field, value: f.value, kind: f.kind })) });
+    out.push({ opportunityId: c.opportunityId, title: c.title, missing: [...c.missing], stage: c.stage, supportedReach: c.supportedReach, potentialReach: c.potentialReach, card, agreements, links, facts });
   }
   return out;
 }
@@ -339,7 +356,7 @@ export async function runBrain(input: { goalId: string; actor: PlanExecutor; eva
       steps: (reading.steps ?? []).map((s) => ({ label: s.label, owner: s.owner, cost: s.cost })),
       nextTest: reading.nextTest?.test ?? null,
       openings: await consideredOpenings(reading),
-      excluded: (reading.excluded ?? []).map((x) => ({ opportunityId: x.opportunityId, title: x.title, reason: x.reason })),
+      excluded: await Promise.all((reading.excluded ?? []).map(async (x) => ({ opportunityId: x.opportunityId, title: x.title, reason: x.reason, ...(await openingRecord(x.opportunityId)) }))),
       questions: await raiseQuestions(reading),
       scope: { targetCents: reading.target.targetCents, daysLeft: reading.target.daysLeft ?? null, hoursCeiling: reading.target.hoursCeiling ?? null, industry: reading.target.scope?.industry ?? null, recurring: reading.target.scope?.recurring ?? null, hoursPerWeek: reading.target.scope?.hoursPerWeek ?? null },
       at,
@@ -708,7 +725,7 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const weighed = [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])];
   const facts = await cardFactsOf(weighed);
   const reviewConditions = r.parentRevisionId ? await conditionsOn(goalId, r.parentRevisionId) : [];
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions };
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])) };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),

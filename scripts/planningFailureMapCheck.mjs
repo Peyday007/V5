@@ -70,6 +70,16 @@ if (which === 'accept') {
   const m = /^(\d+)\/30\b/.exec(last?.usable ?? '');
   ok(!!m && Number(m[1]) >= 27 && /zero critical/i.test(last.note ?? ''), `the latest measurement shows at least 27/30 fresh goals usable with zero critical mistakes (latest: ${last?.usable ?? 'none'})`);
 }
+if (which === 'workflow' || which === 'all') {
+  const wf = data.workflow ?? [];
+  ok(wf.length >= 20, `the current Opus + Brain workflow is mapped (${wf.length} capabilities)`);
+  for (const x of wf) {
+    ok(['PASS', 'PARTIAL', 'FAIL', 'BLOCKED'].includes(x.status), `${x.id} has a workflow status`);
+    ok(x.behavior && x.component && x.inputs && x.output && x.consumer && x.evidence && x.remaining, `${x.id} states behaviour, component, inputs, output, consumer, evidence and what remains`);
+    ok(x.status === 'PASS' || x.remaining !== '—', `${x.id} is not PASS, so it names its remaining work`);
+    ok(md.includes(`| ${x.id} |`), `${x.id} is rendered in the record`);
+  }
+}
 if (failures.length) {
   console.error(`PLANNING_FAILURE_MAP ${which}: FAILED\n- ${failures.join('\n- ')}`);
   process.exit(1);

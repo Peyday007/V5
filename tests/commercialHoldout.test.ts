@@ -55,6 +55,15 @@ describe('the audit cases that motivated it (fresh-plan audit, 2026-11-24)', () 
     // A funder that buys through procurement is a buyer.
     expect(arrangementExclusion({ title: 'Program evaluation', payer: 'Regional community foundation', buyingSignal: 'RFP for an external program evaluation' }, goal)).toBeNull();
   });
+  it('reads the body a payer names, not the program it is registered with (2026-11-27 frozen run, fx-15)', () => {
+    const varroa = { title: 'Varroa mite-load analysis reports from sticky-board photos for commercial beekeepers', payer: 'Commercial beekeepers registered with the state apiary program', offerScope: 'A mite-load report per apiary for the spring filing' };
+    expect(arrangementExclusion(varroa, goal)).toBeNull();
+    expect(arrangementExclusion({ ...varroa, payer: 'Dairy farms enrolled in the federal margin coverage program' }, goal)).toBeNull();
+    expect(arrangementExclusion({ ...varroa, payer: 'Contractors who are members of the state apprenticeship program' }, goal)).toBeNull();
+    // Controls: a program or funder that IS the payer still pays out, and is still excluded.
+    expect(arrangementExclusion({ ...varroa, payer: 'The state apiary program' }, goal)).toMatch(/not a sale/);
+    expect(arrangementExclusion({ ...varroa, payer: 'Riverside community foundation, registered with the state' }, goal)).toMatch(/not a sale/);
+  });
 });
 
 describe('a price filed for a buyer population is never a fee the selling side pays', () => {
