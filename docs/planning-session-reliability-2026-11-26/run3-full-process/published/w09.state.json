@@ -1,0 +1,1180 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_b3684f00c594490fbf18",
+      "words": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": [],
+        "targetCents": 600000,
+        "proofCondition": "$6,000 of settled cash collected within 30 days with no up-front capital"
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "a313f51a6392acc9a443a2ca"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_b3684f00c594490fbf18",
+        "contractDigest": "a313f51a6392acc9a443a2ca",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the two agreed lead service line inventory workbooks",
+          "opportunityIds": [
+            "cop_7fbd709ef874487ab891"
+          ],
+          "why": "Two small water utility managers have given written acceptance at $4,000 each ($8,000). Brain produces the spreadsheet deliverable itself (PRODUCE_SPREADSHEET), direct cost is $40 per workbook with $0 exposure, and cash arrives ~21 days after the sale, inside the 30-day window. Net settled cash $7,920 covers the $6,000 target with no up-front capital and no conversion assumption, since the buyers have already agreed."
+        },
+        "alternatives": [
+          {
+            "title": "Sell additional workbooks to new utilities",
+            "why": "Not needed for the target; buyer volume is unmeasured (open question), so it is not relied on."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the two written acceptances at $4,000 each and the delivery scope with each utility manager",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_agr",
+              "s_price"
+            ],
+            "priceCents": 400000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Brain produces lead service line inventory workbook 1 for the agreed utility",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_del",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $4,000 for workbook 1",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc",
+              "s_agr"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Brain produces lead service line inventory workbook 2 for the agreed utility",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_del",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $4,000 for workbook 2",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc",
+              "s_agr"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 400000,
+            "label": "Workbook 1: $4,000 agreed price",
+            "settlesDay": 22,
+            "stepId": "collect1"
+          },
+          {
+            "day": 22,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost of workbook 1 ($40), paid once the receipt settles",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 400000,
+            "label": "Workbook 2: $4,000 agreed price",
+            "settlesDay": 22,
+            "stepId": "collect2"
+          },
+          {
+            "day": 22,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost of workbook 2 ($40), paid once the receipt settles",
+            "stepId": "deliver2"
+          }
+        ],
+        "proofDay": 22,
+        "quantities": [
+          {
+            "name": "agreed deals",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "deals",
+            "sources": [
+              "s_agr"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 400000,
+            "unit": "cents",
+            "sources": [
+              "s_price",
+              "s_agr"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 4000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 21,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "up-front capital",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exp"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agr",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#agreements",
+            "dated": "2026-11-24",
+            "claim": "Two written acceptances at $4,000 each for the workbook",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $4,000 per workbook",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $40 per workbook",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_del",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "The deliverable is a spreadsheet Brain produces",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exp",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#peakFundingCents",
+            "dated": "2026-11-24",
+            "claim": "Peak funding / exposure is $0",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 21 days after sale",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_7fbd709ef874487ab891",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_7fbd709ef874487ab891",
+            "deals": 2,
+            "price": 4000,
+            "directCost": 40,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_0901fc676c56_1f819f",
+        "digest": "0901fc676c56fd561a16b4f8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3ca1920522fc468d859c/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:20:36.911Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_b3684f00c594490fbf18",
+      "contractDigest": "a313f51a6392acc9a443a2ca",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Deliver the two agreed lead service line inventory workbooks",
+        "opportunityIds": [
+          "cop_7fbd709ef874487ab891"
+        ],
+        "why": "Two small water utility managers have given written acceptance at $4,000 each ($8,000). Brain produces the spreadsheet deliverable itself (PRODUCE_SPREADSHEET), direct cost is $40 per workbook with $0 exposure, and cash arrives ~21 days after the sale, inside the 30-day window. Net settled cash $7,920 covers the $6,000 target with no up-front capital and no conversion assumption, since the buyers have already agreed."
+      },
+      "alternatives": [
+        {
+          "title": "Sell additional workbooks to new utilities",
+          "why": "Not needed for the target; buyer volume is unmeasured (open question), so it is not relied on."
+        }
+      ],
+      "steps": [
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the two written acceptances at $4,000 each and the delivery scope with each utility manager",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_agr",
+            "s_price"
+          ],
+          "priceCents": 400000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver1",
+          "kind": "DELIVER",
+          "label": "Brain produces lead service line inventory workbook 1 for the agreed utility",
+          "performer": "BRAIN",
+          "costCents": 4000,
+          "day": 3,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_del",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect1",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $4,000 for workbook 1",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "s_ttc",
+            "s_agr"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver2",
+          "kind": "DELIVER",
+          "label": "Brain produces lead service line inventory workbook 2 for the agreed utility",
+          "performer": "BRAIN",
+          "costCents": 4000,
+          "day": 3,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_del",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect2",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $4,000 for workbook 2",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "s_ttc",
+            "s_agr"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 3,
+          "kind": "RECEIPT",
+          "amountCents": 400000,
+          "label": "Workbook 1: $4,000 agreed price",
+          "settlesDay": 22,
+          "stepId": "collect1"
+        },
+        {
+          "day": 22,
+          "kind": "SPEND",
+          "amountCents": 4000,
+          "label": "Direct cost of workbook 1 ($40), paid once the receipt settles",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 3,
+          "kind": "RECEIPT",
+          "amountCents": 400000,
+          "label": "Workbook 2: $4,000 agreed price",
+          "settlesDay": 22,
+          "stepId": "collect2"
+        },
+        {
+          "day": 22,
+          "kind": "SPEND",
+          "amountCents": 4000,
+          "label": "Direct cost of workbook 2 ($40), paid once the receipt settles",
+          "stepId": "deliver2"
+        }
+      ],
+      "proofDay": 22,
+      "quantities": [
+        {
+          "name": "agreed deals",
+          "status": "EVIDENCED",
+          "value": 2,
+          "unit": "deals",
+          "sources": [
+            "s_agr"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per workbook",
+          "status": "EVIDENCED",
+          "value": 400000,
+          "unit": "cents",
+          "sources": [
+            "s_price",
+            "s_agr"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per workbook",
+          "status": "EVIDENCED",
+          "value": 4000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to settled cash",
+          "status": "EVIDENCED",
+          "value": 21,
+          "unit": "days",
+          "sources": [
+            "s_ttc"
+          ],
+          "needs": null
+        },
+        {
+          "name": "up-front capital",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "cents",
+          "sources": [
+            "s_exp"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_agr",
+          "url": "https://brain.local/card/cop_7fbd709ef874487ab891#agreements",
+          "dated": "2026-11-24",
+          "claim": "Two written acceptances at $4,000 each for the workbook",
+          "population": "Small water utility managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_7fbd709ef874487ab891#priceCents",
+          "dated": "2026-11-24",
+          "claim": "Price is $4,000 per workbook",
+          "population": "Small water utility managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_7fbd709ef874487ab891#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost is $40 per workbook",
+          "population": "Small water utility managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_del",
+          "url": "https://brain.local/card/cop_7fbd709ef874487ab891#requiredCapabilities",
+          "dated": "2026-11-24",
+          "claim": "The deliverable is a spreadsheet Brain produces",
+          "population": "Small water utility managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_exp",
+          "url": "https://brain.local/card/cop_7fbd709ef874487ab891#peakFundingCents",
+          "dated": "2026-11-24",
+          "claim": "Peak funding / exposure is $0",
+          "population": "Small water utility managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_ttc",
+          "url": "https://brain.local/card/cop_7fbd709ef874487ab891#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "First cash 21 days after sale",
+          "population": "Small water utility managers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_7fbd709ef874487ab891",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_7fbd709ef874487ab891",
+          "deals": 2,
+          "price": 4000,
+          "directCost": 40,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "revisionId": "rev_0901fc676c56_1f819f",
+      "digest": "0901fc676c56fd561a16b4f8",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_3ca1920522fc468d859c/author-2",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:20:36.911Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_0901fc676c56_1f819f",
+      "digest": "0901fc676c56fd561a16b4f8",
+      "contractDigest": "a313f51a6392acc9a443a2ca",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 8000,
+        "committedOpenCents": 0,
+        "preProofCents": 8000,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 3,
+        "collectedCents": 800000,
+        "collectedInWindowCents": 800000,
+        "refundsCents": 0,
+        "netCents": 792000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Lead service line inventory workbooks for small water utilit\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Lead service line inventory workbooks for small water utilit\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 23393× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Small water utility managers — Lead service lin\" needs [figure withheld] and keeps [figure withheld], 3930× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Lead service line inventory workbooks for small water utilities\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_7fbd709ef874487ab891"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Lead service line inventory workbooks for small water utilities\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Lead service line inventory workbooks for small water utilities\"",
+            "owner": "PERSON",
+            "cost": 40
+          },
+          {
+            "label": "Collect payment for \"Lead service line inventory workbooks for small water utilities\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_7fbd709ef874487ab891",
+            "title": "Lead service line inventory workbooks for small water utilities",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 6000,
+            "potentialReach": 6000,
+            "card": {
+              "payer": "Small water utility managers",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:14.090Z",
+              "offerScope": "Lead service line inventory workbooks for small water utilities",
+              "priceCents": 400000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 3,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "municipal water utilities",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 400000,
+                "currency": "USD",
+                "deliverable": "Lead service line inventory workbooks for small water utilities",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 400000,
+                "currency": "USD",
+                "deliverable": "Lead service line inventory workbooks for small water utilities",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Lead service line inventory workbooks for small water utilities to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$40",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Small water utility managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$4000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "21 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 600000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:20:03.776Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_0901fc676c56_1f819f",
+        "revisionDigest": "0901fc676c56fd561a16b4f8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3ca1920522fc468d859c/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d147778ebaf241ecaa75/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is supported: two written acceptances at $4,000 from utility managers (evidenced price for this buyer), deliverable is a spreadsheet Brain produces (PRODUCE_SPREADSHEET present), $40 direct cost below price, $0 exposure, sale day 1 + 21 days settles day 22 inside 30. Net $8,000 - $80 = $7,920 >= $6,000; trace matches. No conversion assumption needed.",
+        "findings": [
+          "Minor: card lists 3 human hours per workbook (6 h total) but no step assigns them to a person; owner hours are unconstrained so not blocking.",
+          "Minor: confirm/invoice steps are BRAIN-performed while SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect them or have the owner send.",
+          "Minor: card has no fulfillmentOwner field (delivery fact only); Brain's engine summary counts the leg as lacking a fulfiller."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:23:18.562Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_0901fc676c56_1f819f",
+      "digest": "0901fc676c56fd561a16b4f8",
+      "contractDigest": "a313f51a6392acc9a443a2ca",
+      "plan": {
+        "goalId": "wst_b3684f00c594490fbf18",
+        "contractDigest": "a313f51a6392acc9a443a2ca",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the two agreed lead service line inventory workbooks",
+          "opportunityIds": [
+            "cop_7fbd709ef874487ab891"
+          ],
+          "why": "Two small water utility managers have given written acceptance at $4,000 each ($8,000). Brain produces the spreadsheet deliverable itself (PRODUCE_SPREADSHEET), direct cost is $40 per workbook with $0 exposure, and cash arrives ~21 days after the sale, inside the 30-day window. Net settled cash $7,920 covers the $6,000 target with no up-front capital and no conversion assumption, since the buyers have already agreed."
+        },
+        "alternatives": [
+          {
+            "title": "Sell additional workbooks to new utilities",
+            "why": "Not needed for the target; buyer volume is unmeasured (open question), so it is not relied on."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the two written acceptances at $4,000 each and the delivery scope with each utility manager",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_agr",
+              "s_price"
+            ],
+            "priceCents": 400000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Brain produces lead service line inventory workbook 1 for the agreed utility",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_del",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $4,000 for workbook 1",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc",
+              "s_agr"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Brain produces lead service line inventory workbook 2 for the agreed utility",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_del",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $4,000 for workbook 2",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc",
+              "s_agr"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 400000,
+            "label": "Workbook 1: $4,000 agreed price",
+            "settlesDay": 22,
+            "stepId": "collect1"
+          },
+          {
+            "day": 22,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost of workbook 1 ($40), paid once the receipt settles",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 400000,
+            "label": "Workbook 2: $4,000 agreed price",
+            "settlesDay": 22,
+            "stepId": "collect2"
+          },
+          {
+            "day": 22,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost of workbook 2 ($40), paid once the receipt settles",
+            "stepId": "deliver2"
+          }
+        ],
+        "proofDay": 22,
+        "quantities": [
+          {
+            "name": "agreed deals",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "deals",
+            "sources": [
+              "s_agr"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 400000,
+            "unit": "cents",
+            "sources": [
+              "s_price",
+              "s_agr"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 4000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 21,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "up-front capital",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exp"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agr",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#agreements",
+            "dated": "2026-11-24",
+            "claim": "Two written acceptances at $4,000 each for the workbook",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $4,000 per workbook",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $40 per workbook",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_del",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "The deliverable is a spreadsheet Brain produces",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exp",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#peakFundingCents",
+            "dated": "2026-11-24",
+            "claim": "Peak funding / exposure is $0",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_7fbd709ef874487ab891#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 21 days after sale",
+            "population": "Small water utility managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_7fbd709ef874487ab891",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_7fbd709ef874487ab891",
+            "deals": 2,
+            "price": 4000,
+            "directCost": 40,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_0901fc676c56_1f819f",
+        "digest": "0901fc676c56fd561a16b4f8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3ca1920522fc468d859c/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:20:36.911Z"
+      },
+      "review": {
+        "revisionId": "rev_0901fc676c56_1f819f",
+        "revisionDigest": "0901fc676c56fd561a16b4f8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3ca1920522fc468d859c/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d147778ebaf241ecaa75/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is supported: two written acceptances at $4,000 from utility managers (evidenced price for this buyer), deliverable is a spreadsheet Brain produces (PRODUCE_SPREADSHEET present), $40 direct cost below price, $0 exposure, sale day 1 + 21 days settles day 22 inside 30. Net $8,000 - $80 = $7,920 >= $6,000; trace matches. No conversion assumption needed.",
+        "findings": [
+          "Minor: card lists 3 human hours per workbook (6 h total) but no step assigns them to a person; owner hours are unconstrained so not blocking.",
+          "Minor: confirm/invoice steps are BRAIN-performed while SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect them or have the owner send.",
+          "Minor: card has no fulfillmentOwner field (delivery fact only); Brain's engine summary counts the leg as lacking a fulfiller."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:23:18.562Z"
+      },
+      "at": "2026-11-27T00:23:53.850Z"
+    },
+    "staleFinal": null
+  }
+}

@@ -1,0 +1,636 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_9144e6c73d864c5ab575",
+      "words": "Collect $6,000 of settled cash within 14 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 600000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$6,000 of buyer payments settled within 14 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "420e930f70d3743ee26e09f8"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_9144e6c73d864c5ab575",
+        "contractDigest": "420e930f70d3743ee26e09f8",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 14 days: the committed transcript work settles in 60 days",
+          "opportunityIds": [],
+          "why": "The only opening, expedited deposition transcripts, has four written acceptances at $1,800 ($7,200 gross, $3,600 after Verbatim Reporting Group's $900 per job), but its record puts first cash at 60 days. The objective counts only cash settled within 14 days, so every dollar of it lands outside the window; and paying the subcontractor before the firms pay would also need up-front capital the objective forbids. Nothing else is held."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the four accepted jobs on a 60+ day window",
+            "why": "Supportable only if the deadline moves to at least 60 days; it also yields $3,600 net of subcontractor cost, so a $6,000 target needs 7 jobs on contribution or 4 on gross collections."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 60,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": "<= 14 days"
+          },
+          {
+            "name": "committedRevenue",
+            "status": "EVIDENCED",
+            "value": 720000,
+            "unit": "cents",
+            "sources": [
+              "s_agree",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "cashSettledInWindow",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents/job",
+            "sources": [
+              "s_directCosts"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "60 days to first cash",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#agreements",
+            "dated": "2026-11-24",
+            "claim": "Four written acceptances at $1,800 each",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#price",
+            "dated": "2026-11-24",
+            "claim": "$1800 per expedited transcript",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_directCosts",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$900 per job to Verbatim Reporting Group (quoted)",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_fulfillment",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Verbatim Reporting Group (quoted) quoted to do the work",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "SETTLES_IN_TIME: the opening's own record puts first cash at 60 days, so the four accepted $1,800 jobs settle after the 14-day deadline and contribute $0 to the target inside the window.",
+          "resolution": "Move the deadline to at least 60 days (then the four acceptances settle $7,200 gross), or find an opening that pays within 14 days; separately, negotiate payment terms with the subcontractor so its $900 per job is paid from receipts, not up front."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a8b97e55416c49dd9b70",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Move the deadline to at least 60 days from now, when the accepted transcript jobs settle."
+          }
+        ],
+        "revisionId": "rev_c53047b77f18_53bfd0",
+        "digest": "c53047b77f181e9b2d75ad24",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_726e61670ef243d29fa4/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:30.229Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_9144e6c73d864c5ab575",
+      "contractDigest": "420e930f70d3743ee26e09f8",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan inside 14 days: the committed transcript work settles in 60 days",
+        "opportunityIds": [],
+        "why": "The only opening, expedited deposition transcripts, has four written acceptances at $1,800 ($7,200 gross, $3,600 after Verbatim Reporting Group's $900 per job), but its record puts first cash at 60 days. The objective counts only cash settled within 14 days, so every dollar of it lands outside the window; and paying the subcontractor before the firms pay would also need up-front capital the objective forbids. Nothing else is held."
+      },
+      "alternatives": [
+        {
+          "title": "Deliver the four accepted jobs on a 60+ day window",
+          "why": "Supportable only if the deadline moves to at least 60 days; it also yields $3,600 net of subcontractor cost, so a $6,000 target needs 7 jobs on contribution or 4 on gross collections."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 60,
+          "unit": "days",
+          "sources": [
+            "s_timeToFirstCash"
+          ],
+          "needs": "<= 14 days"
+        },
+        {
+          "name": "committedRevenue",
+          "status": "EVIDENCED",
+          "value": 720000,
+          "unit": "cents",
+          "sources": [
+            "s_agree",
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "cashSettledInWindow",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "cents",
+          "sources": [
+            "s_timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 90000,
+          "unit": "cents/job",
+          "sources": [
+            "s_directCosts"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_timeToFirstCash",
+          "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "60 days to first cash",
+          "population": "Litigation firms",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_agree",
+          "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#agreements",
+          "dated": "2026-11-24",
+          "claim": "Four written acceptances at $1,800 each",
+          "population": "Litigation firms",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#price",
+          "dated": "2026-11-24",
+          "claim": "$1800 per expedited transcript",
+          "population": "Litigation firms",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_directCosts",
+          "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$900 per job to Verbatim Reporting Group (quoted)",
+          "population": "Litigation firms",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_fulfillment",
+          "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Verbatim Reporting Group (quoted) quoted to do the work",
+          "population": "Litigation firms",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "SETTLES_IN_TIME: the opening's own record puts first cash at 60 days, so the four accepted $1,800 jobs settle after the 14-day deadline and contribute $0 to the target inside the window.",
+        "resolution": "Move the deadline to at least 60 days (then the four acceptances settle $7,200 gross), or find an opening that pays within 14 days; separately, negotiate payment terms with the subcontractor so its $900 per job is paid from receipts, not up front."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_a8b97e55416c49dd9b70",
+          "missing": [
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [],
+      "constraints": [
+        {
+          "constraint": "DEADLINE",
+          "suggestion": "Move the deadline to at least 60 days from now, when the accepted transcript jobs settle."
+        }
+      ],
+      "revisionId": "rev_c53047b77f18_53bfd0",
+      "digest": "c53047b77f181e9b2d75ad24",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_726e61670ef243d29fa4/author-1",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:19:30.229Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_c53047b77f18_53bfd0",
+      "digest": "c53047b77f181e9b2d75ad24",
+      "contractDigest": "420e930f70d3743ee26e09f8",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $6,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 60 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_a8b97e55416c49dd9b70"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_a8b97e55416c49dd9b70",
+            "title": "Expedited deposition transcript production for litigation firms",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 0,
+            "potentialReach": 0,
+            "card": {
+              "payer": "Litigation firms",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:10.857Z",
+              "offerScope": "Expedited deposition transcript production for litigation firms",
+              "priceCents": 180000,
+              "currency": "USD",
+              "fulfillmentOwner": "Verbatim Reporting Group (quoted)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "court reporting",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Expedited deposition transcript production for litigation firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Expedited deposition transcript production for litigation firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Expedited deposition transcript production for litigation firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Expedited deposition transcript production for litigation firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Expedited deposition transcript production for litigation firms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$900",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Verbatim Reporting Group (quoted) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Litigation firms",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$1800",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "60 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_2cb09a1ed5a3455dbe6c",
+          "cnd_64197a29ebfe40c39892"
+        ],
+        "scope": {
+          "targetCents": 600000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:16:45.325Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_c53047b77f18_53bfd0",
+        "revisionDigest": "c53047b77f181e9b2d75ad24",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_726e61670ef243d29fa4/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0fe8a067a7384d7fbfaa/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a DEADLINE constraint is right: the card evidences 60 days to first cash, so the four $1,800 written acceptances ($7,200) settle after the 14-day window and contribute $0 inside it; this is a genuine limit the full evidence cannot fit, matching Brain NOT_VIABLE. Fulfiller (Verbatim Reporting Group, $900/job) is recorded correctly; no capital used.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:15.401Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_c53047b77f18_53bfd0",
+      "digest": "c53047b77f181e9b2d75ad24",
+      "contractDigest": "420e930f70d3743ee26e09f8",
+      "plan": {
+        "goalId": "wst_9144e6c73d864c5ab575",
+        "contractDigest": "420e930f70d3743ee26e09f8",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 14 days: the committed transcript work settles in 60 days",
+          "opportunityIds": [],
+          "why": "The only opening, expedited deposition transcripts, has four written acceptances at $1,800 ($7,200 gross, $3,600 after Verbatim Reporting Group's $900 per job), but its record puts first cash at 60 days. The objective counts only cash settled within 14 days, so every dollar of it lands outside the window; and paying the subcontractor before the firms pay would also need up-front capital the objective forbids. Nothing else is held."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the four accepted jobs on a 60+ day window",
+            "why": "Supportable only if the deadline moves to at least 60 days; it also yields $3,600 net of subcontractor cost, so a $6,000 target needs 7 jobs on contribution or 4 on gross collections."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 60,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": "<= 14 days"
+          },
+          {
+            "name": "committedRevenue",
+            "status": "EVIDENCED",
+            "value": 720000,
+            "unit": "cents",
+            "sources": [
+              "s_agree",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "cashSettledInWindow",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents/job",
+            "sources": [
+              "s_directCosts"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "60 days to first cash",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#agreements",
+            "dated": "2026-11-24",
+            "claim": "Four written acceptances at $1,800 each",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#price",
+            "dated": "2026-11-24",
+            "claim": "$1800 per expedited transcript",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_directCosts",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$900 per job to Verbatim Reporting Group (quoted)",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_fulfillment",
+            "url": "https://brain.local/card/cop_a8b97e55416c49dd9b70#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Verbatim Reporting Group (quoted) quoted to do the work",
+            "population": "Litigation firms",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "SETTLES_IN_TIME: the opening's own record puts first cash at 60 days, so the four accepted $1,800 jobs settle after the 14-day deadline and contribute $0 to the target inside the window.",
+          "resolution": "Move the deadline to at least 60 days (then the four acceptances settle $7,200 gross), or find an opening that pays within 14 days; separately, negotiate payment terms with the subcontractor so its $900 per job is paid from receipts, not up front."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a8b97e55416c49dd9b70",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Move the deadline to at least 60 days from now, when the accepted transcript jobs settle."
+          }
+        ],
+        "revisionId": "rev_c53047b77f18_53bfd0",
+        "digest": "c53047b77f181e9b2d75ad24",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_726e61670ef243d29fa4/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:30.229Z"
+      },
+      "review": {
+        "revisionId": "rev_c53047b77f18_53bfd0",
+        "revisionDigest": "c53047b77f181e9b2d75ad24",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_726e61670ef243d29fa4/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0fe8a067a7384d7fbfaa/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a DEADLINE constraint is right: the card evidences 60 days to first cash, so the four $1,800 written acceptances ($7,200) settle after the 14-day window and contribute $0 inside it; this is a genuine limit the full evidence cannot fit, matching Brain NOT_VIABLE. Fulfiller (Verbatim Reporting Group, $900/job) is recorded correctly; no capital used.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:15.401Z"
+      },
+      "at": "2026-11-27T00:23:46.908Z"
+    },
+    "staleFinal": null
+  }
+}

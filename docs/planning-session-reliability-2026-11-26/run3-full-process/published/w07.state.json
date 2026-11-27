@@ -1,0 +1,960 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_9fed4d2fe5ac42f68c8e",
+      "words": "Collect $4,000 of settled cash within 30 days with no more than 3 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$4,000 of settled cash collected within 30 days",
+        "ownerHoursPerWeek": 3.033333333333333,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "890d39e03f58f53bc4fd5b3b"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_9fed4d2fe5ac42f68c8e",
+        "contractDigest": "890d39e03f58f53bc4fd5b3b",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening needs 60 owner hours against a 13-hour ceiling",
+          "opportunityIds": [],
+          "why": "The single opening (certified translation, $400/deal, 10 written acceptances = $4,000) is fulfilled by the owner personally at 6 hours per deal. Ten deals need 60 owner hours; the objective allows ~3 h/week = 13 hours in 30 days, which covers 2 deals ($800). No other fulfiller is recorded, so the target cannot be carried inside the owner-hours limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner fulfils 2 deals within 13 hours",
+            "why": "Fits the hours but collects only $800 of the $4,000 target."
+          },
+          {
+            "title": "Subcontract translation to a certified translator",
+            "why": "No fulfiller other than the owner exists on the card, and no subcontract price or cost is evidenced; cost per deal is unknown, so margin is unknown."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a certified translator who can fulfil the agreed deals at a cost below $400 per deal, with a written quote",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_ful",
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per deal",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours available in window",
+            "status": "EVIDENCED",
+            "value": 13,
+            "unit": "hours",
+            "sources": [],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for target (10 deals)",
+            "status": "EVIDENCED",
+            "value": 60,
+            "unit": "hours",
+            "sources": [
+              "s_hours",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per deal",
+            "status": "EVIDENCED",
+            "value": 40000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "alternative fulfiller cost per deal",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "a written quote from a certified translator"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#humanHours",
+            "dated": "2026-11-24",
+            "claim": "Each deal takes 6 hours of human work",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "The owner fulfils the work personally",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $400 per deal",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment capacity: the owner is the only recorded fulfiller and 10 deals x 6 hours = 60 owner hours, far above the 13 hours (3 h/week) the objective allows; within the limit only 2 deals ($800) can be delivered.",
+          "resolution": "Either source a certified translator who fulfils the agreed deals for well under $400 each (written quote, so the owner only reviews/sends), or relax the owner-time limit to at least 60 hours over the 30 days (~14 h/week)."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_efd88946bbb849f09103",
+            "missing": [
+              "fulfillment"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_efd88946bbb849f09103",
+            "why": "Fulfilment requires 60 owner hours against a 13-hour ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "fulfillment"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 60 owner hours over 30 days (about 14 hours a week), or keep 3 h/week and accept a target of $800."
+          }
+        ],
+        "revisionId": "rev_ef2ec648e450_4e861b",
+        "digest": "ef2ec648e4506b54cf91ecce",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_58b619fbac024366adf8/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:14:58.302Z"
+      },
+      {
+        "goalId": "wst_9fed4d2fe5ac42f68c8e",
+        "contractDigest": "890d39e03f58f53bc4fd5b3b",
+        "parentRevisionId": "rev_ef2ec648e450_4e861b",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening needs 60 owner hours against a 13-hour ceiling",
+          "opportunityIds": [],
+          "why": "The single opening (certified translation, $400/deal, 10 written acceptances = $4,000) is fulfilled by the owner personally at 6 hours per deal. Ten deals need 60 owner hours; the objective allows ~3 h/week = 13 hours in 30 days, which covers 2 deals ($800). No other fulfiller is recorded, so the target cannot be carried inside the owner-hours limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner fulfils 2 deals within 13 hours",
+            "why": "Fits the hours but collects only $800 of the $4,000 target."
+          },
+          {
+            "title": "Subcontract translation to a certified translator",
+            "why": "No fulfiller other than the owner exists on the card, and no subcontract price or cost is evidenced; cost per deal is unknown, so margin is unknown."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a certified translator who can fulfil the agreed deals at a cost below $400 per deal, with a written quote",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_ful",
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per deal",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for target (10 deals)",
+            "status": "EVIDENCED",
+            "value": 60,
+            "unit": "hours",
+            "sources": [
+              "s_hours",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per deal",
+            "status": "EVIDENCED",
+            "value": 40000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "alternative fulfiller cost per deal",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "a written quote from a certified translator"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#humanHours",
+            "dated": "2026-11-24",
+            "claim": "Each deal takes 6 hours of human work",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "The owner fulfils the work personally",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $400 per deal",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment capacity: the owner is the only recorded fulfiller and 10 deals x 6 hours = 60 owner hours, far above the 13 hours (3 h/week) the objective allows; within the limit only 2 deals ($800) can be delivered.",
+          "resolution": "Either source a certified translator who fulfils the agreed deals for well under $400 each (written quote, so the owner only reviews/sends), or relax the owner-time limit to at least 60 hours over the 30 days (~14 h/week)."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_efd88946bbb849f09103",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_efd88946bbb849f09103",
+            "why": "Fulfilment requires 60 owner hours against a 13-hour ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 60 owner hours over 30 days (about 14 hours a week), or keep 3 h/week and accept a target of $800."
+          }
+        ],
+        "revisionId": "rev_ef332bb9557f_2a5d78",
+        "digest": "ef332bb9557f2185512cc301",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_58b619fbac024366adf8/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:15:07.462Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_9fed4d2fe5ac42f68c8e",
+      "contractDigest": "890d39e03f58f53bc4fd5b3b",
+      "parentRevisionId": "rev_ef2ec648e450_4e861b",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the only opening needs 60 owner hours against a 13-hour ceiling",
+        "opportunityIds": [],
+        "why": "The single opening (certified translation, $400/deal, 10 written acceptances = $4,000) is fulfilled by the owner personally at 6 hours per deal. Ten deals need 60 owner hours; the objective allows ~3 h/week = 13 hours in 30 days, which covers 2 deals ($800). No other fulfiller is recorded, so the target cannot be carried inside the owner-hours limit."
+      },
+      "alternatives": [
+        {
+          "title": "Owner fulfils 2 deals within 13 hours",
+          "why": "Fits the hours but collects only $800 of the $4,000 target."
+        },
+        {
+          "title": "Subcontract translation to a certified translator",
+          "why": "No fulfiller other than the owner exists on the card, and no subcontract price or cost is evidenced; cost per deal is unknown, so margin is unknown."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Find a certified translator who can fulfil the agreed deals at a cost below $400 per deal, with a written quote",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_ful",
+            "s_hours"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "owner hours per deal",
+          "status": "EVIDENCED",
+          "value": 6,
+          "unit": "hours",
+          "sources": [
+            "s_hours"
+          ],
+          "needs": null
+        },
+        {
+          "name": "owner hours needed for target (10 deals)",
+          "status": "EVIDENCED",
+          "value": 60,
+          "unit": "hours",
+          "sources": [
+            "s_hours",
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per deal",
+          "status": "EVIDENCED",
+          "value": 40000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "alternative fulfiller cost per deal",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [],
+          "needs": "a written quote from a certified translator"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_hours",
+          "url": "https://brain.local/card/cop_efd88946bbb849f09103#humanHours",
+          "dated": "2026-11-24",
+          "claim": "Each deal takes 6 hours of human work",
+          "population": "Immigration law firms",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_ful",
+          "url": "https://brain.local/card/cop_efd88946bbb849f09103#fulfillmentOwner",
+          "dated": "2026-11-24",
+          "claim": "The owner fulfils the work personally",
+          "population": "Immigration law firms",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_efd88946bbb849f09103#priceCents",
+          "dated": "2026-11-24",
+          "claim": "Price is $400 per deal",
+          "population": "Immigration law firms",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Fulfilment capacity: the owner is the only recorded fulfiller and 10 deals x 6 hours = 60 owner hours, far above the 13 hours (3 h/week) the objective allows; within the limit only 2 deals ($800) can be delivered.",
+        "resolution": "Either source a certified translator who fulfils the agreed deals for well under $400 each (written quote, so the owner only reviews/sends), or relax the owner-time limit to at least 60 hours over the 30 days (~14 h/week)."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_efd88946bbb849f09103",
+          "missing": [
+            "FULFILMENT"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_efd88946bbb849f09103",
+          "why": "Fulfilment requires 60 owner hours against a 13-hour ceiling."
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "FULFILMENT"
+      ],
+      "constraints": [
+        {
+          "constraint": "OWNER_HOURS",
+          "suggestion": "Allow at least 60 owner hours over 30 days (about 14 hours a week), or keep 3 h/week and accept a target of $800."
+        }
+      ],
+      "revisionId": "rev_ef332bb9557f_2a5d78",
+      "digest": "ef332bb9557f2185512cc301",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_58b619fbac024366adf8/author-2",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:15:07.462Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_ef332bb9557f_2a5d78",
+      "digest": "ef332bb9557f2185512cc301",
+      "contractDigest": "890d39e03f58f53bc4fd5b3b",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: the agreed deals need 60 owner hours, more than the 13 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2789× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_efd88946bbb849f09103"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the supply",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 2.5765587338808182
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 4000 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_efd88946bbb849f09103",
+            "title": "Certified document translation for immigration law firms",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 4000,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Immigration law firms",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:15.540Z",
+              "offerScope": "Certified document translation for immigration law firms",
+              "priceCents": 40000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 6,
+              "requiredCapabilities": [],
+              "industry": "immigration law",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 40000,
+                "currency": "USD",
+                "deliverable": "Certified document translation for immigration law firms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Certified document translation for immigration law firms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Immigration law firms",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$400",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": 13,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 3
+        },
+        "at": "2026-11-27T00:14:02.808Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_ef332bb9557f_2a5d78",
+        "revisionDigest": "ef332bb9557f2185512cc301",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_58b619fbac024366adf8/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_55b2f7f0718a42e1bf42/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and the constraint is genuine: the only opening's recorded fulfiller is the owner at 6 h/deal; 10 agreed $400 deals = $4,000 need 60 h vs ~13 h (3 h/wk x 30 d), which covers 2 deals = $800. No other fulfiller or subcontract cost is evidenced, so even with all evidence the target does not fit the hours limit. Arithmetic and resolution (subcontract quote < $400 or >= ~14 h/wk) check out.",
+        "findings": [
+          "Minor: chain marks FULFILMENT missing although fulfilment is established (owner); the binding issue is OWNER_HOURS, which the constraint correctly names."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:23:17.853Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_ef332bb9557f_2a5d78",
+      "digest": "ef332bb9557f2185512cc301",
+      "contractDigest": "890d39e03f58f53bc4fd5b3b",
+      "plan": {
+        "goalId": "wst_9fed4d2fe5ac42f68c8e",
+        "contractDigest": "890d39e03f58f53bc4fd5b3b",
+        "parentRevisionId": "rev_ef2ec648e450_4e861b",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening needs 60 owner hours against a 13-hour ceiling",
+          "opportunityIds": [],
+          "why": "The single opening (certified translation, $400/deal, 10 written acceptances = $4,000) is fulfilled by the owner personally at 6 hours per deal. Ten deals need 60 owner hours; the objective allows ~3 h/week = 13 hours in 30 days, which covers 2 deals ($800). No other fulfiller is recorded, so the target cannot be carried inside the owner-hours limit."
+        },
+        "alternatives": [
+          {
+            "title": "Owner fulfils 2 deals within 13 hours",
+            "why": "Fits the hours but collects only $800 of the $4,000 target."
+          },
+          {
+            "title": "Subcontract translation to a certified translator",
+            "why": "No fulfiller other than the owner exists on the card, and no subcontract price or cost is evidenced; cost per deal is unknown, so margin is unknown."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a certified translator who can fulfil the agreed deals at a cost below $400 per deal, with a written quote",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_ful",
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per deal",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for target (10 deals)",
+            "status": "EVIDENCED",
+            "value": 60,
+            "unit": "hours",
+            "sources": [
+              "s_hours",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per deal",
+            "status": "EVIDENCED",
+            "value": 40000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "alternative fulfiller cost per deal",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "a written quote from a certified translator"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#humanHours",
+            "dated": "2026-11-24",
+            "claim": "Each deal takes 6 hours of human work",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "The owner fulfils the work personally",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_efd88946bbb849f09103#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $400 per deal",
+            "population": "Immigration law firms",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment capacity: the owner is the only recorded fulfiller and 10 deals x 6 hours = 60 owner hours, far above the 13 hours (3 h/week) the objective allows; within the limit only 2 deals ($800) can be delivered.",
+          "resolution": "Either source a certified translator who fulfils the agreed deals for well under $400 each (written quote, so the owner only reviews/sends), or relax the owner-time limit to at least 60 hours over the 30 days (~14 h/week)."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_efd88946bbb849f09103",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_efd88946bbb849f09103",
+            "why": "Fulfilment requires 60 owner hours against a 13-hour ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 60 owner hours over 30 days (about 14 hours a week), or keep 3 h/week and accept a target of $800."
+          }
+        ],
+        "revisionId": "rev_ef332bb9557f_2a5d78",
+        "digest": "ef332bb9557f2185512cc301",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_58b619fbac024366adf8/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:15:07.462Z"
+      },
+      "review": {
+        "revisionId": "rev_ef332bb9557f_2a5d78",
+        "revisionDigest": "ef332bb9557f2185512cc301",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_58b619fbac024366adf8/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_55b2f7f0718a42e1bf42/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and the constraint is genuine: the only opening's recorded fulfiller is the owner at 6 h/deal; 10 agreed $400 deals = $4,000 need 60 h vs ~13 h (3 h/wk x 30 d), which covers 2 deals = $800. No other fulfiller or subcontract cost is evidenced, so even with all evidence the target does not fit the hours limit. Arithmetic and resolution (subcontract quote < $400 or >= ~14 h/wk) check out.",
+        "findings": [
+          "Minor: chain marks FULFILMENT missing although fulfilment is established (owner); the binding issue is OWNER_HOURS, which the constraint correctly names."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:23:17.853Z"
+      },
+      "at": "2026-11-27T00:23:52.973Z"
+    },
+    "staleFinal": null
+  }
+}

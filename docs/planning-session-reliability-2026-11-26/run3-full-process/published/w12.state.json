@@ -1,0 +1,693 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_366bc9fe756c43a783a3",
+      "words": "Collect $2,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": [],
+        "targetCents": 200000,
+        "proofCondition": "$2,000 of settled cash collected within 30 days with no up-front capital"
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "c224d47d9708e2e273c12008"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_366bc9fe756c43a783a3",
+        "contractDigest": "c224d47d9708e2e273c12008",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the hive-contract price is only asserted, not evidenced",
+          "opportunityIds": [],
+          "why": "The only opening (brokered almond-pollination hive contracts, Valley Apiaries quoted at $110 per hive) depends on growers paying $150 per hive, but that price is something a person said, not a sourced figure, and no buyer has agreed to it. With a $40 margin the target needs 50 hives sold at exactly that price; without an evidenced price the economics and the deal count are unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Test-sell hive contracts at $150",
+            "why": "Possible after the price is grounded, but the 20/200 pre-order rate is from site visitors, not almond growers, and pollination happens in February, so whether growers pay inside the 30-day window is also unproven."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find published almond-pollination hive rental prices paid by growers (figure or range, with source and date) and when growers pay (deposit at signing vs. on placement in February)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per hive",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "a published, dated figure of what almond growers pay per hive (the $150 is only a person's statement)"
+          },
+          {
+            "name": "fulfiller cost per hive",
+            "status": "EVIDENCED",
+            "value": 11000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "almond growers renting hives",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "growers",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_51cf099199a740efbd88#priceCents",
+            "dated": "2026-11-24",
+            "claim": "$150 per hive, recorded as a person's statement only",
+            "population": "Almond growers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_51cf099199a740efbd88#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $110 per hive (Valley Apiaries quote)",
+            "population": "Almond growers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_51cf099199a740efbd88#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "400 almond growers in the valley rent hives every February",
+            "population": "Almond growers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Offer and price: the $150 per-hive price is only a person's statement with no sourced figure or buyer agreement, so whether any margin over the $110 Valley Apiaries cost exists, and how many contracts reach $2,000, is not established.",
+          "resolution": "Research published almond-pollination rental rates (and grower payment timing) and record the revenueRange on the card; if a sourced price leaves a margin over $110 and growers pay a deposit inside the window, re-plan a conditional outreach test to the 400 growers."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_51cf099199a740efbd88",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_51cf099199a740efbd88",
+            "why": "Price per hive is asserted by a person, not evidenced."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "revisionId": "rev_e96fe4c69326_ec8062",
+        "digest": "e96fe4c6932645e003e4ef61",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cab5ff6d70e04fdc82fc/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:58.567Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_366bc9fe756c43a783a3",
+      "contractDigest": "c224d47d9708e2e273c12008",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the hive-contract price is only asserted, not evidenced",
+        "opportunityIds": [],
+        "why": "The only opening (brokered almond-pollination hive contracts, Valley Apiaries quoted at $110 per hive) depends on growers paying $150 per hive, but that price is something a person said, not a sourced figure, and no buyer has agreed to it. With a $40 margin the target needs 50 hives sold at exactly that price; without an evidenced price the economics and the deal count are unknown."
+      },
+      "alternatives": [
+        {
+          "title": "Test-sell hive contracts at $150",
+          "why": "Possible after the price is grounded, but the 20/200 pre-order rate is from site visitors, not almond growers, and pollination happens in February, so whether growers pay inside the 30-day window is also unproven."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Find published almond-pollination hive rental prices paid by growers (figure or range, with source and date) and when growers pay (deposit at signing vs. on placement in February)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per hive",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [],
+          "needs": "a published, dated figure of what almond growers pay per hive (the $150 is only a person's statement)"
+        },
+        {
+          "name": "fulfiller cost per hive",
+          "status": "EVIDENCED",
+          "value": 11000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "almond growers renting hives",
+          "status": "EVIDENCED",
+          "value": 400,
+          "unit": "growers",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_51cf099199a740efbd88#priceCents",
+          "dated": "2026-11-24",
+          "claim": "$150 per hive, recorded as a person's statement only",
+          "population": "Almond growers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_51cf099199a740efbd88#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $110 per hive (Valley Apiaries quote)",
+          "population": "Almond growers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_vol",
+          "url": "https://brain.local/card/cop_51cf099199a740efbd88#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "400 almond growers in the valley rent hives every February",
+          "population": "Almond growers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Offer and price: the $150 per-hive price is only a person's statement with no sourced figure or buyer agreement, so whether any margin over the $110 Valley Apiaries cost exists, and how many contracts reach $2,000, is not established.",
+        "resolution": "Research published almond-pollination rental rates (and grower payment timing) and record the revenueRange on the card; if a sourced price leaves a margin over $110 and growers pay a deposit inside the window, re-plan a conditional outreach test to the 400 growers."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_51cf099199a740efbd88",
+          "missing": [
+            "OFFER_AND_PRICE",
+            "CONVERSION"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_51cf099199a740efbd88",
+          "why": "Price per hive is asserted by a person, not evidenced."
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "revisionId": "rev_e96fe4c69326_ec8062",
+      "digest": "e96fe4c6932645e003e4ef61",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_cab5ff6d70e04fdc82fc/author-2",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:19:58.567Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_e96fe4c69326_ec8062",
+      "digest": "e96fe4c6932645e003e4ef61",
+      "contractDigest": "c224d47d9708e2e273c12008",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 2000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2200× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Brokered almond-pollination hive contracts for beekeepers\" needs [figure withheld] and keeps [figure withheld], 40× the [figure withheld] behind the plan (bound ×20), on a price no buyer i), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_51cf099199a740efbd88"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Brokered almond-pollination hive contracts for beekeepers\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Brokered almond-pollination hive contracts for beekeepers\"",
+            "owner": "PERSON",
+            "cost": 110
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the supply",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Get written terms from a supplier",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Validate the offer with buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Collect payment for \"Brokered almond-pollination hive contracts for beekeepers\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Order the run from the supplier",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 2000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_51cf099199a740efbd88",
+            "title": "Brokered almond-pollination hive contracts for beekeepers",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 2000,
+            "card": {
+              "payer": "Almond growers",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:09.535Z",
+              "offerScope": "Brokered almond-pollination hive contracts for beekeepers",
+              "priceCents": 15000,
+              "currency": "USD",
+              "fulfillmentOwner": "Valley Apiaries (quoted)",
+              "peakFundingCents": 0,
+              "humanHours": 0.2,
+              "requiredCapabilities": [],
+              "industry": "commercial beekeeping",
+              "mechanism": "SUPPLY_DEMAND_MISMATCH",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "400 almond growers in the valley rent hives every February.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Brokered almond-pollination hive contracts for beekeepers to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "20 paid pre-orders from 200 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$110",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Valley Apiaries (quoted) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Almond growers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$150",
+                "kind": "PERSON"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_1661a4ee24ff408a9957"
+        ],
+        "scope": {
+          "targetCents": 200000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:19:20.758Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_e96fe4c69326_ec8062",
+        "revisionDigest": "e96fe4c6932645e003e4ef61",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cab5ff6d70e04fdc82fc/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_c854f862b2a8439dafc9/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN on OFFER_AND_PRICE is correct: the $150/hive price is only a PERSON statement with no agreement or sourced figure, so margin over the $110 Valley Apiaries quote (50 hives x $40 = $2,000 if true) is unestablished; the 20/200 rate is from site visitors, and February pollination timing vs the 30-day window is rightly flagged. Not wrongly cast as a TARGET/CAPITAL constraint.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:23:19.612Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_e96fe4c69326_ec8062",
+      "digest": "e96fe4c6932645e003e4ef61",
+      "contractDigest": "c224d47d9708e2e273c12008",
+      "plan": {
+        "goalId": "wst_366bc9fe756c43a783a3",
+        "contractDigest": "c224d47d9708e2e273c12008",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the hive-contract price is only asserted, not evidenced",
+          "opportunityIds": [],
+          "why": "The only opening (brokered almond-pollination hive contracts, Valley Apiaries quoted at $110 per hive) depends on growers paying $150 per hive, but that price is something a person said, not a sourced figure, and no buyer has agreed to it. With a $40 margin the target needs 50 hives sold at exactly that price; without an evidenced price the economics and the deal count are unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Test-sell hive contracts at $150",
+            "why": "Possible after the price is grounded, but the 20/200 pre-order rate is from site visitors, not almond growers, and pollination happens in February, so whether growers pay inside the 30-day window is also unproven."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find published almond-pollination hive rental prices paid by growers (figure or range, with source and date) and when growers pay (deposit at signing vs. on placement in February)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per hive",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "a published, dated figure of what almond growers pay per hive (the $150 is only a person's statement)"
+          },
+          {
+            "name": "fulfiller cost per hive",
+            "status": "EVIDENCED",
+            "value": 11000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "almond growers renting hives",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "growers",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_51cf099199a740efbd88#priceCents",
+            "dated": "2026-11-24",
+            "claim": "$150 per hive, recorded as a person's statement only",
+            "population": "Almond growers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_51cf099199a740efbd88#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $110 per hive (Valley Apiaries quote)",
+            "population": "Almond growers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_51cf099199a740efbd88#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "400 almond growers in the valley rent hives every February",
+            "population": "Almond growers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Offer and price: the $150 per-hive price is only a person's statement with no sourced figure or buyer agreement, so whether any margin over the $110 Valley Apiaries cost exists, and how many contracts reach $2,000, is not established.",
+          "resolution": "Research published almond-pollination rental rates (and grower payment timing) and record the revenueRange on the card; if a sourced price leaves a margin over $110 and growers pay a deposit inside the window, re-plan a conditional outreach test to the 400 growers."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_51cf099199a740efbd88",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_51cf099199a740efbd88",
+            "why": "Price per hive is asserted by a person, not evidenced."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "revisionId": "rev_e96fe4c69326_ec8062",
+        "digest": "e96fe4c6932645e003e4ef61",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cab5ff6d70e04fdc82fc/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:58.567Z"
+      },
+      "review": {
+        "revisionId": "rev_e96fe4c69326_ec8062",
+        "revisionDigest": "e96fe4c6932645e003e4ef61",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cab5ff6d70e04fdc82fc/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_c854f862b2a8439dafc9/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN on OFFER_AND_PRICE is correct: the $150/hive price is only a PERSON statement with no agreement or sourced figure, so margin over the $110 Valley Apiaries quote (50 hives x $40 = $2,000 if true) is unestablished; the 20/200 rate is from site visitors, and February pollination timing vs the 30-day window is rightly flagged. Not wrongly cast as a TARGET/CAPITAL constraint.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:23:19.612Z"
+      },
+      "at": "2026-11-27T00:23:54.717Z"
+    },
+    "staleFinal": null
+  }
+}

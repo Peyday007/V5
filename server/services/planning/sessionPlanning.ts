@@ -487,6 +487,8 @@ export async function answerResearch(input: {
   const { createFragments, createOrchestration, currentFragments } = await import('../../repos/research.ts');
   const { listLayers } = await import('../../repos/layers.ts');
   const { recordFragmentClaims } = await import('../research/submission.ts');
+  // The question names no market of its own: the gate's own marker for that, never a literal it cannot recognise.
+  const { ANY_NAMED_MARKET } = await import('../research/approvalEnvelope.ts');
   const need = await getNeed(q.needId);
   const opportunity = await getOpportunity(q.opportunityId!);
   if (!need || !opportunity) throw new PlanningRefusal('the question or its opening is gone', 'planning:research');
@@ -504,7 +506,7 @@ export async function answerResearch(input: {
   const orchestration = await createOrchestration({ projectId, layerId: layer.id, runId: (run as { id: string }).id, title: need.blockedAction.slice(0, 200), assignment: need.nextStep, provider: 'WORKER', autoApprove: false } as never);
   await createFragments([{
     orchestrationId: orchestration.id, projectId, layerId: layer.id, fragmentIndex: 0, fragmentKey: `session-${q.field}`, question: need.nextStep,
-    geography: 'any market', population: opportunity.payer ?? `${opportunity.industry ?? 'the opening'} buyers`, timeframe: 'current', definitions: q.field,
+    geography: ANY_NAMED_MARKET, population: opportunity.payer ?? `${opportunity.industry ?? 'the opening'} buyers`, timeframe: 'current', definitions: q.field,
     requiredEvidence: [{ id: RESEARCH_LANE, description: need.completionCondition ?? `the ${q.field}`, necessity: 'REQUIRED' }] as never,
     acceptableSourceTypes: ['a published, dated source'], excludedSourceTypes: [], completionCriteria: ['a dated source stating it'], dependsOn: [], minIndependentSources: 1, attempt: 1,
   }]);

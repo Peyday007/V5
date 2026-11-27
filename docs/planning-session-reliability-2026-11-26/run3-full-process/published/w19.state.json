@@ -1,0 +1,644 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_9c1e2e5d5dfa498cb763",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Target settled cash received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "8e003048d3671aeae64475ce"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_9c1e2e5d5dfa498cb763",
+        "contractDigest": "8e003048d3671aeae64475ce",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the $500 price is a bounty reward, not what maintainers pay",
+          "opportunityIds": [],
+          "why": "The only opening's $500 'price' is what the huntr bounty platform pays researchers per valid vulnerability report — a reward, not a price open-source maintainers pay for an audit workbook. No source shows any maintainer paying for this workbook at any price, so no number of sales can be established toward $3,000."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the audit workbook to maintainers at $500",
+            "why": "Price unestablished: the $500 is a bounty reward paid by a platform, not a purchase by the buyer; the conversion figure (30 pre-orders / 300 visitors) is not tied to this buyer or price."
+          },
+          {
+            "title": "Submit vulnerability reports to huntr for bounties",
+            "why": "A bounty is contingent on finding valid vulnerabilities, not a sale; Brain's deliverable is a spreadsheet, not a validated vulnerability report."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish a sourced price open-source maintainers actually pay for a dependency vulnerability audit workbook",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price maintainers pay for the workbook",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": "a sourced purchase price paid by maintainers"
+          },
+          {
+            "name": "huntr bounty per valid report",
+            "status": "EVIDENCED",
+            "value": 50000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 1500,
+            "unit": "projects",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_a13d20b1d28849239158#price",
+            "dated": null,
+            "claim": "huntr pays security researchers $500 per valid vulnerability report in an open-source project.",
+            "population": "bounty platform paying researchers",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_a13d20b1d28849239158#buyerVolume",
+            "dated": null,
+            "claim": "1,500 open-source projects listed on the bounty registry, each with a security contact.",
+            "population": "open-source projects",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: no source shows open-source maintainers paying for a dependency vulnerability audit workbook; the $500 on the card is a bounty reward huntr pays researchers, not a purchase price.",
+          "resolution": "Research published prices maintainers (or their sponsors) pay for dependency audits/workbooks; if a price is sourced, re-plan with the 1,500 reachable projects and a live conversion test; otherwise construct a different opening."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a13d20b1d28849239158",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "revisionId": "rev_e352841ef646_acdb02",
+        "digest": "e352841ef646a43cf0ba8a40",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_37b8d8c2b71d48c3874c/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:17:47.782Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_9c1e2e5d5dfa498cb763",
+      "contractDigest": "8e003048d3671aeae64475ce",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan: the $500 price is a bounty reward, not what maintainers pay",
+        "opportunityIds": [],
+        "why": "The only opening's $500 'price' is what the huntr bounty platform pays researchers per valid vulnerability report — a reward, not a price open-source maintainers pay for an audit workbook. No source shows any maintainer paying for this workbook at any price, so no number of sales can be established toward $3,000."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the audit workbook to maintainers at $500",
+          "why": "Price unestablished: the $500 is a bounty reward paid by a platform, not a purchase by the buyer; the conversion figure (30 pre-orders / 300 visitors) is not tied to this buyer or price."
+        },
+        {
+          "title": "Submit vulnerability reports to huntr for bounties",
+          "why": "A bounty is contingent on finding valid vulnerabilities, not a sale; Brain's deliverable is a spreadsheet, not a validated vulnerability report."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Establish a sourced price open-source maintainers actually pay for a dependency vulnerability audit workbook",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price maintainers pay for the workbook",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [
+            "s1"
+          ],
+          "needs": "a sourced purchase price paid by maintainers"
+        },
+        {
+          "name": "huntr bounty per valid report",
+          "status": "EVIDENCED",
+          "value": 50000,
+          "unit": "cents",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 1500,
+          "unit": "projects",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_a13d20b1d28849239158#price",
+          "dated": null,
+          "claim": "huntr pays security researchers $500 per valid vulnerability report in an open-source project.",
+          "population": "bounty platform paying researchers",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_a13d20b1d28849239158#buyerVolume",
+          "dated": null,
+          "claim": "1,500 open-source projects listed on the bounty registry, each with a security contact.",
+          "population": "open-source projects",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "OFFER_AND_PRICE: no source shows open-source maintainers paying for a dependency vulnerability audit workbook; the $500 on the card is a bounty reward huntr pays researchers, not a purchase price.",
+        "resolution": "Research published prices maintainers (or their sponsors) pay for dependency audits/workbooks; if a price is sourced, re-plan with the 1,500 reachable projects and a live conversion test; otherwise construct a different opening."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_a13d20b1d28849239158",
+          "missing": [
+            "OFFER_AND_PRICE",
+            "CONVERSION"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "revisionId": "rev_e352841ef646_acdb02",
+      "digest": "e352841ef646a43cf0ba8a40",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_37b8d8c2b71d48c3874c/author-4",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:17:47.782Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_e352841ef646_acdb02",
+      "digest": "e352841ef646a43cf0ba8a40",
+      "contractDigest": "8e003048d3671aeae64475ce",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1946× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Open-source project maintainers — Dependency vu\" needs [figure withheld] and keeps [figure withheld], 491× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Open-source project maintainers\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_a13d20b1d28849239158"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Open-source project maintainers",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Open-source project maintainers",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 54.01134082214275
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_a13d20b1d28849239158",
+            "title": "Dependency vulnerability audit workbook for open-source maintainers",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 500,
+            "card": {
+              "payer": "Open-source project maintainers",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:14.145Z",
+              "offerScope": "Dependency vulnerability audit workbook for open-source maintainers",
+              "priceCents": 50000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "open-source software maintenance",
+              "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "1,500 open-source projects are listed on the bounty registry; each publishes a security contact.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Dependency vulnerability audit workbook for open-source maintainers to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "30 paid pre-orders from 300 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Open-source project maintainers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The huntr bounty platform pays security researchers $500 for each valid vulnerability report in an open-source project.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_bbce63872b8347ebb082"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:15:16.952Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_e352841ef646_acdb02",
+        "revisionDigest": "e352841ef646a43cf0ba8a40",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_37b8d8c2b71d48c3874c/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6b840fa82a8e42269d70/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the card's $500 'price' is huntr's bounty paid to researchers, not a price maintainers pay for an audit workbook, so OFFER_AND_PRICE is the decisive evidence gap; no constraint is claimed.",
+        "findings": [
+          "Minor: CONVERSION is listed missing although the card carries an EVIDENCE conversion fact (30/300); not decisive given the price gap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:41.444Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_e352841ef646_acdb02",
+      "digest": "e352841ef646a43cf0ba8a40",
+      "contractDigest": "8e003048d3671aeae64475ce",
+      "plan": {
+        "goalId": "wst_9c1e2e5d5dfa498cb763",
+        "contractDigest": "8e003048d3671aeae64475ce",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the $500 price is a bounty reward, not what maintainers pay",
+          "opportunityIds": [],
+          "why": "The only opening's $500 'price' is what the huntr bounty platform pays researchers per valid vulnerability report — a reward, not a price open-source maintainers pay for an audit workbook. No source shows any maintainer paying for this workbook at any price, so no number of sales can be established toward $3,000."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the audit workbook to maintainers at $500",
+            "why": "Price unestablished: the $500 is a bounty reward paid by a platform, not a purchase by the buyer; the conversion figure (30 pre-orders / 300 visitors) is not tied to this buyer or price."
+          },
+          {
+            "title": "Submit vulnerability reports to huntr for bounties",
+            "why": "A bounty is contingent on finding valid vulnerabilities, not a sale; Brain's deliverable is a spreadsheet, not a validated vulnerability report."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish a sourced price open-source maintainers actually pay for a dependency vulnerability audit workbook",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price maintainers pay for the workbook",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": "a sourced purchase price paid by maintainers"
+          },
+          {
+            "name": "huntr bounty per valid report",
+            "status": "EVIDENCED",
+            "value": 50000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 1500,
+            "unit": "projects",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_a13d20b1d28849239158#price",
+            "dated": null,
+            "claim": "huntr pays security researchers $500 per valid vulnerability report in an open-source project.",
+            "population": "bounty platform paying researchers",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_a13d20b1d28849239158#buyerVolume",
+            "dated": null,
+            "claim": "1,500 open-source projects listed on the bounty registry, each with a security contact.",
+            "population": "open-source projects",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: no source shows open-source maintainers paying for a dependency vulnerability audit workbook; the $500 on the card is a bounty reward huntr pays researchers, not a purchase price.",
+          "resolution": "Research published prices maintainers (or their sponsors) pay for dependency audits/workbooks; if a price is sourced, re-plan with the 1,500 reachable projects and a live conversion test; otherwise construct a different opening."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a13d20b1d28849239158",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "revisionId": "rev_e352841ef646_acdb02",
+        "digest": "e352841ef646a43cf0ba8a40",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_37b8d8c2b71d48c3874c/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:17:47.782Z"
+      },
+      "review": {
+        "revisionId": "rev_e352841ef646_acdb02",
+        "revisionDigest": "e352841ef646a43cf0ba8a40",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_37b8d8c2b71d48c3874c/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6b840fa82a8e42269d70/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the card's $500 'price' is huntr's bounty paid to researchers, not a price maintainers pay for an audit workbook, so OFFER_AND_PRICE is the decisive evidence gap; no constraint is claimed.",
+        "findings": [
+          "Minor: CONVERSION is listed missing although the card carries an EVIDENCE conversion fact (30/300); not decisive given the price gap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:41.444Z"
+      },
+      "at": "2026-11-27T00:23:38.690Z"
+    },
+    "staleFinal": null
+  }
+}

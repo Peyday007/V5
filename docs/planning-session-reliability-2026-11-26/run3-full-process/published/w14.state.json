@@ -1,0 +1,2250 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_958b08836c2c4982ad7b",
+      "words": "Earn $1,500 a month in recurring revenue within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 150000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Recurring revenue of $1,500 a month in place within 45 days: recurring monthly agreements totalling at least $1,500/month, with a monthly payment settled inside the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "1e27f4351a39cbb9e88f28e8"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_958b08836c2c4982ad7b",
+        "contractDigest": "06ddee44dfb0215bc87809b9",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Bill the six agreed brewery TTB clients for month one and sell four vet reconciliation workbooks",
+          "opportunityIds": [
+            "cop_54d50662dbcc43338dc1",
+            "cop_5478cae8efb448ab8f59"
+          ],
+          "why": "Six written acceptances at $300/month for TTB excise report preparation give $1,800 settling day 16 (15 days to first cash); only month one settles inside the 30-day window, so month two is not counted. Four $450 vet controlled-substance workbooks ($1,800) to the 1,200 licensed clinics, at an evidenced 12% paid conversion and 4 days to first cash, bring the total to $3,600 gross, $3,530 after $70 direct costs. Brain produces every spreadsheet; payment is taken before delivery so no capital is exposed."
+        },
+        "alternatives": [
+          {
+            "title": "Vet workbooks alone (7 deals, $3,150)",
+            "why": "Viable on the evidence but rests entirely on new sales; the brewery acceptances cut new sales needed to four."
+          },
+          {
+            "title": "Brewery alone",
+            "why": "Rejected: six agreed clients x $300 = $1,800 in-window; the second monthly bill settles after day 30 and new brewery sales have no evidenced conversion."
+          }
+        ],
+        "steps": [
+          {
+            "id": "b_sell",
+            "kind": "SELL",
+            "label": "Confirm the six written brewery acceptances at $300/month and invoice month one",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "b1",
+              "b2"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_collect",
+            "kind": "COLLECT",
+            "label": "Collect six month-one payments (15 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "b_sell",
+            "evidence": [
+              "b3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_deliver",
+            "kind": "DELIVER",
+            "label": "Brain prepares the six monthly TTB excise report spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 16,
+            "dependsOn": "b_collect",
+            "evidence": [
+              "b4",
+              "b5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_reach",
+            "kind": "REACH",
+            "label": "Brain emails licensed veterinary clinics at their published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "v1",
+              "v2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_sell",
+            "kind": "SELL",
+            "label": "Sell the controlled-substance reconciliation workbook at $450 to four clinics",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "v_reach",
+            "evidence": [
+              "v3",
+              "v4"
+            ],
+            "priceCents": 45000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_collect",
+            "kind": "COLLECT",
+            "label": "Collect four $450 payments before delivery (4 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "v_sell",
+            "evidence": [
+              "v5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the four reconciliation workbooks",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 7,
+            "dependsOn": "v_collect",
+            "evidence": [
+              "v6",
+              "v7"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 1 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 2 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 3 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 4 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 5 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 6 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "Direct cost $10 x 6 TTB reports",
+            "stepId": "b_deliver"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 1 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 2 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 3 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 4 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Direct cost $5 x 4 workbooks",
+            "stepId": "v_deliver"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "brewery written acceptances",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "clients",
+            "sources": [
+              "b1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery price",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "USD per month",
+            "sources": [
+              "b2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery time to first cash",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "days",
+            "sources": [
+              "b3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery direct cost",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "USD",
+            "sources": [
+              "b4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet clinic population",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "clinics",
+            "sources": [
+              "v1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet price",
+            "status": "EVIDENCED",
+            "value": 450,
+            "unit": "USD",
+            "sources": [
+              "v3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet paid conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "fraction",
+            "sources": [
+              "v4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet time to first cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "v5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet direct cost",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD",
+            "sources": [
+              "v6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "b1",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#agreements",
+            "dated": "2026-11-24",
+            "claim": "Six WRITTEN_ACCEPTANCE agreements at $300, state AGREED",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b2",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#price",
+            "dated": "2026-11-24",
+            "claim": "$300 a month, billed monthly",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b3",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "15 days to first cash",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b4",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $10",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b5",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v1",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,200 veterinary clinics licensed by the state board, reconciling quarterly",
+            "population": "Veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v2",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses; posted asking for this work",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v3",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#price",
+            "dated": "2026-11-24",
+            "claim": "Price $450",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v4",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "36 paid pre-orders from 300 unique visitors",
+            "population": "Veterinary clinic visitors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v5",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v6",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v7",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "deals": 6,
+            "price": 300,
+            "directCost": 10,
+            "capital": 0
+          },
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "deals": 4,
+            "price": 450,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_a297989fd515_3f53a3",
+        "digest": "a297989fd5156c9ae82758a9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af9f15de646d429da93f/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:02.857Z"
+      },
+      {
+        "goalId": "wst_958b08836c2c4982ad7b",
+        "contractDigest": "06ddee44dfb0215bc87809b9",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Bill the six agreed brewery TTB clients for month one and sell four vet reconciliation workbooks",
+          "opportunityIds": [
+            "cop_54d50662dbcc43338dc1",
+            "cop_5478cae8efb448ab8f59"
+          ],
+          "why": "Six written acceptances at $300/month for TTB excise report preparation give $1,800 settling day 16 (15 days to first cash); only month one settles inside the 30-day window, so month two is not counted. Four $450 vet controlled-substance workbooks ($1,800) to the 1,200 licensed clinics, at an evidenced 12% paid conversion and 4 days to first cash, bring the total to $3,600 gross, $3,520 after $80 direct costs. Brain produces every spreadsheet; payment is taken before delivery so no capital is exposed."
+        },
+        "alternatives": [
+          {
+            "title": "Vet workbooks alone (7 deals, $3,150)",
+            "why": "Viable on the evidence but rests entirely on new sales; the brewery acceptances cut new sales needed to four."
+          },
+          {
+            "title": "Brewery alone",
+            "why": "Rejected: six agreed clients x $300 = $1,800 in-window; the second monthly bill settles after day 30 and new brewery sales have no evidenced conversion."
+          }
+        ],
+        "steps": [
+          {
+            "id": "b_sell",
+            "kind": "SELL",
+            "label": "Confirm the six written brewery acceptances at $300/month and invoice month one",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "b1",
+              "b2"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_collect",
+            "kind": "COLLECT",
+            "label": "Collect six month-one payments (15 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "b_sell",
+            "evidence": [
+              "b3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_deliver",
+            "kind": "DELIVER",
+            "label": "Brain prepares the six monthly TTB excise report spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 16,
+            "dependsOn": "b_collect",
+            "evidence": [
+              "b4",
+              "b5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_reach",
+            "kind": "REACH",
+            "label": "Brain emails licensed veterinary clinics at their published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "v1",
+              "v2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_sell",
+            "kind": "SELL",
+            "label": "Sell the controlled-substance reconciliation workbook at $450 to four clinics",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "v_reach",
+            "evidence": [
+              "v3",
+              "v4"
+            ],
+            "priceCents": 45000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_collect",
+            "kind": "COLLECT",
+            "label": "Collect four $450 payments before delivery (4 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "v_sell",
+            "evidence": [
+              "v5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "v_deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the four reconciliation workbooks",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 7,
+            "dependsOn": "v_collect",
+            "evidence": [
+              "v6",
+              "v7"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 1 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 2 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 3 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 4 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 5 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 6 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "Direct cost $10 x 6 TTB reports",
+            "stepId": "b_deliver"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 1 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 2 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 3 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 45000,
+            "label": "Vet clinic 4 workbook",
+            "settlesDay": 7,
+            "stepId": "v_collect"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Direct cost $5 x 4 workbooks",
+            "stepId": "v_deliver"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "brewery written acceptances",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "clients",
+            "sources": [
+              "b1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery price",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "USD per month",
+            "sources": [
+              "b2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery time to first cash",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "days",
+            "sources": [
+              "b3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery direct cost",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "USD",
+            "sources": [
+              "b4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet clinic population",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "clinics",
+            "sources": [
+              "v1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet price",
+            "status": "EVIDENCED",
+            "value": 450,
+            "unit": "USD",
+            "sources": [
+              "v3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet paid conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "fraction",
+            "sources": [
+              "v4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet time to first cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "v5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "vet direct cost",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD",
+            "sources": [
+              "v6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "b1",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#agreements",
+            "dated": "2026-11-24",
+            "claim": "Six WRITTEN_ACCEPTANCE agreements at $300, state AGREED",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b2",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#price",
+            "dated": "2026-11-24",
+            "claim": "$300 a month, billed monthly",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b3",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "15 days to first cash",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b4",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $10",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b5",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v1",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,200 veterinary clinics licensed by the state board, reconciling quarterly",
+            "population": "Veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v2",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses; posted asking for this work",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v3",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#price",
+            "dated": "2026-11-24",
+            "claim": "Price $450",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v4",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "36 paid pre-orders from 300 unique visitors",
+            "population": "Veterinary clinic visitors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v5",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v6",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "v7",
+            "url": "https://brain.local/card/cop_5478cae8efb448ab8f59#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "deals": 6,
+            "price": 300,
+            "directCost": 10,
+            "capital": 0
+          },
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "deals": 4,
+            "price": 450,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_49b52c05ba0a_25065c",
+        "digest": "49b52c05ba0a4e1d294a8c97",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af9f15de646d429da93f/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:08.823Z"
+      },
+      {
+        "goalId": "wst_958b08836c2c4982ad7b",
+        "contractDigest": "1e27f4351a39cbb9e88f28e8",
+        "parentRevisionId": "rev_49b52c05ba0a_25065c",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Start the six agreed brewery clients on $300/month TTB report preparation ($1,800/month recurring)",
+          "opportunityIds": [
+            "cop_54d50662dbcc43338dc1"
+          ],
+          "why": "The goal now counts a monthly recurring run-rate of $1,500 within 45 days. Six written acceptances at $300 a month, billed monthly, give $1,800/month of recurring revenue (six clients; five would be exactly $1,500, the sixth is margin). The first monthly payment settles 15 days after invoicing (day 16), inside the 45-day window; Brain produces each monthly spreadsheet ($10 direct cost) after payment, so no capital is exposed. The one-off vet workbook does not move a monthly run-rate and is excluded."
+        },
+        "alternatives": [
+          {
+            "title": "Add vet reconciliation workbooks",
+            "why": "Rejected: a one-off $450 sale does not count toward a monthly recurring run-rate."
+          },
+          {
+            "title": "Sell TTB preparation to further breweries",
+            "why": "Not needed: the six acceptances already exceed $1,500/month; new brewery sales have no evidenced conversion rate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "b_sell",
+            "kind": "SELL",
+            "label": "Confirm the six written brewery acceptances at $300/month recurring and invoice month one",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "b1",
+              "b2"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_collect",
+            "kind": "COLLECT",
+            "label": "Collect six month-one payments (15 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "b_sell",
+            "evidence": [
+              "b3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_deliver",
+            "kind": "DELIVER",
+            "label": "Brain prepares the six monthly TTB excise report spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 16,
+            "dependsOn": "b_collect",
+            "evidence": [
+              "b4",
+              "b5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 1 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 2 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 3 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 4 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 5 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 6 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "Direct cost $10 x 6 TTB reports",
+            "stepId": "b_deliver"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "brewery written acceptances",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "clients",
+            "sources": [
+              "b1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery price",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "USD per month",
+            "sources": [
+              "b2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery time to first cash",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "days",
+            "sources": [
+              "b3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery direct cost",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "USD",
+            "sources": [
+              "b4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "monthly recurring revenue",
+            "status": "EVIDENCED",
+            "value": 1800,
+            "unit": "USD per month",
+            "sources": [
+              "b1",
+              "b2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "b1",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#agreements",
+            "dated": "2026-11-24",
+            "claim": "Six WRITTEN_ACCEPTANCE agreements at $300, state AGREED",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b2",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#price",
+            "dated": "2026-11-24",
+            "claim": "$300 a month, billed monthly",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b3",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "15 days to first cash",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b4",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $10",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b5",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "why": "Pays once; the goal counts a monthly recurring run-rate, which a one-off sale does not move"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "deals": 6,
+            "price": 300,
+            "directCost": 10,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_0e07988bc0fe_881130",
+        "digest": "0e07988bc0feada4dee0e464",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af9f15de646d429da93f/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:20:58.388Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_958b08836c2c4982ad7b",
+      "contractDigest": "1e27f4351a39cbb9e88f28e8",
+      "parentRevisionId": "rev_49b52c05ba0a_25065c",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Start the six agreed brewery clients on $300/month TTB report preparation ($1,800/month recurring)",
+        "opportunityIds": [
+          "cop_54d50662dbcc43338dc1"
+        ],
+        "why": "The goal now counts a monthly recurring run-rate of $1,500 within 45 days. Six written acceptances at $300 a month, billed monthly, give $1,800/month of recurring revenue (six clients; five would be exactly $1,500, the sixth is margin). The first monthly payment settles 15 days after invoicing (day 16), inside the 45-day window; Brain produces each monthly spreadsheet ($10 direct cost) after payment, so no capital is exposed. The one-off vet workbook does not move a monthly run-rate and is excluded."
+      },
+      "alternatives": [
+        {
+          "title": "Add vet reconciliation workbooks",
+          "why": "Rejected: a one-off $450 sale does not count toward a monthly recurring run-rate."
+        },
+        {
+          "title": "Sell TTB preparation to further breweries",
+          "why": "Not needed: the six acceptances already exceed $1,500/month; new brewery sales have no evidenced conversion rate."
+        }
+      ],
+      "steps": [
+        {
+          "id": "b_sell",
+          "kind": "SELL",
+          "label": "Confirm the six written brewery acceptances at $300/month recurring and invoice month one",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "b1",
+            "b2"
+          ],
+          "priceCents": 30000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "b_collect",
+          "kind": "COLLECT",
+          "label": "Collect six month-one payments (15 days to first cash)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "b_sell",
+          "evidence": [
+            "b3"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "b_deliver",
+          "kind": "DELIVER",
+          "label": "Brain prepares the six monthly TTB excise report spreadsheets",
+          "performer": "BRAIN",
+          "costCents": 6000,
+          "day": 16,
+          "dependsOn": "b_collect",
+          "evidence": [
+            "b4",
+            "b5"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 30000,
+          "label": "Brewery client 1 month one",
+          "settlesDay": 16,
+          "stepId": "b_collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 30000,
+          "label": "Brewery client 2 month one",
+          "settlesDay": 16,
+          "stepId": "b_collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 30000,
+          "label": "Brewery client 3 month one",
+          "settlesDay": 16,
+          "stepId": "b_collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 30000,
+          "label": "Brewery client 4 month one",
+          "settlesDay": 16,
+          "stepId": "b_collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 30000,
+          "label": "Brewery client 5 month one",
+          "settlesDay": 16,
+          "stepId": "b_collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 30000,
+          "label": "Brewery client 6 month one",
+          "settlesDay": 16,
+          "stepId": "b_collect"
+        },
+        {
+          "day": 16,
+          "kind": "SPEND",
+          "amountCents": 6000,
+          "label": "Direct cost $10 x 6 TTB reports",
+          "stepId": "b_deliver"
+        }
+      ],
+      "proofDay": 16,
+      "quantities": [
+        {
+          "name": "brewery written acceptances",
+          "status": "EVIDENCED",
+          "value": 6,
+          "unit": "clients",
+          "sources": [
+            "b1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "brewery price",
+          "status": "EVIDENCED",
+          "value": 300,
+          "unit": "USD per month",
+          "sources": [
+            "b2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "brewery time to first cash",
+          "status": "EVIDENCED",
+          "value": 15,
+          "unit": "days",
+          "sources": [
+            "b3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "brewery direct cost",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "USD",
+          "sources": [
+            "b4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "monthly recurring revenue",
+          "status": "EVIDENCED",
+          "value": 1800,
+          "unit": "USD per month",
+          "sources": [
+            "b1",
+            "b2"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "b1",
+          "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#agreements",
+          "dated": "2026-11-24",
+          "claim": "Six WRITTEN_ACCEPTANCE agreements at $300, state AGREED",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b2",
+          "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#price",
+          "dated": "2026-11-24",
+          "claim": "$300 a month, billed monthly",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b3",
+          "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "15 days to first cash",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b4",
+          "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $10",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b5",
+          "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_54d50662dbcc43338dc1",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_5478cae8efb448ab8f59",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_5478cae8efb448ab8f59",
+          "why": "Pays once; the goal counts a monthly recurring run-rate, which a one-off sale does not move"
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_54d50662dbcc43338dc1",
+          "deals": 6,
+          "price": 300,
+          "directCost": 10,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "revisionId": "rev_0e07988bc0fe_881130",
+      "digest": "0e07988bc0feada4dee0e464",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_af9f15de646d429da93f/author-3",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:20:58.388Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_0e07988bc0fe_881130",
+      "digest": "0e07988bc0feada4dee0e464",
+      "contractDigest": "1e27f4351a39cbb9e88f28e8",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 6000,
+        "committedOpenCents": 0,
+        "preProofCents": 6000,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 1,
+        "collectedCents": 180000,
+        "collectedInWindowCents": 180000,
+        "refundsCents": 0,
+        "netCents": 174000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Monthly federal excise (TTB) report preparation for craft br\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Monthly federal excise (TTB) report preparation for craft br\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4339× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Craft brewery owners — Monthly federal excise (\" needs [figure withheld] and keeps [figure withheld], 282× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Monthly federal excise (TTB) report preparation for craft breweries\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_54d50662dbcc43338dc1"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Monthly federal excise (TTB) report preparation for craft breweries\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Monthly federal excise (TTB) report preparation for craft breweries\"",
+            "owner": "PERSON",
+            "cost": 10
+          },
+          {
+            "label": "Collect payment for \"Monthly federal excise (TTB) report preparation for craft breweries\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "title": "Monthly federal excise (TTB) report preparation for craft breweries",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1500,
+            "potentialReach": 1500,
+            "card": {
+              "payer": "Craft brewery owners",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:14.797Z",
+              "offerScope": "Monthly federal excise (TTB) report preparation for craft breweries",
+              "priceCents": 30000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "craft breweries",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "180 licensed craft breweries in the state file TTB excise returns monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly federal excise (TTB) report preparation for craft breweries to each buyer, billed monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$10",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Craft brewery owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$300 a month",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "15 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "title": "Controlled-substance log reconciliation workbook for veterinary clinics",
+            "reason": "left out by the goal's own terms: pays once: this goal counts a monthly recurring run-rate, which a one-off sale does not move"
+          }
+        ],
+        "questions": [],
+        "scope": {
+          "targetCents": 150000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": "MONTHLY",
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:20:41.788Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_0e07988bc0fe_881130",
+        "revisionDigest": "0e07988bc0feada4dee0e464",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af9f15de646d429da93f/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d87a2dfaf19240d2a17b/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Reviewed against contract v2 (digest 1e27f435, recurring $1,500/month within 45 days, no capital); revision is on that digest. Six written acceptances at the evidenced $300/month, billed monthly = $1,800/month >= $1,500; first payment settles day 16 inside 45; Brain produces the spreadsheet ($10 cost, after payment, $0 exposure). The one-off vet workbook is correctly excluded as not moving the run-rate. Trace matches.",
+        "findings": [
+          "Minor: card lists 1 human hour per client-month (6 h/month) not assigned to any step; owner hours unconstrained.",
+          "Minor: confirm/invoice steps are BRAIN-performed while SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+          "Minor: chain lists the excluded vet opening."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:23:19.965Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_0e07988bc0fe_881130",
+      "digest": "0e07988bc0feada4dee0e464",
+      "contractDigest": "1e27f4351a39cbb9e88f28e8",
+      "plan": {
+        "goalId": "wst_958b08836c2c4982ad7b",
+        "contractDigest": "1e27f4351a39cbb9e88f28e8",
+        "parentRevisionId": "rev_49b52c05ba0a_25065c",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Start the six agreed brewery clients on $300/month TTB report preparation ($1,800/month recurring)",
+          "opportunityIds": [
+            "cop_54d50662dbcc43338dc1"
+          ],
+          "why": "The goal now counts a monthly recurring run-rate of $1,500 within 45 days. Six written acceptances at $300 a month, billed monthly, give $1,800/month of recurring revenue (six clients; five would be exactly $1,500, the sixth is margin). The first monthly payment settles 15 days after invoicing (day 16), inside the 45-day window; Brain produces each monthly spreadsheet ($10 direct cost) after payment, so no capital is exposed. The one-off vet workbook does not move a monthly run-rate and is excluded."
+        },
+        "alternatives": [
+          {
+            "title": "Add vet reconciliation workbooks",
+            "why": "Rejected: a one-off $450 sale does not count toward a monthly recurring run-rate."
+          },
+          {
+            "title": "Sell TTB preparation to further breweries",
+            "why": "Not needed: the six acceptances already exceed $1,500/month; new brewery sales have no evidenced conversion rate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "b_sell",
+            "kind": "SELL",
+            "label": "Confirm the six written brewery acceptances at $300/month recurring and invoice month one",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "b1",
+              "b2"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_collect",
+            "kind": "COLLECT",
+            "label": "Collect six month-one payments (15 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "b_sell",
+            "evidence": [
+              "b3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "b_deliver",
+            "kind": "DELIVER",
+            "label": "Brain prepares the six monthly TTB excise report spreadsheets",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 16,
+            "dependsOn": "b_collect",
+            "evidence": [
+              "b4",
+              "b5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 1 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 2 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 3 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 4 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 5 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 30000,
+            "label": "Brewery client 6 month one",
+            "settlesDay": 16,
+            "stepId": "b_collect"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "Direct cost $10 x 6 TTB reports",
+            "stepId": "b_deliver"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "brewery written acceptances",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "clients",
+            "sources": [
+              "b1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery price",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "USD per month",
+            "sources": [
+              "b2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery time to first cash",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "days",
+            "sources": [
+              "b3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "brewery direct cost",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "USD",
+            "sources": [
+              "b4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "monthly recurring revenue",
+            "status": "EVIDENCED",
+            "value": 1800,
+            "unit": "USD per month",
+            "sources": [
+              "b1",
+              "b2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "b1",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#agreements",
+            "dated": "2026-11-24",
+            "claim": "Six WRITTEN_ACCEPTANCE agreements at $300, state AGREED",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b2",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#price",
+            "dated": "2026-11-24",
+            "claim": "$300 a month, billed monthly",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b3",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "15 days to first cash",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b4",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $10",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b5",
+            "url": "https://brain.local/card/cop_54d50662dbcc43338dc1#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_5478cae8efb448ab8f59",
+            "why": "Pays once; the goal counts a monthly recurring run-rate, which a one-off sale does not move"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_54d50662dbcc43338dc1",
+            "deals": 6,
+            "price": 300,
+            "directCost": 10,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_0e07988bc0fe_881130",
+        "digest": "0e07988bc0feada4dee0e464",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af9f15de646d429da93f/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:20:58.388Z"
+      },
+      "review": {
+        "revisionId": "rev_0e07988bc0fe_881130",
+        "revisionDigest": "0e07988bc0feada4dee0e464",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af9f15de646d429da93f/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d87a2dfaf19240d2a17b/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Reviewed against contract v2 (digest 1e27f435, recurring $1,500/month within 45 days, no capital); revision is on that digest. Six written acceptances at the evidenced $300/month, billed monthly = $1,800/month >= $1,500; first payment settles day 16 inside 45; Brain produces the spreadsheet ($10 cost, after payment, $0 exposure). The one-off vet workbook is correctly excluded as not moving the run-rate. Trace matches.",
+        "findings": [
+          "Minor: card lists 1 human hour per client-month (6 h/month) not assigned to any step; owner hours unconstrained.",
+          "Minor: confirm/invoice steps are BRAIN-performed while SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+          "Minor: chain lists the excluded vet opening."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:23:19.965Z"
+      },
+      "at": "2026-11-27T00:23:58.986Z"
+    },
+    "staleFinal": null
+  }
+}

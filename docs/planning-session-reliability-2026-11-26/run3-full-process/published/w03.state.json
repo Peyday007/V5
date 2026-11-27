@@ -1,0 +1,658 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_caa3321ecf0a41e6ab83",
+      "words": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$5,000 of buyer payments settled within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "11d6db1fbaba96683dafb5b8"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_caa3321ecf0a41e6ab83",
+        "contractDigest": "11d6db1fbaba96683dafb5b8",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the ballast-water record pack has no recorded way to reach its buyers",
+          "opportunityIds": [],
+          "why": "The only opening (ballast-water record packs, $2,500, Brain-produced spreadsheet, $0 exposure, 14 days to cash) has no reachableChannel on its card. Without a published, permitted channel to the 90 registered operators no offer can be sent, and the 9/120 pre-order rate was measured on visitors of a page, not on any channel Brain can reach these buyers through. Two to three sales would cover $5,000, so the channel alone decides it."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 2-3 ballast-water packs at $2,500 once a channel is found",
+            "why": "Becomes a candidate plan (conditional on conversion through that channel) as soon as the access question is answered with a sourced channel."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Find and source a published channel to the port-authority-registered coastal operators (register contact details, association list or operators' own contact pages) and its reach",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_buyerVolume",
+              "s_reachableChannel"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachableBuyers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "operators",
+            "sources": [
+              "s_reachableChannel"
+            ],
+            "needs": "a sourced published channel to the 90 registered operators"
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 250000,
+            "unit": "cents/pack",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 90,
+            "unit": "operators",
+            "sources": [
+              "s_buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "90 coastal operators registered with the port authority; one pack per vessel per year",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#price",
+            "dated": "2026-11-24",
+            "claim": "$2500 per pack",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conversionRates",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 paid pre-orders from 120 unique visitors",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "No reachable channel recorded on the card",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyingSignal",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "REACHABLE_BUYER: no published, permitted channel to coastal ship operators is recorded for the ballast-water pack opening, so no offer can be delivered and conversion through a real channel cannot be measured.",
+          "resolution": "Answer research question cnd_691dc16ddd76455bbfbd: source the port authority's operator register (or an association list / operators' published contact pages) with how many of the 90 operators it reaches; then sell 2-3 packs at $2,500 and measure conversion on that channel."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_27e4b6426c044640bb0e",
+            "missing": [
+              "REACHABLE_BUYER",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "REACHABLE_BUYER"
+        ],
+        "constraints": [],
+        "revisionId": "rev_ffa3b4efe17f_6d2633",
+        "digest": "ffa3b4efe17f0d6aa263c326",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c27725d182e54108ad9d/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:56.334Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_caa3321ecf0a41e6ab83",
+      "contractDigest": "11d6db1fbaba96683dafb5b8",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan: the ballast-water record pack has no recorded way to reach its buyers",
+        "opportunityIds": [],
+        "why": "The only opening (ballast-water record packs, $2,500, Brain-produced spreadsheet, $0 exposure, 14 days to cash) has no reachableChannel on its card. Without a published, permitted channel to the 90 registered operators no offer can be sent, and the 9/120 pre-order rate was measured on visitors of a page, not on any channel Brain can reach these buyers through. Two to three sales would cover $5,000, so the channel alone decides it."
+      },
+      "alternatives": [
+        {
+          "title": "Sell 2-3 ballast-water packs at $2,500 once a channel is found",
+          "why": "Becomes a candidate plan (conditional on conversion through that channel) as soon as the access question is answered with a sourced channel."
+        }
+      ],
+      "steps": [
+        {
+          "id": "research",
+          "kind": "RESEARCH",
+          "label": "Find and source a published channel to the port-authority-registered coastal operators (register contact details, association list or operators' own contact pages) and its reach",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_buyerVolume",
+            "s_reachableChannel"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "reachableBuyers",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "operators",
+          "sources": [
+            "s_reachableChannel"
+          ],
+          "needs": "a sourced published channel to the 90 registered operators"
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 250000,
+          "unit": "cents/pack",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerPopulation",
+          "status": "EVIDENCED",
+          "value": 90,
+          "unit": "operators",
+          "sources": [
+            "s_buyerVolume"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_buyerVolume",
+          "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "90 coastal operators registered with the port authority; one pack per vessel per year",
+          "population": "Coastal ship operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#price",
+          "dated": "2026-11-24",
+          "claim": "$2500 per pack",
+          "population": "Coastal ship operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conversionRates",
+          "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "9 paid pre-orders from 120 unique visitors",
+          "population": "Coastal ship operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_reachableChannel",
+          "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "No reachable channel recorded on the card",
+          "population": "Coastal ship operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_buyingSignal",
+          "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#buyingSignal",
+          "dated": "2026-11-24",
+          "claim": "Posted asking for this work",
+          "population": "Coastal ship operators",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "REACHABLE_BUYER: no published, permitted channel to coastal ship operators is recorded for the ballast-water pack opening, so no offer can be delivered and conversion through a real channel cannot be measured.",
+        "resolution": "Answer research question cnd_691dc16ddd76455bbfbd: source the port authority's operator register (or an association list / operators' published contact pages) with how many of the 90 operators it reaches; then sell 2-3 packs at $2,500 and measure conversion on that channel."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_27e4b6426c044640bb0e",
+          "missing": [
+            "REACHABLE_BUYER",
+            "CONVERSION"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "REACHABLE_BUYER"
+      ],
+      "constraints": [],
+      "revisionId": "rev_ffa3b4efe17f_6d2633",
+      "digest": "ffa3b4efe17f0d6aa263c326",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_c27725d182e54108ad9d/author-1",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:18:56.334Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_ffa3b4efe17f_6d2633",
+      "digest": "ffa3b4efe17f0d6aa263c326",
+      "contractDigest": "11d6db1fbaba96683dafb5b8",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Ballast-water management record packs for coastal ship opera\", and what it is missing first is a buyer we can actually reach. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 12250× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_27e4b6426c044640bb0e"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish a buyer we can actually reach",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Find a published, permitted way to reach the buyer for \"Ballast-water management record packs for coastal ship operators\".",
+        "openings": [
+          {
+            "opportunityId": "cop_27e4b6426c044640bb0e",
+            "title": "Ballast-water management record packs for coastal ship operators",
+            "missing": [
+              "REACHABLE_BUYER",
+              "CONVERSION"
+            ],
+            "stage": "B_EVIDENCED",
+            "supportedReach": 5000,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Coastal ship operators",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:15.760Z",
+              "offerScope": "Ballast-water management record packs for coastal ship operators",
+              "priceCents": 250000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "coastal shipping",
+              "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "90 coastal operators are registered with the port authority; each needs a pack per vessel each year.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Ballast-water management record packs for coastal ship operators to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "9 paid pre-orders from 120 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$50",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Coastal ship operators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$2500",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_691dc16ddd76455bbfbd"
+        ],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:15:51.230Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_ffa3b4efe17f_6d2633",
+        "revisionDigest": "ffa3b4efe17f0d6aa263c326",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c27725d182e54108ad9d/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b931e153c0c3498696a5/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and names the decisive gap the evidence decides: the card has no reachableChannel (Brain marks REACHABLE_BUYER missing), so no offer can be delivered; this is correctly not framed as a TARGET/CAPITAL constraint (2 x $2,500 would cover $5,000). Resolution points at the parked access question; no spend, no fabricated figures.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:14.714Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_ffa3b4efe17f_6d2633",
+      "digest": "ffa3b4efe17f0d6aa263c326",
+      "contractDigest": "11d6db1fbaba96683dafb5b8",
+      "plan": {
+        "goalId": "wst_caa3321ecf0a41e6ab83",
+        "contractDigest": "11d6db1fbaba96683dafb5b8",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the ballast-water record pack has no recorded way to reach its buyers",
+          "opportunityIds": [],
+          "why": "The only opening (ballast-water record packs, $2,500, Brain-produced spreadsheet, $0 exposure, 14 days to cash) has no reachableChannel on its card. Without a published, permitted channel to the 90 registered operators no offer can be sent, and the 9/120 pre-order rate was measured on visitors of a page, not on any channel Brain can reach these buyers through. Two to three sales would cover $5,000, so the channel alone decides it."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 2-3 ballast-water packs at $2,500 once a channel is found",
+            "why": "Becomes a candidate plan (conditional on conversion through that channel) as soon as the access question is answered with a sourced channel."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Find and source a published channel to the port-authority-registered coastal operators (register contact details, association list or operators' own contact pages) and its reach",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_buyerVolume",
+              "s_reachableChannel"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachableBuyers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "operators",
+            "sources": [
+              "s_reachableChannel"
+            ],
+            "needs": "a sourced published channel to the 90 registered operators"
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 250000,
+            "unit": "cents/pack",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 90,
+            "unit": "operators",
+            "sources": [
+              "s_buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "90 coastal operators registered with the port authority; one pack per vessel per year",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#price",
+            "dated": "2026-11-24",
+            "claim": "$2500 per pack",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conversionRates",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 paid pre-orders from 120 unique visitors",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "No reachable channel recorded on the card",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyingSignal",
+            "url": "https://brain.local/card/cop_27e4b6426c044640bb0e#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "REACHABLE_BUYER: no published, permitted channel to coastal ship operators is recorded for the ballast-water pack opening, so no offer can be delivered and conversion through a real channel cannot be measured.",
+          "resolution": "Answer research question cnd_691dc16ddd76455bbfbd: source the port authority's operator register (or an association list / operators' published contact pages) with how many of the 90 operators it reaches; then sell 2-3 packs at $2,500 and measure conversion on that channel."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_27e4b6426c044640bb0e",
+            "missing": [
+              "REACHABLE_BUYER",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "REACHABLE_BUYER"
+        ],
+        "constraints": [],
+        "revisionId": "rev_ffa3b4efe17f_6d2633",
+        "digest": "ffa3b4efe17f0d6aa263c326",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c27725d182e54108ad9d/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:56.334Z"
+      },
+      "review": {
+        "revisionId": "rev_ffa3b4efe17f_6d2633",
+        "revisionDigest": "ffa3b4efe17f0d6aa263c326",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c27725d182e54108ad9d/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b931e153c0c3498696a5/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and names the decisive gap the evidence decides: the card has no reachableChannel (Brain marks REACHABLE_BUYER missing), so no offer can be delivered; this is correctly not framed as a TARGET/CAPITAL constraint (2 x $2,500 would cover $5,000). Resolution points at the parked access question; no spend, no fabricated figures.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:14.714Z"
+      },
+      "at": "2026-11-27T00:23:46.252Z"
+    },
+    "staleFinal": null
+  }
+}

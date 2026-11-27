@@ -1,0 +1,1854 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_9837310cc7dd4a768b0d",
+      "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$4,000 of settled cash collected within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "bcd11f9c33eb8acbefc008f9"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_9837310cc7dd4a768b0d",
+        "contractDigest": "bcd11f9c33eb8acbefc008f9",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Email-test then sell $200 obituary syndication workbooks to licensed funeral homes",
+          "opportunityIds": [
+            "cop_0d41bcee3b2448d6947c"
+          ],
+          "why": "600 licensed funeral homes are reachable by published business email and posted asking for this work; the $200 price, $5 direct cost, Brain-produced spreadsheet delivery and 5-day time to first cash are evidenced. 20 sales (3.3% of the population) carry $4,000, but no close rate is evidenced, so a first-batch email test measures it before the full send. Payment is taken before delivery so no capital is exposed."
+        },
+        "alternatives": [
+          {
+            "title": "Send to all 600 homes at once",
+            "why": "Rejected: without a measured close rate it commits the whole list to an untested offer; the staged test reads conversion first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach1",
+            "kind": "REACH",
+            "label": "Brain emails a first batch of 150 funeral homes from the published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer1",
+            "kind": "OFFER",
+            "label": "Offer the obituary syndication workbook at $200, payment before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 20000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Measure reply and paid-close rate on the first batch by day 10",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "offer1",
+            "evidence": [],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "reach2",
+            "kind": "REACH",
+            "label": "If the test passes, email the remaining 450 funeral homes",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "test",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close orders at $200 from both batches",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "reach2",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 20000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment before delivery (5 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "offer1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers each paid workbook",
+            "performer": "BRAIN",
+            "costCents": 10000,
+            "day": 10,
+            "dependsOn": "collect",
+            "evidence": [
+              "s5",
+              "s6"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 100000,
+            "label": "First-batch orders (5 x $200)",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 2500,
+            "label": "Direct cost $5 x 5 first-batch workbooks",
+            "stepId": "deliver"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 300000,
+            "label": "Second-batch orders (15 x $200)",
+            "settlesDay": 21,
+            "stepId": "collect"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 7500,
+            "label": "Direct cost $5 x 15 second-batch workbooks",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "funeral homes",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 200,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "paid close rate per contacted home",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "Measured by the first-batch email test; at least 3.3% of 600 homes needed"
+          },
+          {
+            "name": "deals needed",
+            "status": "ESTIMATE",
+            "value": 20,
+            "unit": "deals",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "600 funeral homes licensed by the state board",
+            "population": "Funeral homes",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses; posted asking for this work",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#price",
+            "dated": "2026-11-24",
+            "claim": "Price $200",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 5 of the first 150 contacted funeral homes have paid $200 (a paid close rate of at least 3.3%), with the cash settled.",
+          "stop": [
+            "Fewer than 2 paid orders from the first 150 homes by day 10",
+            "Payments do not settle within 5 days of order"
+          ],
+          "continue": [
+            "5 or more paid orders from the first batch by day 10: email the remaining 450 homes",
+            "2-4 paid orders: revise the offer and test a second batch of 150 before the full send"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_0d41bcee3b2448d6947c",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_0d41bcee3b2448d6947c",
+            "deals": 20,
+            "price": 200,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_4a50f6ab413a_557356",
+        "digest": "4a50f6ab413af46c9d2df1cc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c71218017d1048a2b110/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:00.773Z"
+      },
+      {
+        "goalId": "wst_9837310cc7dd4a768b0d",
+        "contractDigest": "bcd11f9c33eb8acbefc008f9",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Email-test then sell $200 obituary syndication workbooks to licensed funeral homes",
+          "opportunityIds": [
+            "cop_0d41bcee3b2448d6947c"
+          ],
+          "why": "600 licensed funeral homes are reachable by published business email and posted asking for this work; the $200 price, $5 direct cost, Brain-produced spreadsheet delivery and 5-day time to first cash are evidenced. 20 sales (3.3% of the population) carry $4,000, but no close rate is evidenced, so a first-batch email test measures it before the full send. Payment is taken before delivery so no capital is exposed."
+        },
+        "alternatives": [
+          {
+            "title": "Send to all 600 homes at once",
+            "why": "Rejected: without a measured close rate it commits the whole list to an untested offer; the staged test reads conversion first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach1",
+            "kind": "REACH",
+            "label": "Brain emails a first batch of 150 funeral homes from the published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer1",
+            "kind": "OFFER",
+            "label": "Offer the obituary syndication workbook at $200, payment before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 20000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Measure reply and paid-close rate on the first batch by day 10",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "offer1",
+            "evidence": [
+              "paid close rate per contacted home",
+              "s1"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "reach2",
+            "kind": "REACH",
+            "label": "If the test passes, email the remaining 450 funeral homes",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "test",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close orders at $200 from both batches",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "reach2",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 20000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment before delivery (5 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "offer1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers each paid workbook",
+            "performer": "BRAIN",
+            "costCents": 10000,
+            "day": 10,
+            "dependsOn": "collect",
+            "evidence": [
+              "s5",
+              "s6"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 100000,
+            "label": "First-batch orders (5 x $200)",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 2500,
+            "label": "Direct cost $5 x 5 first-batch workbooks",
+            "stepId": "deliver"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 300000,
+            "label": "Second-batch orders (15 x $200)",
+            "settlesDay": 21,
+            "stepId": "collect"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 7500,
+            "label": "Direct cost $5 x 15 second-batch workbooks",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "funeral homes",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 200,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "paid close rate per contacted home",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "Measured by the first-batch email test; at least 3.3% of 600 homes needed"
+          },
+          {
+            "name": "deals needed",
+            "status": "ESTIMATE",
+            "value": 20,
+            "unit": "deals",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "600 funeral homes licensed by the state board",
+            "population": "Funeral homes",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses; posted asking for this work",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#price",
+            "dated": "2026-11-24",
+            "claim": "Price $200",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 5 of the first 150 contacted funeral homes have paid $200 (a paid close rate of at least 3.3%), with the cash settled.",
+          "stop": [
+            "Fewer than 2 paid orders from the first 150 homes by day 10",
+            "Payments do not settle within 5 days of order"
+          ],
+          "continue": [
+            "5 or more paid orders from the first batch by day 10: email the remaining 450 homes",
+            "2-4 paid orders: revise the offer and test a second batch of 150 before the full send"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_0d41bcee3b2448d6947c",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_0d41bcee3b2448d6947c",
+            "deals": 20,
+            "price": 200,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_0de2e61b2253_23d484",
+        "digest": "0de2e61b2253a1ac1d739cbc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c71218017d1048a2b110/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:06.589Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_9837310cc7dd4a768b0d",
+      "contractDigest": "bcd11f9c33eb8acbefc008f9",
+      "parentRevisionId": null,
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Email-test then sell $200 obituary syndication workbooks to licensed funeral homes",
+        "opportunityIds": [
+          "cop_0d41bcee3b2448d6947c"
+        ],
+        "why": "600 licensed funeral homes are reachable by published business email and posted asking for this work; the $200 price, $5 direct cost, Brain-produced spreadsheet delivery and 5-day time to first cash are evidenced. 20 sales (3.3% of the population) carry $4,000, but no close rate is evidenced, so a first-batch email test measures it before the full send. Payment is taken before delivery so no capital is exposed."
+      },
+      "alternatives": [
+        {
+          "title": "Send to all 600 homes at once",
+          "why": "Rejected: without a measured close rate it commits the whole list to an untested offer; the staged test reads conversion first."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach1",
+          "kind": "REACH",
+          "label": "Brain emails a first batch of 150 funeral homes from the published business addresses",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer1",
+          "kind": "OFFER",
+          "label": "Offer the obituary syndication workbook at $200, payment before delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach1",
+          "evidence": [
+            "s3"
+          ],
+          "priceCents": 20000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "test",
+          "kind": "TEST",
+          "label": "Measure reply and paid-close rate on the first batch by day 10",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "offer1",
+          "evidence": [
+            "paid close rate per contacted home",
+            "s1"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "reach2",
+          "kind": "REACH",
+          "label": "If the test passes, email the remaining 450 funeral homes",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 11,
+          "dependsOn": "test",
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Close orders at $200 from both batches",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 11,
+          "dependsOn": "reach2",
+          "evidence": [
+            "s3"
+          ],
+          "priceCents": 20000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect payment before delivery (5 days to first cash)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "offer1",
+          "evidence": [
+            "s4"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Brain produces and delivers each paid workbook",
+          "performer": "BRAIN",
+          "costCents": 10000,
+          "day": 10,
+          "dependsOn": "collect",
+          "evidence": [
+            "s5",
+            "s6"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 100000,
+          "label": "First-batch orders (5 x $200)",
+          "settlesDay": 10,
+          "stepId": "collect"
+        },
+        {
+          "day": 10,
+          "kind": "SPEND",
+          "amountCents": 2500,
+          "label": "Direct cost $5 x 5 first-batch workbooks",
+          "stepId": "deliver"
+        },
+        {
+          "day": 16,
+          "kind": "RECEIPT",
+          "amountCents": 300000,
+          "label": "Second-batch orders (15 x $200)",
+          "settlesDay": 21,
+          "stepId": "collect"
+        },
+        {
+          "day": 21,
+          "kind": "SPEND",
+          "amountCents": 7500,
+          "label": "Direct cost $5 x 15 second-batch workbooks",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 10,
+      "quantities": [
+        {
+          "name": "buyer population",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "funeral homes",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 200,
+          "unit": "USD",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per deal",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "USD",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to first cash",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "paid close rate per contacted home",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "fraction",
+          "sources": [],
+          "needs": "Measured by the first-batch email test; at least 3.3% of 600 homes needed"
+        },
+        {
+          "name": "deals needed",
+          "status": "ESTIMATE",
+          "value": 20,
+          "unit": "deals",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "600 funeral homes licensed by the state board",
+          "population": "Funeral homes",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Published business email addresses; posted asking for this work",
+          "population": "Funeral home directors",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#price",
+          "dated": "2026-11-24",
+          "claim": "Price $200",
+          "population": "Funeral home directors",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days to first cash",
+          "population": "Funeral home directors",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $5",
+          "population": "Funeral home directors",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s6",
+          "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Funeral home directors",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": {
+        "proof": "By day 10, at least 5 of the first 150 contacted funeral homes have paid $200 (a paid close rate of at least 3.3%), with the cash settled.",
+        "stop": [
+          "Fewer than 2 paid orders from the first 150 homes by day 10",
+          "Payments do not settle within 5 days of order"
+        ],
+        "continue": [
+          "5 or more paid orders from the first batch by day 10: email the remaining 450 homes",
+          "2-4 paid orders: revise the offer and test a second batch of 150 before the full send"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_0d41bcee3b2448d6947c",
+          "missing": [
+            "CONVERSION"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_0d41bcee3b2448d6947c",
+          "deals": 20,
+          "price": 200,
+          "directCost": 5,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CONVERSION"
+      ],
+      "constraints": [],
+      "revisionId": "rev_0de2e61b2253_23d484",
+      "digest": "0de2e61b2253a1ac1d739cbc",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_c71218017d1048a2b110/author-3",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:18:06.589Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_0de2e61b2253_23d484",
+      "digest": "0de2e61b2253a1ac1d739cbc",
+      "contractDigest": "bcd11f9c33eb8acbefc008f9",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 10000,
+        "committedOpenCents": 0,
+        "preProofCents": 2500,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 5,
+        "collectedCents": 400000,
+        "collectedInWindowCents": 400000,
+        "refundsCents": 0,
+        "netCents": 390000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Obituary syndication workbooks for funeral homes\", and what it is missing first is buyers who have actually agreed to it, or a sized measure of how many agree. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1386× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Funeral home directors — Obituary syndication w\" needs [figure withheld] and keeps [figure withheld], 191× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Obituary syndication workbooks for funeral homes\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_0d41bcee3b2448d6947c"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Obituary syndication workbooks for funeral homes\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Obituary syndication workbooks for funeral homes\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Collect payment for \"Obituary syndication workbooks for funeral homes\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Sell \"Obituary syndication workbooks for funeral homes\": offer it to its reachable buyers at 200 USD for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence. Tie up no more than 0 USD until money comes in.",
+        "openings": [
+          {
+            "opportunityId": "cop_0d41bcee3b2448d6947c",
+            "title": "Obituary syndication workbooks for funeral homes",
+            "missing": [
+              "CONVERSION"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 4000,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Funeral home directors",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:13.708Z",
+              "offerScope": "Obituary syndication workbooks for funeral homes",
+              "priceCents": 20000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "funeral homes",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "600 funeral homes are licensed by the state board; each publishes obituaries weekly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Obituary syndication workbooks for funeral homes to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Funeral home directors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$200",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_a75ed6fc630e4eb082b1"
+        ],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:17:05.496Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_0de2e61b2253_23d484",
+        "revisionDigest": "0de2e61b2253a1ac1d739cbc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c71218017d1048a2b110/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0c4b1e236c8941048251/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right: buyer (600 licensed funeral homes, evidenced), channel, $200 price, $5 cost, Brain delivery and 5-day settlement are evidenced; only the paid close rate is unknown and a 150-home live test measures it with proof (>=5 paid by day 10), stop and continue. 20 x $200 = $4,000 within 30 days at $0 capital; ledger recomputes to $4,000 collected, $100 spent.",
+        "findings": [
+          "Minor: zero margin - at exactly the 3.3% proof threshold the full 600 yields exactly 20 deals/$4,000; any shortfall misses.",
+          "Minor: the '2-4 orders' continue branch cannot reach the target on the remaining list unless the revised offer lifts conversion above 3.3%.",
+          "Minor: second-batch receipts (day 16) are tied to step 'collect' dated day 5."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:40.721Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_0de2e61b2253_23d484",
+      "digest": "0de2e61b2253a1ac1d739cbc",
+      "contractDigest": "bcd11f9c33eb8acbefc008f9",
+      "plan": {
+        "goalId": "wst_9837310cc7dd4a768b0d",
+        "contractDigest": "bcd11f9c33eb8acbefc008f9",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Email-test then sell $200 obituary syndication workbooks to licensed funeral homes",
+          "opportunityIds": [
+            "cop_0d41bcee3b2448d6947c"
+          ],
+          "why": "600 licensed funeral homes are reachable by published business email and posted asking for this work; the $200 price, $5 direct cost, Brain-produced spreadsheet delivery and 5-day time to first cash are evidenced. 20 sales (3.3% of the population) carry $4,000, but no close rate is evidenced, so a first-batch email test measures it before the full send. Payment is taken before delivery so no capital is exposed."
+        },
+        "alternatives": [
+          {
+            "title": "Send to all 600 homes at once",
+            "why": "Rejected: without a measured close rate it commits the whole list to an untested offer; the staged test reads conversion first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach1",
+            "kind": "REACH",
+            "label": "Brain emails a first batch of 150 funeral homes from the published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer1",
+            "kind": "OFFER",
+            "label": "Offer the obituary syndication workbook at $200, payment before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach1",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 20000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Measure reply and paid-close rate on the first batch by day 10",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "offer1",
+            "evidence": [
+              "paid close rate per contacted home",
+              "s1"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "reach2",
+            "kind": "REACH",
+            "label": "If the test passes, email the remaining 450 funeral homes",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "test",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close orders at $200 from both batches",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "reach2",
+            "evidence": [
+              "s3"
+            ],
+            "priceCents": 20000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment before delivery (5 days to first cash)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "offer1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers each paid workbook",
+            "performer": "BRAIN",
+            "costCents": 10000,
+            "day": 10,
+            "dependsOn": "collect",
+            "evidence": [
+              "s5",
+              "s6"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 100000,
+            "label": "First-batch orders (5 x $200)",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 2500,
+            "label": "Direct cost $5 x 5 first-batch workbooks",
+            "stepId": "deliver"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 300000,
+            "label": "Second-batch orders (15 x $200)",
+            "settlesDay": 21,
+            "stepId": "collect"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 7500,
+            "label": "Direct cost $5 x 15 second-batch workbooks",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "funeral homes",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 200,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "paid close rate per contacted home",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "Measured by the first-batch email test; at least 3.3% of 600 homes needed"
+          },
+          {
+            "name": "deals needed",
+            "status": "ESTIMATE",
+            "value": 20,
+            "unit": "deals",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "600 funeral homes licensed by the state board",
+            "population": "Funeral homes",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses; posted asking for this work",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#price",
+            "dated": "2026-11-24",
+            "claim": "Price $200",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_0d41bcee3b2448d6947c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Funeral home directors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 5 of the first 150 contacted funeral homes have paid $200 (a paid close rate of at least 3.3%), with the cash settled.",
+          "stop": [
+            "Fewer than 2 paid orders from the first 150 homes by day 10",
+            "Payments do not settle within 5 days of order"
+          ],
+          "continue": [
+            "5 or more paid orders from the first batch by day 10: email the remaining 450 homes",
+            "2-4 paid orders: revise the offer and test a second batch of 150 before the full send"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_0d41bcee3b2448d6947c",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_0d41bcee3b2448d6947c",
+            "deals": 20,
+            "price": 200,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_0de2e61b2253_23d484",
+        "digest": "0de2e61b2253a1ac1d739cbc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c71218017d1048a2b110/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:06.589Z"
+      },
+      "review": {
+        "revisionId": "rev_0de2e61b2253_23d484",
+        "revisionDigest": "0de2e61b2253a1ac1d739cbc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c71218017d1048a2b110/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0c4b1e236c8941048251/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right: buyer (600 licensed funeral homes, evidenced), channel, $200 price, $5 cost, Brain delivery and 5-day settlement are evidenced; only the paid close rate is unknown and a 150-home live test measures it with proof (>=5 paid by day 10), stop and continue. 20 x $200 = $4,000 within 30 days at $0 capital; ledger recomputes to $4,000 collected, $100 spent.",
+        "findings": [
+          "Minor: zero margin - at exactly the 3.3% proof threshold the full 600 yields exactly 20 deals/$4,000; any shortfall misses.",
+          "Minor: the '2-4 orders' continue branch cannot reach the target on the remaining list unless the revised offer lifts conversion above 3.3%.",
+          "Minor: second-batch receipts (day 16) are tied to step 'collect' dated day 5."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:40.721Z"
+      },
+      "at": "2026-11-27T00:23:36.224Z"
+    },
+    "staleFinal": null
+  }
+}

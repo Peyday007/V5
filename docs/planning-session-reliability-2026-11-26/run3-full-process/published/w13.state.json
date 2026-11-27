@@ -1,0 +1,1423 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_b5419886772f4cd09bb0",
+      "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$4,000 of settled cash collected within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "12e8de396c57d2999c2ca9f6"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_b5419886772f4cd09bb0",
+        "contractDigest": "12e8de396c57d2999c2ca9f6",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the only sourced price cannot reach $4,000 from the evidenced stable population",
+          "opportunityIds": [],
+          "why": "The card records priceCents 90000 ($900) but the sourced price fact is $90; a contradicted price is not established. At the sourced $90, $4,000 needs 45 sales; the evidenced conversion (26 paid pre-orders from 260 visitors, 10%) applied to the 260 registered stables yields about 26 sales = $2,340, short of target. Settlement terms are not recorded either."
+        },
+        "alternatives": [
+          {
+            "title": "Sell at the card price of $900 (5 deals)",
+            "why": "Rejected: $900 is contradicted by the sourced $90 price fact and no buyer is shown paying it; Brain flags it as a price no buyer is shown to pay."
+          },
+          {
+            "title": "Sell at $90 to all 260 stables",
+            "why": "Rejected: needs 45 buyers (17% of the population) against an evidenced 10% conversion; reach of ~$2,340 is below $4,000."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research what boarding stables are published as actually paying for waiver/boarding-agreement management (resolve $90 vs $900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Research payment terms / settlement timing for this offer",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per deal",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "Published buyer-paid price; card $900 contradicts sourced $90"
+          },
+          {
+            "name": "sourced price",
+            "status": "EVIDENCED",
+            "value": 90,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "stables",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion rate",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "fraction of visitors",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed at $90",
+            "status": "ESTIMATE",
+            "value": 45,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlement terms",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "paymentTerms not recorded on the card"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#price",
+            "dated": "2026-11-24",
+            "claim": "Price $90",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card priceCents 90000 ($900), unsourced and contradicting s1",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 boarding stables registered with the state equine council",
+            "population": "Boarding stables",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "26 paid pre-orders from 260 unique visitors",
+            "population": "visitors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Price: the card price ($900) is contradicted by the sourced price ($90); at $90 the evidenced population (260 stables) at the evidenced 10% conversion reaches about $2,340, below the $4,000 target, and settlement terms are unrecorded.",
+          "resolution": "Research what boarding stables are published as paying for this service (the parked revenueRange question) and its payment terms; if a sourced price near $900 is established, a 5-deal plan becomes possible; otherwise lower the target to what $90 x evidenced conversions reaches."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d45d1303cea1404e9fb3",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME",
+              "SETTLEMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_d45d1303cea1404e9fb3",
+            "why": "Price contradicted ($900 card vs $90 sourced); at $90 the evidenced volume cannot carry $4,000"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "SETTLEMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "At the sourced $90 price and evidenced 10% conversion of 260 stables, about $2,300 is reachable in 30 days; lower the target to ~$2,300 or establish a higher sourced price."
+          }
+        ],
+        "revisionId": "rev_f674586f12ef_d20b5f",
+        "digest": "f674586f12ef56dfa0d935b8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0ea58ed8b789408098c4/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:15:08.314Z"
+      },
+      {
+        "goalId": "wst_b5419886772f4cd09bb0",
+        "contractDigest": "12e8de396c57d2999c2ca9f6",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the only sourced price cannot reach $4,000 from the evidenced stable population",
+          "opportunityIds": [],
+          "why": "The card records priceCents 90000 ($900) but the sourced price fact is $90; a contradicted price is not established. At the sourced $90, $4,000 needs 45 sales; the evidenced conversion (26 paid pre-orders from 260 visitors, 10%) applied to the 260 registered stables yields about 26 sales = $2,340, short of target."
+        },
+        "alternatives": [
+          {
+            "title": "Sell at the card price of $900 (5 deals)",
+            "why": "Rejected: $900 is contradicted by the sourced $90 price fact and no buyer is shown paying it; Brain flags it as a price no buyer is shown to pay."
+          },
+          {
+            "title": "Sell at $90 to all 260 stables",
+            "why": "Rejected: needs 45 buyers (17% of the population) against an evidenced 10% conversion; reach of ~$2,340 is below $4,000."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research what boarding stables are published as actually paying for waiver/boarding-agreement management (resolve $90 vs $900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per deal",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "Published buyer-paid price; card $900 contradicts sourced $90"
+          },
+          {
+            "name": "sourced price",
+            "status": "EVIDENCED",
+            "value": 90,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "stables",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion rate",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "fraction of visitors",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed at $90",
+            "status": "ESTIMATE",
+            "value": 45,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlement terms",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days to first cash",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#price",
+            "dated": "2026-11-24",
+            "claim": "Price $90",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card priceCents 90000 ($900), unsourced and contradicting s1",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 boarding stables registered with the state equine council",
+            "population": "Boarding stables",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "26 paid pre-orders from 260 unique visitors",
+            "population": "visitors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Price: the card price ($900) is contradicted by the sourced price ($90); at $90 the evidenced population (260 stables) at the evidenced 10% conversion reaches about $2,340, below the $4,000 target.",
+          "resolution": "Research what boarding stables are published as paying for this service (the parked revenueRange question); if a sourced price near $900 is established, a 5-deal plan becomes possible; otherwise lower the target to what $90 x evidenced conversions reaches."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d45d1303cea1404e9fb3",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_d45d1303cea1404e9fb3",
+            "why": "Price contradicted ($900 card vs $90 sourced); at $90 the evidenced volume cannot carry $4,000"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "At the sourced $90 price and evidenced 10% conversion of 260 stables, about $2,300 is reachable in 30 days; lower the target to ~$2,300 or establish a higher sourced price."
+          }
+        ],
+        "revisionId": "rev_fa1b192737e7_c2ff14",
+        "digest": "fa1b192737e7e2151cc88605",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0ea58ed8b789408098c4/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:15:17.736Z"
+      },
+      {
+        "goalId": "wst_b5419886772f4cd09bb0",
+        "contractDigest": "12e8de396c57d2999c2ca9f6",
+        "parentRevisionId": "rev_fa1b192737e7_c2ff14",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan yet: the stable-waiver offer price is unresolved ($900 card vs $90 sourced)",
+          "opportunityIds": [],
+          "why": "The horse-boarding waiver/agreement opening remains the candidate: 260 registered stables, published emails, a posted buying signal, Brain-produced spreadsheet delivery, $5 direct cost and 5 days to first cash are evidenced. But the card price ($900) contradicts the sourced price fact ($90), so the offer price is not established, and no purchase frequency is recorded to size market volume. At $900 the target needs 5 sales; at $90 it needs 45 of 260 stables (the population is worth $23,400 at $90, so the target is not ruled out). Which plan applies cannot be decided until the price is resolved by research."
+        },
+        "alternatives": [
+          {
+            "title": "Plan at the card price of $900 (5 deals)",
+            "why": "Not adopted: $900 is contradicted by the sourced $90 price fact and no buyer is shown paying it."
+          },
+          {
+            "title": "Plan at the sourced $90 price (45 deals)",
+            "why": "Not adopted yet: the price is contradicted and the needed 17% share of stables is not established by a conversion or purchase-frequency measure; decided after the price research."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research what boarding stables are published as actually paying for liability waiver / boarding-agreement management (the parked revenueRange question), resolving $90 vs $900",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Research how often a stable buys this (once or recurring) to size market volume",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per deal",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "Published buyer-paid price; card $900 contradicts sourced $90"
+          },
+          {
+            "name": "sourced price",
+            "status": "EVIDENCED",
+            "value": 90,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "stables",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion rate",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "fraction of visitors",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed at $90",
+            "status": "ESTIMATE",
+            "value": 45,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": "45 of 260 stables; share not established"
+          },
+          {
+            "name": "settlement terms",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days to first cash",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "population value at $90",
+            "status": "ESTIMATE",
+            "value": 23400,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "purchase frequency",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "purchases per stable per year",
+            "sources": [],
+            "needs": "Not recorded on the card"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#price",
+            "dated": "2026-11-24",
+            "claim": "Price $90",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card priceCents 90000 ($900), unsourced and contradicting s1",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 boarding stables registered with the state equine council",
+            "population": "Boarding stables",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "26 paid pre-orders from 260 unique visitors",
+            "population": "visitors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: the card price ($900) is contradicted by the sourced price fact ($90), so the offer price is unestablished; with no purchase frequency recorded, MARKET_VOLUME cannot be sized for either price.",
+          "resolution": "Run the parked revenueRange research (what boarding stables are published as paying for this service, with source and date) and record purchase frequency; then plan at the established price (5 sales at $900, or 45 of 260 stables at $90)."
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "TARGET constraint is wrong: 260 x $90 = $23,400 >= $4,000",
+            "resolution": "Accepted. The TARGET constraint is removed; the 10% visitor pre-order rate is no longer treated as a population cap, and the $23,400 population value at $90 is recorded."
+          },
+          {
+            "finding": "the opening is excluded with no grounds",
+            "resolution": "Accepted. The exclusion is removed; the opening stays the candidate pending the price question (chain missing OFFER_AND_PRICE, MARKET_VOLUME)."
+          },
+          {
+            "finding": "decisive gap should be OFFER_AND_PRICE with the parked revenueRange research as resolution",
+            "resolution": "Accepted. The decisive gap is the contradicted price plus missing purchase frequency, and the resolution is the revenueRange research and a frequency count, not a target cut."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_d45d1303cea1404e9fb3",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "revisionId": "rev_2b7866d984b9_a17f98",
+        "digest": "2b7866d984b9a96e073abce3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0ea58ed8b789408098c4/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:23:52.755Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_b5419886772f4cd09bb0",
+      "contractDigest": "12e8de396c57d2999c2ca9f6",
+      "parentRevisionId": "rev_fa1b192737e7_c2ff14",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan yet: the stable-waiver offer price is unresolved ($900 card vs $90 sourced)",
+        "opportunityIds": [],
+        "why": "The horse-boarding waiver/agreement opening remains the candidate: 260 registered stables, published emails, a posted buying signal, Brain-produced spreadsheet delivery, $5 direct cost and 5 days to first cash are evidenced. But the card price ($900) contradicts the sourced price fact ($90), so the offer price is not established, and no purchase frequency is recorded to size market volume. At $900 the target needs 5 sales; at $90 it needs 45 of 260 stables (the population is worth $23,400 at $90, so the target is not ruled out). Which plan applies cannot be decided until the price is resolved by research."
+      },
+      "alternatives": [
+        {
+          "title": "Plan at the card price of $900 (5 deals)",
+          "why": "Not adopted: $900 is contradicted by the sourced $90 price fact and no buyer is shown paying it."
+        },
+        {
+          "title": "Plan at the sourced $90 price (45 deals)",
+          "why": "Not adopted yet: the price is contradicted and the needed 17% share of stables is not established by a conversion or purchase-frequency measure; decided after the price research."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Research what boarding stables are published as actually paying for liability waiver / boarding-agreement management (the parked revenueRange question), resolving $90 vs $900",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "r2",
+          "kind": "RESEARCH",
+          "label": "Research how often a stable buys this (once or recurring) to size market volume",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s3"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per deal",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": "Published buyer-paid price; card $900 contradicts sourced $90"
+        },
+        {
+          "name": "sourced price",
+          "status": "EVIDENCED",
+          "value": 90,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyer population",
+          "status": "EVIDENCED",
+          "value": 260,
+          "unit": "stables",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion rate",
+          "status": "EVIDENCED",
+          "value": 0.1,
+          "unit": "fraction of visitors",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals needed at $90",
+          "status": "ESTIMATE",
+          "value": 45,
+          "unit": "deals",
+          "sources": [
+            "s1"
+          ],
+          "needs": "45 of 260 stables; share not established"
+        },
+        {
+          "name": "settlement terms",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days to first cash",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        },
+        {
+          "name": "population value at $90",
+          "status": "ESTIMATE",
+          "value": 23400,
+          "unit": "USD",
+          "sources": [
+            "s1",
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "purchase frequency",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "purchases per stable per year",
+          "sources": [],
+          "needs": "Not recorded on the card"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#price",
+          "dated": "2026-11-24",
+          "claim": "Price $90",
+          "population": "Boarding stable owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#priceCents",
+          "dated": "2026-11-24",
+          "claim": "Card priceCents 90000 ($900), unsourced and contradicting s1",
+          "population": "Boarding stable owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "260 boarding stables registered with the state equine council",
+          "population": "Boarding stables",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "26 paid pre-orders from 260 unique visitors",
+          "population": "visitors",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days to first cash",
+          "population": "Boarding stable owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "OFFER_AND_PRICE: the card price ($900) is contradicted by the sourced price fact ($90), so the offer price is unestablished; with no purchase frequency recorded, MARKET_VOLUME cannot be sized for either price.",
+        "resolution": "Run the parked revenueRange research (what boarding stables are published as paying for this service, with source and date) and record purchase frequency; then plan at the established price (5 sales at $900, or 45 of 260 stables at $90)."
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "TARGET constraint is wrong: 260 x $90 = $23,400 >= $4,000",
+          "resolution": "Accepted. The TARGET constraint is removed; the 10% visitor pre-order rate is no longer treated as a population cap, and the $23,400 population value at $90 is recorded."
+        },
+        {
+          "finding": "the opening is excluded with no grounds",
+          "resolution": "Accepted. The exclusion is removed; the opening stays the candidate pending the price question (chain missing OFFER_AND_PRICE, MARKET_VOLUME)."
+        },
+        {
+          "finding": "decisive gap should be OFFER_AND_PRICE with the parked revenueRange research as resolution",
+          "resolution": "Accepted. The decisive gap is the contradicted price plus missing purchase frequency, and the resolution is the revenueRange research and a frequency count, not a target cut."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_d45d1303cea1404e9fb3",
+          "missing": [
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE",
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "revisionId": "rev_2b7866d984b9_a17f98",
+      "digest": "2b7866d984b9a96e073abce3",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_0ea58ed8b789408098c4/author-3",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:23:52.755Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_2b7866d984b9_a17f98",
+      "digest": "2b7866d984b9a96e073abce3",
+      "contractDigest": "12e8de396c57d2999c2ca9f6",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 32340× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Liability waiver and boarding-agreement management for horse\" needs [figure withheld] and keeps [figure withheld], 490× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Boarding stable owners\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_d45d1303cea1404e9fb3"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Liability waiver and boarding-agreement management for horse boarding stables\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Liability waiver and boarding-agreement management for horse boarding stables\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Boarding stable owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Boarding stable owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 9.991294722977795
+          },
+          {
+            "label": "Collect payment for \"Liability waiver and boarding-agreement management for horse boarding stables\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_d45d1303cea1404e9fb3",
+            "title": "Liability waiver and boarding-agreement management for horse boarding stables",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Boarding stable owners",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:16.207Z",
+              "offerScope": "Liability waiver and boarding-agreement management for horse boarding stables",
+              "priceCents": 90000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "horse boarding",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "260 boarding stables are registered with the state equine council.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Liability waiver and boarding-agreement management for horse boarding stables to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "26 paid pre-orders from 260 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Boarding stable owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$90",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_a2f3f35b45ec423f93c5"
+        ],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:14:06.167Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_fa1b192737e7_c2ff14",
+        "revisionDigest": "fa1b192737e7e2151cc88605",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0ea58ed8b789408098c4/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_38ed4d12574942a98bdd/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The price contradiction ($900 card vs $90 sourced fact) is correctly caught and is the decisive gap, but the revision then asserts a TARGET constraint the evidence does not support: at $90 the 260 registered stables are worth $23,400, far above $4,000, so the target is not infeasible; it is unestablished because the price is unresolved. Missing evidence is not a TARGET constraint.",
+        "findings": [
+          "TARGET constraint (\"lower the target to ~$2,300\") is wrong: 260 x $90 = $23,400 >= $4,000 even at the sourced low price; $2,340 comes from treating a 10% visitor pre-order rate as a cap on the whole population, which it is not",
+          "the opening is excluded as \"evidenced volume cannot carry $4,000\", which the arithmetic contradicts; it should stay as the candidate pending the price question",
+          "decisive gap should be stated as OFFER_AND_PRICE (contradicted price, plus no purchase frequency for MARKET_VOLUME) with the parked revenueRange research as resolution, not a target cut"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:16.095Z"
+      },
+      {
+        "revisionId": "rev_2b7866d984b9_a17f98",
+        "revisionDigest": "2b7866d984b9a96e073abce3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0ea58ed8b789408098c4/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_38ed4d12574942a98bdd/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "All three findings answered. The TARGET constraint and the exclusion are removed. The decisive gap is now OFFER_AND_PRICE: the card says $900, which contradicts the sourced $90, and no purchase frequency is recorded, so MARKET_VOLUME cannot be sized. That matches Brain's missing links. The arithmetic is correct: $4,000 needs 5 sales at $900 or 45 sales at $90, and 260 stables x $90 = $23,400, so the target is not ruled out. The resolution is the parked revenueRange research plus a purchase-frequency count. No spend, and no unknown is treated as known.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:24:57.895Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_2b7866d984b9_a17f98",
+      "digest": "2b7866d984b9a96e073abce3",
+      "contractDigest": "12e8de396c57d2999c2ca9f6",
+      "plan": {
+        "goalId": "wst_b5419886772f4cd09bb0",
+        "contractDigest": "12e8de396c57d2999c2ca9f6",
+        "parentRevisionId": "rev_fa1b192737e7_c2ff14",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan yet: the stable-waiver offer price is unresolved ($900 card vs $90 sourced)",
+          "opportunityIds": [],
+          "why": "The horse-boarding waiver/agreement opening remains the candidate: 260 registered stables, published emails, a posted buying signal, Brain-produced spreadsheet delivery, $5 direct cost and 5 days to first cash are evidenced. But the card price ($900) contradicts the sourced price fact ($90), so the offer price is not established, and no purchase frequency is recorded to size market volume. At $900 the target needs 5 sales; at $90 it needs 45 of 260 stables (the population is worth $23,400 at $90, so the target is not ruled out). Which plan applies cannot be decided until the price is resolved by research."
+        },
+        "alternatives": [
+          {
+            "title": "Plan at the card price of $900 (5 deals)",
+            "why": "Not adopted: $900 is contradicted by the sourced $90 price fact and no buyer is shown paying it."
+          },
+          {
+            "title": "Plan at the sourced $90 price (45 deals)",
+            "why": "Not adopted yet: the price is contradicted and the needed 17% share of stables is not established by a conversion or purchase-frequency measure; decided after the price research."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research what boarding stables are published as actually paying for liability waiver / boarding-agreement management (the parked revenueRange question), resolving $90 vs $900",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Research how often a stable buys this (once or recurring) to size market volume",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per deal",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "Published buyer-paid price; card $900 contradicts sourced $90"
+          },
+          {
+            "name": "sourced price",
+            "status": "EVIDENCED",
+            "value": 90,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "stables",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion rate",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "fraction of visitors",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed at $90",
+            "status": "ESTIMATE",
+            "value": 45,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": "45 of 260 stables; share not established"
+          },
+          {
+            "name": "settlement terms",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days to first cash",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "population value at $90",
+            "status": "ESTIMATE",
+            "value": 23400,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "purchase frequency",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "purchases per stable per year",
+            "sources": [],
+            "needs": "Not recorded on the card"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#price",
+            "dated": "2026-11-24",
+            "claim": "Price $90",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card priceCents 90000 ($900), unsourced and contradicting s1",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 boarding stables registered with the state equine council",
+            "population": "Boarding stables",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "26 paid pre-orders from 260 unique visitors",
+            "population": "visitors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_d45d1303cea1404e9fb3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Boarding stable owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: the card price ($900) is contradicted by the sourced price fact ($90), so the offer price is unestablished; with no purchase frequency recorded, MARKET_VOLUME cannot be sized for either price.",
+          "resolution": "Run the parked revenueRange research (what boarding stables are published as paying for this service, with source and date) and record purchase frequency; then plan at the established price (5 sales at $900, or 45 of 260 stables at $90)."
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "TARGET constraint is wrong: 260 x $90 = $23,400 >= $4,000",
+            "resolution": "Accepted. The TARGET constraint is removed; the 10% visitor pre-order rate is no longer treated as a population cap, and the $23,400 population value at $90 is recorded."
+          },
+          {
+            "finding": "the opening is excluded with no grounds",
+            "resolution": "Accepted. The exclusion is removed; the opening stays the candidate pending the price question (chain missing OFFER_AND_PRICE, MARKET_VOLUME)."
+          },
+          {
+            "finding": "decisive gap should be OFFER_AND_PRICE with the parked revenueRange research as resolution",
+            "resolution": "Accepted. The decisive gap is the contradicted price plus missing purchase frequency, and the resolution is the revenueRange research and a frequency count, not a target cut."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_d45d1303cea1404e9fb3",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "revisionId": "rev_2b7866d984b9_a17f98",
+        "digest": "2b7866d984b9a96e073abce3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0ea58ed8b789408098c4/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:23:52.755Z"
+      },
+      "review": {
+        "revisionId": "rev_2b7866d984b9_a17f98",
+        "revisionDigest": "2b7866d984b9a96e073abce3",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0ea58ed8b789408098c4/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_38ed4d12574942a98bdd/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "All three findings answered. The TARGET constraint and the exclusion are removed. The decisive gap is now OFFER_AND_PRICE: the card says $900, which contradicts the sourced $90, and no purchase frequency is recorded, so MARKET_VOLUME cannot be sized. That matches Brain's missing links. The arithmetic is correct: $4,000 needs 5 sales at $900 or 45 sales at $90, and 260 stables x $90 = $23,400, so the target is not ruled out. The resolution is the parked revenueRange research plus a purchase-frequency count. No spend, and no unknown is treated as known.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:24:57.895Z"
+      },
+      "at": "2026-11-27T00:25:39.486Z"
+    },
+    "staleFinal": null
+  }
+}

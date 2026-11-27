@@ -1,0 +1,1048 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_f291d292dd0c4aadb012",
+      "words": "Collect $1,000 of settled cash within 7 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 100000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 7,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$1,000 of settled cash collected within 7 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "9235892d915cc27b34047a67"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_f291d292dd0c4aadb012",
+        "contractDigest": "9235892d915cc27b34047a67",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Invoice and deliver the five written-accepted grooming no-show workbooks",
+          "opportunityIds": [
+            "cop_6b3a87d90dfe4fa195bb"
+          ],
+          "why": "Five written acceptances at $250 each ($1,250) are recorded against the opening; Brain produces the spreadsheet ($5 direct cost each); first cash settles in 3 days, inside the 7-day window. Invoicing on acceptance and delivering once paid keeps up-front capital at $0."
+        },
+        "alternatives": [
+          {
+            "title": "Cold outreach to further grooming salons",
+            "why": "Not needed: the written acceptances already carry the target; buyer volume is uncounted, so new sales would be unevidenced."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the five written acceptances at $250 and send invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect the five $250 payments (settle in 3 days)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the five no-show analysis workbooks",
+            "performer": "BRAIN",
+            "costCents": 2500,
+            "day": 4,
+            "dependsOn": "collect",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 1 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 2 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 3 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 4 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 5 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 2500,
+            "label": "Direct cost $5 x 5 workbooks",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "written acceptances",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 250,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#agreements",
+            "dated": "2026-11-24",
+            "claim": "Five WRITTEN_ACCEPTANCE agreements at $250 each, state AGREED",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#price",
+            "dated": "2026-11-24",
+            "claim": "Price $250",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5 per deal",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_6b3a87d90dfe4fa195bb",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_6b3a87d90dfe4fa195bb",
+            "deals": 5,
+            "price": 250,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_ce4e36225e02_365a9f",
+        "digest": "ce4e36225e02c391b5035695",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_50320e449b244155a38a/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:16:59.572Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_f291d292dd0c4aadb012",
+      "contractDigest": "9235892d915cc27b34047a67",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Invoice and deliver the five written-accepted grooming no-show workbooks",
+        "opportunityIds": [
+          "cop_6b3a87d90dfe4fa195bb"
+        ],
+        "why": "Five written acceptances at $250 each ($1,250) are recorded against the opening; Brain produces the spreadsheet ($5 direct cost each); first cash settles in 3 days, inside the 7-day window. Invoicing on acceptance and delivering once paid keeps up-front capital at $0."
+      },
+      "alternatives": [
+        {
+          "title": "Cold outreach to further grooming salons",
+          "why": "Not needed: the written acceptances already carry the target; buyer volume is uncounted, so new sales would be unevidenced."
+        }
+      ],
+      "steps": [
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the five written acceptances at $250 and send invoices",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "priceCents": 25000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect the five $250 payments (settle in 3 days)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "sell",
+          "evidence": [
+            "s3"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Brain produces and delivers the five no-show analysis workbooks",
+          "performer": "BRAIN",
+          "costCents": 2500,
+          "day": 4,
+          "dependsOn": "collect",
+          "evidence": [
+            "s4",
+            "s5"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Buyer 1 payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Buyer 2 payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Buyer 3 payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Buyer 4 payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 1,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Buyer 5 payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 4,
+          "kind": "SPEND",
+          "amountCents": 2500,
+          "label": "Direct cost $5 x 5 workbooks",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 4,
+      "quantities": [
+        {
+          "name": "written acceptances",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "deals",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 250,
+          "unit": "USD",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per deal",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "USD",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to first cash",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "days",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#agreements",
+          "dated": "2026-11-24",
+          "claim": "Five WRITTEN_ACCEPTANCE agreements at $250 each, state AGREED",
+          "population": "Grooming salon owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#price",
+          "dated": "2026-11-24",
+          "claim": "Price $250",
+          "population": "Grooming salon owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "3 days to first cash",
+          "population": "Grooming salon owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $5 per deal",
+          "population": "Grooming salon owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Grooming salon owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_6b3a87d90dfe4fa195bb",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_6b3a87d90dfe4fa195bb",
+          "deals": 5,
+          "price": 250,
+          "directCost": 5,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "revisionId": "rev_ce4e36225e02_365a9f",
+      "digest": "ce4e36225e02c391b5035695",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_50320e449b244155a38a/author-3",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:16:59.572Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_ce4e36225e02_365a9f",
+      "digest": "ce4e36225e02c391b5035695",
+      "contractDigest": "9235892d915cc27b34047a67",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 2500,
+        "committedOpenCents": 0,
+        "preProofCents": 2500,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 1,
+        "collectedCents": 125000,
+        "collectedInWindowCents": 125000,
+        "refundsCents": 0,
+        "netCents": 122500
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: No-show analysis workbook for dog grooming salons\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"No-show analysis workbook for dog grooming salons\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1225× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"No-show analysis workbook for dog grooming salons\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_6b3a87d90dfe4fa195bb"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"No-show analysis workbook for dog grooming salons\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"No-show analysis workbook for dog grooming salons\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Collect payment for \"No-show analysis workbook for dog grooming salons\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_6b3a87d90dfe4fa195bb",
+            "title": "No-show analysis workbook for dog grooming salons",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1000,
+            "potentialReach": 1000,
+            "card": {
+              "payer": "Grooming salon owners",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:15.655Z",
+              "offerScope": "No-show analysis workbook for dog grooming salons",
+              "priceCents": 25000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "pet grooming",
+              "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "No-show analysis workbook for dog grooming salons",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "No-show analysis workbook for dog grooming salons",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "No-show analysis workbook for dog grooming salons",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "No-show analysis workbook for dog grooming salons",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "No-show analysis workbook for dog grooming salons",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell No-show analysis workbook for dog grooming salons to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Grooming salon owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$250",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "3 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_4855861c6ef24d5094da"
+        ],
+        "scope": {
+          "targetCents": 100000,
+          "daysLeft": 7,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:16:12.073Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_ce4e36225e02_365a9f",
+        "revisionDigest": "ce4e36225e02c391b5035695",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_50320e449b244155a38a/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f8e1c5542614476c8086/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right: five WRITTEN_ACCEPTANCE agreements (AGREED) at $250 on the card carry $1,250 vs the $1,000 target; price, $5 direct cost, Brain-produced spreadsheet delivery and 3-day settlement are EVIDENCE facts; cash settles day 4 inside 7 days; $0 capital; ledger recomputes to $1,250 collected, $25 spent, net $1,225; one lost buyer still leaves $1,000.",
+        "findings": [
+          "Minor: plan assumes buyers pay on invoice before delivery; the agreements do not state payment terms (no capital is at risk either way since direct cost is $25).",
+          "Minor: SEND_A_MESSAGE and ISSUE_AN_INVOICE executors are NOT_CONNECTED and must be connected before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:40.352Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_ce4e36225e02_365a9f",
+      "digest": "ce4e36225e02c391b5035695",
+      "contractDigest": "9235892d915cc27b34047a67",
+      "plan": {
+        "goalId": "wst_f291d292dd0c4aadb012",
+        "contractDigest": "9235892d915cc27b34047a67",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Invoice and deliver the five written-accepted grooming no-show workbooks",
+          "opportunityIds": [
+            "cop_6b3a87d90dfe4fa195bb"
+          ],
+          "why": "Five written acceptances at $250 each ($1,250) are recorded against the opening; Brain produces the spreadsheet ($5 direct cost each); first cash settles in 3 days, inside the 7-day window. Invoicing on acceptance and delivering once paid keeps up-front capital at $0."
+        },
+        "alternatives": [
+          {
+            "title": "Cold outreach to further grooming salons",
+            "why": "Not needed: the written acceptances already carry the target; buyer volume is uncounted, so new sales would be unevidenced."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the five written acceptances at $250 and send invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect the five $250 payments (settle in 3 days)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the five no-show analysis workbooks",
+            "performer": "BRAIN",
+            "costCents": 2500,
+            "day": 4,
+            "dependsOn": "collect",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 1 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 2 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 3 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 4 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 1,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Buyer 5 payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 2500,
+            "label": "Direct cost $5 x 5 workbooks",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "written acceptances",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 250,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#agreements",
+            "dated": "2026-11-24",
+            "claim": "Five WRITTEN_ACCEPTANCE agreements at $250 each, state AGREED",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#price",
+            "dated": "2026-11-24",
+            "claim": "Price $250",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5 per deal",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_6b3a87d90dfe4fa195bb#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Grooming salon owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_6b3a87d90dfe4fa195bb",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_6b3a87d90dfe4fa195bb",
+            "deals": 5,
+            "price": 250,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_ce4e36225e02_365a9f",
+        "digest": "ce4e36225e02c391b5035695",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_50320e449b244155a38a/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:16:59.572Z"
+      },
+      "review": {
+        "revisionId": "rev_ce4e36225e02_365a9f",
+        "revisionDigest": "ce4e36225e02c391b5035695",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_50320e449b244155a38a/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f8e1c5542614476c8086/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right: five WRITTEN_ACCEPTANCE agreements (AGREED) at $250 on the card carry $1,250 vs the $1,000 target; price, $5 direct cost, Brain-produced spreadsheet delivery and 3-day settlement are EVIDENCE facts; cash settles day 4 inside 7 days; $0 capital; ledger recomputes to $1,250 collected, $25 spent, net $1,225; one lost buyer still leaves $1,000.",
+        "findings": [
+          "Minor: plan assumes buyers pay on invoice before delivery; the agreements do not state payment terms (no capital is at risk either way since direct cost is $25).",
+          "Minor: SEND_A_MESSAGE and ISSUE_AN_INVOICE executors are NOT_CONNECTED and must be connected before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:40.352Z"
+      },
+      "at": "2026-11-27T00:23:35.889Z"
+    },
+    "staleFinal": null
+  }
+}

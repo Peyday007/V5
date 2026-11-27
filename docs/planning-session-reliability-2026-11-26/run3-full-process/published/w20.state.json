@@ -1,0 +1,560 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_9cfe7e3b133a45fb8d59",
+      "words": "Collect $15,000 of settled cash within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Target settled cash received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "bc8a0c694f1d53b83ecce64e"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_9cfe7e3b133a45fb8d59",
+        "contractDigest": "bc8a0c694f1d53b83ecce64e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: one hospital at $4,800 cannot carry $15,000",
+          "opportunityIds": [],
+          "why": "The single opening is one organisation (Meridian Regional Health System) whose evidenced price is one $4,800 purchase order already issued on 2026-10-02. Even if Meridian bought again, one buyer at $4,800 reaches at most a third of the $15,000 target; no population of similar buyers, and no conversion, is evidenced."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the credentialing audit workbook to Meridian",
+            "why": "At most $4,800 from one buyer; the PO was already awarded on 2026-10-02, so a further purchase is not evidenced; 30-day time to cash."
+          },
+          {
+            "title": "Sell the same workbook to other hospital systems",
+            "why": "No counted population of hospitals buying this, no price paid by any other buyer, no conversion rate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count hospital systems that buy vendor-credentialing audits through a published procurement channel, with prices paid and frequency",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Meridian purchase order",
+            "status": "EVIDENCED",
+            "value": 480000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers of this kind reachable",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "organisations",
+            "sources": [],
+            "needs": "a counted population beyond one organisation"
+          },
+          {
+            "name": "conversion",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share",
+            "sources": [],
+            "needs": "a measured close rate on this buyer type"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_9a50f18569b2466aa801#price",
+            "dated": "2026-10-02",
+            "claim": "Meridian's procurement office issued a $4,800 purchase order for a vendor-credentialing audit.",
+            "population": "Meridian Regional Health System (one organisation)",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: the only buyer is one organisation whose single evidenced purchase is $4,800 (already awarded 2026-10-02); no population of buyers exists on the record to carry $15,000, so the target is out of reach even at a 100% close.",
+          "resolution": "Research a counted population of hospital systems procuring vendor-credentialing audits (published procurement portals/award notices with prices); at $4,800 per deal, at least 4 settled deals in 45 days are needed. Otherwise the owner lowers the target to what one buyer can carry."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9a50f18569b2466aa801",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "revisionId": "rev_3d9253d9fef0_df025a",
+        "digest": "3d9253d9fef0247c9631eb0a",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dac1383cfd1b462a9d51/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:08.794Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_9cfe7e3b133a45fb8d59",
+      "contractDigest": "bc8a0c694f1d53b83ecce64e",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan: one hospital at $4,800 cannot carry $15,000",
+        "opportunityIds": [],
+        "why": "The single opening is one organisation (Meridian Regional Health System) whose evidenced price is one $4,800 purchase order already issued on 2026-10-02. Even if Meridian bought again, one buyer at $4,800 reaches at most a third of the $15,000 target; no population of similar buyers, and no conversion, is evidenced."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the credentialing audit workbook to Meridian",
+          "why": "At most $4,800 from one buyer; the PO was already awarded on 2026-10-02, so a further purchase is not evidenced; 30-day time to cash."
+        },
+        {
+          "title": "Sell the same workbook to other hospital systems",
+          "why": "No counted population of hospitals buying this, no price paid by any other buyer, no conversion rate."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Count hospital systems that buy vendor-credentialing audits through a published procurement channel, with prices paid and frequency",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "Meridian purchase order",
+          "status": "EVIDENCED",
+          "value": 480000,
+          "unit": "cents",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyers of this kind reachable",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "organisations",
+          "sources": [],
+          "needs": "a counted population beyond one organisation"
+        },
+        {
+          "name": "conversion",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "share",
+          "sources": [],
+          "needs": "a measured close rate on this buyer type"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_9a50f18569b2466aa801#price",
+          "dated": "2026-10-02",
+          "claim": "Meridian's procurement office issued a $4,800 purchase order for a vendor-credentialing audit.",
+          "population": "Meridian Regional Health System (one organisation)",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "MARKET_VOLUME: the only buyer is one organisation whose single evidenced purchase is $4,800 (already awarded 2026-10-02); no population of buyers exists on the record to carry $15,000, so the target is out of reach even at a 100% close.",
+        "resolution": "Research a counted population of hospital systems procuring vendor-credentialing audits (published procurement portals/award notices with prices); at $4,800 per deal, at least 4 settled deals in 45 days are needed. Otherwise the owner lowers the target to what one buyer can carry."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_9a50f18569b2466aa801",
+          "missing": [
+            "CONVERSION",
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "revisionId": "rev_3d9253d9fef0_df025a",
+      "digest": "3d9253d9fef0247c9631eb0a",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_dac1383cfd1b462a9d51/author-4",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:18:08.794Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_3d9253d9fef0_df025a",
+      "digest": "3d9253d9fef0247c9631eb0a",
+      "contractDigest": "bc8a0c694f1d53b83ecce64e",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 15000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 4800). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 9116× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 4760× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Vendor-credentialing audit workbook for Meridian Regional Health Syste\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_9a50f18569b2466aa801"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Vendor-credentialing audit workbook for Meridian Regional Health System\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Vendor-credentialing audit workbook for Meridian Regional Health System\"",
+            "owner": "PERSON",
+            "cost": 40
+          },
+          {
+            "label": "Collect payment for \"Vendor-credentialing audit workbook for Meridian Regional Health System\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 15000 USD still needed — the openings held reach at most 4800 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_9a50f18569b2466aa801",
+            "title": "Vendor-credentialing audit workbook for Meridian Regional Health System",
+            "missing": [
+              "CONVERSION"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 4800,
+            "potentialReach": 4800,
+            "card": {
+              "payer": "Meridian Regional Health System",
+              "reachableChannel": "Meridian's procurement office (published email)",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:16.280Z",
+              "offerScope": "Vendor-credentialing audit workbook for Meridian Regional Health System",
+              "priceCents": 480000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "hospital vendor credentialing",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Vendor-credentialing audit workbook for Meridian Regional Health System to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$40",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Meridian Regional Health System",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Meridian Regional Health System's procurement office issued a $4,800 purchase order for a vendor-credentialing audit (award notice, 2026-10-02).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "30 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_d763e3ddd26c436aab0a",
+          "cnd_f6cffb457e9941b58ce7"
+        ],
+        "scope": {
+          "targetCents": 1500000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:15:48.093Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_3d9253d9fef0_df025a",
+        "revisionDigest": "3d9253d9fef0247c9631eb0a",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dac1383cfd1b462a9d51/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_bbfe027b0f004142886a/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the only buyer is one organisation (Meridian) with one evidenced $4,800 PO; one organisation is not a population, and $15,000 needs at least 4 deals (15,000/4,800=3.1). Gap correctly named as missing MARKET_VOLUME evidence, constraints empty.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:41.813Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_3d9253d9fef0_df025a",
+      "digest": "3d9253d9fef0247c9631eb0a",
+      "contractDigest": "bc8a0c694f1d53b83ecce64e",
+      "plan": {
+        "goalId": "wst_9cfe7e3b133a45fb8d59",
+        "contractDigest": "bc8a0c694f1d53b83ecce64e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: one hospital at $4,800 cannot carry $15,000",
+          "opportunityIds": [],
+          "why": "The single opening is one organisation (Meridian Regional Health System) whose evidenced price is one $4,800 purchase order already issued on 2026-10-02. Even if Meridian bought again, one buyer at $4,800 reaches at most a third of the $15,000 target; no population of similar buyers, and no conversion, is evidenced."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the credentialing audit workbook to Meridian",
+            "why": "At most $4,800 from one buyer; the PO was already awarded on 2026-10-02, so a further purchase is not evidenced; 30-day time to cash."
+          },
+          {
+            "title": "Sell the same workbook to other hospital systems",
+            "why": "No counted population of hospitals buying this, no price paid by any other buyer, no conversion rate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count hospital systems that buy vendor-credentialing audits through a published procurement channel, with prices paid and frequency",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Meridian purchase order",
+            "status": "EVIDENCED",
+            "value": 480000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers of this kind reachable",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "organisations",
+            "sources": [],
+            "needs": "a counted population beyond one organisation"
+          },
+          {
+            "name": "conversion",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share",
+            "sources": [],
+            "needs": "a measured close rate on this buyer type"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_9a50f18569b2466aa801#price",
+            "dated": "2026-10-02",
+            "claim": "Meridian's procurement office issued a $4,800 purchase order for a vendor-credentialing audit.",
+            "population": "Meridian Regional Health System (one organisation)",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: the only buyer is one organisation whose single evidenced purchase is $4,800 (already awarded 2026-10-02); no population of buyers exists on the record to carry $15,000, so the target is out of reach even at a 100% close.",
+          "resolution": "Research a counted population of hospital systems procuring vendor-credentialing audits (published procurement portals/award notices with prices); at $4,800 per deal, at least 4 settled deals in 45 days are needed. Otherwise the owner lowers the target to what one buyer can carry."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9a50f18569b2466aa801",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "revisionId": "rev_3d9253d9fef0_df025a",
+        "digest": "3d9253d9fef0247c9631eb0a",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dac1383cfd1b462a9d51/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:08.794Z"
+      },
+      "review": {
+        "revisionId": "rev_3d9253d9fef0_df025a",
+        "revisionDigest": "3d9253d9fef0247c9631eb0a",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dac1383cfd1b462a9d51/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_bbfe027b0f004142886a/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the only buyer is one organisation (Meridian) with one evidenced $4,800 PO; one organisation is not a population, and $15,000 needs at least 4 deals (15,000/4,800=3.1). Gap correctly named as missing MARKET_VOLUME evidence, constraints empty.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:41.813Z"
+      },
+      "at": "2026-11-27T00:23:39.024Z"
+    },
+    "staleFinal": null
+  }
+}
