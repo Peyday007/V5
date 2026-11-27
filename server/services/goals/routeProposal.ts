@@ -578,7 +578,7 @@ export function parseDirections(text: string, ctx: RouteContext): { directions: 
     }
     const mechanism = str(r['mechanism'], 40)?.toUpperCase();
     if (!mechanism || !(CASH_MECHANISMS as readonly string[]).includes(mechanism)) {
-      reject(`mechanism "${mechanism ?? ''}" is not one Brain records`, 'MECHANISM');
+      reject(`mechanism "${mechanism ?? ''}" is not one Brain records; use one of ${CASH_MECHANISMS.join(', ')}`, 'MECHANISM');
       continue;
     }
     const performerRaw = str(r['performer'], 20)?.toUpperCase();
@@ -929,7 +929,7 @@ export function parseRoutes(obj: Record<string, unknown> | null, ctx: RouteConte
     }
     const mechanism = str(r['mechanism'], 40)?.toUpperCase();
     if (!mechanism || !(CASH_MECHANISMS as readonly string[]).includes(mechanism)) {
-      reject(`mechanism "${mechanism ?? ''}" is not one Brain records`, 'MECHANISM');
+      reject(`mechanism "${mechanism ?? ''}" is not one Brain records; use one of ${CASH_MECHANISMS.join(', ')}`, 'MECHANISM');
       continue;
     }
     const price = amount(r['price']);

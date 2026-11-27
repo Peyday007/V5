@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "filed": [],
+    "refused": [
+      {
+        "title": "retry probe: wrong mechanism",
+        "why": "mechanism \"SERVICE\" is not one Brain records; use one of EXISTING_BUYING_SIGNAL, DIAGNOSTIC_OPPORTUNITY, EXPLICIT_PAID_REQUEST, TEMPORARY_EXPLOIT, SUPPLY_DEMAND_MISMATCH, PAIN_TRIGGERED_IMPLEMENTATION, RESALE_OR_ASSET, INFORMATION_ASYMMETRY, PRODUCTIZED_SERVICE, CAPABILITY_ARBITRAGE, SUBCONTRACTED_FULFILMENT, JIGSAW_COMBINATION, OTHER",
+        "rule": "MECHANISM"
+      }
+    ]
+  }
+}

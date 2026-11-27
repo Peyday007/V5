@@ -1,0 +1,1920 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_84e874d30c5a4c78bb13",
+      "words": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days. Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement and no owner physical work. Do not use the owner's existing businesses or past campaign history as evidence.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1000000,
+        "currency": "USD",
+        "metric": "COLLECTED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": 200000,
+        "preProofSpendCapCents": 30000,
+        "exposureCapCents": null,
+        "proofCondition": "proof of demand: at least one paying customer commitment (paid order or signed paid commitment) from a buyer outside the owner's existing businesses",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "FORBIDDEN",
+        "exclusions": [],
+        "evidenceExclusions": [
+          "the owner's existing businesses",
+          "the owner's past campaign history"
+        ]
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "0a6f43d6c143a87125d46895"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_84e874d30c5a4c78bb13",
+        "contractDigest": "0a6f43d6c143a87125d46895",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell Textbroker-written SEO blog packages to US small businesses by cold email, gated by a USD 300 demand test",
+          "opportunityIds": [
+            "cop_8edcdc6ebf3547c8aa56"
+          ],
+          "why": "Ten USD 1,000 packages reach the USD 10,000 target; fulfilment is subcontracted to Textbroker so the owner does no work; buyers pay up front so receipts settle well inside 30 days. The price sits at or below the 2025 EFA work-for-hire blog median (25-45 cents/word, about USD 1,000-1,800 for 4,000 words). Whether SMBs reply and buy is unknown and only a live test can measure it."
+        },
+        "alternatives": [
+          {
+            "title": "Print-on-demand holiday t-shirts on Etsy via Printful",
+            "why": "About 360 orders at USD 28 needed in 30 days from a brand-new shop with no reviews; margin after Printful's USD 11.92 base, shipping and Etsy fees is thin and ad spend under a USD 300 pre-proof cap cannot plausibly buy that volume; demand and price unevidenced."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "TEST",
+            "label": "Set up two sending domains and an Instantly plan, build a list of 1,000 US SMB marketing contacts, and send a 3-step cold email offering the 4-post package at USD 1,000 paid up front",
+            "performer": "BRAIN",
+            "costCents": 15000,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the package at USD 1,000 with a sample post",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 100000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Close with a paid invoice (card) before any order is placed",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "closeRate"
+            ],
+            "priceCents": 100000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "ORDER",
+            "label": "Order 4 x 1,000-word posts per paid package from Textbroker 4-star writers",
+            "performer": "Textbroker",
+            "costCents": 150000,
+            "day": 11,
+            "dependsOn": "s3",
+            "evidence": [
+              "textbrokerCost"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Textbroker",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Textbroker writers deliver; Brain quality-checks and forwards the posts",
+            "performer": "Textbroker",
+            "costCents": null,
+            "day": 16,
+            "dependsOn": "s4",
+            "evidence": [],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Textbroker",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "COLLECT",
+            "label": "Payment collected up front at close via card processor",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 12,
+            "dependsOn": "s3",
+            "evidence": [],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Domains, Instantly plan and contact list for the demand test",
+            "stepId": "s1"
+          },
+          {
+            "day": 11,
+            "kind": "SPEND",
+            "amountCents": 150000,
+            "label": "Textbroker orders for 10 packages (USD 150 each)",
+            "stepId": "s4"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 1000000,
+            "label": "10 packages x USD 1,000 paid up front",
+            "settlesDay": 14,
+            "stepId": "s6"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 100000,
+            "unit": "cents per package",
+            "sources": [
+              "s_efa"
+            ],
+            "needs": null
+          },
+          {
+            "name": "closeRate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid packages per contacted SMB",
+            "sources": [],
+            "needs": "live cold-email test"
+          },
+          {
+            "name": "textbrokerCost",
+            "status": "ESTIMATE",
+            "value": 15000,
+            "unit": "cents per package",
+            "sources": [],
+            "needs": "Textbroker's own client price list"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_efa",
+            "url": "https://brain.local/card/cop_8edcdc6ebf3547c8aa56#revenueRange",
+            "dated": "2026-05-04",
+            "claim": "Clients were charged 25-45 cents/word for work-for-hire blog posts in 2025 (EFA survey)",
+            "population": "clients of EFA member freelancers",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": {
+          "proof": "At least 1 paid USD 1,000 package from a new SMB buyer by day 10 out of 1,000 contacted",
+          "stop": [
+            "no paid package by day 10 with USD 150 spent",
+            "reply rate below 1% after 1,000 sends"
+          ],
+          "continue": [
+            "1+ paid package by day 10: scale sends to 5,000 contacts within the USD 2,000 total cap"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "missing": [
+              "CURRENT_DEMAND",
+              "CONVERSION",
+              "ECONOMICS"
+            ]
+          },
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "why": "needs ~360 retail orders from a new Etsy shop in 30 days; price and demand unevidenced; ad budget under the USD 300 pre-proof cap cannot buy that volume"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "deals": 10,
+            "price": 1000,
+            "directCost": 150,
+            "capital": 150
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "CONVERSION",
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_ddf08476566d_d8a4c1",
+        "digest": "ddf08476566d6925dd797eaa",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:50:04.334Z"
+      },
+      {
+        "goalId": "wst_84e874d30c5a4c78bb13",
+        "contractDigest": "0a6f43d6c143a87125d46895",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell Textbroker-written SEO blog packages to US small businesses by cold email, gated by a USD 300 demand test",
+          "opportunityIds": [
+            "cop_8edcdc6ebf3547c8aa56"
+          ],
+          "why": "Ten USD 1,000 packages reach the USD 10,000 target; fulfilment is subcontracted to Textbroker so the owner does no work; buyers pay up front, so no supplier money is committed before a buyer pays. Every chain link is unestablished today: the USD 1,000 price is an estimate below the 2025 EFA work-for-hire blog range (25-45 cents/word, about USD 1,000-1,800 for 4,000 words, but for EFA members' clients, not SMBs), and demand, close rate, Textbroker's cost and settlement are measured only by the USD 150 live test, inside the USD 300 pre-proof cap."
+        },
+        "alternatives": [
+          {
+            "title": "Print-on-demand holiday t-shirts on Etsy via Printful",
+            "why": "About 360 orders at USD 28 needed in 30 days from a brand-new shop with no reviews; margin after Printful's USD 11.92 base, shipping and Etsy fees is thin and ad spend under a USD 300 pre-proof cap cannot plausibly buy that volume; demand and price unevidenced."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "TEST",
+            "label": "Set up two sending domains and an Instantly plan, build a list of 1,000 US SMB marketing contacts, and send a 3-step cold email offering the 4-post package at USD 1,000 paid up front",
+            "performer": "BRAIN",
+            "costCents": 15000,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "closeRate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the package at USD 1,000 with a sample post",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 100000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Close with a paid invoice (card) before any order is placed",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "closeRate"
+            ],
+            "priceCents": 100000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "ORDER",
+            "label": "Order 4 x 1,000-word posts per paid package from Textbroker 4-star writers",
+            "performer": "Textbroker",
+            "costCents": 150000,
+            "day": 11,
+            "dependsOn": "s3",
+            "evidence": [
+              "textbrokerCost"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Textbroker",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Textbroker writers deliver; Brain quality-checks and forwards the posts",
+            "performer": "Textbroker",
+            "costCents": null,
+            "day": 16,
+            "dependsOn": "s4",
+            "evidence": [
+              "textbrokerCost",
+              "fulfilmentConfirmed"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Textbroker",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "COLLECT",
+            "label": "Payment collected up front at close via card processor",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 12,
+            "dependsOn": "s3",
+            "evidence": [
+              "closeRate",
+              "paymentSettlementDays"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Domains, Instantly plan and contact list for the demand test",
+            "stepId": "s1"
+          },
+          {
+            "day": 11,
+            "kind": "SPEND",
+            "amountCents": 150000,
+            "label": "Textbroker orders for 10 packages (USD 150 each)",
+            "stepId": "s4"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 1000000,
+            "label": "10 packages x USD 1,000 paid up front",
+            "settlesDay": 14,
+            "stepId": "s6"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "ESTIMATE",
+            "value": 100000,
+            "unit": "cents per package",
+            "sources": [
+              "s_efa"
+            ],
+            "needs": "buyers paying it in the live test; EFA rates are for EFA members' clients, not US SMBs specifically"
+          },
+          {
+            "name": "closeRate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid packages per contacted SMB",
+            "sources": [],
+            "needs": "live cold-email test"
+          },
+          {
+            "name": "textbrokerCost",
+            "status": "ESTIMATE",
+            "value": 15000,
+            "unit": "cents per package",
+            "sources": [],
+            "needs": "Textbroker's own client price shown at order checkout on a test order"
+          },
+          {
+            "name": "fulfilmentConfirmed",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "test package delivered by Textbroker to spec",
+            "sources": [],
+            "needs": "one Textbroker order placed for the first paid buyer"
+          },
+          {
+            "name": "paymentSettlementDays",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days from card payment to usable cash",
+            "sources": [],
+            "needs": "first paid invoice settles through the card processor"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_efa",
+            "url": "https://brain.local/card/cop_8edcdc6ebf3547c8aa56#revenueRange",
+            "dated": "2026-05-04",
+            "claim": "Clients were charged 25-45 cents/word for work-for-hire blog posts in 2025 (EFA survey)",
+            "population": "clients of EFA member freelancers",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": {
+          "proof": "At least 1 paid USD 1,000 package from a new SMB buyer (not from the owner's businesses) by day 10 out of 1,000 contacted, its Textbroker order placed at <= USD 250 and its card payment settled",
+          "stop": [
+            "no paid package by day 10 with USD 150 spent",
+            "positive reply rate below 1% after 1,000 sends",
+            "Textbroker cost per package above USD 250 or delivery not to spec"
+          ],
+          "continue": [
+            "1+ paid package by day 10: scale sends to 5,000 contacts within the USD 2,000 total cap, ordering from Textbroker only after each buyer pays"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "why": "needs ~360 retail orders from a new Etsy shop in 30 days; price and demand unevidenced; ad budget under the USD 300 pre-proof cap cannot buy that volume"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "deals": 10,
+            "price": 1000,
+            "directCost": 150,
+            "capital": 150
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_638aed8b1c5d_a86522",
+        "digest": "638aed8b1c5d1819c52fee68",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:50:25.862Z"
+      },
+      {
+        "goalId": "wst_84e874d30c5a4c78bb13",
+        "contractDigest": "0a6f43d6c143a87125d46895",
+        "parentRevisionId": "rev_638aed8b1c5d_a86522",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan yet: measure whether US SMBs prepay USD 1,000 for a subcontracted 4-post SEO blog package, and what Textbroker charges to write it",
+          "opportunityIds": [],
+          "why": "Neither admitted route has an established price, buyer signal, fulfilment cost or close rate. The only price research (EFA 2025 blog rates) was rejected by the evidence gate on population and definitions; Textbroker's own client price list is not publicly reachable (textbroker.com/pricing returns 404) and third-party figures for 4-star work conflict (about 3.2-5 cents/word). Brain's planner reads NOT_VIABLE. The blog-package route is the one a USD 150 experiment inside the USD 300 pre-proof cap can decide; Etsy POD would need ~360 orders from a new shop."
+        },
+        "alternatives": [
+          {
+            "title": "CONDITIONAL resale of Textbroker-written blog packages at USD 1,000 (revision rev_638aed8b1c5d_a86522)",
+            "why": "Withdrawn: it rested on six unestablished links, not just a close rate; price and supplier cost are not evidenced."
+          },
+          {
+            "title": "Print-on-demand holiday t-shirts on Etsy via Printful",
+            "why": "~360 orders at USD 28 needed in 30 days from a new shop; Printful's own page lists a USD 11.92 base before shipping and Etsy fees; demand and price unevidenced, and USD 300 of ads cannot plausibly buy that volume."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Open a Textbroker client account and read the checkout price for four 1,000-word 4-star posts (no deposit placed); record per-word price, processing fee and stated turnaround",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "textbrokerCost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Register two sending domains, start an Instantly plan with 14-day warm-up, and build a 1,000-contact list of US SMBs that publish a blog",
+            "performer": "BRAIN",
+            "costCents": 15000,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "closeRate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OFFER",
+            "label": "After warm-up, send a 3-step offer: four 1,000-word SEO posts for USD 1,000 paid up front by card, with a free sample paragraph",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 15,
+            "dependsOn": "t1",
+            "evidence": [
+              "closeRate",
+              "price"
+            ],
+            "priceCents": 100000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "OTHER",
+            "label": "Read replies and paid checkouts through day 22 and decide stop/continue",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 22,
+            "dependsOn": "t2",
+            "evidence": [
+              "closeRate"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Two domains (~USD 24), Instantly plan (~USD 37), contact list (~USD 89)",
+            "stepId": "t1"
+          }
+        ],
+        "proofDay": 22,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents per package US SMBs prepay",
+            "sources": [],
+            "needs": "paid checkouts in the live offer test"
+          },
+          {
+            "name": "closeRate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid packages per 1,000 contacted SMBs",
+            "sources": [],
+            "needs": "live offer test"
+          },
+          {
+            "name": "textbrokerCost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents per 4,000-word package",
+            "sources": [],
+            "needs": "Textbroker checkout price (third-party figures conflict: ~3.2-5 cents/word)"
+          }
+        ],
+        "sources": [],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that US small businesses pay any stated price for an outsourced blog package (OFFER_AND_PRICE), no buying signal from them (CURRENT_DEMAND), and no established supplier cost per package (ECONOMICS): the EFA price claim was rejected on population, and Textbroker's client price is unpublished and contradicted by third parties.",
+          "resolution": "Run the USD 150 experiment inside the USD 300 pre-proof cap: read Textbroker's checkout price (no spend), warm two domains for 14 days, then offer 1,000 US SMBs four SEO posts for USD 1,000 prepaid. Proof: >=1 paid checkout by day 22 and a Textbroker cost <= USD 250 per package. Stop: zero paid checkouts and positive replies under 1% by day 22, or Textbroker cost above USD 250. Continue: rebuild a plan from the measured price, close rate and cost; note that with proof on day 22 only ~8 days remain, so the USD 10,000 within 30 days needs about 10 prepaid packages in that span.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "ECONOMICS"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Price (,000/package) has no accepted evidence; ,000 is at the bottom edge of the EFA range, not below it.",
+            "resolution": "Accepted. The EFA claim was rejected by the gate and is no longer cited; price is UNKNOWN and OFFER_AND_PRICE is a decisive link of the no-plan."
+          },
+          {
+            "finding": "Textbroker cost and fulfilment are researchable now from Textbroker's published client prices.",
+            "resolution": "Accepted in part: I searched; textbroker.com/pricing returns 404 and third-party figures conflict (3.2-5 cents/word for 4-star), so the cost is still unestablished. Step r1 reads it from Textbroker's own checkout at no spend before any offer is sent; ECONOMICS is a decisive link."
+          },
+          {
+            "finding": "Cash ledger books all ten receipts on the proof day and needs a stated close rate.",
+            "resolution": "Accepted. The plan is now NO_PLAN; no receipts are booked, and the close rate is UNKNOWN, measured by the experiment."
+          },
+          {
+            "finding": "New sending domains need warm-up; a day-1 send of 1,000 is not deliverable.",
+            "resolution": "Accepted. Domains warm for 14 days; offers go out day 15 and the proof day is 22, with the consequence for the 30-day target stated in the resolution."
+          },
+          {
+            "finding": "Ledger omits card fees and scale-up costs.",
+            "resolution": "Accepted. Only the USD 150 experiment is planned and booked; card fees (~3%) and scale-up sends are to be costed in the plan rebuilt after proof, inside the USD 2,000 cap."
+          },
+          {
+            "finding": "Executor capabilities SEND_A_MESSAGE/ISSUE_AN_INVOICE are NOT_CONNECTED and PAY_A_SUPPLIER NOT_DECLARED.",
+            "resolution": "Accepted. The experiment needs SEND_A_MESSAGE and READ_REPLIES (an Instantly connection on the new domains) and a card checkout link; no supplier payment is made in the experiment. Connecting them is the first step of t1."
+          },
+          {
+            "finding": "The Etsy alternative's exclusion arithmetic is right.",
+            "resolution": "Agreed; kept excluded with the same reason."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "revenueRange",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "directCosts",
+              "brain:ECONOMICS"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "brain:FULFILMENT"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "why": "needs ~360 retail orders at USD 28 from a new Etsy shop in 30 days; price and demand unevidenced; USD 300 of pre-proof ad spend cannot plausibly buy that volume"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "ECONOMICS",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d3e0d4b02959_317031",
+        "digest": "d3e0d4b02959dc0636cebe8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T06:12:16.809Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_84e874d30c5a4c78bb13",
+      "contractDigest": "0a6f43d6c143a87125d46895",
+      "parentRevisionId": "rev_638aed8b1c5d_a86522",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan yet: measure whether US SMBs prepay USD 1,000 for a subcontracted 4-post SEO blog package, and what Textbroker charges to write it",
+        "opportunityIds": [],
+        "why": "Neither admitted route has an established price, buyer signal, fulfilment cost or close rate. The only price research (EFA 2025 blog rates) was rejected by the evidence gate on population and definitions; Textbroker's own client price list is not publicly reachable (textbroker.com/pricing returns 404) and third-party figures for 4-star work conflict (about 3.2-5 cents/word). Brain's planner reads NOT_VIABLE. The blog-package route is the one a USD 150 experiment inside the USD 300 pre-proof cap can decide; Etsy POD would need ~360 orders from a new shop."
+      },
+      "alternatives": [
+        {
+          "title": "CONDITIONAL resale of Textbroker-written blog packages at USD 1,000 (revision rev_638aed8b1c5d_a86522)",
+          "why": "Withdrawn: it rested on six unestablished links, not just a close rate; price and supplier cost are not evidenced."
+        },
+        {
+          "title": "Print-on-demand holiday t-shirts on Etsy via Printful",
+          "why": "~360 orders at USD 28 needed in 30 days from a new shop; Printful's own page lists a USD 11.92 base before shipping and Etsy fees; demand and price unevidenced, and USD 300 of ads cannot plausibly buy that volume."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Open a Textbroker client account and read the checkout price for four 1,000-word 4-star posts (no deposit placed); record per-word price, processing fee and stated turnaround",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "textbrokerCost"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Register two sending domains, start an Instantly plan with 14-day warm-up, and build a 1,000-contact list of US SMBs that publish a blog",
+          "performer": "BRAIN",
+          "costCents": 15000,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "closeRate"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t2",
+          "kind": "OFFER",
+          "label": "After warm-up, send a 3-step offer: four 1,000-word SEO posts for USD 1,000 paid up front by card, with a free sample paragraph",
+          "performer": "BRAIN",
+          "costCents": null,
+          "day": 15,
+          "dependsOn": "t1",
+          "evidence": [
+            "closeRate",
+            "price"
+          ],
+          "priceCents": 100000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t3",
+          "kind": "OTHER",
+          "label": "Read replies and paid checkouts through day 22 and decide stop/continue",
+          "performer": "BRAIN",
+          "costCents": null,
+          "day": 22,
+          "dependsOn": "t2",
+          "evidence": [
+            "closeRate"
+          ],
+          "executor": {
+            "operation": "PLAN_DECISION",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 15000,
+          "label": "Two domains (~USD 24), Instantly plan (~USD 37), contact list (~USD 89)",
+          "stepId": "t1"
+        }
+      ],
+      "proofDay": 22,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents per package US SMBs prepay",
+          "sources": [],
+          "needs": "paid checkouts in the live offer test"
+        },
+        {
+          "name": "closeRate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "paid packages per 1,000 contacted SMBs",
+          "sources": [],
+          "needs": "live offer test"
+        },
+        {
+          "name": "textbrokerCost",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents per 4,000-word package",
+          "sources": [],
+          "needs": "Textbroker checkout price (third-party figures conflict: ~3.2-5 cents/word)"
+        }
+      ],
+      "sources": [],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "No evidence that US small businesses pay any stated price for an outsourced blog package (OFFER_AND_PRICE), no buying signal from them (CURRENT_DEMAND), and no established supplier cost per package (ECONOMICS): the EFA price claim was rejected on population, and Textbroker's client price is unpublished and contradicted by third parties.",
+        "resolution": "Run the USD 150 experiment inside the USD 300 pre-proof cap: read Textbroker's checkout price (no spend), warm two domains for 14 days, then offer 1,000 US SMBs four SEO posts for USD 1,000 prepaid. Proof: >=1 paid checkout by day 22 and a Textbroker cost <= USD 250 per package. Stop: zero paid checkouts and positive replies under 1% by day 22, or Textbroker cost above USD 250. Continue: rebuild a plan from the measured price, close rate and cost; note that with proof on day 22 only ~8 days remain, so the USD 10,000 within 30 days needs about 10 prepaid packages in that span.",
+        "decisiveLinks": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Price (,000/package) has no accepted evidence; ,000 is at the bottom edge of the EFA range, not below it.",
+          "resolution": "Accepted. The EFA claim was rejected by the gate and is no longer cited; price is UNKNOWN and OFFER_AND_PRICE is a decisive link of the no-plan."
+        },
+        {
+          "finding": "Textbroker cost and fulfilment are researchable now from Textbroker's published client prices.",
+          "resolution": "Accepted in part: I searched; textbroker.com/pricing returns 404 and third-party figures conflict (3.2-5 cents/word for 4-star), so the cost is still unestablished. Step r1 reads it from Textbroker's own checkout at no spend before any offer is sent; ECONOMICS is a decisive link."
+        },
+        {
+          "finding": "Cash ledger books all ten receipts on the proof day and needs a stated close rate.",
+          "resolution": "Accepted. The plan is now NO_PLAN; no receipts are booked, and the close rate is UNKNOWN, measured by the experiment."
+        },
+        {
+          "finding": "New sending domains need warm-up; a day-1 send of 1,000 is not deliverable.",
+          "resolution": "Accepted. Domains warm for 14 days; offers go out day 15 and the proof day is 22, with the consequence for the 30-day target stated in the resolution."
+        },
+        {
+          "finding": "Ledger omits card fees and scale-up costs.",
+          "resolution": "Accepted. Only the USD 150 experiment is planned and booked; card fees (~3%) and scale-up sends are to be costed in the plan rebuilt after proof, inside the USD 2,000 cap."
+        },
+        {
+          "finding": "Executor capabilities SEND_A_MESSAGE/ISSUE_AN_INVOICE are NOT_CONNECTED and PAY_A_SUPPLIER NOT_DECLARED.",
+          "resolution": "Accepted. The experiment needs SEND_A_MESSAGE and READ_REPLIES (an Instantly connection on the new domains) and a card checkout link; no supplier payment is made in the experiment. Connecting them is the first step of t1."
+        },
+        {
+          "finding": "The Etsy alternative's exclusion arithmetic is right.",
+          "resolution": "Agreed; kept excluded with the same reason."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "price",
+            "revenueRange",
+            "brain:OFFER_AND_PRICE"
+          ]
+        },
+        {
+          "condition": 1,
+          "decision": "ACCEPTED",
+          "records": [
+            "directCosts",
+            "brain:ECONOMICS"
+          ]
+        },
+        {
+          "condition": 2,
+          "decision": "ACCEPTED",
+          "records": [
+            "fulfillment",
+            "brain:FULFILMENT"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_50f3ff3566c846c7b6b4",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_50f3ff3566c846c7b6b4",
+          "why": "needs ~360 retail orders at USD 28 from a new Etsy shop in 30 days; price and demand unevidenced; USD 300 of pre-proof ad spend cannot plausibly buy that volume"
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "ECONOMICS",
+        "CONVERSION"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_d3e0d4b02959_317031",
+      "digest": "d3e0d4b02959dc0636cebe8e",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T06:12:16.809Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_d3e0d4b02959_317031",
+      "digest": "d3e0d4b02959dc0636cebe8e",
+      "contractDigest": "0a6f43d6c143a87125d46895",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 15000,
+        "committedOpenCents": 0,
+        "preProofCents": 15000,
+        "maxExposureCents": 15000,
+        "minCashCents": 185000,
+        "minCashDay": 1,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": -15000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 10000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_8edcdc6ebf3547c8aa56",
+          "cop_50f3ff3566c846c7b6b4"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 10000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "title": "Resold SEO blog content packages for US small businesses, written by Textbroker writers",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1000,
+            "card": {
+              "payer": "US small businesses that buy outsourced blog content (marketing managers / owners)",
+              "reachableChannel": "cold email from a new sending domain (Instantly) to publicly listed SMB marketing contacts",
+              "offerScope": "Four 1,000-word SEO blog posts per month, ordered from Textbroker 4-star writers and quality-checked by Brain",
+              "priceCents": 100000,
+              "currency": "USD",
+              "fulfillmentOwner": "Textbroker",
+              "peakFundingCents": 30000,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "unspecified",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: cold email from a new sending domain (Instantly) to publicly listed SMB marketin"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "costs or money tied up are not established"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "cold email from a new sending domain (Instantly) to publicly listed SMB marketing contacts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Four 1,000-word SEO blog posts per month, ordered from Textbroker 4-star writers and quality-checked by Brain to US small businesses that buy outsourced blog content (marketing managers / owners), reached through cold email from a new sending domain (Instantly) to publicly listed SMB marketing contacts, at $1,000; Textbroker delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Textbroker.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Four 1,000-word SEO blog posts per month, ordered from Textbroker 4-star writers and quality-checked by Brain",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US small businesses that buy outsourced blog content (marketing managers / owners)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,000",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,000",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "title": "Print-on-demand holiday apparel on Etsy fulfilled by Printful",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 28,
+            "card": {
+              "payer": "Etsy consumer shoppers buying holiday gifts",
+              "reachableChannel": "Etsy marketplace listings plus Etsy Ads",
+              "offerScope": "Brain-designed niche holiday t-shirts printed and shipped by Printful",
+              "priceCents": 2800,
+              "currency": "USD",
+              "fulfillmentOwner": "Printful",
+              "peakFundingCents": 30000,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "unspecified",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Etsy marketplace listings plus Etsy Ads"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 28 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 12, tied up 300"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "7 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Etsy marketplace listings plus Etsy Ads",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Brain-designed niche holiday t-shirts printed and shipped by Printful to Etsy consumer shoppers buying holiday gifts, reached through Etsy marketplace listings plus Etsy Ads, at $28; Printful delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$12",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Printful.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Brain-designed niche holiday t-shirts printed and shipped by Printful",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Etsy consumer shoppers buying holiday gifts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$28",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$28",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 1000000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T06:09:26.955Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_638aed8b1c5d_a86522",
+        "revisionDigest": "638aed8b1c5d1819c52fee68",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_459d4643f5d94e0c8f65/fleet-worker",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "CONDITIONAL is not yet justified. A conditional plan must rest on an unknown only a live test measures (the close rate); this one leaves six links unestablished (demand, price, conversion, fulfilment, economics, settlement), several of which desk research decides before any money is spent: Textbroker publishes its own per-word client prices (so the $150/package cost and fulfilment are knowable now), and what US SMBs pay for outsourced SEO blog packages is published by agencies and marketplaces. The only price source cited (EFA work-for-hire blog rates) was rejected by Brain's evidence gate this hour on population and definitions, and every card fact is a RECOMMENDATION. Brain's planner reads NOT_VIABLE. The schedule is also not executable as written: brand-new sending domains cannot send 1,000 cold emails on day 1 without a warm-up, which pushes the day-10 proof later. Recomputed: 10 x $1,000 = $10,000; spend $150 + 10 x $150 = $1,650 (inside the $2,000 cap; pre-proof $150 inside the $300 cap), but the ledger omits card-processing fees (~3%, ~$300) and the cost of the scale-up sends the continue rule calls for.",
+        "findings": [
+          "Price ($1,000/package) has no accepted evidence: the EFA claim was rejected (population: EFA members' clients, not US SMBs; definitions: per-word freelancer rates, not a content-mill package). At 25-45 cents/word x 4,000 words the EFA range is $1,000-1,800, so $1,000 is at its bottom edge, not 'below' it as the strategy says.",
+          "Textbroker cost and fulfilment are treated as live-test unknowns but are researchable now from Textbroker's published client prices; research them before calling the plan CONDITIONAL.",
+          "Cash ledger books all ten $1,000 receipts on day 10 (the proof day), while the validation says only 1 paid package is needed by day 10 and sends are scaled to 5,000 contacts afterwards; the COLLECT step is day 12 and settlement day 14. The receipts must be spread over the scale-up, and the ten closes need a stated close rate (10 paid of 1,000-5,000 cold contacts = 0.2-1%, at $1,000 paid up front) that is unevidenced.",
+          "New sending domains need warm-up before volume cold email; a day-1 send of 1,000 is not deliverable as planned, and the proof day should move accordingly (still inside 30 days?).",
+          "Ledger omits card-processor fees and the extra domains/list/Instantly costs of scaling to 5,000 contacts; maxExposure is $1,650 with no exposure cap, but the total spend must be shown inside $2,000 including those.",
+          "Executor capabilities SEND_A_MESSAGE/ISSUE_AN_INVOICE are NOT_CONNECTED and PAY_A_SUPPLIER is NOT_DECLARED; the plan should name how Brain gets each before day 1.",
+          "The Etsy alternative's exclusion arithmetic (about 360 orders at $28 = $10,080) is right; the excluded reason is reasonable."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T06:10:16.137Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The card's price is a RECOMMENDATION ($1,000) and the only revenueRange research was rejected by the gate; ten sales at an unevidenced price cannot carry the $10,000 target."
+          },
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "link": "ECONOMICS",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "directCosts",
+            "why": "No EVIDENCE fact gives Textbroker's cost per package; the $150 figure and the $250 stop threshold rest on nothing yet, and they decide margin and total spend against the $2,000 cap."
+          },
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "link": "FULFILMENT",
+            "basis": "EVIDENCE",
+            "field": "fulfillment",
+            "why": "Fulfilment by Textbroker is only a RECOMMENDATION; whether Textbroker 4-star writers deliver four 1,000-word SEO posts within the 5-day window is not established."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_d3e0d4b02959_317031",
+        "revisionDigest": "d3e0d4b02959dc0636cebe8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_459d4643f5d94e0c8f65/fleet-worker",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance and it names the decisive gap correctly as missing evidence, not a false TARGET/CAPITAL constraint: neither card holds an EVIDENCE fact for price, buying signal or supplier cost (every fact is a RECOMMENDATION; the EFA price claim and the Etsy volume claim were both rejected by the gate on population/definitions), and Brain's planner independently reads NOT_VIABLE. The prior review's findings are answered one by one and the three conditions accepted. The experiment is inside every limit: $24 + $37 + $89 = $150 spent day 1, pre-proof $150 <= $300, total $150 <= $2,000, no owner physical work, no use of the owner's businesses or history. The 14-day warm-up is now planned and the consequence (proof day 22 leaves ~8 days for ~10 prepaid $1,000 packages) is stated honestly. No receipts are booked against unknowns. The owner can act on it: it is a bounded test, not a claimed route to $10,000.",
+        "findings": [
+          "Factual error in the strategy: Textbroker does publish client prices — https://www.textbroker.com/clients-prices-conditions (opened 2026-11-27) states OpenOrder 'as little as 2.3 cents per word', TeamOrder 'starting at 3.5 cents/word', plus a $0.50 processing fee per order, commission included. Only /pricing 404s. The 4-star rate should be read from that page's pricing overview now (desk research, no spend), which makes ECONOMICS decidable before step t1 rather than a live-test unknown.",
+          "Brain's nextTest asks to discover and research further openings that can reach $10,000; the no-plan pursues only the one route whose proof lands on day 22. It should also commission discovery of openings with an existing buying signal that can settle inside 30 days, since this test cannot plausibly reach the target in the window even if it proves demand.",
+          "SEND_A_MESSAGE/READ_REPLIES remain NOT_CONNECTED; connecting the Instantly workspace on the new domains is a prerequisite of t1, as the answer says."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T06:13:25.463Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_d3e0d4b02959_317031",
+      "digest": "d3e0d4b02959dc0636cebe8e",
+      "contractDigest": "0a6f43d6c143a87125d46895",
+      "plan": {
+        "goalId": "wst_84e874d30c5a4c78bb13",
+        "contractDigest": "0a6f43d6c143a87125d46895",
+        "parentRevisionId": "rev_638aed8b1c5d_a86522",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan yet: measure whether US SMBs prepay USD 1,000 for a subcontracted 4-post SEO blog package, and what Textbroker charges to write it",
+          "opportunityIds": [],
+          "why": "Neither admitted route has an established price, buyer signal, fulfilment cost or close rate. The only price research (EFA 2025 blog rates) was rejected by the evidence gate on population and definitions; Textbroker's own client price list is not publicly reachable (textbroker.com/pricing returns 404) and third-party figures for 4-star work conflict (about 3.2-5 cents/word). Brain's planner reads NOT_VIABLE. The blog-package route is the one a USD 150 experiment inside the USD 300 pre-proof cap can decide; Etsy POD would need ~360 orders from a new shop."
+        },
+        "alternatives": [
+          {
+            "title": "CONDITIONAL resale of Textbroker-written blog packages at USD 1,000 (revision rev_638aed8b1c5d_a86522)",
+            "why": "Withdrawn: it rested on six unestablished links, not just a close rate; price and supplier cost are not evidenced."
+          },
+          {
+            "title": "Print-on-demand holiday t-shirts on Etsy via Printful",
+            "why": "~360 orders at USD 28 needed in 30 days from a new shop; Printful's own page lists a USD 11.92 base before shipping and Etsy fees; demand and price unevidenced, and USD 300 of ads cannot plausibly buy that volume."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Open a Textbroker client account and read the checkout price for four 1,000-word 4-star posts (no deposit placed); record per-word price, processing fee and stated turnaround",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "textbrokerCost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Register two sending domains, start an Instantly plan with 14-day warm-up, and build a 1,000-contact list of US SMBs that publish a blog",
+            "performer": "BRAIN",
+            "costCents": 15000,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "closeRate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OFFER",
+            "label": "After warm-up, send a 3-step offer: four 1,000-word SEO posts for USD 1,000 paid up front by card, with a free sample paragraph",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 15,
+            "dependsOn": "t1",
+            "evidence": [
+              "closeRate",
+              "price"
+            ],
+            "priceCents": 100000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "OTHER",
+            "label": "Read replies and paid checkouts through day 22 and decide stop/continue",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 22,
+            "dependsOn": "t2",
+            "evidence": [
+              "closeRate"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Two domains (~USD 24), Instantly plan (~USD 37), contact list (~USD 89)",
+            "stepId": "t1"
+          }
+        ],
+        "proofDay": 22,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents per package US SMBs prepay",
+            "sources": [],
+            "needs": "paid checkouts in the live offer test"
+          },
+          {
+            "name": "closeRate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid packages per 1,000 contacted SMBs",
+            "sources": [],
+            "needs": "live offer test"
+          },
+          {
+            "name": "textbrokerCost",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents per 4,000-word package",
+            "sources": [],
+            "needs": "Textbroker checkout price (third-party figures conflict: ~3.2-5 cents/word)"
+          }
+        ],
+        "sources": [],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that US small businesses pay any stated price for an outsourced blog package (OFFER_AND_PRICE), no buying signal from them (CURRENT_DEMAND), and no established supplier cost per package (ECONOMICS): the EFA price claim was rejected on population, and Textbroker's client price is unpublished and contradicted by third parties.",
+          "resolution": "Run the USD 150 experiment inside the USD 300 pre-proof cap: read Textbroker's checkout price (no spend), warm two domains for 14 days, then offer 1,000 US SMBs four SEO posts for USD 1,000 prepaid. Proof: >=1 paid checkout by day 22 and a Textbroker cost <= USD 250 per package. Stop: zero paid checkouts and positive replies under 1% by day 22, or Textbroker cost above USD 250. Continue: rebuild a plan from the measured price, close rate and cost; note that with proof on day 22 only ~8 days remain, so the USD 10,000 within 30 days needs about 10 prepaid packages in that span.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "ECONOMICS"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Price (,000/package) has no accepted evidence; ,000 is at the bottom edge of the EFA range, not below it.",
+            "resolution": "Accepted. The EFA claim was rejected by the gate and is no longer cited; price is UNKNOWN and OFFER_AND_PRICE is a decisive link of the no-plan."
+          },
+          {
+            "finding": "Textbroker cost and fulfilment are researchable now from Textbroker's published client prices.",
+            "resolution": "Accepted in part: I searched; textbroker.com/pricing returns 404 and third-party figures conflict (3.2-5 cents/word for 4-star), so the cost is still unestablished. Step r1 reads it from Textbroker's own checkout at no spend before any offer is sent; ECONOMICS is a decisive link."
+          },
+          {
+            "finding": "Cash ledger books all ten receipts on the proof day and needs a stated close rate.",
+            "resolution": "Accepted. The plan is now NO_PLAN; no receipts are booked, and the close rate is UNKNOWN, measured by the experiment."
+          },
+          {
+            "finding": "New sending domains need warm-up; a day-1 send of 1,000 is not deliverable.",
+            "resolution": "Accepted. Domains warm for 14 days; offers go out day 15 and the proof day is 22, with the consequence for the 30-day target stated in the resolution."
+          },
+          {
+            "finding": "Ledger omits card fees and scale-up costs.",
+            "resolution": "Accepted. Only the USD 150 experiment is planned and booked; card fees (~3%) and scale-up sends are to be costed in the plan rebuilt after proof, inside the USD 2,000 cap."
+          },
+          {
+            "finding": "Executor capabilities SEND_A_MESSAGE/ISSUE_AN_INVOICE are NOT_CONNECTED and PAY_A_SUPPLIER NOT_DECLARED.",
+            "resolution": "Accepted. The experiment needs SEND_A_MESSAGE and READ_REPLIES (an Instantly connection on the new domains) and a card checkout link; no supplier payment is made in the experiment. Connecting them is the first step of t1."
+          },
+          {
+            "finding": "The Etsy alternative's exclusion arithmetic is right.",
+            "resolution": "Agreed; kept excluded with the same reason."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "revenueRange",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "directCosts",
+              "brain:ECONOMICS"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "brain:FULFILMENT"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_8edcdc6ebf3547c8aa56",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_50f3ff3566c846c7b6b4",
+            "why": "needs ~360 retail orders at USD 28 from a new Etsy shop in 30 days; price and demand unevidenced; USD 300 of pre-proof ad spend cannot plausibly buy that volume"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "ECONOMICS",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d3e0d4b02959_317031",
+        "digest": "d3e0d4b02959dc0636cebe8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T06:12:16.809Z"
+      },
+      "review": {
+        "revisionId": "rev_d3e0d4b02959_317031",
+        "revisionDigest": "d3e0d4b02959dc0636cebe8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_459d4643f5d94e0c8f65/fleet-worker",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance and it names the decisive gap correctly as missing evidence, not a false TARGET/CAPITAL constraint: neither card holds an EVIDENCE fact for price, buying signal or supplier cost (every fact is a RECOMMENDATION; the EFA price claim and the Etsy volume claim were both rejected by the gate on population/definitions), and Brain's planner independently reads NOT_VIABLE. The prior review's findings are answered one by one and the three conditions accepted. The experiment is inside every limit: $24 + $37 + $89 = $150 spent day 1, pre-proof $150 <= $300, total $150 <= $2,000, no owner physical work, no use of the owner's businesses or history. The 14-day warm-up is now planned and the consequence (proof day 22 leaves ~8 days for ~10 prepaid $1,000 packages) is stated honestly. No receipts are booked against unknowns. The owner can act on it: it is a bounded test, not a claimed route to $10,000.",
+        "findings": [
+          "Factual error in the strategy: Textbroker does publish client prices — https://www.textbroker.com/clients-prices-conditions (opened 2026-11-27) states OpenOrder 'as little as 2.3 cents per word', TeamOrder 'starting at 3.5 cents/word', plus a $0.50 processing fee per order, commission included. Only /pricing 404s. The 4-star rate should be read from that page's pricing overview now (desk research, no spend), which makes ECONOMICS decidable before step t1 rather than a live-test unknown.",
+          "Brain's nextTest asks to discover and research further openings that can reach $10,000; the no-plan pursues only the one route whose proof lands on day 22. It should also commission discovery of openings with an existing buying signal that can settle inside 30 days, since this test cannot plausibly reach the target in the window even if it proves demand.",
+          "SEND_A_MESSAGE/READ_REPLIES remain NOT_CONNECTED; connecting the Instantly workspace on the new domains is a prerequisite of t1, as the answer says."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T06:13:25.463Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T06:14:32.838Z"
+    },
+    "staleFinal": null
+  }
+}

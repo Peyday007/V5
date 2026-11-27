@@ -1,0 +1,75 @@
+{
+ "published": true,
+ "revisionId": "rev_d3e0d4b02959_317031",
+ "stance": "NO_PLAN",
+ "author": "wkr_0020ac8ce4eb451e8513/j2-app-session",
+ "reviewer": "wkr_459d4643f5d94e0c8f65/fleet-worker",
+ "reviewVerdict": "PASS",
+ "independent": true,
+ "openingsSupplied": 0,
+ "openingsDiscovered": [
+  [
+   "cop_8edcdc6ebf3547c8aa56",
+   "Resold SEO blog content packages for US small businesses, written by Textbroker writers"
+  ],
+  [
+   "cop_50f3ff3566c846c7b6b4",
+   "Print-on-demand holiday apparel on Etsy fulfilled by Printful"
+  ]
+ ],
+ "queueItems": [
+  [
+   "PLAN_VERIFY",
+   "SUCCEEDED",
+   "plan-verify:cnd_55c6346cf2194d95b4aa:1",
+   "2026-11-27T05:49:32.107Z",
+   "2026-11-27T06:08:59.716Z"
+  ],
+  [
+   "PLAN_VERIFY",
+   "SUCCEEDED",
+   "plan-verify:cnd_fc0af1be05c4454ea90c:1",
+   "2026-11-27T05:49:32.558Z",
+   "2026-11-27T06:09:27.650Z"
+  ],
+  [
+   "PLAN_REVIEW",
+   "SUCCEEDED",
+   "plan-review:rev_638aed8b1c5d_a86522",
+   "2026-11-27T05:50:25.863Z",
+   "2026-11-27T06:10:21.426Z"
+  ],
+  [
+   "PLAN_REVIEW",
+   "SUCCEEDED",
+   "plan-review:rev_d3e0d4b02959_317031",
+   "2026-11-27T06:12:16.810Z",
+   "2026-11-27T06:13:25.914Z"
+  ]
+ ],
+ "research": [
+  "Research submitted for revenueRange on cop_8edcdc6ebf3547c8aa56 by APP_SESSION wkr_0020ac8ce4eb451e8513/j2-app-session: 1 claim(s), awaiting the evidence gate",
+  "Research submitted for buyerVolume on cop_50f3ff3566c846c7b6b4 by APP_SESSION wkr_0020ac8ce4eb451e8513/j2-app-session: 1 claim(s), awaiting the evidence gate",
+  "Research for revenueRange on cop_8edcdc6ebf3547c8aa56 not accepted; planner rerun",
+  "Research for buyerVolume on cop_50f3ff3566c846c7b6b4 not accepted; planner rerun"
+ ],
+ "decisiveLinks": [
+  "CURRENT_DEMAND",
+  "OFFER_AND_PRICE",
+  "ECONOMICS"
+ ],
+ "decisiveGap": "No evidence that US small businesses pay any stated price for an outsourced blog package (OFFER_AND_PRICE), no buying signal from them (CURRENT_DEMAND), and no established supplier cost per package (ECONOMICS): the EFA price claim was rejected on population, and Textbroker's client price is unpublished and contradicted by third parties.",
+ "resolution": "Run the USD 150 experiment inside the USD 300 pre-proof cap: read Textbroker's checkout price (no spend), warm two domains for 14 days, then offer 1,000 US SMBs four SEO posts for USD 1,000 prepaid. Proof: >=1 paid checkout by day 22 and a Textbroker cost <= USD 250 per package. Stop: zero paid checkouts and positive replies under 1% by day 22, or Textbroker cost above USD 250. Continue: rebuild a plan from the measured price, close rate and cost; note that with proof on day 22 only ~8 days remain, so the USD 10,000 within 30 days needs about 10 prepaid packages in that span.",
+ "reviews": [
+  [
+   "rev_638aed8b1c5d_a86522",
+   "REVISE",
+   3
+  ],
+  [
+   "rev_d3e0d4b02959_317031",
+   "PASS",
+   0
+  ]
+ ]
+}

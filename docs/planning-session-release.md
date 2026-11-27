@@ -82,6 +82,9 @@ The author session just reads the verdict from `brain_planning_state`. You never
    `npm run admin -- access grant-planning worker-05 <project> --admin <your Brain admin email>`
    That is the only grant. Reviewers need nothing new: any other connected worker with the research set on that
    project can take the review and verification items.
+   **Own the goal your session creates.** Set your `ownerUserId` on its terms (`PATCH /api/goals/<goal>/terms`). A goal
+   created through the connector has no owner. Under brain-only mode, routines take its review and verification
+   items only once it is owner-directed.
 3. **Author session.** In a Claude app session with the Brain connector, give an objective in your own words. The
    session should:
    1. create the goal;

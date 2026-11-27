@@ -15,6 +15,7 @@
 |---|---|
 | The planning tools in production | Authorise merge and `Deploy` of `claude/10k-revenue-30-days-9ba2t4`. It is 0 behind `production`, merges cleanly, has no migrations, and passes the impacted selection on SQLite and Postgres. Steps: `../planning-session-release.md`. |
 | Planning writes for the author connector | After the deploy, run `npm run admin -- access grant-planning worker-05 <project> --admin <your admin email>` on the production deployment. |
+| Fleet review of a goal your app session creates | Take ownership of the goal (`PATCH /api/goals/<goal>/terms` with your `ownerUserId`). A goal your connector creates has no owner, because a worker carries no person identity. Under your brain-only rule (§84), routines take an unowned goal's review only if you own it (§118). Found and verified in journey 2. |
 
 ## What no longer needs the owner (built 2026-11-27)
 
