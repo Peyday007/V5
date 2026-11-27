@@ -1,0 +1,1405 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "goal": {
+      "id": "wst_3edbdc800aee4a8faaca",
+      "title": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days. Maximum total spending: $2,000. Maximum cumulative spen",
+      "intent": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days. Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement and no owner physical work. Do not use the owner's existing businesses or past campaign history as evidence."
+    },
+    "contract": {
+      "goalId": "wst_3edbdc800aee4a8faaca",
+      "words": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days. Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement and no owner physical work. Do not use the owner's existing businesses or past campaign history as evidence.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1000000,
+        "currency": "USD",
+        "metric": "COLLECTED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": 200000,
+        "preProofSpendCapCents": 30000,
+        "exposureCapCents": null,
+        "proofCondition": "proof of demand",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "FORBIDDEN",
+        "exclusions": [
+          "owner's existing businesses"
+        ],
+        "evidenceExclusions": [
+          "owner's existing businesses",
+          "owner's past campaign history"
+        ]
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "ab18592146cb2979c9c79328"
+    },
+    "stored": {
+      "targetCents": 1000000,
+      "currency": "USD",
+      "windowDays": 30,
+      "capitalCeilingCents": 200000,
+      "capitalBeforeProofCents": 30000,
+      "hoursCeiling": null,
+      "proven": false,
+      "projectId": "prj_a5550a83b9544825b8db"
+    },
+    "openings": [
+      {
+        "id": "cop_e0716d82a55d4527b332",
+        "title": "WCAG/ADA accessibility audit and remediation for small-business websites",
+        "state": "DISCOVERED",
+        "origin": "ROUTE_PROPOSAL",
+        "facts": [
+          {
+            "field": "access",
+            "value": "Cold email via Instantly Growth plan ($47/mo) to owners of sites failing automated accessibility scans",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "captureMechanism",
+            "value": "Sell Focused WCAG 2.1 AA audit of key pages plus remediation of found issues to US small businesses (retail, Shopify, restaurants, professional services) with public websites exposed to ADA demand letters, reached through Cold email via Instantly Growth plan ($47/mo) to owners of sites failing automated accessibility scans, at $1,500; Freelance accessibility developer (Fiverr/Upwork) applying fixes; Brain runs automated scans and writes the audit delivers it.",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "exposure",
+            "value": "$300",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "fulfillment",
+            "value": "Freelance accessibility developer (Fiverr/Upwork) applying fixes; Brain runs automated scans and writes the audit.",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "hours",
+            "value": "0.5 owner hours per sale",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "offer",
+            "value": "Focused WCAG 2.1 AA audit of key pages plus remediation of found issues",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "payer",
+            "value": "US small businesses (retail, Shopify, restaurants, professional services) with public websites exposed to ADA demand letters",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "price",
+            "value": "$1,500",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "revenueRange",
+            "value": "An accessibility services firm writing for small businesses states that a manual WCAG 2.1 AA audit for a small informational website often costs $1,500-$4,000.",
+            "kind": "EVIDENCE"
+          },
+          {
+            "field": "routeSearches",
+            "value": "https://accessible.org/small-business-afford-website-ada-compliant/; https://krdo.com/news/2026/10/15/website-accessibility-lawsuits-are-rising-and-smaller-businesses-are-frequent-targets/; UsableNet 2026 midyear accessibility lawsuits; https://instantly.ai/pricing",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "routeStage",
+            "value": "ROUTE",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "timeToFirstCash",
+            "value": "14 days",
+            "kind": "RECOMMENDATION"
+          }
+        ]
+      },
+      {
+        "id": "cop_673c9ca2371f43198d5c",
+        "title": "Bid on posted AI-automation (n8n) build jobs on freelance marketplaces",
+        "state": "DISCOVERED",
+        "origin": "ROUTE_PROPOSAL",
+        "facts": [
+          {
+            "field": "access",
+            "value": "Marketplace proposals (Freelancer.com, Upwork; Upwork Connects $0.15 each)",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "buyerVolume",
+            "value": "17 Small businesses posting n8n / AI-chatbot build projects on Freelancer.com and Upwork (Freelancer.com n8n category showed 17 open jobs on 2026-11-27, average bids $153-$592, 48-386 bids each; Upwork search returned ~19 n8n/AI listings at $15-$2,500 fixed)",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "captureMechanism",
+            "value": "Sell Fixed-price n8n AI workflow or chatbot build delivered within the posted scope to Small businesses posting n8n / AI-chatbot build projects on Freelancer.com and Upwork, reached through Marketplace proposals (Freelancer.com, Upwork; Upwork Connects $0.15 each), at $400; Freelance n8n developer hired per job on Freelancer.com/Upwork (average bids $153-$592 on comparable jobs) delivers it.",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "exposure",
+            "value": "$60",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "fulfillment",
+            "value": "Freelance n8n developer hired per job on Freelancer.com/Upwork (average bids $153-$592 on comparable jobs).",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "hours",
+            "value": "0.5 owner hours per sale",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "offer",
+            "value": "Fixed-price n8n AI workflow or chatbot build delivered within the posted scope",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "payer",
+            "value": "Small businesses posting n8n / AI-chatbot build projects on Freelancer.com and Upwork",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "price",
+            "value": "$400",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "revenueRange",
+            "value": "$400",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "routeSearches",
+            "value": "https://www.freelancer.com/jobs/n8n/; https://support.upwork.com/hc/en-us/articles/211062538-Learn-about-the-Freelancer-Service-Fee; https://www.freelancer.com/jobs/n8n/; Upwork n8n automation fixed price job search; https://www.freelancer.com/jobs/n8n/; https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work; https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "routeStage",
+            "value": "ROUTE",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "timeToFirstCash",
+            "value": "12 days",
+            "kind": "RECOMMENDATION"
+          }
+        ]
+      },
+      {
+        "id": "cop_c51d3c5d68e546ffb390",
+        "title": "Done-for-you AI voice receptionist setup for home-service contractors",
+        "state": "DISCOVERED",
+        "origin": "ROUTE_PROPOSAL",
+        "facts": [
+          {
+            "field": "access",
+            "value": "Cold email via Instantly to contractors",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "captureMechanism",
+            "value": "Sell AI voice receptionist configured on a white-label platform: one-time setup fee plus monthly retainer to Owner-operated HVAC/plumbing/roofing businesses missing inbound calls, reached through Cold email via Instantly to contractors, at $1,000; White-label voice-AI build service on Trillet Agency platform (managed build for agencies) delivers it.",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "exposure",
+            "value": "$250",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "fulfillment",
+            "value": "White-label voice-AI build service on Trillet Agency platform (managed build for agencies).",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "hours",
+            "value": "0.5 owner hours per sale",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "offer",
+            "value": "AI voice receptionist configured on a white-label platform: one-time setup fee plus monthly retainer",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "payer",
+            "value": "Owner-operated HVAC/plumbing/roofing businesses missing inbound calls",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "price",
+            "value": "$1,000",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "revenueRange",
+            "value": "$1,000",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "routeSearches",
+            "value": "https://trillet.ai/blogs/how-agencies-should-price-voice-ai-services; https://www.nonstopautomation.com/pricing; AI voice agent agency setup fee HVAC plumbing; https://instantly.ai/pricing",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "routeStage",
+            "value": "ROUTE",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "timeToFirstCash",
+            "value": "10 days",
+            "kind": "RECOMMENDATION"
+          }
+        ]
+      },
+      {
+        "id": "cop_a33f35a4fe5e4034a840",
+        "title": "Monthly podcast short-form clip repurposing retainer",
+        "state": "DISCOVERED",
+        "origin": "ROUTE_PROPOSAL",
+        "facts": [
+          {
+            "field": "access",
+            "value": "Cold email / DMs to podcasters",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "captureMechanism",
+            "value": "Sell Up to 4 episodes/month: 10 captioned short clips per episode, timestamps, summary to Business and creator podcasters publishing weekly video episodes, reached through Cold email / DMs to podcasters, at $397; Freelance podcast clip editor (Contra listing from $49.99/mo; Fiverr clip gigs $5-$100/job) delivers it.",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "exposure",
+            "value": "$100",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "fulfillment",
+            "value": "Freelance podcast clip editor (Contra listing from $49.99/mo; Fiverr clip gigs $5-$100/job).",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "hours",
+            "value": "0.25 owner hours per sale",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "offer",
+            "value": "Up to 4 episodes/month: 10 captioned short clips per episode, timestamps, summary",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "payer",
+            "value": "Business and creator podcasters publishing weekly video episodes",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "price",
+            "value": "$397",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "revenueRange",
+            "value": "$397",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "routeSearches",
+            "value": "https://whop.com/joined/clip-craft-agency-5290/products/podcast-repurposing-plan/; short-form video clipping service for podcasters monthly price agency; https://www.opus.pro/blog/best-clipping-agencies",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "routeStage",
+            "value": "ROUTE",
+            "kind": "RECOMMENDATION"
+          },
+          {
+            "field": "timeToFirstCash",
+            "value": "7 days",
+            "kind": "RECOMMENDATION"
+          }
+        ]
+      }
+    ],
+    "exclusions": [
+      "owner's existing businesses"
+    ],
+    "evidenceExclusions": [
+      "owner's existing businesses",
+      "owner's past campaign history"
+    ],
+    "openProblems": [],
+    "revisions": [
+      {
+        "revisionId": "rev_193a613e6326_d44b28",
+        "digest": "193a613e6326801e287b9045",
+        "stance": "NO_PLAN",
+        "contractDigest": "ab18592146cb2979c9c79328",
+        "stale": false
+      },
+      {
+        "revisionId": "rev_193a613e6326_62d02a",
+        "digest": "193a613e6326801e287b9045",
+        "stance": "NO_PLAN",
+        "contractDigest": "ab18592146cb2979c9c79328",
+        "stale": false
+      },
+      {
+        "revisionId": "rev_14a854ff731a_1a2c9f",
+        "digest": "14a854ff731a6815cb1bfc38",
+        "stance": "NO_PLAN",
+        "contractDigest": "ab18592146cb2979c9c79328",
+        "stale": false
+      },
+      {
+        "revisionId": "rev_575c27c4eb74_11dbef",
+        "digest": "575c27c4eb74774644a36718",
+        "stance": "NO_PLAN",
+        "contractDigest": "ab18592146cb2979c9c79328",
+        "stale": false
+      },
+      {
+        "revisionId": "rev_ee5787b67010_2f2ade",
+        "digest": "ee5787b67010020d416f5a6e",
+        "stance": "NO_PLAN",
+        "contractDigest": "ab18592146cb2979c9c79328",
+        "stale": false
+      }
+    ],
+    "lastReview": {
+      "revisionId": "rev_ee5787b67010_2f2ade",
+      "revisionDigest": "ee5787b67010020d416f5a6e",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_247bfbc3570249c88bcf/discovery-1",
+        "model": "claude-opus-5-5"
+      },
+      "reviewer": {
+        "kind": "MODEL",
+        "id": "wkr_e053549969e147889b2e/reviewer-3",
+        "model": "claude-opus-5-5"
+      },
+      "verdict": "PASS",
+      "reasons": "All six earlier findings are resolved. NO_PLAN is right. The decisive gap is now read from the accepted evidence: remediation benchmark $2,000-$10,000 (s2) and freelance audit benchmark $2,000-$8,000 (s3) both sit at or above the $1,500 audit-plus-remediation price, and one remediation at the low uses the whole $2,000 cap. That is ECONOMICS contradicted, with fulfilment, volume and conversion unestablished. The s1 benchmark is explicitly not treated as proof of this offer's price or of demand. The rejected DYNO Mapper $3,000-$8,000 claim is kept with its definitions reason (it includes the owner's own staff hours) and is not used. Geography is unstated on every source and a US source is required. The MARKET_VOLUME disagreement holds: about 7 buyers are needed and the lawsuit counts were rejected as a buyer count. Arithmetic checks: ($2,000 - $197) / 7 = $257; audit-only 3 x $4,000 = $12,000 with ($2,000 - $197) / 3 = $601; pre-proof $47 + $150 = $197 <= $300; captured payments by day 10 settle about day 24, and the last capture by day 16 settles by day 30. The resolution stays inside every limit and states the conditions that rule the route out.",
+      "findings": [
+        "Minor: the audit-only re-scope prices at the s1 top ($4,000) and bars a provider quote at <= $600. The card's own fulfilment note says Brain writes the audit from automated scans, which could cost about $0, but that option is not considered. If Brain's audit is a credible deliverable, it changes the economics, and it needs establishing either way.",
+        "Minor: the alternatives text for the WCAG route is stale. It still says price is unestablished and does not mention the s2/s3 contradiction."
+      ],
+      "resolution": null,
+      "at": "2026-11-27T02:52:20.127Z"
+    },
+    "final": {
+      "revisionId": "rev_ee5787b67010_2f2ade",
+      "digest": "ee5787b67010020d416f5a6e",
+      "contractDigest": "ab18592146cb2979c9c79328",
+      "plan": {
+        "goalId": "wst_3edbdc800aee4a8faaca",
+        "contractDigest": "ab18592146cb2979c9c79328",
+        "parentRevisionId": "rev_575c27c4eb74_11dbef",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the accepted benchmarks put fulfilment cost above the $1,500 offer price",
+          "opportunityIds": [],
+          "why": "Three claims from two independent publishers are accepted on the accessibility card: small-site manual audits $1,500-$4,000 (s1, Accessible.org), small-business site remediation ~$2,000-$10,000 (s2, DYNO Mapper) and freelance small-site audits $2,000-$8,000 (s3, DYNO Mapper). None states its geography, so applicability to US buyers is not established. Read together they contradict the route: the offer bundles audit and remediation for $1,500, while the published low end of remediation alone ($2,000) and of a freelance audit alone ($2,000) each exceed that price, so a subcontracted delivery loses money at the benchmarks, and one remediation at the benchmark low uses the whole $2,000 total cap. A fourth claim (DYNO Mapper $3,000-$8,000 total) was rejected on definitions because it includes the owner's own staff hours. No fulfiller, buyer count, buying signal or close rate is established for any opening."
+        },
+        "alternatives": [
+          {
+            "title": "Small-business WCAG/ADA audit and remediation by cold email (cop_e0716d82a55d4527b332)",
+            "why": "Strongest candidate (about 7 sales at $1,500), but price for US small-business buyers, subcontractor remediation cost, reachable buyer count and cold-email conversion are all unestablished; cold-email domains also need warm-up time inside a 30-day window."
+          },
+          {
+            "title": "AI voice receptionist setup for home-service contractors (cop_c51d3c5d68e546ffb390)",
+            "why": "Setup-fee price is only an agency-guide recommendation; competing platforms advertise no setup fee, so whether contractors pay $1,000 is unestablished."
+          },
+          {
+            "title": "Podcast clip repurposing retainer (cop_a33f35a4fe5e4034a840)",
+            "why": "Needs about 26 paying clients at $397 within 30 days; demand, conversion and subcontractor cost unestablished, and cheaper freelancers compete."
+          },
+          {
+            "title": "Bidding on posted n8n build jobs (cop_673c9ca2371f43198d5c)",
+            "why": "Observed market volume is small (17 open jobs in the Freelancer.com n8n category, each with dozens to hundreds of bids) and about 25 wins at $400 would be needed; Upwork fixed-price funds clear only after review plus a 5-day hold."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Published small-site manual audit price",
+            "status": "EVIDENCED",
+            "value": 1500,
+            "unit": "USD per audit, low end of $1,500-$4,000",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A buyer paying this offer's price; and a source stating US geography"
+          },
+          {
+            "name": "Published small-business site remediation cost",
+            "status": "EVIDENCED",
+            "value": 2000,
+            "unit": "USD per site, low end of ~$2,000-$10,000",
+            "sources": [
+              "s2"
+            ],
+            "needs": "A named fulfiller's fixed quote materially below this benchmark, or the route loses money"
+          },
+          {
+            "name": "Published freelance small-site audit cost",
+            "status": "EVIDENCED",
+            "value": 2000,
+            "unit": "USD per audit, low end of $2,000-$8,000",
+            "sources": [
+              "s3"
+            ],
+            "needs": "A named auditor's fixed quote below the offer price"
+          },
+          {
+            "name": "Rejected: DYNO Mapper total realistic cost $3,000-$8,000 for a 50-page small business site (clm_150bc8867d38428ba087)",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "Rejected on definitions: the total includes 20-40 internal staff hours of the site owner's own work, so it is not a price a buyer pays a provider; not used"
+          },
+          {
+            "name": "Fulfiller cost per sale that fits the $2,000 total cap at $1,500 x 7 sales",
+            "status": "ESTIMATE",
+            "value": 257,
+            "unit": "USD per sale",
+            "sources": [],
+            "needs": "Derived: ($2,000 - $197 pre-proof test) / 7 = about $257; about 1/8 of the s2 and s3 benchmark lows"
+          },
+          {
+            "name": "Reachable small-business buyers of this kind",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers",
+            "sources": [],
+            "needs": "A count from a directory, register or marketplace category"
+          },
+          {
+            "name": "Cold-email close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid sales per contacted buyer",
+            "sources": [],
+            "needs": "Only a live, capped outreach test can measure it"
+          },
+          {
+            "name": "Pre-proof test spend",
+            "status": "ESTIMATE",
+            "value": 197,
+            "unit": "USD",
+            "sources": [],
+            "needs": "Instantly Growth $47 (read on instantly.ai/pricing, not a card fact) + domains/mailboxes <= $150 (unsourced estimate)"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_e0716d82a55d4527b332#revenueRange",
+            "dated": "2026-06-06",
+            "claim": "Accessible.org: a manual WCAG 2.1 AA audit for a small informational website often costs $1,500-$4,000 (accepted, clm_d85f9743519349bcaf4b).",
+            "population": "Small informational websites. Geography not stated by the source; applicability to the card's US buyers is not established (accepted under the gate's no-geographic-requirement rule)",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_e0716d82a55d4527b332#revenueRange",
+            "dated": "2026-04-24",
+            "claim": "DYNO Mapper (independent second publisher): a small business site under 50 pages with basic forms needs about $2,000-$10,000 initial remediation (accepted, clm_afa7c30232994a7d846a).",
+            "population": "Small business sites under 50 pages. Geography not stated by the source; applicability to the card's US buyers is not established (accepted under the gate's no-geographic-requirement rule)",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_e0716d82a55d4527b332#revenueRange",
+            "dated": "2026-04-24",
+            "claim": "DYNO Mapper: a freelance accessibility specialist charges $100-$200 per hour and a small-site audit by one costs $2,000-$8,000 (accepted, clm_92bc3abdff7643da8d43).",
+            "population": "Small sites. Geography not stated by the source; applicability to the card's US buyers is not established (accepted under the gate's no-geographic-requirement rule)",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "ECONOMICS is contradicted by the accepted evidence for the strongest route (cop_e0716d82a55d4527b332): published costs to deliver (remediation ~$2,000-$10,000 per site, s2; freelance audit $2,000-$8,000, s3) are at or above the $1,500 price (audit benchmark $1,500-$4,000, s1), so 7 sales would need a fulfiller at about $257 per sale, roughly one-eighth of the benchmark lows, to fit the $2,000 total cap; no such fulfiller is established, nor buyer count or close rate.",
+          "resolution": "This route stays ruled out unless a step below passes; no money is spent before step (3) proof. (1) Fulfiller, no spend, by day 2: obtain a fixed written quote from a named accessibility provider. Audit+remediation at $1,500 needs a quote <= $257 per site (7 sales, ($2,000 - $197)/7). Alternatively re-scope to audit-only priced at the s1 top ($4,000): 3 sales reach $12,000, and the quote must be <= ($2,000 - $197)/3 = about $600 per audit. Both bars sit far below the accepted benchmarks (s2 $2,000+, s3 $2,000+), so if no named provider quotes under the bar, the route is ruled out by ECONOMICS and the total-spend cap. (2) Buyer count, no spend, by day 2: a count of reachable small-business sites of the target kind from a published directory or marketplace category, plus a source stating US prices or buyers (s1-s3 state no geography). (3) Pre-proof test inside the $300 cap, line by line: Instantly Growth $47 + sending domains/mailboxes <= $150 + Brain-built lead list $0 + delivery $0 before proof = <= $197; outreach sending by day 3. Proof of demand = by day 10, at least 2 buyers have each paid the full offer price and the charge has succeeded (payment captured, not a promise or invoice); with the card's 14 days to usable cash those two settle by about day 24. (4) Timing: every remaining sale must have payment captured by day 16 so its about 14-day path to usable cash ends by day 30; if sending has not started by day 3, proof is not met by day 10, or the sales count needed cannot be captured by day 16, the 30-day window rules the route out and spending stops. Only after proof is any provider ordered, paid from receipts inside the $2,000 total.",
+          "decisiveLinks": [
+            "ECONOMICS",
+            "FULFILMENT",
+            "MARKET_VOLUME",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The accepted remediation benchmark (~$2,000-$10,000 per site) is ignored and contradicts the $240-or-less bar.",
+            "resolution": "Accepted. s2 is now cited and the decisive gap is that ECONOMICS is contradicted: remediation's benchmark low ($2,000) exceeds the $1,500 price and alone uses the $2,000 cap; the bar (<= $257 at 7 sales) is stated as about one-eighth of that low, and the route is ruled out unless a named provider quotes under it."
+          },
+          {
+            "finding": "The accepted freelancer audit benchmark ($2,000-$8,000) is not related to the $1,500 price.",
+            "resolution": "Accepted. s3 is cited: a freelance small-site audit alone costs at least $2,000, above the $1,500 audit+remediation price, so subcontracting the audit also loses money; the audit-only re-scope at $4,000 needs a quote <= about $600, still below s3's low."
+          },
+          {
+            "finding": "The rejected claim and its definitions reason are not recorded.",
+            "resolution": "Accepted. clm_150bc8867d38428ba087 (DYNO Mapper $3,000-$8,000 total) is recorded in quantities and strategy as rejected on definitions because the total includes 20-40 internal staff hours, and it is not used."
+          },
+          {
+            "finding": "The revision says a second publisher was accepted but cites one source.",
+            "resolution": "Accepted. Sources now cite s1 (Accessible.org) and s2, s3 (DYNO Mapper, the independent second publisher), each with its accepted claim id."
+          },
+          {
+            "finding": "The single source's geography is unstated, yet step (1) treats geography as settled.",
+            "resolution": "Accepted. Every source's population now says geography is not stated and applicability to US buyers is not established; step (2) requires a source stating US prices or buyers."
+          },
+          {
+            "finding": "'2 buyers paid by day 10' vs 14 days to cash is undefined.",
+            "resolution": "Accepted. Proof is now defined as 2 buyers' full payments captured (charge succeeded) by day 10, settling as usable cash about day 24; every other sale must be captured by day 16 to settle by day 30."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_a33f35a4fe5e4034a840",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME",
+              "MARKET_VOLUME"
+            ]
+          },
+          {
+            "opportunityId": "cop_e0716d82a55d4527b332",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME",
+              "MARKET_VOLUME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c51d3c5d68e546ffb390",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME",
+              "MARKET_VOLUME"
+            ]
+          },
+          {
+            "opportunityId": "cop_673c9ca2371f43198d5c",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT",
+          "ECONOMICS",
+          "MARKET_VOLUME",
+          "CONVERSION",
+          "OFFER_AND_PRICE",
+          "CURRENT_DEMAND",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_a33f35a4fe5e4034a840",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain treats this as a one-off needing one buyer, but $10,000 at this card's price needs about 26 separate buyers within 30 days; no count of reachable buyers of this kind is established (the only buyer-volume research, lawsuit counts, was rejected as not a buyer count)."
+          },
+          {
+            "opportunityId": "cop_e0716d82a55d4527b332",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain treats this as a one-off needing one buyer, but $10,000 at this card's price needs about 7 separate buyers within 30 days; no count of reachable buyers of this kind is established (the only buyer-volume research, lawsuit counts, was rejected as not a buyer count)."
+          },
+          {
+            "opportunityId": "cop_c51d3c5d68e546ffb390",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain treats this as a one-off needing one buyer, but $10,000 at this card's price needs about 10 separate buyers within 30 days; no count of reachable buyers of this kind is established (the only buyer-volume research, lawsuit counts, was rejected as not a buyer count)."
+          }
+        ],
+        "revisionId": "rev_ee5787b67010_2f2ade",
+        "digest": "ee5787b67010020d416f5a6e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_247bfbc3570249c88bcf/discovery-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:50:58.638Z"
+      },
+      "review": {
+        "revisionId": "rev_ee5787b67010_2f2ade",
+        "revisionDigest": "ee5787b67010020d416f5a6e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_247bfbc3570249c88bcf/discovery-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e053549969e147889b2e/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "All six earlier findings are resolved. NO_PLAN is right. The decisive gap is now read from the accepted evidence: remediation benchmark $2,000-$10,000 (s2) and freelance audit benchmark $2,000-$8,000 (s3) both sit at or above the $1,500 audit-plus-remediation price, and one remediation at the low uses the whole $2,000 cap. That is ECONOMICS contradicted, with fulfilment, volume and conversion unestablished. The s1 benchmark is explicitly not treated as proof of this offer's price or of demand. The rejected DYNO Mapper $3,000-$8,000 claim is kept with its definitions reason (it includes the owner's own staff hours) and is not used. Geography is unstated on every source and a US source is required. The MARKET_VOLUME disagreement holds: about 7 buyers are needed and the lawsuit counts were rejected as a buyer count. Arithmetic checks: ($2,000 - $197) / 7 = $257; audit-only 3 x $4,000 = $12,000 with ($2,000 - $197) / 3 = $601; pre-proof $47 + $150 = $197 <= $300; captured payments by day 10 settle about day 24, and the last capture by day 16 settles by day 30. The resolution stays inside every limit and states the conditions that rule the route out.",
+        "findings": [
+          "Minor: the audit-only re-scope prices at the s1 top ($4,000) and bars a provider quote at <= $600. The card's own fulfilment note says Brain writes the audit from automated scans, which could cost about $0, but that option is not considered. If Brain's audit is a credible deliverable, it changes the economics, and it needs establishing either way.",
+          "Minor: the alternatives text for the WCAG route is stale. It still says price is unestablished and does not mention the s2/s3 contradiction."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:52:20.127Z"
+      },
+      "at": "2026-11-27T02:52:42.229Z"
+    },
+    "brain": {
+      "at": "2026-11-27T02:46:36.733Z",
+      "completed": true,
+      "verdict": "NOT_VIABLE",
+      "summary": "No modelled strategy can work under the current limits: cannot reach the 10000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Sell a retainer of 4 unit(s) at 15% off (×3.4 the unit price, ×4.0 its direct cost)) it would reach 0% (p50 $2,720): a hypothesis to test by running each one's kill criterion, not evidence.",
+      "openings": [
+        {
+          "opportunityId": "cop_a33f35a4fe5e4034a840",
+          "title": "Monthly podcast short-form clip repurposing retainer",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ],
+          "stage": "C_MARKET_TEST_READY",
+          "supportedReach": 0,
+          "potentialReach": 397,
+          "card": {
+            "payer": "Business and creator podcasters publishing weekly video episodes",
+            "reachableChannel": "Cold email / DMs to podcasters",
+            "offerScope": "Up to 4 episodes/month: 10 captioned short clips per episode, timestamps, summary",
+            "priceCents": 39700,
+            "currency": "USD",
+            "fulfillmentOwner": "Freelance podcast clip editor (Contra listing from $49.99/mo; Fiverr clip gigs $5-$100/job)",
+            "peakFundingCents": 10000,
+            "humanHours": 0.25,
+            "requiredCapabilities": [],
+            "industry": "Podcasting / creator media",
+            "mechanism": "CAPABILITY_ARBITRAGE",
+            "state": "DISCOVERED"
+          },
+          "agreements": [],
+          "links": [
+            {
+              "link": "REACHABLE_BUYER",
+              "ok": true,
+              "basis": "reach: Cold email / DMs to podcasters"
+            },
+            {
+              "link": "CURRENT_DEMAND",
+              "ok": false,
+              "basis": "no buying signal recorded"
+            },
+            {
+              "link": "OFFER_AND_PRICE",
+              "ok": false,
+              "basis": "price 397 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+            },
+            {
+              "link": "CONVERSION",
+              "ok": false,
+              "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+            },
+            {
+              "link": "MARKET_VOLUME",
+              "ok": true,
+              "basis": "a one-off needs its one buyer"
+            },
+            {
+              "link": "FULFILMENT",
+              "ok": false,
+              "basis": "nobody has established who would do the work"
+            },
+            {
+              "link": "ECONOMICS",
+              "ok": false,
+              "basis": "costs or money tied up are not established"
+            },
+            {
+              "link": "SETTLES_IN_TIME",
+              "ok": false,
+              "basis": "7 days to usable cash against 30 left"
+            }
+          ],
+          "facts": [
+            {
+              "field": "access",
+              "value": "Cold email / DMs to podcasters",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "captureMechanism",
+              "value": "Sell Up to 4 episodes/month: 10 captioned short clips per episode, timestamps, summary to Business and creator podcasters publishing weekly video episodes, reached through Cold email / DMs to podcasters, at $397; Freelance podcast clip editor (Contra listing from $49.99/mo; Fiverr clip gigs $5-$100/job) delivers it.",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "exposure",
+              "value": "$100",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "fulfillment",
+              "value": "Freelance podcast clip editor (Contra listing from $49.99/mo; Fiverr clip gigs $5-$100/job).",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "hours",
+              "value": "0.25 owner hours per sale",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "offer",
+              "value": "Up to 4 episodes/month: 10 captioned short clips per episode, timestamps, summary",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "payer",
+              "value": "Business and creator podcasters publishing weekly video episodes",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "price",
+              "value": "$397",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "revenueRange",
+              "value": "$397",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "routeSearches",
+              "value": "https://whop.com/joined/clip-craft-agency-5290/products/podcast-repurposing-plan/; short-form video clipping service for podcasters monthly price agency; https://www.opus.pro/blog/best-clipping-agencies",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "routeStage",
+              "value": "ROUTE",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "timeToFirstCash",
+              "value": "7 days",
+              "kind": "RECOMMENDATION"
+            }
+          ]
+        },
+        {
+          "opportunityId": "cop_e0716d82a55d4527b332",
+          "title": "WCAG/ADA accessibility audit and remediation for small-business websites",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ],
+          "stage": "C_MARKET_TEST_READY",
+          "supportedReach": 0,
+          "potentialReach": 1500,
+          "card": {
+            "payer": "US small businesses (retail, Shopify, restaurants, professional services) with public websites exposed to ADA demand letters",
+            "reachableChannel": "Cold email via Instantly Growth plan ($47/mo) to owners of sites failing automated accessibility scans",
+            "offerScope": "Focused WCAG 2.1 AA audit of key pages plus remediation of found issues",
+            "priceCents": 150000,
+            "currency": "USD",
+            "fulfillmentOwner": "Freelance accessibility developer (Fiverr/Upwork) applying fixes; Brain runs automated scans and writes the audit",
+            "peakFundingCents": 30000,
+            "humanHours": 0.5,
+            "requiredCapabilities": [],
+            "industry": "Web accessibility compliance",
+            "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+            "state": "DISCOVERED"
+          },
+          "agreements": [],
+          "links": [
+            {
+              "link": "REACHABLE_BUYER",
+              "ok": true,
+              "basis": "reach: Cold email via Instantly Growth plan ($47/mo) to owners of sites failing automat"
+            },
+            {
+              "link": "CURRENT_DEMAND",
+              "ok": false,
+              "basis": "no buying signal recorded"
+            },
+            {
+              "link": "OFFER_AND_PRICE",
+              "ok": false,
+              "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+            },
+            {
+              "link": "CONVERSION",
+              "ok": false,
+              "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+            },
+            {
+              "link": "MARKET_VOLUME",
+              "ok": true,
+              "basis": "a one-off needs its one buyer"
+            },
+            {
+              "link": "FULFILMENT",
+              "ok": false,
+              "basis": "nobody has established who would do the work"
+            },
+            {
+              "link": "ECONOMICS",
+              "ok": false,
+              "basis": "costs or money tied up are not established"
+            },
+            {
+              "link": "SETTLES_IN_TIME",
+              "ok": false,
+              "basis": "14 days to usable cash against 30 left"
+            }
+          ],
+          "facts": [
+            {
+              "field": "access",
+              "value": "Cold email via Instantly Growth plan ($47/mo) to owners of sites failing automated accessibility scans",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "captureMechanism",
+              "value": "Sell Focused WCAG 2.1 AA audit of key pages plus remediation of found issues to US small businesses (retail, Shopify, restaurants, professional services) with public websites exposed to ADA demand letters, reached through Cold email via Instantly Growth plan ($47/mo) to owners of sites failing automated accessibility scans, at $1,500; Freelance accessibility developer (Fiverr/Upwork) applying fixes; Brain runs automated scans and writes the audit delivers it.",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "exposure",
+              "value": "$300",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "fulfillment",
+              "value": "Freelance accessibility developer (Fiverr/Upwork) applying fixes; Brain runs automated scans and writes the audit.",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "hours",
+              "value": "0.5 owner hours per sale",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "offer",
+              "value": "Focused WCAG 2.1 AA audit of key pages plus remediation of found issues",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "payer",
+              "value": "US small businesses (retail, Shopify, restaurants, professional services) with public websites exposed to ADA demand letters",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "price",
+              "value": "$1,500",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "revenueRange",
+              "value": "An accessibility services firm writing for small businesses states that a manual WCAG 2.1 AA audit for a small informational website often costs $1,500-$4,000.",
+              "kind": "EVIDENCE"
+            },
+            {
+              "field": "routeSearches",
+              "value": "https://accessible.org/small-business-afford-website-ada-compliant/; https://krdo.com/news/2026/10/15/website-accessibility-lawsuits-are-rising-and-smaller-businesses-are-frequent-targets/; UsableNet 2026 midyear accessibility lawsuits; https://instantly.ai/pricing",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "routeStage",
+              "value": "ROUTE",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "timeToFirstCash",
+              "value": "14 days",
+              "kind": "RECOMMENDATION"
+            }
+          ]
+        },
+        {
+          "opportunityId": "cop_c51d3c5d68e546ffb390",
+          "title": "Done-for-you AI voice receptionist setup for home-service contractors",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ],
+          "stage": "C_MARKET_TEST_READY",
+          "supportedReach": 0,
+          "potentialReach": 1000,
+          "card": {
+            "payer": "Owner-operated HVAC/plumbing/roofing businesses missing inbound calls",
+            "reachableChannel": "Cold email via Instantly to contractors",
+            "offerScope": "AI voice receptionist configured on a white-label platform: one-time setup fee plus monthly retainer",
+            "priceCents": 100000,
+            "currency": "USD",
+            "fulfillmentOwner": "White-label voice-AI build service on Trillet Agency platform (managed build for agencies)",
+            "peakFundingCents": 25000,
+            "humanHours": 0.5,
+            "requiredCapabilities": [],
+            "industry": "Home services (HVAC, plumbing, roofing)",
+            "mechanism": "CAPABILITY_ARBITRAGE",
+            "state": "DISCOVERED"
+          },
+          "agreements": [],
+          "links": [
+            {
+              "link": "REACHABLE_BUYER",
+              "ok": true,
+              "basis": "reach: Cold email via Instantly to contractors"
+            },
+            {
+              "link": "CURRENT_DEMAND",
+              "ok": false,
+              "basis": "no buying signal recorded"
+            },
+            {
+              "link": "OFFER_AND_PRICE",
+              "ok": false,
+              "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+            },
+            {
+              "link": "CONVERSION",
+              "ok": false,
+              "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+            },
+            {
+              "link": "MARKET_VOLUME",
+              "ok": true,
+              "basis": "a one-off needs its one buyer"
+            },
+            {
+              "link": "FULFILMENT",
+              "ok": false,
+              "basis": "nobody has established who would do the work"
+            },
+            {
+              "link": "ECONOMICS",
+              "ok": false,
+              "basis": "costs or money tied up are not established"
+            },
+            {
+              "link": "SETTLES_IN_TIME",
+              "ok": false,
+              "basis": "10 days to usable cash against 30 left"
+            }
+          ],
+          "facts": [
+            {
+              "field": "access",
+              "value": "Cold email via Instantly to contractors",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "captureMechanism",
+              "value": "Sell AI voice receptionist configured on a white-label platform: one-time setup fee plus monthly retainer to Owner-operated HVAC/plumbing/roofing businesses missing inbound calls, reached through Cold email via Instantly to contractors, at $1,000; White-label voice-AI build service on Trillet Agency platform (managed build for agencies) delivers it.",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "exposure",
+              "value": "$250",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "fulfillment",
+              "value": "White-label voice-AI build service on Trillet Agency platform (managed build for agencies).",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "hours",
+              "value": "0.5 owner hours per sale",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "offer",
+              "value": "AI voice receptionist configured on a white-label platform: one-time setup fee plus monthly retainer",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "payer",
+              "value": "Owner-operated HVAC/plumbing/roofing businesses missing inbound calls",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "price",
+              "value": "$1,000",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "revenueRange",
+              "value": "$1,000",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "routeSearches",
+              "value": "https://trillet.ai/blogs/how-agencies-should-price-voice-ai-services; https://www.nonstopautomation.com/pricing; AI voice agent agency setup fee HVAC plumbing; https://instantly.ai/pricing",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "routeStage",
+              "value": "ROUTE",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "timeToFirstCash",
+              "value": "10 days",
+              "kind": "RECOMMENDATION"
+            }
+          ]
+        },
+        {
+          "opportunityId": "cop_673c9ca2371f43198d5c",
+          "title": "Bid on posted AI-automation (n8n) build jobs on freelance marketplaces",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ],
+          "stage": "B_EVIDENCED",
+          "supportedReach": 0,
+          "potentialReach": 0,
+          "card": {
+            "payer": "Small businesses posting n8n / AI-chatbot build projects on Freelancer.com and Upwork",
+            "reachableChannel": "Marketplace proposals (Freelancer.com, Upwork; Upwork Connects $0.15 each)",
+            "offerScope": "Fixed-price n8n AI workflow or chatbot build delivered within the posted scope",
+            "priceCents": 40000,
+            "currency": "USD",
+            "fulfillmentOwner": "Freelance n8n developer hired per job on Freelancer.com/Upwork (average bids $153-$592 on comparable jobs)",
+            "peakFundingCents": 6000,
+            "humanHours": 0.5,
+            "requiredCapabilities": [],
+            "industry": "Software / workflow automation services",
+            "mechanism": "EXPLICIT_PAID_REQUEST",
+            "state": "DISCOVERED"
+          },
+          "agreements": [],
+          "links": [
+            {
+              "link": "REACHABLE_BUYER",
+              "ok": true,
+              "basis": "reach: Marketplace proposals (Freelancer.com, Upwork; Upwork Connects $0.15 each)"
+            },
+            {
+              "link": "CURRENT_DEMAND",
+              "ok": false,
+              "basis": "no buying signal recorded"
+            },
+            {
+              "link": "OFFER_AND_PRICE",
+              "ok": false,
+              "basis": "price 400 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+            },
+            {
+              "link": "CONVERSION",
+              "ok": false,
+              "basis": "100 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+            },
+            {
+              "link": "MARKET_VOLUME",
+              "ok": false,
+              "basis": "25 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+            },
+            {
+              "link": "FULFILMENT",
+              "ok": false,
+              "basis": "nobody has established who would do the work"
+            },
+            {
+              "link": "ECONOMICS",
+              "ok": false,
+              "basis": "costs or money tied up are not established"
+            },
+            {
+              "link": "SETTLES_IN_TIME",
+              "ok": false,
+              "basis": "money comes only after winning an award, then doing the work, then the buyer paying on its terms — nobody has established when that would be"
+            }
+          ],
+          "facts": [
+            {
+              "field": "access",
+              "value": "Marketplace proposals (Freelancer.com, Upwork; Upwork Connects $0.15 each)",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "buyerVolume",
+              "value": "17 Small businesses posting n8n / AI-chatbot build projects on Freelancer.com and Upwork (Freelancer.com n8n category showed 17 open jobs on 2026-11-27, average bids $153-$592, 48-386 bids each; Upwork search returned ~19 n8n/AI listings at $15-$2,500 fixed)",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "captureMechanism",
+              "value": "Sell Fixed-price n8n AI workflow or chatbot build delivered within the posted scope to Small businesses posting n8n / AI-chatbot build projects on Freelancer.com and Upwork, reached through Marketplace proposals (Freelancer.com, Upwork; Upwork Connects $0.15 each), at $400; Freelance n8n developer hired per job on Freelancer.com/Upwork (average bids $153-$592 on comparable jobs) delivers it.",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "exposure",
+              "value": "$60",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "fulfillment",
+              "value": "Freelance n8n developer hired per job on Freelancer.com/Upwork (average bids $153-$592 on comparable jobs).",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "hours",
+              "value": "0.5 owner hours per sale",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "offer",
+              "value": "Fixed-price n8n AI workflow or chatbot build delivered within the posted scope",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "payer",
+              "value": "Small businesses posting n8n / AI-chatbot build projects on Freelancer.com and Upwork",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "price",
+              "value": "$400",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "revenueRange",
+              "value": "$400",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "routeSearches",
+              "value": "https://www.freelancer.com/jobs/n8n/; https://support.upwork.com/hc/en-us/articles/211062538-Learn-about-the-Freelancer-Service-Fee; https://www.freelancer.com/jobs/n8n/; Upwork n8n automation fixed price job search; https://www.freelancer.com/jobs/n8n/; https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work; https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "routeStage",
+              "value": "ROUTE",
+              "kind": "RECOMMENDATION"
+            },
+            {
+              "field": "timeToFirstCash",
+              "value": "12 days",
+              "kind": "RECOMMENDATION"
+            }
+          ]
+        }
+      ],
+      "excluded": [],
+      "scope": {
+        "targetCents": 1000000,
+        "daysLeft": 30,
+        "hoursCeiling": null,
+        "industry": null,
+        "recurring": null,
+        "hoursPerWeek": null
+      },
+      "nextTest": "Discover, construct and research openings that can reach the 10000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them."
+    },
+    "questions": [
+      {
+        "needId": "cnd_c393bf07a3904a258b39",
+        "opportunityId": "cop_a33f35a4fe5e4034a840",
+        "field": "buyerVolume",
+        "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+        "settledWhen": "The buyerVolume is recorded on this card.",
+        "parked": true,
+        "returned": null,
+        "submitted": []
+      },
+      {
+        "needId": "cnd_e6c46b11a74148b083b2",
+        "opportunityId": "cop_a33f35a4fe5e4034a840",
+        "field": "revenueRange",
+        "ask": "Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.",
+        "settledWhen": "The revenueRange is recorded on this card.",
+        "parked": true,
+        "returned": null,
+        "submitted": []
+      },
+      {
+        "needId": "cnd_f14ecb93962043c0bd13",
+        "opportunityId": "cop_c51d3c5d68e546ffb390",
+        "field": "buyerVolume",
+        "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+        "settledWhen": "The buyerVolume is recorded on this card.",
+        "parked": true,
+        "returned": null,
+        "submitted": []
+      },
+      {
+        "needId": "cnd_c1cf63597e3b4230b57a",
+        "opportunityId": "cop_c51d3c5d68e546ffb390",
+        "field": "revenueRange",
+        "ask": "Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.",
+        "settledWhen": "The revenueRange is recorded on this card.",
+        "parked": true,
+        "returned": null,
+        "submitted": []
+      },
+      {
+        "needId": "cnd_812707e5446343d894c0",
+        "opportunityId": "cop_e0716d82a55d4527b332",
+        "field": "buyerVolume",
+        "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+        "settledWhen": "The buyerVolume is recorded on this card.",
+        "parked": false,
+        "returned": {
+          "phase": "VERIFIED",
+          "needId": "cnd_812707e5446343d894c0",
+          "opportunityId": "cop_e0716d82a55d4527b332",
+          "field": "buyerVolume",
+          "verifier": {
+            "kind": "APP_SESSION",
+            "id": "wkr_e053549969e147889b2e/verifier-1",
+            "model": "claude-opus-5-5"
+          },
+          "researcher": {
+            "kind": "APP_SESSION",
+            "id": "wkr_247bfbc3570249c88bcf/discovery-1",
+            "model": "claude-opus-5-5"
+          },
+          "fragmentStatus": "BLOCKED",
+          "gateReasons": [
+            "No claim in this fragment survived the evidence gate.",
+            "3 claim(s) failed: the source directly supports the claim.",
+            "1 required evidence lane(s) have no accepted claim: answer (The buyerVolume is recorded on this card.)",
+            "The accepted claims rest on 0 independent source(s), below the 1 this fragment requires."
+          ],
+          "claims": [
+            {
+              "claimId": "clm_bf9730f2dc4149218f32",
+              "accepted": false,
+              "rejectionReason": "UNVERIFIABLE: the claim text, URL and passage are not exposed through the connector (id and SOURCED only), so I cannot confirm the page states it. I opened the UsableNet 2025 year-end report (plain text): '5,114 ADA digital accessibility lawsuits' filed Jan 1 to Dec 15 2025; 3,195 federal and 1,919 state (NY, CA); 64% against companies under $25M revenue (a percentage, not a count); '1,427 ... targeted companies that had already been sued'. These are counts of lawsuits and defendants. They do not count buyers who will buy an audit, give no reachable channel, and give no purchase frequency."
+            },
+            {
+              "claimId": "clm_caf1daadf2bc452cac8e",
+              "accepted": false,
+              "rejectionReason": "UNVERIFIABLE: the claim text, URL and passage are not exposed through the connector (id and SOURCED only), so I cannot confirm the page states it. I opened the UsableNet 2025 year-end report (plain text): '5,114 ADA digital accessibility lawsuits' filed Jan 1 to Dec 15 2025; 3,195 federal and 1,919 state (NY, CA); 64% against companies under $25M revenue (a percentage, not a count); '1,427 ... targeted companies that had already been sued'. These are counts of lawsuits and defendants. They do not count buyers who will buy an audit, give no reachable channel, and give no purchase frequency."
+            },
+            {
+              "claimId": "clm_c95e90b97a454f87933d",
+              "accepted": false,
+              "rejectionReason": "UNVERIFIABLE: the claim text, URL and passage are not exposed through the connector (id and SOURCED only), so I cannot confirm the page states it. I opened the UsableNet 2025 year-end report (plain text): '5,114 ADA digital accessibility lawsuits' filed Jan 1 to Dec 15 2025; 3,195 federal and 1,919 state (NY, CA); 64% against companies under $25M revenue (a percentage, not a count); '1,427 ... targeted companies that had already been sued'. These are counts of lawsuits and defendants. They do not count buyers who will buy an audit, give no reachable channel, and give no purchase frequency."
+            }
+          ],
+          "answered": null,
+          "unanswered": {
+            "state": "NO_SUPPORT",
+            "detail": "The research finished and nothing it found supports an answer here. The field stays unknown, which is the honest outcome rather than a blank filled in to close a need."
+          },
+          "input": {
+            "field": "buyerVolume",
+            "before": null,
+            "after": null
+          },
+          "missing": {
+            "before": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "after": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          "rerun": {
+            "completed": true,
+            "verdict": "NOT_VIABLE",
+            "at": "2026-11-27T00:21:10.198Z"
+          }
+        },
+        "submitted": [
+          {
+            "claimId": "clm_bf9730f2dc4149218f32",
+            "claim": "5,114 ADA digital accessibility lawsuits were filed in 2025 (data Jan 1 - Dec 15, 2025); each defendant is a business whose website was alleged inaccessible, a buyer population that needs remediation, typically once.",
+            "sourceUrl": "https://info.usablenet.com/2025-year-end-digital-accessibility-lawsuit-report-plain-text",
+            "sourceTitle": "2025 Year-End Digital Accessibility Lawsuit Report (plain text)",
+            "sourcePublisher": "UsableNet",
+            "sourceDate": "2025-12-15",
+            "evidenceExcerpt": "In 2025, a total of 5,114 ADA digital accessibility lawsuits were filed.",
+            "evidenceLocator": "Report summary; coverage stated as January 1, 2025 through December 15, 2025; page prints no publication date, coverage ends December 15, 2025",
+            "sourced": true,
+            "accepted": false,
+            "rejectionReason": "UNVERIFIABLE: the claim text, URL and passage are not exposed through the connector (id and SOURCED only), so I cannot confirm the page states it. I opened the UsableNet 2025 year-end report (plain text): '5,114 ADA digital accessibility lawsuits' filed Jan 1 to Dec 15 2025; 3,195 federal and 1,919 state (NY, CA); 64% against companies under $25M revenue (a percentage, not a count); '1,427 ... targeted companies that had already been sued'. These are counts of lawsuits and defendants. They do not count buyers who will buy an audit, give no reachable channel, and give no purchase frequency."
+          },
+          {
+            "claimId": "clm_caf1daadf2bc452cac8e",
+            "claim": "Companies with under $25M annual revenue accounted for 64% of 2025 digital accessibility lawsuits, and eCommerce accounted for 70% of filings by industry.",
+            "sourceUrl": "https://info.usablenet.com/2025-year-end-digital-accessibility-lawsuit-report-plain-text",
+            "sourceTitle": "2025 Year-End Digital Accessibility Lawsuit Report (plain text)",
+            "sourcePublisher": "UsableNet",
+            "sourceDate": "2025-12-15",
+            "evidenceExcerpt": "Companies with less than 25 million dollars in annual revenue accounted for 64 percent of cases.",
+            "evidenceLocator": "Company size section; industry breakdown 'eCommerce: 70 percent'; page prints no publication date, coverage ends December 15, 2025",
+            "sourced": true,
+            "accepted": false,
+            "rejectionReason": "UNVERIFIABLE: the claim text, URL and passage are not exposed through the connector (id and SOURCED only), so I cannot confirm the page states it. I opened the UsableNet 2025 year-end report (plain text): '5,114 ADA digital accessibility lawsuits' filed Jan 1 to Dec 15 2025; 3,195 federal and 1,919 state (NY, CA); 64% against companies under $25M revenue (a percentage, not a count); '1,427 ... targeted companies that had already been sued'. These are counts of lawsuits and defendants. They do not count buyers who will buy an audit, give no reachable channel, and give no purchase frequency."
+          },
+          {
+            "claimId": "clm_c95e90b97a454f87933d",
+            "claim": "1,427 of the 2025 digital accessibility lawsuits targeted companies that had already been sued, so repeat defendants exist and a sued company is not reliably remediated after one suit.",
+            "sourceUrl": "https://info.usablenet.com/2025-year-end-digital-accessibility-lawsuit-report-plain-text",
+            "sourceTitle": "2025 Year-End Digital Accessibility Lawsuit Report (plain text)",
+            "sourcePublisher": "UsableNet",
+            "sourceDate": "2025-12-15",
+            "evidenceExcerpt": "1,427 ADA digital accessibility lawsuits targeted companies that had already been sued.",
+            "evidenceLocator": "Repeat lawsuits section; page prints no publication date, coverage ends December 15, 2025",
+            "sourced": true,
+            "accepted": false,
+            "rejectionReason": "UNVERIFIABLE: the claim text, URL and passage are not exposed through the connector (id and SOURCED only), so I cannot confirm the page states it. I opened the UsableNet 2025 year-end report (plain text): '5,114 ADA digital accessibility lawsuits' filed Jan 1 to Dec 15 2025; 3,195 federal and 1,919 state (NY, CA); 64% against companies under $25M revenue (a percentage, not a count); '1,427 ... targeted companies that had already been sued'. These are counts of lawsuits and defendants. They do not count buyers who will buy an audit, give no reachable channel, and give no purchase frequency."
+          }
+        ]
+      }
+    ]
+  }
+}
