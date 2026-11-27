@@ -7,7 +7,8 @@
  *   npx tsx scripts/planningMcpHost.ts credential --world DIR [--as NAME] [--out FILE]   a worker of its own with the
  *                                                                  operator's scopes on the world's project
  *   npx tsx scripts/planningMcpHost.ts serve --world DIR --port P  serve POST /mcp until killed
- *   npx tsx scripts/planningMcpHost.ts call --port P --credential FILE --tool NAME --args FILE   one tools/call
+ *   npx tsx scripts/planningMcpHost.ts call (--port P | --url https://…/mcp) --credential FILE --tool NAME --args FILE   one tools/call
+ *   npx tsx scripts/planningMcpHost.ts probe --url https://…/mcp --credential FILE   tools/list carries every planning tool
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,7 +30,9 @@ async function main(): Promise<void> {
     const name = need('tool');
     const args = flag('args') ? JSON.parse(fs.readFileSync(need('args'), 'utf8')) : {};
     const bearer = fs.readFileSync(need('credential'), 'utf8').trim();
-    const response = await fetch(`http://127.0.0.1:${need('port')}/mcp`, {
+    // --url: any Brain's MCP endpoint (staging or production, for the release's connection test); --port: a local host.
+    const endpoint = flag('url') ?? `http://127.0.0.1:${need('port')}/mcp`;
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'mcp-protocol-version': PROTOCOL, 'mcp-method': 'tools/call', 'mcp-name': name, accept: 'application/json, text/event-stream', 'content-type': 'application/json', authorization: `Bearer ${bearer}` },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args, _meta: { 'io.modelcontextprotocol/protocolVersion': PROTOCOL, 'io.modelcontextprotocol/clientInfo': { name: 'planning-session', version: '1.0.0' }, 'io.modelcontextprotocol/clientCapabilities': {} } } }),
@@ -40,6 +43,20 @@ async function main(): Promise<void> {
     const result = (body['result'] ?? {}) as Record<string, unknown>;
     process.stdout.write(`${JSON.stringify({ status: response.status, isError: result['isError'] === true, value: result['structuredContent'] ?? result['content'] ?? body['error'] ?? null }, null, 2)}\n`);
     return;
+  }
+  if (cmd === 'probe') {
+    const bearer = fs.readFileSync(need('credential'), 'utf8').trim();
+    const response = await fetch(need('url'), {
+      method: 'POST',
+      headers: { 'mcp-protocol-version': PROTOCOL, 'mcp-method': 'tools/list', accept: 'application/json, text/event-stream', 'content-type': 'application/json', authorization: `Bearer ${bearer}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': PROTOCOL, 'io.modelcontextprotocol/clientInfo': { name: 'planning-release-probe', version: '1.0.0' }, 'io.modelcontextprotocol/clientCapabilities': {} } } }),
+    });
+    const body = (await response.json().catch(() => ({}))) as { result?: { tools?: { name: string }[] } };
+    const names = new Set((body.result?.tools ?? []).map((t) => t.name));
+    const { PLANNING_TOOLS } = await import('../server/mcp/planningTools.ts');
+    const missing = PLANNING_TOOLS.map((t) => t.name).filter((n) => !names.has(n));
+    process.stdout.write(`${JSON.stringify({ status: response.status, planningTools: PLANNING_TOOLS.length - missing.length, missing }, null, 2)}\n`);
+    process.exit(missing.length === 0 && response.status === 200 ? 0 : 1);
   }
   const world = need('world');
   const meta = JSON.parse(fs.readFileSync(path.join(world, 'world.json'), 'utf8')) as { projectId: string; userId: string };

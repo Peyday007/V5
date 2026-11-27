@@ -213,7 +213,8 @@ export interface PlanRevisionInput {
   quantities: QuantityInput[];
   sources: SourceInput[];
   validation: { proof: string; stop: string[]; continue: string[] } | null;
-  noPlan: { decisiveGap: string; resolution: string } | null;
+  /** decisiveLinks: the chain links the decisive gap is about (structured, so the gap, the chain and `resolves` can be checked to agree). */
+  noPlan: { decisiveGap: string; resolution: string; decisiveLinks?: string[] } | null;
   /** A simulated chance of reaching the target, and whether it is calibrated against resolved outcomes. */
   reach: { value: number; calibrated: boolean; presentedAs: 'PROBABILITY' | 'COVERAGE' } | null;
   /** Answers to the previous review's findings, when revising after REVISE. */
@@ -231,6 +232,8 @@ export interface PlanRevisionInput {
   members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null }[];
   /** The chain links the plan's validation test or research measures (what would resolve the unknowns). */
   resolves?: string[];
+  /** Where the session's chain judgement differs from Brain's planner (BrainFacts.links): the link and the evidence-based reason. */
+  disagreements?: { opportunityId: string; link: string; reason: string }[];
   /** Constraints (DEADLINE, CAPITAL, TARGET, OWNER_HOURS) the session finds rule every plan out, with the relaxation it suggests. */
   constraints?: { constraint: string; suggestion: string }[];
   /** Set by the transport when the payload arrived incomplete. */
@@ -282,6 +285,8 @@ export type CheckCode =
   | 'FULFILMENT_UNESTABLISHED'
   | 'CAPABILITY_NOT_HELD'
   | 'CAPABILITY_UNREAD'
+  | 'CHAIN_DISAGREEMENT_UNSTATED'
+  | 'RESOLUTION_UNNAMED'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -304,6 +309,8 @@ export interface BrainFacts {
   fulfilment?: Record<string, { by: 'BRAIN' | 'PROVIDER' | 'OWNER' | 'NOBODY'; name: string | null; capability: string | null; capabilityState: string | null }>;
   /** The owner hours the stored goal allows over its window, or null when it states none. */
   hoursCeiling?: number | null;
+  /** Per opening: Brain's planner's judgement of each chain link and the basis that decides it. */
+  links?: Record<string, { link: string; ok: boolean; basis: string }[]>;
 }
 
 /** The cash sequence, day by day, with every limit's running figure. Exported so the author can read it back. */
@@ -396,6 +403,41 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     }
   }
   for (const k of r.constraints ?? []) if (!(PLAN_CONSTRAINTS as readonly string[]).includes(k.constraint)) add('INCOMPLETE_OUTPUT', `"${k.constraint}" is not a constraint (${PLAN_CONSTRAINTS.join(', ')})`, null);
+
+  // The session's chain judgement against Brain's: a difference in either direction carries its evidence-based reason,
+  // so a link Brain establishes is never silently dropped and one Brain finds unestablished is never silently assumed.
+  const stated = (id: string, link: string) => (r.disagreements ?? []).some((d) => d.opportunityId === id && d.link === link && d.reason.trim().length > 0);
+  for (const c of r.chain ?? []) {
+    const theirs = brain?.links?.[c.opportunityId];
+    if (!theirs?.length) continue;
+    for (const l of theirs) {
+      const mineMissing = c.missing.includes(l.link);
+      if (l.ok && mineMissing && !stated(c.opportunityId, l.link)) add('CHAIN_DISAGREEMENT_UNSTATED', `you mark ${l.link} missing on ${c.opportunityId}, but Brain's planner establishes it ("${l.basis}"); state why the evidence does not support it in \`disagreements\`, or remove it from the chain`, c.opportunityId);
+      if (!l.ok && !mineMissing && !stated(c.opportunityId, l.link)) add('CHAIN_DISAGREEMENT_UNSTATED', `you treat ${l.link} as established on ${c.opportunityId}, but Brain's planner does not ("${l.basis}"); state the evidence that establishes it in \`disagreements\`, or mark it missing`, c.opportunityId);
+    }
+  }
+
+  // What would resolve the plan's unknowns names them: a no-plan's decisive gap is stated as chain links, marked missing,
+  // and measured by `resolves`; a conditional plan's test measures every link its members are missing.
+  const missingAnywhere = new Set((r.chain ?? []).flatMap((c) => c.missing));
+  const resolves = new Set(r.resolves ?? []);
+  if (r.stance === 'NO_PLAN' && !(r.constraints ?? []).length) {
+    const decisive = r.noPlan?.decisiveLinks ?? [];
+    if (!decisive.length) add('RESOLUTION_UNNAMED', 'a no-plan result must name its decisive gap as chain links (noPlan.decisiveLinks), not only in prose');
+    for (const l of decisive) {
+      if (!(CHAIN_LINKS as readonly string[]).includes(l)) add('INCOMPLETE_OUTPUT', `decisive link "${l}" is not a chain link`, null);
+      else {
+        if (!missingAnywhere.has(l)) add('RESOLUTION_UNNAMED', `the decisive gap names ${l}, but no opening's chain marks it missing`, null);
+        if (!resolves.has(l)) add('RESOLUTION_UNNAMED', `the decisive gap is ${l}, but \`resolves\` names no measurement or research of it`, null);
+      }
+    }
+  }
+  if (r.stance === 'CONDITIONAL') {
+    for (const c of r.chain ?? []) {
+      if (!r.strategy.opportunityIds.includes(c.opportunityId)) continue;
+      for (const l of c.missing) if (!resolves.has(l)) add('RESOLUTION_UNNAMED', `the plan's member ${c.opportunityId} is missing ${l}, but its validation (\`resolves\`) does not measure it`, c.opportunityId);
+    }
+  }
 
   // Stance-specific completeness.
   if (r.stance === 'NO_PLAN') {

@@ -257,12 +257,14 @@ export interface SessionOpening {
   potentialReach: number | null;
   card: Record<string, unknown>;
   agreements: { amountCents: number; currency: string; deliverable: string; evidenceKind: string; state: string; recordedBy: string }[];
+  /** Brain's planner's judgement of each chain link for this opening, with the basis that decides it. */
+  links: { link: string; ok: boolean; basis: string }[];
   facts: { field: string; value: string | null; kind: string }[];
 }
 
 const OPENING_FIELDS = ['payer', 'reachableChannel', 'buyingSignal', 'signalObservedAt', 'offerScope', 'acceptanceCondition', 'priceCents', 'currency', 'paymentTerms', 'fulfillmentOwner', 'deliveryMethod', 'requiredInputs', 'deadline', 'economicsNote', 'peakFundingCents', 'humanHours', 'requiredCapabilities', 'industry', 'mechanism', 'state'] as const;
 
-async function consideredOpenings(reading: { considered: { opportunityId: string; title: string; missing: string[]; stage: string; supportedReach: number; potentialReach: number | null }[] }): Promise<SessionOpening[]> {
+async function consideredOpenings(reading: { considered: { opportunityId: string; title: string; missing: string[]; stage: string; supportedReach: number; potentialReach: number | null }[]; strategies?: { opportunityIds: string[]; links: { link: string; ok: boolean; basis: string }[] }[] }): Promise<SessionOpening[]> {
   const out: SessionOpening[] = [];
   for (const c of reading.considered ?? []) {
     const o = await getOpportunity(c.opportunityId);
@@ -274,7 +276,12 @@ async function consideredOpenings(reading: { considered: { opportunityId: string
     // Written agreements and commitments recorded against it (the journey's agreement rows): evidence the card's facts do not carry.
     const { agreementsFor } = await import('../../repos/cashJourney.ts');
     const agreements = (await agreementsFor(c.opportunityId).catch(() => [])).map((a) => ({ amountCents: a.amountCents, currency: a.currency, deliverable: a.deliverable, evidenceKind: a.evidenceKind, state: a.state, recordedBy: a.recordedBy }));
-    out.push({ opportunityId: c.opportunityId, title: c.title, missing: [...c.missing], stage: c.stage, supportedReach: c.supportedReach, potentialReach: c.potentialReach, card, agreements, facts: facts.map((f) => ({ field: f.field, value: f.value, kind: f.kind })) });
+    // Brain's own judgement of each chain link for this opening, with the row or rule that decides it: the strategy
+    // that holds this opening alone, else the first that holds it. What a session must answer before it disagrees.
+    const strategy = (reading.strategies ?? []).find((one) => one.opportunityIds.length === 1 && one.opportunityIds[0] === c.opportunityId)
+      ?? (reading.strategies ?? []).find((one) => one.opportunityIds.includes(c.opportunityId));
+    const links = (strategy?.links ?? []).map((l) => ({ link: l.link, ok: l.ok, basis: l.basis }));
+    out.push({ opportunityId: c.opportunityId, title: c.title, missing: [...c.missing], stage: c.stage, supportedReach: c.supportedReach, potentialReach: c.potentialReach, card, agreements, links, facts: facts.map((f) => ({ field: f.field, value: f.value, kind: f.kind })) });
   }
   return out;
 }
@@ -638,6 +645,7 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
     ...(input.revision.members ? { members: input.revision.members } : {}),
     ...(input.revision.resolves ? { resolves: input.revision.resolves } : {}),
     ...(input.revision.constraints ? { constraints: input.revision.constraints } : {}),
+    ...(input.revision.disagreements ? { disagreements: input.revision.disagreements } : {}),
     ...(missing.length || input.revision.truncated ? { truncated: true } : {}),
   };
   const lastContribution = (await events(goalId, PLANNING_EVENTS.contribution)).pop();
@@ -646,7 +654,8 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const admitted = await admittedIds(goalId);
   const fulfilment = await fulfilmentOf(r.strategy.opportunityIds);
   r.steps = await withExecutors(r.steps, r.strategy.opportunityIds, fulfilment);
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling };
+  const links = Object.fromEntries((brainRun.openings ?? []).filter((o) => o.links?.length).map((o) => [o.opportunityId, o.links]));
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),

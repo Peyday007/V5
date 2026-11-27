@@ -128,3 +128,40 @@ describe('review independence', () => {
     expect(sameExecutor({ kind: 'APP_SESSION', id: 'author', model: null }, { kind: 'MODEL', id: 'reviewer', model: null })).toBe(false);
   });
 });
+
+describe('the session’s chain judgement against Brain’s, and what resolves an unknown', () => {
+  const linksAllOk = { o1: ['REACHABLE_BUYER', 'CURRENT_DEMAND', 'OFFER_AND_PRICE', 'CONVERSION', 'MARKET_VOLUME', 'FULFILMENT', 'ECONOMICS', 'SETTLES_IN_TIME'].map((link) => ({ link, ok: true, basis: link === 'CONVERSION' ? "measured on this offer's own inbound page: 22 money-committed pre-orders from 200 unique visitors" : 'evidenced' })) };
+
+  it('refuses a link Brain establishes being dropped silently, and accepts the disagreement once its reason is stated', () => {
+    const conditional = plan({ stance: 'CONDITIONAL', chain: [{ opportunityId: 'o1', missing: ['CONVERSION'] }], resolves: ['CONVERSION'], validation: { proof: 'two paid', stop: ['none by day 10'], continue: ['two paid'] } });
+    const c = codes(conditional, brain({ links: linksAllOk }));
+    expect(c).toContain('CHAIN_DISAGREEMENT_UNSTATED');
+    const detail = checkRevision(contract, conditional, brain({ links: linksAllOk }), '2026-11-27').find((p) => p.code === 'CHAIN_DISAGREEMENT_UNSTATED')!.detail;
+    expect(detail).toContain("this offer's own inbound page");
+    const reasoned = { ...conditional, disagreements: [{ opportunityId: 'o1', link: 'CONVERSION', reason: 'the page rate was measured on inbound visitors; this plan reaches buyers by cold email' }] };
+    expect(codes(reasoned, brain({ links: linksAllOk }))).not.toContain('CHAIN_DISAGREEMENT_UNSTATED');
+  });
+
+  it('refuses treating a link Brain finds unestablished as established without stating the evidence', () => {
+    const links = { o1: linksAllOk.o1.map((l) => (l.link === 'OFFER_AND_PRICE' ? { ...l, ok: false, basis: 'the price is a bounty reward, not a purchase' } : l)) };
+    expect(codes(plan({ chain: [{ opportunityId: 'o1', missing: [] }] }), brain({ links }))).toContain('CHAIN_DISAGREEMENT_UNSTATED');
+  });
+
+  it('requires a no-plan’s decisive gap as chain links that are missing and measured by `resolves` (mv-01 regression)', () => {
+    const noPlan = (over: Partial<PlanRevisionInput>): PlanRevisionInput => plan({
+      stance: 'NO_PLAN', strategy: { title: 'no plan', opportunityIds: [], why: 'w' }, steps: [], cash: [], alternatives: [{ title: 'a', why: 'b' }],
+      noPlan: { decisiveGap: 'the $10,000 figure is a bounty reward, not a price', resolution: 'find a sourced purchase price' }, ...over,
+    });
+    expect(codes(noPlan({ chain: [{ opportunityId: 'o1', missing: ['MARKET_VOLUME'] }], resolves: ['MARKET_VOLUME'] }))).toContain('RESOLUTION_UNNAMED');
+    const named = { decisiveGap: 'bounty, not a price', resolution: 'find a sourced purchase price', decisiveLinks: ['OFFER_AND_PRICE'] };
+    expect(codes(noPlan({ noPlan: named, chain: [{ opportunityId: 'o1', missing: ['MARKET_VOLUME'] }], resolves: ['MARKET_VOLUME'] }))).toContain('RESOLUTION_UNNAMED');
+    expect(codes(noPlan({ noPlan: named, chain: [{ opportunityId: 'o1', missing: ['OFFER_AND_PRICE', 'MARKET_VOLUME'] }], resolves: ['MARKET_VOLUME'] }))).toContain('RESOLUTION_UNNAMED');
+    expect(codes(noPlan({ noPlan: named, chain: [{ opportunityId: 'o1', missing: ['OFFER_AND_PRICE', 'MARKET_VOLUME'] }], resolves: ['OFFER_AND_PRICE', 'MARKET_VOLUME'] }))).not.toContain('RESOLUTION_UNNAMED');
+  });
+
+  it('requires a conditional plan’s validation to measure every link its members are missing', () => {
+    const r = plan({ stance: 'CONDITIONAL', chain: [{ opportunityId: 'o1', missing: ['CONVERSION', 'MARKET_VOLUME'] }], resolves: ['CONVERSION'], validation: { proof: 'p', stop: ['s'], continue: ['c'] } });
+    expect(codes(r)).toContain('RESOLUTION_UNNAMED');
+    expect(codes({ ...r, resolves: ['CONVERSION', 'MARKET_VOLUME'] })).not.toContain('RESOLUTION_UNNAMED');
+  });
+});

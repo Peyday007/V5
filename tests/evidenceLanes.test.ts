@@ -390,12 +390,12 @@ describe('a lane rendered for a human', () => {
 });
 
 describe('a fragment whose geography is not a place', () => {
-  const scoped = (geography: string, verdict: 'UNKNOWN' | 'MISMATCH') => {
+  const scoped = (geography: string, verdict: 'UNKNOWN' | 'MISMATCH' | 'UNSTATED' | 'MATCH', population?: { declared: string; verdict: 'MATCH' | 'MISMATCH' | 'UNSTATED' }) => {
     const claims = [claim()];
     const verification = verdictsFor(claims);
     const entry = verification.verdicts.get(claims[0]!.id)!;
-    entry.scopeMatch = { ...entry.scopeMatch, geography: verdict };
-    return applyGate({ fragment: fragment({ geography }), claims, verification });
+    entry.scopeMatch = { ...entry.scopeMatch, geography: verdict, ...(population ? { population: population.verdict } : {}) };
+    return applyGate({ fragment: fragment({ geography, ...(population ? { population: population.declared } : {}) }), claims, verification });
   };
 
   it('does not refuse a claim the verifier could not place in "the market this question names"', () => {
@@ -405,5 +405,21 @@ describe('a fragment whose geography is not a place', () => {
   it('still refuses a mismatch against it, and an unknown against a real place', () => {
     expect(scoped(ANY_NAMED_MARKET, 'MISMATCH').acceptedClaims).toBe(0);
     expect(scoped('New Jersey', 'UNKNOWN').acceptedClaims).toBe(0);
+  });
+
+  // Matched controls (owner's correction, 2026-11-27): an unrestricted question and a market-specific one, the same claim.
+  it('does not refuse a claim whose source states no geography when the question requires none', () => {
+    const g = scoped(ANY_NAMED_MARKET, 'UNSTATED');
+    expect(g.acceptedClaims).toBe(1);
+  });
+
+  it('still refuses an unstated geography when the question names a particular market', () => {
+    expect(scoped('United States', 'UNSTATED').acceptedClaims).toBe(0);
+    expect(scoped('United States', 'MATCH').acceptedClaims).toBe(1);
+  });
+
+  it('lets an unstated geography decide nothing else: a population mismatch still refuses the claim', () => {
+    expect(scoped(ANY_NAMED_MARKET, 'UNSTATED', { declared: 'US small businesses', verdict: 'MISMATCH' }).acceptedClaims).toBe(0);
+    expect(scoped(ANY_NAMED_MARKET, 'UNSTATED', { declared: 'US small businesses', verdict: 'MATCH' }).acceptedClaims).toBe(1);
   });
 });

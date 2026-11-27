@@ -10,6 +10,7 @@
  *   npx tsx scripts/planningReliabilitySession.ts change  --case ID --dir D --step K
  *   npx tsx scripts/planningReliabilitySession.ts grade   --case ID --dir D [--step K]   one graded row (JSON)
  *   npx tsx scripts/planningReliabilitySession.ts summary --rows a.json,b.json,…         the reliability table
+ *   (prepare, change and grade take --cases FILE to read a fresh held-out set instead of the bench's own cases)
  *
  * The world directory a session is given holds no expectation: the case's rubric is read only here,
  * by `grade`. Nothing touches production, spends or contacts anyone.
@@ -31,6 +32,17 @@ const out = (value: unknown) => process.stdout.write(`${JSON.stringify(value, nu
 
 async function caseOf(id: string) {
   const { PUBLIC_CASES } = await import('../bench/planningReliability/cases.ts');
+  // A fresh, held-out set lives outside the repository (--cases FILE: a JSON array of PlanningCase), validated by the bench's own rules.
+  const file = flag('cases');
+  if (file) {
+    const { caseProblem } = await import('../bench/planningReliability/case.ts');
+    const list = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown[];
+    const found = list.find((one) => (one as { id?: string }).id === id);
+    if (!found) throw new Error(`no case ${id} in ${file}`);
+    const problem = caseProblem(found);
+    if (problem) throw new Error(`case ${id} is malformed: ${problem}`);
+    return found as (typeof PUBLIC_CASES)[number];
+  }
   const c = PUBLIC_CASES.find((one) => one.id === id);
   if (!c) throw new Error(`no case ${id}`);
   return c;

@@ -171,7 +171,14 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
 
   it('control 1: a feasible, fully evidenced objective returns a complete plan that is reviewed and published', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
-    const r = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [] }, actor: AUTHOR, today: '2026-11-26' });
+    // Claiming every link established where Brain's planner holds the route as a hypothesis is refused until each
+    // disagreement states its evidence (the session's sources s1–s3); stated, the plan passes.
+    const silent = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [] }, actor: AUTHOR, today: '2026-11-26' });
+    expect(silent.problems.map((p) => p.code)).toContain('CHAIN_DISAGREEMENT_UNSTATED');
+    const unestablished = (silent.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []).filter((l) => !l.ok);
+    expect(unestablished.length).toBeGreaterThan(0);
+    const disagreements = unestablished.map((l) => ({ opportunityId: opp, link: l.link, reason: `established by the session's sources s1–s3 (price quote, contractor quote, pilot of 4 paid from 200), which Brain's card does not yet hold` }));
+    const r = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], disagreements }, actor: AUTHOR, today: '2026-11-26' });
     expect(r.brain.completed).toBe(true);
     expect(r.problems).toEqual([]);
     // The structured judgement a grader reads survives the transport.

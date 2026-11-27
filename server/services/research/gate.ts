@@ -248,7 +248,12 @@ function scopeFailures(scope: ClaimScopeMatch, fragment: ResearchFragment): stri
   // claims were refused on exactly that on 2026-10-13. A MISMATCH still
   // fails: that is a reader saying the claim is about another market than the
   // one the question is about.
-  const anyMarket = fragment.geography === ANY_NAMED_MARKET && scope.geography === 'UNKNOWN';
+  //
+  // UNSTATED is the same non-finding against it (owner's correction, 2026-11-27): a source that names no
+  // market cannot be outside a question that requires none. The claim keeps its UNSTATED verdict — its scope
+  // stays unspecified, nothing relabels it MATCH — and every other condition (support, population, timeframe,
+  // definitions, independence) still decides it. A question that names a market still fails UNSTATED.
+  const anyMarket = fragment.geography === ANY_NAMED_MARKET && (scope.geography === 'UNKNOWN' || scope.geography === 'UNSTATED');
   if (fragment.geography && !anyMarket && !SCOPE_PASSES.has(scope.geography)) {
     failures.push(`geography (${scope.geography.toLowerCase()} vs "${fragment.geography}")`);
   }
