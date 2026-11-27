@@ -381,11 +381,21 @@ function eventFromRow(detail: Record<string, unknown>): ReservationEvent | null 
   };
 }
 
-/** Every recorded reservation event about these counterparties, from every business, in recorded order. */
+/**
+ * Every recorded reservation event about these counterparties, from every
+ * business, in recorded order: counterparties in id order, each ledger's events
+ * in the order they were written. Each ledger is read once per call, however
+ * often or in whatever order its counterparty is named, and one at a time, so a
+ * reading holds at most one pooled connection for it (§61).
+ */
 export async function recordedReservationEvents(counterpartyIds: readonly string[]): Promise<ReservationEvent[]> {
   const out: ReservationEvent[] = [];
+  const read = new Set<string>();
   for (const id of [...new Set(counterpartyIds)].sort()) {
-    for (const row of await cashEventsOfKind(counterpartyLedger(id), RESERVATION_EVENT_KIND)) {
+    const ledger = counterpartyLedger(id);
+    if (read.has(ledger)) continue;
+    read.add(ledger);
+    for (const row of await cashEventsOfKind(ledger, RESERVATION_EVENT_KIND)) {
       const event = eventFromRow(row.detail);
       if (event && event.counterpartyId === id) out.push(event);
     }

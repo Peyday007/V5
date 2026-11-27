@@ -670,15 +670,26 @@ export function fulfillerCounterpartyId(name: string): string {
 const BRAIN_PERFORMS: ReadonlySet<string> = new Set(['SOFTWARE', 'RESEARCH']);
 const namesBrain = (name: string) => name.toLowerCase().includes('brain');
 
+type OpportunityRow = NonNullable<Awaited<ReturnType<typeof import('../../../repos/cashPortfolio.ts').getOpportunity>>>;
+
 /** The fulfillers the opportunity's rows name, with the facts those rows establish. Writes nothing. */
 export async function sourcedFulfillers(opportunityId: string): Promise<SourcedFulfiller[]> {
-  const [{ getOpportunity }, { readObligations }, { listMoneyEntries }] = await Promise.all([
-    import('../../../repos/cashPortfolio.ts'),
+  const { getOpportunity } = await import('../../../repos/cashPortfolio.ts');
+  const opportunity = await getOpportunity(opportunityId);
+  if (!opportunity) return [];
+  return fulfillersOf(opportunity);
+}
+
+/**
+ * `sourcedFulfillers` on an opportunity row the caller already read, so one
+ * reading does not ask the pool for the same row twice (§61).
+ */
+async function fulfillersOf(opportunity: OpportunityRow): Promise<SourcedFulfiller[]> {
+  const opportunityId = opportunity.id;
+  const [{ readObligations }, { listMoneyEntries }] = await Promise.all([
     import('../../cash/journey/fulfillment.ts'),
     import('../../../repos/cashLedger.ts'),
   ]);
-  const opportunity = await getOpportunity(opportunityId);
-  if (!opportunity) return [];
   const [obligations, entries] = await Promise.all([
     readObligations(opportunityId),
     listMoneyEntries({ projectId: opportunity.projectId, opportunityId, limit: 2000 }),
@@ -774,7 +785,7 @@ async function opportunityCandidates(input: OpportunityTransactionInput): Promis
   const { getOpportunity } = await import('../../../repos/cashPortfolio.ts');
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return { businessId: null, fulfillers: [], candidates: [], rest: null };
-  const fulfillers = await sourcedFulfillers(input.opportunityId);
+  const fulfillers = await fulfillersOf(opportunity);
   const candidates: Counterparty[] = [];
   for (const f of fulfillers) candidates.push(await sourcedCandidate(f, f.sources.some((s) => s.startsWith('fulfillment:')) ? 'supplier' : 'fulfiller'));
   const have = new Set(candidates.map((c) => c.id));
@@ -817,13 +828,14 @@ export async function readOpportunityTransaction(input: OpportunityTransactionIn
   const none = noReading(input, found);
   if (none) return none;
   const ids = found.candidates.map((c) => c.id);
+  const read = await commercialReadings(found.businessId!, input.action ?? RESERVE_ACTION);
   const reading = readTransaction({
     ...found.rest!,
     candidates: found.candidates,
     events: await recordedReservationEvents(ids),
-    authority: await authorityFor(found.businessId!, input.action ?? RESERVE_ACTION),
+    authority: read.authority,
   });
-  const negotiations = await negotiateCandidates(found.businessId!, found.candidates, found.fulfillers);
+  const negotiations = negotiationsOn(found.candidates, found.fulfillers, read.terms);
   return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, negotiations, detail: reading.deliverability.reason };
 }
 
@@ -836,11 +848,15 @@ async function decideOpportunity(
   const none = noReading(input, found);
   if (none) return none;
   const ids = found.candidates.map((c) => c.id);
+  const held: { terms: TermsReading | null } = { terms: null };
   const reading = await decideRecorded(ids, actorRef, async (events) => {
-    const one = readTransaction({ ...found.rest!, candidates: found.candidates, events, authority: await authorityFor(found.businessId!, input.action ?? RESERVE_ACTION) });
+    // Judged under the lock, when the row is written; the same decision also gives the negotiating terms.
+    const read = await commercialReadings(found.businessId!, input.action ?? RESERVE_ACTION);
+    held.terms = read.terms;
+    const one = readTransaction({ ...found.rest!, candidates: found.candidates, events, authority: read.authority });
     return { result: one, append: toAppend(one) };
   });
-  const negotiations = await negotiateCandidates(found.businessId!, found.candidates, found.fulfillers);
+  const negotiations = negotiationsOn(found.candidates, found.fulfillers, held.terms ?? await authorizedTermsFor(found.businessId!));
   return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, negotiations, detail: reading.reserve.permitted ? reading.deliverability.reason : reading.reserve.detail };
 }
 
@@ -875,10 +891,12 @@ export interface OpportunityNegotiation {
  * commercial grant by its owner (`checkCommercialAuthority`): the per-action ceiling a person
  * wrote, in the grant's currency. No grant, no terms — the reading says which authority is missing.
  */
+export interface TermsReading { terms: AuthorizedTerms | null; currency: string | null; authority: AuthorityReading }
+
 export async function authorizedTermsFor(
   businessId: string,
   action: CommercialAction = NEGOTIATE_ACTION,
-): Promise<{ terms: AuthorizedTerms | null; currency: string | null; authority: AuthorityReading }> {
+): Promise<TermsReading> {
   const decision = await checkCommercialAuthority({ projectId: businessId, action });
   const authority: AuthorityReading = {
     businessId,
@@ -924,13 +942,28 @@ export function negotiateOnTerms(
   return { counterpartyId: candidate.id, terms, step: negotiate(candidate, read.terms) };
 }
 
+/**
+ * The reserve authority and the negotiating terms for one reading, from as few
+ * commercial-authority decisions as they need. Both ask the owner about the
+ * same business; when the reserve action is the negotiating action (the
+ * default, `ENGAGE_CONTRACTOR`) one decision answers both, exactly as two
+ * separate reads of it would (§61). A different action is still its own read.
+ */
+async function commercialReadings(businessId: string, action: CommercialAction): Promise<{ authority: AuthorityReading; terms: TermsReading }> {
+  if (action === NEGOTIATE_ACTION) {
+    const terms = await authorizedTermsFor(businessId, NEGOTIATE_ACTION);
+    return { authority: terms.authority, terms };
+  }
+  const authority = await authorityFor(businessId, action);
+  return { authority, terms: await authorizedTermsFor(businessId) };
+}
+
 /** Every candidate's next move, against the business's live authorized terms. Writes nothing. */
-async function negotiateCandidates(
-  businessId: string,
+function negotiationsOn(
   candidates: readonly Counterparty[],
   fulfillers: readonly SourcedFulfiller[],
-): Promise<OpportunityNegotiation[]> {
+  read: TermsReading,
+): OpportunityNegotiation[] {
   if (candidates.length === 0) return [];
-  const read = await authorizedTermsFor(businessId);
   return candidates.map((c) => negotiateOnTerms(c, fulfillers.find((f) => f.counterpartyId === c.id) ?? null, read));
 }
